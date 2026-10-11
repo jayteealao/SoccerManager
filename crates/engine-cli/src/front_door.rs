@@ -765,6 +765,7 @@ pub(crate) mod tests {
                     id: (*id).into(),
                     team: *team,
                     rating: *rating,
+                    ..RatingEntry::default()
                 })
                 .collect(),
         }

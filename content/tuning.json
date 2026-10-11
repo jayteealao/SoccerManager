@@ -507,6 +507,13 @@
         "either_deg": 20.0,
         "shift_s": 0.6,
         "show_m": 1.5
+      },
+      "season": {
+        "form_neutral": 6.5,
+        "form_weight": 20.0,
+        "goal_weight": 15.0,
+        "ambition_weight": 0.6,
+        "cap": 40.0
       }
     }
   },

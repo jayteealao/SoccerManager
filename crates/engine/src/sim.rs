@@ -826,6 +826,7 @@ impl Simulation {
         // ([`Self::kick_off_form`]), so a restored match takes no draw here.
         for i in 0..sim.players.len() {
             sim.tally_played(i);
+            sim.tally_started(i);
         }
         sim.refresh_effective();
         Ok(sim)

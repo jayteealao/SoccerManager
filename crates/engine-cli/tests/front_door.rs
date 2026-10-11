@@ -596,7 +596,11 @@ fn the_squad_views_hold_across_launches() {
         assert_eq!(code, 200, "{read}");
         assert_eq!(
             serde_json::from_str::<Value>(&read).unwrap(),
-            serde_json::json!({"views": [], "ratings": {}})
+            serde_json::json!({
+                "views": [],
+                "ratings": {},
+                "season": {"matches": [], "players": {}}
+            })
         );
         let (code, _) = http(launched.port, "GET", "/engine/views", false, "");
         assert_eq!(code, 400, "a read names a club");

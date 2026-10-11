@@ -1083,6 +1083,49 @@ fn the_traits_block_ships_reads_as_no_trait_when_absent_and_refuses_a_chance_abo
     );
 }
 
+/// The shipped tuning carries the season block; a tuning file without it loads and plays a
+/// ten-minute match exactly as one whose season block is neutral; and a cap above 100 is
+/// refused, naming the field.
+#[test]
+fn the_season_block_ships_reads_as_neutral_when_absent_and_refuses_a_wide_cap() {
+    use engine::contract::params::SeasonTuning;
+    use engine::data::ContentFiles;
+    let shipped = ContentFiles::read(&common::content_dir()).unwrap();
+    let content = engine::Content::from_files(&shipped).unwrap();
+    assert_eq!(
+        content.tuning.engine.contract.season,
+        Some(SeasonTuning::shipped())
+    );
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    let contract = tuning["engine"]["contract"].as_object_mut().unwrap();
+    assert!(contract.remove("season").is_some());
+    let mut old = shipped.clone();
+    old.tuning = serde_json::to_vec(&tuning).unwrap();
+    let old = engine::Content::from_files(&old).unwrap();
+    assert_eq!(old.tuning.engine.contract.season(), SeasonTuning::NEUTRAL);
+    let [a, b] = common::default_teams(&old);
+    let play = |config: engine::MatchConfig| {
+        let mut sim = engine::Simulation::new(config).unwrap();
+        while !sim.is_over() {
+            sim.step();
+        }
+        sim.finish();
+        sim.take_events()
+    };
+    let absent = engine::MatchConfig::new(7, 10, &old, [&a, &b]).unwrap();
+    let mut neutral = absent.clone();
+    neutral.tuning.contract.season = Some(SeasonTuning::NEUTRAL);
+    assert_eq!(play(absent), play(neutral), "the events differ");
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    tuning["engine"]["contract"]["season"]["cap"] = 120.0.into();
+    let mut wide = shipped.clone();
+    wide.tuning = serde_json::to_vec(&tuning).unwrap();
+    let err = engine::Content::from_files(&wide).unwrap_err().to_string();
+    assert!(err.contains("engine.contract.season.cap"), "{err}");
+}
+
 /// The shipped tuning carries the foot block; a tuning file without it loads and plays a
 /// ten-minute match exactly as one whose foot cost cap and showing distance are 0; and a cost
 /// cap above 5 points is refused, naming the field.

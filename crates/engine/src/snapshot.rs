@@ -55,7 +55,9 @@
 //!   at a tick, with the carrier, with possession, with the loose ball) and the end's value
 //!   (u32); then the roster bits of the carriers whose carry is under way and of the keepers
 //!   who met the loose ball's moment (u32 each). A stoppage ends every override but an
-//!   anchor's, so a resumed match plays its anchors as the unbroken match does.
+//!   anchor's, so a resumed match plays its anchors as the unbroken match does. Version 14
+//!   also ends each player's tally with his assists (u32) and whether he started (u8), so a
+//!   resumed match's record counts them as the unbroken match's does.
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -1293,6 +1295,8 @@ fn decode_tally(r: &mut Reader<'_>) -> Decoded<crate::sim::tally::PlayerTally> {
         red: r.u32()?,
         conceded: r.u32()?,
         xg: r.f64()?,
+        assists: r.u32()?,
+        started: r.bool()?,
     })
 }
 

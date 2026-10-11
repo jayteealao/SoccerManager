@@ -1,7 +1,9 @@
 //! Mood in play: a goal lifts the scorer and a big miss lowers the misser, each by his swing
 //! (temperament and pressure handling); a full mood stays inside the mind cap; the team mood
-//! weighs each player by his leadership; a substitute enters at his side's bench mood; and a
-//! match resumed from a snapshot moves moods as the unbroken match does.
+//! weighs each player by his leadership; a substitute enters at his kick-off mood plus his
+//! side's bench mood; a player in form and ahead of his season goal starts above neutral,
+//! the more so the more ambitious he is; and a match resumed from a snapshot moves moods as
+//! the unbroken match does.
 
 mod common;
 
@@ -136,7 +138,7 @@ fn the_team_mood_weighs_each_player_by_his_leadership() {
     assert!(follower > 0.0 && leader > follower, "{follower} {leader}");
 }
 
-/// A substitute's mood starts from his kick-off value (0) plus his side's
+/// A substitute's mood starts from his kick-off value (0 here) plus his side's
 /// events while he was on the bench. A substitution waits for the next stoppage; the home
 /// side scores, and the substitute comes on at the goal's stoppage.
 #[test]
@@ -158,6 +160,71 @@ fn a_substitute_enters_at_his_sides_bench_mood() {
     assert!(bench > 0.0, "the bench took the goal: {bench}");
     let entered = sim.mood(off);
     assert!(entered > 0.0, "the substitute enters lifted: {entered}");
+}
+
+/// The kick-off mood of home player 5 rated `ambition`, with recent form `form` (tenths) and
+/// season-goal progress `progress` (percent of the pace), in a match of `config`.
+fn kick_off_mood(
+    config: MatchConfig,
+    ambition: f64,
+    form: Option<u8>,
+    progress: Option<u8>,
+) -> f64 {
+    let me = index(0, 5);
+    let sim = spread(Scene::new(config), -45.0, 45.0)
+        .rating(me, "ambition", ambition)
+        .kick_off(me, form, progress)
+        .build();
+    sim.mood(me)
+}
+
+/// Shape AC-26: a player in good form (7.5) and ahead of his season goal (150 percent of
+/// the pace) starts above neutral, and an ambitious one (18) higher than one of little
+/// ambition (5); in poorer form (6.0) and behind his goal (40 percent) he starts below it, the
+/// ambitious one lower; with no season inputs, or with no season block in the tuning, he
+/// starts at 0.
+#[test]
+fn form_and_goal_progress_set_the_kick_off_mood_weighted_by_ambition() {
+    let high = kick_off_mood(calm_match(90), 18.0, Some(75), Some(150));
+    let low = kick_off_mood(calm_match(90), 5.0, Some(75), Some(150));
+    println!("in form and ahead: ambition 18 {high:.2}, ambition 5 {low:.2}");
+    assert!(low > 0.0 && high > low, "{low} {high}");
+    let high = kick_off_mood(calm_match(90), 18.0, Some(60), Some(40));
+    let low = kick_off_mood(calm_match(90), 5.0, Some(60), Some(40));
+    println!("poor and behind: ambition 18 {high:.2}, ambition 5 {low:.2}");
+    assert!(low < 0.0 && high < low, "{low} {high}");
+    assert_eq!(kick_off_mood(calm_match(90), 18.0, None, None), 0.0);
+    let mut config = calm_match(90);
+    config.tuning.contract.season = None;
+    assert_eq!(kick_off_mood(config, 18.0, Some(75), Some(150)), 0.0);
+}
+
+/// A substitute with a kick-off mood enters at it plus his side's bench mood times his swing.
+#[test]
+fn a_substitute_enters_at_his_kick_off_mood_plus_the_bench_mood() {
+    let a = index(0, 9);
+    let off = index(0, 7);
+    let mut config = calm_match(90);
+    let on = config.teams[0].bench[0];
+    config.teams[0].squad[on].kick_off_mood = 20.0;
+    let squad_off = config.players[off].squad;
+    let mut sim = shooter(config, a, 10.0, DVec2::new(40.0, 0.0))
+        .queue(
+            0,
+            engine::tactics::change::Change::Substitution { off: squad_off, on },
+        )
+        .shoot(DVec2::new(12.5, 1.0), 25.0, 0.0)
+        .build();
+    step_until(&mut sim, 3_000, |s| s.players()[off].squad == on);
+    let swing =
+        engine::sim::mood::swing(&sim.personality(off), &sim.tuning().contract.person().mood);
+    let want = (20.0 + sim.bench_mood(0) * swing).clamp(-FULL, FULL);
+    assert!(sim.bench_mood(0) > 0.0);
+    assert!(
+        (sim.mood(off) - want).abs() < 1e-9,
+        "{} {want}",
+        sim.mood(off)
+    );
 }
 
 /// Captures a snapshot at the first stoppage from minute 30.

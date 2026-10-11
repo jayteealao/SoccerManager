@@ -81,7 +81,8 @@ fn every_player_who_played_is_rated_and_the_record_lists_the_same() {
         assert_eq!(entry.rating, f64::from(r.rating_tenths) / 10.0);
         let json = serde_json::to_string(entry).unwrap();
         let shown = json.split("\"rating\":").nth(1).unwrap();
-        let decimals = shown.trim_end_matches('}').split('.').nth(1).unwrap_or("");
+        let shown = shown.split([',', '}']).next().unwrap();
+        let decimals = shown.split('.').nth(1).unwrap_or("");
         assert!(decimals.len() <= 1, "{json}");
     }
 }

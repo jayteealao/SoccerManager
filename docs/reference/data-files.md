@@ -284,6 +284,11 @@ The attribute contract: how ratings become play.
 | foot.either_deg | within this many degrees of straight ahead either foot kicks, so the strong one does | 20.0 | 0 to 90 |
 | foot.shift_s | seconds an unpressed carrier needs on the ball to move it onto his strong foot | 0.6 | 0 to 5 |
 | foot.show_m | metres a closing presser stands toward the strong side of the most one-footed carrier | 1.5 | 0 to 5 |
+| season.form_neutral | the match rating that counts as neither good nor bad form | 6.5 | 1 to 10 |
+| season.form_weight | mood points per rating point of recent form above or below `form_neutral` | 20 | 0 to 50 |
+| season.goal_weight | mood points a full pace ahead of (or behind) the season goal gives (or takes) at average ambition | 15 | 0 to 50 |
+| season.ambition_weight | the share of `goal_weight` the most ambitious player adds and the least ambitious loses | 0.6 | 0 to 0.9 |
+| season.cap | the most mood points the season gives or takes at kick-off | 40 | 0 to 100 |
 
 The curve is `F(r) = scale × e^((r − center) / width)`: with the shipped values a rating of 10 gives 8.0, 18 gives 21.7, and 2 gives 2.9, so each step up the scale is worth more than the one below. A contest between two players is `σ(logit(base) + k × (F(a) − F(b)))`, inside the action's floor and ceiling, where `σ` is the logistic function. A share is `σ(k × (F − F(10)))`, 0.5 at rating 10. A per-player factor is `1 + spread × (2 × share − 1)`, 1 at rating 10; the factors scale the receive, intercept, press, shape, block, sprint, turn, aerial reach, claim, organise and rush reads.
 
@@ -291,11 +296,13 @@ Each action carries exactly the fields play reads of it. A missing field or one 
 
 The hooks are how the newer attributes reach play. Marking divides `cover_distance` by the covering player's `mark` factor, so a better marker tracks a carrier tighter. An attacker with off-ball movement above the average whose target lies beyond the onside line comes back toward it by his off-ball skill (0 to 1), and moves his place `anchor_space_m` times that skill away from the nearest defender. A corner's or free kick's delivery turns from its aim by up to `restart_noise` times `1.5 − share` of its stage. A throw-in looks for team-mates up to 15 m times the thrower's `long_throw` factor. Flair adds `flair_risk` times his flair skill (−1 to 1) times the pass's forward share to a pass's score, and lowers the technique the take-on and chip gates need by `flair_gate` times that skill. While his side trails, a presser's reach grows by `behind_effort` times his determination skill. A keeper's chase range grows by `rash_chase` times his eccentricity skill. The back line's gap divides by the keeper's organise factor and the back line's mean, weighted by `organise_back_line`. Braking is `decel_anchor` times the turn factor. A tuning file without the `hooks` block reads every hook as before them: braking with the acceleration, no direct free kick taken (the taker decides), no delivery noise, the keeper alone organising the line, and no other term.
 
-The person block is how mood, familiarity and the personality values reach play. A player's mood runs from −100 to 100 percent of a full mood and starts each match at 0. His own events and his side's goals move it at once by their impulse times his swing, `(1 − temperament_weight · temperament)(1 − pressure_weight · pressure handling)`, each personality value read as a skill from −1 to 1 (0 at rating 10). Every second it drifts toward `score_weight` per goal of his side's lead. Each side keeps a bench mood that takes the side's events and the drift, and a substitute comes on at it times his swing. Mood moves the mental group through the pressure and momentum modifier slots, inside the mind cap, and moves the shot, forward-pass and hold scores by `risk` times mood over 100. Professionalism scales the lapse chance by `1 − occasions.professionalism · professionalism`; pressure handling scales a penalty's spread; temperament and sportsmanship add their log-odds to a tackle's foul chance. Familiarity reads the gap between his natural rating and his rating at his formation slot's position (see [engine modules](engine-modules.md#modifier-slots)); the pre-match level range includes it for a player in the lineup. The shared floor keeps every stage value at or above the player's base value less `floor_drop` points on the curve, after every state and his form. A tuning file without the `person` block plays as before it: mood stays 0, familiarity costs nothing, no occasion acts and no floor binds. No screen, report or event shows a mood or a personality value as a number.
+The person block is how mood, familiarity and the personality values reach play. A player's mood runs from −100 to 100 percent of a full mood and starts each match at his kick-off mood (see the season block below), 0 without season inputs. His own events and his side's goals move it at once by their impulse times his swing, `(1 − temperament_weight · temperament)(1 − pressure_weight · pressure handling)`, each personality value read as a skill from −1 to 1 (0 at rating 10). Every second it drifts toward `score_weight` per goal of his side's lead. Each side keeps a bench mood that takes the side's events and the drift, and a substitute comes on at his kick-off mood plus the bench mood times his swing. Mood moves the mental group through the pressure and momentum modifier slots, inside the mind cap, and moves the shot, forward-pass and hold scores by `risk` times mood over 100. Professionalism scales the lapse chance by `1 − occasions.professionalism · professionalism`; pressure handling scales a penalty's spread; temperament and sportsmanship add their log-odds to a tackle's foul chance. Familiarity reads the gap between his natural rating and his rating at his formation slot's position (see [engine modules](engine-modules.md#modifier-slots)); the pre-match level range includes it for a player in the lineup. The shared floor keeps every stage value at or above the player's base value less `floor_drop` points on the curve, after every state and his form. A tuning file without the `person` block plays as before it: mood stays 0, familiarity costs nothing, no occasion acts and no floor binds. No screen, report or event shows a mood or a personality value as a number.
 
 The traits block is how a player's traits of play reach play. Each trait he carries moves one engine choice by its weight, all of it when strong and `moderate_share` of it when moderate; the reader table in `crates/engine/tests/readers.rs` names the function and the quantity for each. A strong trait can also override an instruction his team holds for him that it goes against. Ten traits have such an instruction: dwelling on the ball and holding it up against a faster tempo, releasing it early against a slower one, cutting inside against wide width, hugging the touchline against narrow width, pressing relentlessly against low pressing, getting forward and arriving late in the box against a defend duty, staying back against an attack duty, and rushing out against a deep line. At a moment of play where the trait's choice differs from the one play took, with an opponent within 2.5 m of him or his mood at or below `low_mood`, one draw below the trait's `override_chance` makes the trait win and writes a `trait-override` event. No count, cooldown or phase of play limits it; an override that carries, holds, presses, anchors or chases lasts as long as that action does. The shipped chances give a player with such a trait 2 to 4 overrides a match. The other traits' override moments are too rare for that rate, so they act through their weight only. A tuning file without the `traits` block plays as before it: no trait moves a choice and none overrides.
 
 The foot block is how a player's weaker foot reaches play. A kick goes to the side of its direction against the kicker's facing, since the ball he carries sits straight ahead of him; within `either_deg` of straight ahead his strong foot plays it. A pass, chip, cross, open shot or long shot to the side of his weaker foot costs `cost_cap × (1 − weaker / 100) × min(1, base + pressure_weight × pressure + range_weight × range)` rating points, where pressure rises from 0 with the nearest opponent at `pressure_m` to 1 at 0 m and range from 0 to 1 at `range_m`. The cost is 0 on his strong side and with time to shift the ball: when no opponent is within 2.5 m and he has held the ball `shift_s` seconds, and always at a penalty and a direct free kick, which are placed dead balls. The cost lowers the kick's execute stage and, when he is pressed, its pressure stage; with the `person` block present it shrinks on each stage to the points left above the shared floor, so an 18 never kicks below 11. A keeper's distribution, a clearance and a restart delivery pay no cost. A presser closing a carrier from outside `press_engage` runs for his meeting point moved `show_m × (1 − weaker / 100)` metres toward the carrier's strong side, showing a one-footed carrier onto his weaker foot; within `press_engage` he goes for the ball. A tuning file without the `foot` block plays as before it: no kick pays and no presser shows.
+
+The season block is how the launcher's season record reaches play. A player whose condition carries his recent form (`recent_rating`) and his progress toward his season goal (`goal_progress`) starts the match at `form_weight × (recent_rating / 10 − form_neutral) + goal_weight × (1 + ambition_weight × ambition) × clamp((goal_progress − 100) / 100, −1, 1)`, kept within `cap` either way, where ambition is read as a skill from −1 to 1 (0 at rating 10). A missing input adds nothing, so a match without season inputs, as every `simulate`, `calibrate` and test match is, starts every mood at 0, and ambition changes nothing in it. From kick-off the drift and the events move the mood as above. A tuning file without the `season` block reads every kick-off mood as 0.
 
 Top speed reads pace directly, not through the curve: the real speed of the player's pace from `speed.kmh`, its difference from a pace-10 player times `speed.amplification`, in metres per second, added to `speed.anchor_ms`. Acceleration is `accel.anchor` times the sprint factor. Braking is `hooks.decel_anchor` times the turn factor: a change of velocity against his run is clamped by his braking, any other by his acceleration.
 
@@ -403,7 +410,7 @@ Every player who played gets a match rating at full time, from 1.0 to 10.0 with 
 | result.win, result.loss | his side's result, times the share of the match he played | 0.3, −0.3 |
 | defenders | the positions counted as defenders | CB, LB, RB |
 
-A shoot-out decides a knockout match but rates as a draw. The match record lists the ratings as `players.rating`; the live stream sends them in the `ratings` message.
+A shoot-out decides a knockout match but rates as a draw. The match record lists the ratings as `players.rating`; the live stream sends them in the `ratings` message. Each `players.rating` entry also carries the figures the launcher's season record adds up: `started` (on the pitch at kick-off), `minutes` (whole minutes on the pitch), `goals`, `assists` (goals scored from his completed pass), `clean_sheet` (none conceded while he was on the pitch, over at least `clean_sheet.min_minutes`, whatever his position) and `red`. A record written before them reads each as 0 or false.
 
 ### fatigue
 
@@ -625,6 +632,7 @@ Version 3 holds every rating in tenths of the 1 to 20 scale, written as a number
 
 | Field | Bound |
 |---|---|
+| converted_from | `1`, only in a copy the launcher writes of a file converted from version 1: its players may then leave out the body fields, as a converted version 1 player has none; optional, absent in a file written by hand |
 | club.id | 3 to 64 characters |
 | club.name | 2 to 48 characters |
 | club.short_name | 2 to 4 characters |
@@ -660,7 +668,7 @@ Before kick-off the AI manager picks a player for each slot of the formation the
 
 ### Match condition
 
-A player may carry an optional `condition` block: his condition for this match. Every field is optional; an absent field has no effect, and a file without the block hashes as it did before the block existed. The season carries these between matches later; until then the team file gives them.
+A player may carry an optional `condition` block: his condition for this match. Every field is optional; an absent field has no effect, and a file without the block hashes as it did before the block existed. The launcher's season record writes `recent_rating` and `goal_progress` into the copy of a team file it plays a match from (see [The season file](#the-season-file)); the team file gives the others.
 
 ```json
 "condition": { "sharpness": 60, "adaptation": 40, "rest_days": 3, "matches_at_club": 12 }
@@ -672,6 +680,8 @@ A player may carry an optional `condition` block: his condition for this match. 
 | condition.adaptation | 0 to 100 percent | 100 | Below 100, his mental ratings drop, by 1.0 point at 0 (the `engine.modifier.adaptation` slot); a player new to a country is given a low value |
 | condition.rest_days | 0 to 14 days | rested | His energy at kick-off, and a higher injury chance with fewer than 4 days |
 | condition.matches_at_club | 0 to 1000 | none | Matches he has played for the club. Play does not read it; it sets how sure a reader is of his hidden values (see [hidden](#hidden)) |
+| condition.recent_rating | 10 to 100, tenths of a match rating | none | His recent form, the mean of his last five match ratings: with the season block, it sets part of his kick-off mood |
+| condition.goal_progress | 0 to 200 percent of the pace | none | His progress toward his season goal, 100 on track: with the season block and his ambition, it sets part of his kick-off mood |
 
 An unknown field is refused, and a value out of range is refused by player and field: `content refused: team teams/x.json: players: player p-club-00000001-00-04: condition field sharpness is 101; allowed 0 to 100`.
 
@@ -827,6 +837,8 @@ The engine writes these files to the data folder. The data folder is `SM_DATA_DI
 | `engine.port` | `serve`, while it serves a match | the socket port, as one line |
 | `settings.json` | `launch`, when the player saves the settings | the player's three settings; see below |
 | `views.json` | `launch`, when the player saves a squad view, and when the Squad screen first reads a club after a match | each club's named squad views and its players' last ten match ratings; see below |
+| `season.json` | `launch` with the start screen, when the match after a finished one starts or the Squad screen first reads a club after it | each club's season record and each player's season goal; see below |
+| `matches/<match.id>/team-a.json`, `team-b.json` | `launch` with the start screen, before a club's match after its first | the copy of a side's team file the match is played from, with each recorded player's recent form and goal progress; see below |
 | `matches/<match.id>/events.jsonl` | `simulate`, `serve`, `resume` | one match event per line, as the `match-event` record |
 | `matches/<match.id>/stats.json` | `simulate`, `serve`, `resume` | the statistics of the match, as the `match-stats` record |
 | `matches/<match.id>/snapshot.smsn` | `simulate`, `serve` | the newest snapshot of the match; `resume` and `serve --resume` read it |
@@ -965,6 +977,42 @@ Each club's part:
 | `ratings` | from player id to his newest 10 match ratings, oldest first, each `{"match", "rating"}` with the rating from 1.0 to 10.0 |
 
 The launcher adds the ratings of the home side of the last match it ran, read from that match's `stats.json`, when the page next reads the club, once per match. Saving views keeps the club's ratings. A column id the page does not know is dropped when the page reads it, so a view from a later release still opens. A missing file is empty. A file that does not read, has another field, or breaks a limit is read as empty and logs the `launch.views_refused` signal; the launcher refuses the same values from the page with the reason. The launcher writes the file through a temporary file.
+
+### The season file
+
+`season.json` holds each club's season as the launcher plays it: a stand-in for the season layer, which does not exist yet; when it does, it takes this file over. Only a launch with the start screen keeps it, and both sides of every match are recorded.
+
+| Field | Values |
+|---|---|
+| `schema_version` | 1 |
+| `clubs` | an object from club id to that club's part, at most 500 clubs |
+
+Each club's part holds `matches`, the match ids it played, oldest first (at most 200; the record then stops growing), and `players`, from player id to his season:
+
+| Field | Values |
+|---|---|
+| `starts`, `minutes`, `goals`, `assists`, `clean_sheets`, `red_cards` | his totals over the club's matches he played, from each match's `players.rating` entry |
+| `ratings` | every match rating, oldest first, each `{"match", "rating"}` with the rating from 1.0 to 10.0 |
+| `goal` | `{"kind", "target"}`: his one season goal, given when he first enters the record |
+
+A season goal is one of six kinds: `goals` (score N), `assists` (make N), `clean_sheets` (keep N), `starts` (start N matches), `average_rating` (average at least X) and `no_own_fault_absence` (miss no match through his own fault: no red card). Its kind comes from his listed position and his level there, in three bands: high from 14.0, middle from 10.0, low below.
+
+| Listed position | High | Middle | Low |
+|---|---|---|---|
+| GK | clean sheets | clean sheets | starts |
+| CB | clean sheets | no own-fault absence | starts |
+| LB, RB | clean sheets | assists | starts |
+| DM | average rating | no own-fault absence | starts |
+| CM | average rating | assists | starts |
+| AM | assists | assists | starts |
+| LW, RW | goals | assists | starts |
+| ST | goals | goals | starts |
+
+Its target is for a season of 38 matches, on a straight line between the value at level 10 and the value at level 20, rounded to a whole number (an average rating to a tenth): goals 8 to 24 for a striker and 5 to 14 for a winger; assists 5 to 14 for an attacking midfielder and 3 to 9 for anyone else; clean sheets 8 to 18; starts 15 to 34; an average rating of 6.4 to 7.4; no own-fault absence has none.
+
+His progress is measured against the pace of his club's matches so far: for a count, `100 × count / (target × matches / 38)`, kept to 0 to 200; for an average rating, `100 × mean / target` once he has a rating; for no own-fault absence, 100 without a red card and 0 with one. His recent form is the mean of his newest five ratings. Before a club's match after its first, the launcher writes a copy of each side's team file into the new match folder as `team-a.json` or `team-b.json`, at the current version, with each recorded player's `condition.recent_rating` and `condition.goal_progress` set, and the match is played from it, so its replay keeps them; a copy of a file converted from version 1 says `converted_from: 1`. Resume plays a saved match from the copies in its folder when they are there. A club with no match yet plays from its file as shipped.
+
+The launcher adds the last match it ran when the next match starts or the page next reads a club, once per match. A missing file is empty. A file that does not read, has another field, or breaks a limit is read as empty and logs the `launch.season_refused` signal. The launcher writes the file through a temporary file.
 
 ### The matchday bug report
 

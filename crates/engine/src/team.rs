@@ -79,6 +79,9 @@ pub struct SquadPlayer {
     /// The personality values play reads on an occasion, computed once from his ratings
     /// ([`crate::contract::personality_scales`]); no state moves them.
     pub personality: crate::contract::PersonalityScales,
+    /// The mood he starts a match at, from the season inputs of his condition and his
+    /// ambition ([`crate::sim::mood::kick_off_mood`]); 0 without them.
+    pub kick_off_mood: f64,
 }
 
 impl SquadPlayer {
@@ -236,8 +239,15 @@ impl Team {
                 let personality =
                     crate::contract::personality_scales(&attributes, schema, &tuning.contract);
                 let traits: Vec<_> = entry.traits.iter().map(|(n, s)| (n.clone(), *s)).collect();
+                let condition = entry.condition.unwrap_or_default();
+                let kick_off_mood = crate::sim::mood::kick_off_mood(
+                    &condition,
+                    &personality,
+                    &tuning.contract.season(),
+                );
                 SquadPlayer {
                     personality,
+                    kick_off_mood,
                     positions,
                     foot,
                     trait_set: crate::traits::TraitSet::of(&traits),
@@ -248,7 +258,7 @@ impl Team {
                     stages,
                     attributes,
                     body,
-                    condition: entry.condition.unwrap_or_default(),
+                    condition,
                     start_energy: 1.0,
                 }
             })
@@ -277,8 +287,8 @@ impl Team {
             .collect()
     }
 
-    /// Squad player `squad` in `slot`, at his base values, with his kick-off energy, and at
-    /// rest at `pos`.
+    /// Squad player `squad` in `slot`, at his base values, with his kick-off energy and
+    /// kick-off mood, and at rest at `pos`.
     pub fn player(&self, slot: usize, squad: usize, pos: DVec2) -> Player {
         let s = &self.squad[squad];
         Player {
@@ -292,7 +302,7 @@ impl Team {
             deltas: [0; crate::contract::states::GROUP_COUNT],
             form: 0,
             form_match: 0,
-            mood: 0.0,
+            mood: s.kick_off_mood,
             energy: s.start_energy,
             pos,
             vel: DVec2::ZERO,

@@ -32,7 +32,7 @@ impl Modifier for OwnMoodV1 {
 
 pub const OWN_MOOD_V1_CARD: ModuleCard = ModuleCard {
     purpose: "Moves a player's mental ratings with his own mood (mind family): his events and the score lift or lower him.",
-    inputs: "The player's mood (-100 to 100, moved by his goals, assists, big misses, errors, cards, fouls suffered, duels and his side's goals, and drifting with the score) and the person tuning.",
+    inputs: "The player's mood (-100 to 100, starting at his kick-off mood from his recent form and season-goal progress weighted by his ambition, moved by his goals, assists, big misses, errors, cards, fouls suffered, duels and his side's goals, and drifting with the score) and the person tuning.",
     outputs: "A delta on the mental group, own_weight points at a full mood either way, inside the mind cap.",
     tuning: &["contract.person.mood.own_weight"],
     calibration: "none: no mood band in realism-bands.json",

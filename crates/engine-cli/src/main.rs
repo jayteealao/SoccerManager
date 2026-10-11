@@ -21,6 +21,7 @@ mod replay_inputs;
 mod report;
 mod resimulate;
 mod resume;
+mod season;
 mod serve;
 mod simulate;
 mod state_files;

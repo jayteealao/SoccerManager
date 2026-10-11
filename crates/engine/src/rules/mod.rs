@@ -327,6 +327,7 @@ impl Simulation {
                 && receiver == k
                 && passer != k
             {
+                self.tally(passer, crate::sim::tally::Count::Assist);
                 self.mood_event(passer, crate::sim::mood::MoodEvent::Assist);
             }
         }

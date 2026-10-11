@@ -1,15 +1,19 @@
 //! Mood: how each player feels in the match, from −100 (a full low) to 100 (a full high),
-//! 0 at kick-off. His own events and his side's goals move it at once, by the impulse of the
+//! starting at his kick-off mood: his recent form and his progress toward his season goal,
+//! weighted by his ambition, as the launcher's season record gives them in his condition
+//! ([`kick_off_mood`]); 0 without them. His own events and his side's goals move it at once, by the impulse of the
 //! event times his swing; at each refresh it drifts toward a target the score sets, which is
 //! also how an impulse fades. Temperament and pressure handling set the swing; pressure
 //! handling also sets how much a late close game weighs on him. Each side keeps a bench mood
 //! that takes the side's events and the drift, and a substitute enters at it times his swing.
 //!
 //! Mood draws nothing and writes no event and no trace point: it moves only through play.
-//! With no person block in the tuning every impulse and the drift are 0, so mood stays 0.
+//! With no person block in the tuning every impulse and the drift are 0, so mood stays at the
+//! kick-off mood; with no season block, or no season inputs, that is 0.
 
 use crate::contract::PersonalityScales;
-use crate::contract::params::MoodTuning;
+use crate::contract::params::{MoodTuning, SeasonTuning};
+use crate::data::team::Condition;
 use crate::fatigue::REFRESH_TICKS;
 use crate::rules::clock::TICKS_PER_MINUTE;
 use crate::sim::Simulation;
@@ -94,6 +98,22 @@ pub fn drift_target(
     target.clamp(-FULL, FULL)
 }
 
+/// The mood a player of personality `p` starts a match at, from the season inputs of his
+/// condition `c`: `form_weight` per rating point of his recent form above `form_neutral`, plus
+/// `goal_weight · (1 + ambition_weight · ambition)` times how far ahead of the pace of his
+/// season goal he is (−1 a full pace behind, 1 a full pace ahead), kept within `cap` either
+/// way. A missing input adds nothing.
+pub fn kick_off_mood(c: &Condition, p: &PersonalityScales, s: &SeasonTuning) -> f64 {
+    let form = c.recent_rating.map_or(0.0, |r| {
+        s.form_weight * (f64::from(r) / 10.0 - s.form_neutral)
+    });
+    let goal = c.goal_progress.map_or(0.0, |g| {
+        let ahead = ((f64::from(g) - 100.0) / 100.0).clamp(-1.0, 1.0);
+        s.goal_weight * (1.0 + s.ambition_weight * p.ambition) * ahead
+    });
+    (form + goal).clamp(-s.cap, s.cap)
+}
+
 /// `mood` moved toward `target` by at most `step`.
 fn toward(mood: f64, target: f64, step: f64) -> f64 {
     if mood < target {
@@ -169,13 +189,14 @@ impl Simulation {
         }
     }
 
-    /// A substitute who comes on at roster index `i` starts at his kick-off mood (0) plus his
+    /// A substitute who comes on at roster index `i` starts at his kick-off mood plus his
     /// side's bench mood times his swing.
     pub(crate) fn enter_mood(&mut self, i: usize) {
         let m = self.mood_tuning();
-        let team = self.players[i].team;
+        let (team, squad) = (self.players[i].team, self.players[i].squad);
         let swing = swing(&self.personality(i), &m);
-        self.players[i].mood = (self.bench_mood[team] * swing).clamp(-FULL, FULL);
+        let kick_off = self.teams[team].squad[squad].kick_off_mood;
+        self.players[i].mood = (kick_off + self.bench_mood[team] * swing).clamp(-FULL, FULL);
     }
 
     /// Player `i`'s mood, −100 to 100.
@@ -226,6 +247,32 @@ mod tests {
             ..PersonalityScales::NEUTRAL
         };
         assert!(swing(&calm, &m) < 1.0);
+    }
+
+    #[test]
+    fn the_kick_off_mood_reads_form_and_goal_progress_weighted_by_ambition() {
+        let s = SeasonTuning::shipped();
+        let p = |ambition: f64| PersonalityScales {
+            ambition,
+            ..PersonalityScales::NEUTRAL
+        };
+        let c = |form: Option<u8>, progress: Option<u8>| Condition {
+            recent_rating: form,
+            goal_progress: progress,
+            ..Condition::default()
+        };
+        assert_eq!(kick_off_mood(&c(None, None), &p(0.8), &s), 0.0);
+        let good = c(Some(75), Some(150));
+        assert_eq!(kick_off_mood(&good, &p(0.8), &SeasonTuning::NEUTRAL), 0.0);
+        assert!((kick_off_mood(&good, &p(0.0), &s) - 27.5).abs() < 1e-9);
+        assert!(kick_off_mood(&good, &p(0.8), &s) > kick_off_mood(&good, &p(-0.8), &s));
+        let behind = c(None, Some(40));
+        assert!(kick_off_mood(&behind, &p(0.8), &s) < kick_off_mood(&behind, &p(-0.8), &s));
+        assert!(kick_off_mood(&behind, &p(-0.8), &s) < 0.0);
+        let best = c(Some(100), Some(200));
+        assert_eq!(kick_off_mood(&best, &p(1.0), &s), s.cap);
+        let worst = c(Some(10), Some(0));
+        assert_eq!(kick_off_mood(&worst, &p(1.0), &s), -s.cap);
     }
 
     #[test]

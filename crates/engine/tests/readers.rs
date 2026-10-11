@@ -2,8 +2,8 @@
 //! communication, names the engine function that reads it, and a scripted scene shows that
 //! changing it on one player from 5.0 to 18.0 moves the decision or the outcome that function
 //! sets, by at least the row's least move. The three personality values inert in a match
-//! change nothing at all. A value with neither a row nor a place in the pending list fails the
-//! table, and so does a pending value that gains a row.
+//! change nothing at all. A value with neither a row nor a place in the inert list fails the
+//! table.
 //!
 //! A row reads one quantity of its hook for the player at a rating: a distance, an angle, a
 //! chance, a score or a range. Each scene is deterministic: it reads the decision maker's
@@ -43,12 +43,6 @@ struct Row {
     reason: Option<&'static str>,
     scene: fn(f64) -> f64,
 }
-
-/// The values whose occasion the season goal reads; no match reader exists for them yet.
-///
-/// sdlc-debt: the season goal gives ambition its reader and deletes this list; the test fails
-/// when a listed value gains a row, so the list can only shrink.
-const AWAITS_READER: [&str; 1] = ["ambition"];
 
 /// The personality values inert in a match.
 const INERT: [&str; 3] = ["loyalty", "money_motivation", "controversy"];
@@ -473,6 +467,19 @@ fn sportsmanship(v: f64) -> f64 {
 
 /// Home player 5, rated `v` in leadership, at a full mood, his team-mates at 0: his side's
 /// mood.
+/// Home player 5, rated `v` in ambition, in form at the neutral rating and ahead of his
+/// season goal at 150 percent of the pace: his kick-off mood.
+fn ambition(v: f64) -> f64 {
+    let me = index(0, 5);
+    let neutral = far().build().tuning().contract.season().form_neutral;
+    let form = (neutral * 10.0).round() as u8;
+    let sim = far()
+        .rating(me, "ambition", v)
+        .kick_off(me, Some(form), Some(150))
+        .build();
+    sim.mood(me)
+}
+
 fn leadership(v: f64) -> f64 {
     let me = index(0, 5);
     let sim = far()
@@ -755,6 +762,15 @@ fn rows() -> Vec<Row> {
             reason: None,
             scene: versatility,
         },
+        Row {
+            field: "ambition",
+            reader: "sim::mood::kick_off_mood",
+            quantity: "kick-off mood ahead of his season goal",
+            dir: Dir::Up,
+            least: 0.10,
+            reason: None,
+            scene: ambition,
+        },
     ]
 }
 
@@ -852,7 +868,7 @@ fn the_inert_values_change_nothing_in_a_match() {
 }
 
 /// Completeness: every attribute the version 4 catalogue added, communication and agility
-/// has a row, is inert, or waits in the pending list; a pending value has no row.
+/// has a row or is inert, never both.
 #[test]
 fn every_new_value_has_a_reader_or_waits_for_one() {
     let rows = rows();
@@ -865,20 +881,9 @@ fn every_new_value_has_a_reader_or_waits_for_one() {
             content.attributes.index(name).is_some(),
             "{name} is not in the catalogue"
         );
-        let counted = [
-            has_row(name),
-            INERT.contains(&name),
-            AWAITS_READER.contains(&name),
-        ]
-        .iter()
-        .filter(|&&b| b)
-        .count();
-        assert_eq!(counted, 1, "{name}: a row, inert, or pending, exactly one");
-    }
-    for name in AWAITS_READER {
         assert!(
-            !has_row(name),
-            "{name} has a reader now; remove it from AWAITS_READER"
+            has_row(name) != INERT.contains(&name),
+            "{name}: a row or inert, exactly one"
         );
     }
     for row in &rows {

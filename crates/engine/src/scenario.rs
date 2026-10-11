@@ -270,6 +270,11 @@ impl Scene {
             schema,
             &sim.config.tuning.contract,
         );
+        entry.kick_off_mood = crate::sim::mood::kick_off_mood(
+            &entry.condition,
+            &entry.personality,
+            &sim.config.tuning.contract.season(),
+        );
         sim.players[i].attributes = entry.attributes;
         let (deltas, form) = (sim.players[i].deltas, sim.players[i].form);
         // Writes the squad entry's values when he is at his base, else blends them again.
@@ -282,6 +287,28 @@ impl Scene {
     pub fn mood(mut self, i: usize, mood: f64) -> Self {
         self.sim.players[i].mood = mood.clamp(-crate::sim::mood::FULL, crate::sim::mood::FULL);
         self.sim.refresh_effective();
+        self
+    }
+
+    /// Gives player `i` the season inputs a launcher match carries in his condition, his recent
+    /// form in tenths of a rating and his season-goal progress in percent of the pace, and
+    /// starts him at the kick-off mood they give, with his ambition and the match's tuning.
+    pub fn kick_off(
+        mut self,
+        i: usize,
+        recent_rating: Option<u8>,
+        goal_progress: Option<u8>,
+    ) -> Self {
+        let sim = &mut self.sim;
+        let (team, squad) = (sim.players[i].team, sim.players[i].squad);
+        let season = sim.config.tuning.contract.season();
+        let entry = &mut sim.teams[team].squad[squad];
+        entry.condition.recent_rating = recent_rating;
+        entry.condition.goal_progress = goal_progress;
+        entry.kick_off_mood =
+            crate::sim::mood::kick_off_mood(&entry.condition, &entry.personality, &season);
+        sim.players[i].mood = entry.kick_off_mood;
+        sim.refresh_effective();
         self
     }
 

@@ -663,6 +663,7 @@ fn the_condition_block_reads_back_and_its_absence_writes_nothing() {
             adaptation: Some(40),
             rest_days: Some(3),
             matches_at_club: Some(12),
+            ..Condition::default()
         })
     );
     assert_eq!(
@@ -705,6 +706,73 @@ fn a_condition_value_out_of_range_is_refused_naming_the_player_and_the_field() {
              condition field sharpness is 101; allowed 0 to 100"
         )
     );
+}
+
+/// The season inputs (recent form in tenths, goal progress in percent) load in range and are
+/// refused out of range, naming the player, the field and the range.
+#[test]
+fn the_season_inputs_load_in_range_and_are_refused_out_of_range() {
+    let content = common::content();
+    let with = |field: &str, v: u32| {
+        let mut raw: serde_json::Value =
+            serde_json::from_slice(&fixture_bytes("teams/v2-good.json")).unwrap();
+        raw["players"][0]["condition"] = serde_json::json!({ field: v });
+        content.team_from_bytes(&serde_json::to_vec(&raw).unwrap(), "planted.json")
+    };
+    for (field, v, range) in [
+        ("recent_rating", 101, "10 to 100"),
+        ("recent_rating", 9, "10 to 100"),
+        ("goal_progress", 201, "0 to 200"),
+    ] {
+        let text = with(field, v).unwrap_err().to_string();
+        assert!(
+            text.contains(&format!(
+                "player p-club-00000001-00-01: condition field {field} is {v}; allowed {range}"
+            )),
+            "{text}"
+        );
+    }
+    for (field, v) in [
+        ("recent_rating", 10),
+        ("recent_rating", 100),
+        ("goal_progress", 0),
+        ("goal_progress", 200),
+    ] {
+        let file = with(field, v).unwrap().value;
+        let c = file.players[0].condition.unwrap();
+        let got = if field == "recent_rating" {
+            c.recent_rating
+        } else {
+            c.goal_progress
+        };
+        assert_eq!(got, Some(u8::try_from(v).unwrap()), "{field}");
+    }
+}
+
+/// A copy of a converted version 1 file says so with `converted_from: 1`, and its players
+/// load without body fields; without the mark a missing body field is still refused, and any
+/// other version it names is refused.
+#[test]
+fn a_converted_copy_loads_without_body_fields_and_only_from_version_1() {
+    let content = common::content();
+    let dir = common::content_dir();
+    let shipped = content
+        .load_team(&dir, &dir.path(engine::data::TEAM_A_FILE))
+        .unwrap()
+        .value;
+    assert!(shipped.players.iter().all(|p| p.height.is_none()));
+    let mut copy = shipped.clone();
+    copy.schema_version = engine::data::TEAM_VERSION;
+    let load =
+        |file: &TeamFile| content.team_from_bytes(&serde_json::to_vec(file).unwrap(), "copy.json");
+    let text = load(&copy).unwrap_err().to_string();
+    assert!(text.contains("body field height is missing"), "{text}");
+    copy.converted_from = Some(1);
+    let loaded = load(&copy).unwrap().value;
+    assert_eq!(loaded.players, shipped.players);
+    copy.converted_from = Some(2);
+    let text = load(&copy).unwrap_err().to_string();
+    assert!(text.contains("converted_from is 2; allowed 1"), "{text}");
 }
 
 /// A version 2 file still naming the old injury resistance is refused naming the player and

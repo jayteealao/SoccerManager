@@ -37,6 +37,10 @@ pub struct PlayerTally {
     pub red: u32,
     /// Goals his side conceded while he was on the pitch.
     pub conceded: u32,
+    /// Goals he made: his completed pass reached the scorer.
+    pub assists: u32,
+    /// `true` when he was on the pitch at kick-off.
+    pub started: bool,
 }
 
 /// Which counter a match event adds to.
@@ -55,6 +59,7 @@ pub(crate) enum Count {
     Foul,
     Yellow,
     Red,
+    Assist,
 }
 
 impl PlayerTally {
@@ -73,6 +78,7 @@ impl PlayerTally {
             Count::Foul => &mut self.fouls,
             Count::Yellow => &mut self.yellow,
             Count::Red => &mut self.red,
+            Count::Assist => &mut self.assists,
         };
         *c += 1;
     }
@@ -106,6 +112,12 @@ impl Simulation {
     pub(crate) fn tally_played(&mut self, i: usize) {
         let p = &self.players[i];
         self.tallies[p.team][p.squad].played = true;
+    }
+
+    /// Marks the player at roster index `i` as on the pitch at kick-off.
+    pub(crate) fn tally_started(&mut self, i: usize) {
+        let p = &self.players[i];
+        self.tallies[p.team][p.squad].started = true;
     }
 
     /// `ticks` more on the pitch for every player of both sides who is on it.

@@ -63,6 +63,12 @@ pub struct ContractTuning {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]
     pub foot: Option<FootTuning>,
+    /// The season at kick-off: how a player's recent form and his progress toward his season
+    /// goal, weighted by his ambition, set his mood when the match starts. Optional, so a
+    /// tuning file written before it still loads, and then every kick-off mood is 0.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub season: Option<SeasonTuning>,
 }
 
 /// The traits values a tuning file without a traits block reads: no weight, no chance.
@@ -91,6 +97,60 @@ impl ContractTuning {
     #[inline]
     pub fn foot(&self) -> FootTuning {
         self.foot.unwrap_or(FootTuning::NONE)
+    }
+
+    /// The season values: the file's, or [`SeasonTuning::NEUTRAL`] when it has none.
+    #[inline]
+    pub fn season(&self) -> SeasonTuning {
+        self.season.unwrap_or(SeasonTuning::NEUTRAL)
+    }
+}
+
+/// The season block (`engine.contract.season`). A player's kick-off mood is his recent form
+/// above or below `form_neutral` times `form_weight`, plus his progress toward his season goal
+/// (from a full pace behind to a full pace ahead) times `goal_weight`, which his ambition
+/// raises or lowers by up to `ambition_weight` of itself; the sum stays within `cap` either
+/// side of neutral.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct SeasonTuning {
+    /// The match rating (1 to 10) that counts as neither good nor bad form.
+    #[garde(range(min = 1.0, max = 10.0))]
+    pub form_neutral: f64,
+    /// Mood points (of 100) per rating point of form above or below neutral.
+    #[garde(range(min = 0.0, max = 50.0))]
+    pub form_weight: f64,
+    /// Mood points at a full pace ahead of (or behind) the season goal, at neutral ambition.
+    #[garde(range(min = 0.0, max = 50.0))]
+    pub goal_weight: f64,
+    /// The share of the goal's weight the most ambitious player adds and the least ambitious
+    /// loses; below 1, so the goal always counts the same way round.
+    #[garde(range(min = 0.0, max = 0.9))]
+    pub ambition_weight: f64,
+    /// The most mood points the season gives or takes at kick-off.
+    #[garde(range(min = 0.0, max = 100.0))]
+    pub cap: f64,
+}
+
+impl SeasonTuning {
+    /// No season at kick-off: every weight 0, so every kick-off mood is 0.
+    pub const NEUTRAL: SeasonTuning = SeasonTuning {
+        form_neutral: 6.5,
+        form_weight: 0.0,
+        goal_weight: 0.0,
+        ambition_weight: 0.0,
+        cap: 0.0,
+    };
+
+    /// The shipped season block; a test pins `content/tuning.json` to it.
+    pub const fn shipped() -> SeasonTuning {
+        SeasonTuning {
+            form_neutral: 6.5,
+            form_weight: 20.0,
+            goal_weight: 15.0,
+            ambition_weight: 0.6,
+            cap: 40.0,
+        }
     }
 }
 
@@ -1266,6 +1326,7 @@ impl Default for ContractTuning {
             }),
             traits: Some(TraitTuning::shipped()),
             foot: Some(FootTuning::shipped()),
+            season: Some(SeasonTuning::shipped()),
         }
     }
 }
@@ -1367,6 +1428,22 @@ mod tests {
         }
         let text = c.validate().unwrap_err().to_string();
         assert!(text.contains("foot.cost_cap"), "{text}");
+    }
+
+    #[test]
+    fn a_file_without_the_season_block_reads_it_neutral_and_a_wide_cap_is_refused() {
+        let c = ContractTuning {
+            season: None,
+            ..Default::default()
+        };
+        assert_eq!(c.season(), SeasonTuning::NEUTRAL);
+        assert!(c.validate().is_ok());
+        let mut c = ContractTuning::default();
+        if let Some(s) = c.season.as_mut() {
+            s.cap = 120.0;
+        }
+        let text = c.validate().unwrap_err().to_string();
+        assert!(text.contains("season.cap"), "{text}");
     }
 
     #[test]

@@ -35,6 +35,7 @@ use crate::cli::LaunchOpts;
 use crate::engines::{Choice, PreviousEngine, Refusal};
 use crate::front_door::{SampleTeam, SavedMatch, Settings, Views};
 use crate::matchday::round::Round;
+use crate::season::{COPY_FILES, Season};
 use crate::web::{Action, Status};
 
 /// Seconds a worker waits for a page that lost its connection.
@@ -106,14 +107,20 @@ struct Worker {
     refusal: Option<Refusal>,
     /// The seed of the next fresh match, and of the round match setup previews.
     seed: u64,
-    /// The team-file flags every worker of this program receives.
+    /// The team-file flags every worker of this program receives: the fixture's, or the
+    /// season record's copies of them in the match folder.
     teams: Vec<OsString>,
+    /// The team-file flags of the chosen clubs as match setup offers them, before the season
+    /// record conditions them.
+    fixture: Vec<OsString>,
     /// The unfinished match the start screen offers to resume.
     saved: Option<SavedMatch>,
     /// The player's settings.
     settings: Settings,
     /// The squad screen's store: named views and match ratings per club.
     views: Views,
+    /// The season record of every club the launcher's matches played.
+    season: Season,
 }
 
 /// The program that plays the match: this program, or the previous release's program with
@@ -243,10 +250,12 @@ pub fn run(content_dir: Option<&Path>, opts: &LaunchOpts) -> anyhow::Result<i32>
             resumed_from: None,
             refusal: None,
             seed,
+            fixture: teams.clone(),
             teams,
             saved,
             settings: Settings::load(&data),
             views: Views::load(&data),
+            season: Season::load(&data),
         }),
         engine,
         previous: PreviousEngine::locate(opts.previous.as_deref()),
@@ -741,7 +750,7 @@ impl Launcher {
                 return Err("a match is already running".into());
             }
             if let Some((home, away)) = chosen {
-                worker.teams = vec![
+                worker.fixture = vec![
                     "--team-a".into(),
                     home.path.as_os_str().to_os_string(),
                     "--team-b".into(),
@@ -760,6 +769,7 @@ impl Launcher {
             worker.match_id = fresh.to_string();
             worker.snapshot = snapshot_of(&worker.match_id);
             worker.match_millis = fresh.millis;
+            worker.teams = self.conditioned_teams(&worker);
             worker.program = Program::Current;
             worker.snapshot_tick = None;
             worker.resumed_from = None;
@@ -791,14 +801,29 @@ impl Launcher {
             };
             (saved.path.clone(), files)
         };
-        self.lock().teams = files.map_or_else(Vec::new, |[a, b]| {
+        let flags = |[a, b]: [PathBuf; 2]| -> Vec<OsString> {
             vec![
                 "--team-a".into(),
                 a.into_os_string(),
                 "--team-b".into(),
                 b.into_os_string(),
             ]
+        };
+        // A match played from the season record's copies resumes from them, so its content
+        // hash is the one its save holds.
+        let copies = files.as_ref().map(|[a, b]| {
+            let folder = path.parent().unwrap_or(Path::new(""));
+            let copy = |k: usize, shipped: &PathBuf| {
+                let p = folder.join(COPY_FILES[k]);
+                if p.is_file() { p } else { shipped.clone() }
+            };
+            [copy(0, a), copy(1, b)]
         });
+        {
+            let mut worker = self.lock();
+            worker.fixture = files.map_or_else(Vec::new, flags);
+            worker.teams = copies.map_or_else(Vec::new, flags);
+        }
         tracing::info!(signal = "launch.resume_saved");
         self.resume_saved(&path);
         Ok(())
@@ -878,9 +903,38 @@ impl Launcher {
         Ok(())
     }
 
-    /// Adds the home ratings of the match the launcher last ran, once its record exists, and
-    /// saves the store when anything was added. A record that is missing or refused adds
-    /// nothing; a refused one says why.
+    /// The worker's team-file flags for the match `worker` is about to start: the fixture's,
+    /// with each side whose club has a match in the season record replaced by a copy in the
+    /// new match folder that carries its players' recent form and goal progress. Without
+    /// match setup, the fixture's as given.
+    fn conditioned_teams(&self, worker: &Worker) -> Vec<OsString> {
+        let mut flags = worker.fixture.clone();
+        let Some(door) = &self.front_door else {
+            return flags;
+        };
+        let folder = self.data.join("matches").join(&worker.match_id);
+        for (k, name) in COPY_FILES.iter().enumerate() {
+            let Some(path) = flags.get(2 * k + 1) else {
+                continue;
+            };
+            let Some(team) = door.teams.iter().find(|t| t.path.as_os_str() == path) else {
+                continue;
+            };
+            let Some(copy) = worker.season.conditioned(&team.file) else {
+                continue;
+            };
+            match crate::season::write_copy(&folder, name, &copy) {
+                Ok(written) => flags[2 * k + 1] = written.into_os_string(),
+                Err(e) => tracing::warn!(signal = "launch.season_refused", reason = %e),
+            }
+        }
+        flags
+    }
+
+    /// Adds the match the launcher last ran, once its record exists: the home ratings to the
+    /// squad screen's store and, with match setup, both sides to the season record; saves
+    /// each when anything was added. A record that is missing or refused adds nothing; a
+    /// refused one says why.
     fn ingest_last_match(&self, worker: &mut Worker) {
         let Some(folder) = worker.snapshot.parent() else {
             return;
@@ -901,8 +955,49 @@ impl Launcher {
                         );
                     }
                 }
+                self.ingest_season(worker, &stats);
             }
             Err(e) => tracing::warn!(signal = "launch.views_refused", reason = %e),
+        }
+    }
+
+    /// Adds both sides of the finished match `stats` to the season record, when match setup
+    /// offers both clubs (their team files give each new player his goal), and saves it.
+    fn ingest_season(&self, worker: &mut Worker, stats: &engine::observe::MatchStats) {
+        let Some(door) = &self.front_door else {
+            return;
+        };
+        let file = |side: usize| {
+            door.teams
+                .iter()
+                .find(|t| t.id() == stats.teams[side].id)
+                .map(|t| &t.file)
+        };
+        let (Some(home), Some(away)) = (file(0), file(1)) else {
+            return;
+        };
+        let before = worker
+            .season
+            .clubs
+            .values()
+            .map(|c| c.matches.len())
+            .sum::<usize>();
+        worker
+            .season
+            .ingest(stats, [home, away], &door.content.attributes);
+        if worker
+            .season
+            .clubs
+            .values()
+            .map(|c| c.matches.len())
+            .sum::<usize>()
+            == before
+        {
+            return;
+        }
+        match worker.season.save(&self.data) {
+            Ok(()) => tracing::info!(signal = "launch.season_recorded", match_id = %stats.match_id),
+            Err(e) => tracing::warn!(signal = "launch.season_refused", reason = %e),
         }
     }
 
@@ -1017,7 +1112,15 @@ impl Status for Arc<Launcher> {
     fn views(&self, club: &str) -> Option<String> {
         let mut worker = self.lock();
         self.ingest_last_match(&mut worker);
-        Some(worker.views.club_json(club).to_string())
+        let squad = self.front_door.as_ref().and_then(|door| {
+            door.teams
+                .iter()
+                .find(|t| t.id() == club)
+                .map(|t| (&t.file, &door.content.attributes))
+        });
+        let mut part = worker.views.club_json(club);
+        part["season"] = worker.season.club_json(club, squad);
+        Some(part.to_string())
     }
 
     fn round(&self, home: &str, away: &str) -> Option<Result<String, String>> {
@@ -1099,9 +1202,11 @@ mod tests {
                 refusal: None,
                 seed: 1,
                 teams: Vec::new(),
+                fixture: Vec::new(),
                 saved: None,
                 settings: Settings::default(),
                 views: Views::default(),
+                season: Season::default(),
             }),
             engine: missing.clone(),
             previous: PreviousEngine {
@@ -1126,7 +1231,131 @@ mod tests {
             .unwrap_or_else(|| panic!("the finished match's ratings are lost: {club}"));
         assert_eq!(kept.len(), 1, "the match is added once: {club}");
         assert_eq!(kept[0]["match"], "m-done");
-        assert_eq!(Views::load(&data).club_json("club-a"), club);
+        let mut stored = Views::load(&data).club_json("club-a");
+        stored["season"] = club["season"].clone();
+        assert_eq!(stored, club);
         let _ = std::fs::remove_dir_all(&data);
+    }
+
+    /// With match setup, a finished match between two sample clubs enters the season record
+    /// of both when the next match starts; the views answer carries the home club's season
+    /// part; and the next match plays from copies in its own folder that carry each recorded
+    /// player's form and goal progress.
+    #[test]
+    fn a_finished_match_enters_the_season_and_the_next_match_plays_from_the_copies() {
+        let folder = crate::season::tests::temp("launch");
+        let data = folder.0.clone();
+        let missing = data.join("no-engine");
+        let dir = ContentDir::at(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content"));
+        let content = Content::load(&dir).unwrap();
+        let teams = crate::front_door::sample_teams(&dir, &content).unwrap();
+        let (home, away) = (teams[0].clone(), teams[1].clone());
+        let star = home.file.players[2].id.clone();
+        let mut stats = crate::front_door::tests::stats("m-done", &[]);
+        stats.teams[0].id = home.id().to_string();
+        stats.teams[1].id = away.id().to_string();
+        stats.ratings = vec![engine::observe::RatingEntry {
+            id: star.clone(),
+            team: 0,
+            rating: 8.1,
+            started: true,
+            minutes: 90,
+            goals: 1,
+            ..Default::default()
+        }];
+        let file = engine::observe::write_stats(&data, &stats).unwrap();
+        let shipped_flags = vec![
+            OsString::from("--team-a"),
+            home.path.as_os_str().to_os_string(),
+            OsString::from("--team-b"),
+            away.path.as_os_str().to_os_string(),
+        ];
+        let launcher = Arc::new(Launcher {
+            worker: Mutex::new(Worker {
+                state: State::Finished,
+                child: None,
+                pid: None,
+                generation: 1,
+                snapshot_tick: None,
+                match_id: "m-done".into(),
+                snapshot: file.with_file_name(engine::snapshot::FILE_NAME),
+                match_millis: 0,
+                program: Program::Current,
+                resumed_from: None,
+                refusal: None,
+                seed: 1,
+                teams: shipped_flags.clone(),
+                fixture: shipped_flags,
+                saved: None,
+                settings: Settings::default(),
+                views: Views::default(),
+                season: Season::default(),
+            }),
+            engine: missing.clone(),
+            previous: PreviousEngine {
+                program: missing.clone(),
+                content: missing,
+            },
+            content_dir: None,
+            skin: "",
+            fixed_seed: None,
+            minutes: 1,
+            data: data.clone(),
+            front_door: Some(FrontDoor {
+                dir,
+                content,
+                teams,
+            }),
+            drop_client_at: Mutex::new(None),
+            fast_forward_to: None,
+            test_jump: false,
+        });
+        let body = serde_json::json!({ "home": home.id(), "away": away.id() }).to_string();
+        launcher.new_match(Some(&body)).unwrap();
+
+        let season = Season::load(&data);
+        for club in [home.id(), away.id()] {
+            assert_eq!(season.clubs[club].matches, ["m-done"], "{club}");
+        }
+        let answer: serde_json::Value =
+            serde_json::from_str(&launcher.views(home.id()).unwrap()).unwrap();
+        let part = &answer["season"];
+        assert_eq!(part["matches"], serde_json::json!(["m-done"]));
+        assert_eq!(part["players"][&star]["starts"], 1);
+        assert_eq!(part["players"][&star]["form"], 8.1);
+        let squad = home.file.players.len();
+        assert_eq!(
+            part["players"].as_object().unwrap().len(),
+            squad,
+            "every squad player is listed with his goal"
+        );
+
+        let (folder, flags) = {
+            let worker = launcher.lock();
+            (
+                data.join("matches").join(&worker.match_id),
+                worker.teams.clone(),
+            )
+        };
+        for (k, name) in COPY_FILES.iter().enumerate() {
+            let copy = folder.join(name);
+            assert_eq!(
+                flags[2 * k + 1],
+                copy.as_os_str(),
+                "side {k} plays the copy"
+            );
+            let door = launcher.front_door.as_ref().unwrap();
+            let loaded = door
+                .content
+                .team_from_bytes(&std::fs::read(&copy).unwrap(), name)
+                .unwrap()
+                .value;
+            if k == 0 {
+                let entry = loaded.players.iter().find(|p| p.id == star).unwrap();
+                let c = entry.condition.unwrap();
+                assert_eq!(c.recent_rating, Some(81));
+                assert!(c.goal_progress.is_some());
+            }
+        }
     }
 }
