@@ -33,7 +33,7 @@ const SKINS = ['broadcast-blue', 'interim-light'];
 const SEED = 7;
 /// The north star's seed: the lowest whose matchday has a goal at another ground before the
 /// fast-forward ends.
-const NORTH_STAR_SEED = 5;
+const NORTH_STAR_SEED = 6;
 
 const content = {};
 

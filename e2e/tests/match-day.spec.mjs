@@ -7,12 +7,13 @@ import { kickOff, openMatch, playUntil, scoreBug, setSpeed, showMatch, until } f
 
 let fixture;
 
-// Seed 3 scores late in the first half of a ten-minute match (tick 11,623): the lowest seed
-// that still scores in ten minutes now that restarts wait as long as real ones.
+// Seed 2 scores in a ten-minute match: the lowest seed that still scores in ten minutes now
+// that restarts wait as long as real ones and the defensive stages read the decided
+// attributes (seed 3 until then).
 test.beforeAll(() => {
   const dir = tempDir('fixture');
   fixture = path.join(dir, 'match.smfx');
-  const run = runEngine(['record', '--seed', '3', '--minutes', '10', '--out', fixture], { dataDir: dir });
+  const run = runEngine(['record', '--seed', '2', '--minutes', '10', '--out', fixture], { dataDir: dir });
   expect(run.code, run.stderr).toBe(0);
 });
 
