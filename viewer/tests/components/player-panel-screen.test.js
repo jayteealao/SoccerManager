@@ -202,7 +202,21 @@ test('an AM in the ST slot reads out of position on the familiarity row', async 
 test('the hover lists the same actions on pointer and on focus, no minor weight, and Escape closes it', async () => {
   const { panel } = await openPanel(1);
   const row = panel.querySelector('[data-attr="crossing"]');
-  assert.equal(row.getAttribute('tabindex'), '0');
+  // The attributes take one place in the Tab order: the first row; the arrow keys move it.
+  const attrs = [...panel.querySelectorAll('[data-attr]')];
+  assert.deepEqual(
+    attrs.filter((el) => el.getAttribute('tabindex') === '0'),
+    [attrs[0]]
+  );
+  attrs[0].focus();
+  await settle();
+  attrs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+  await settle();
+  assert.equal(document.activeElement, attrs[1], 'ArrowDown moves to the next row');
+  assert.equal(attrs[1].getAttribute('tabindex'), '0');
+  assert.equal(attrs[0].getAttribute('tabindex'), '-1');
+  attrs[1].blur();
+  await settle();
   const expected = actionsOf('crossing').map((a) => `${a.words}${a.role}`);
   const rows = () => [...panel.querySelectorAll('[data-hover="crossing"] li')].map((li) => li.textContent.trim());
   row.dispatchEvent(pointer('pointerenter', 'mouse'));

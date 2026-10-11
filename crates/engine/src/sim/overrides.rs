@@ -1,37 +1,31 @@
 //! The trait override's moments, its draw and its event ([`crate::traits`]). A moment is a
-//! decision that happens in play: a carrier's release of the ball (a restart kick included),
-//! his first decision after gaining it, the start of his carry from a wide channel, a new
-//! opposing carrier for a presser, his side gaining the ball for an anchor, and a loose ball
-//! reaching a keeper's range. At a moment that meets the override's conditions the player
+//! decision that happens in play: a carrier's release of the ball, his first decision after
+//! gaining it, the start of his carry from a wide channel, a new opposing carrier for a
+//! presser, his side gaining the ball for an anchor, and a loose ball reaching a keeper's
+//! range. At a moment that meets the override's conditions the player
 //! draws once on his own `trait_override` key; the draw happens nowhere else, so a match with
 //! no strong conflicting trait draws nothing new.
 //!
-//! Each moment lists every trait whose choice it can read. Only the traits with a row in the
-//! conflict table ([`TraitKind::conflicts`]) ever meet one; the others' choices stay here so
-//! that a row brings a trait back without new moment code.
+//! Each moment lists the traits whose choice it reads: the traits with a row in the conflict
+//! table ([`TraitKind::conflicts`]). A trait given a row needs its moment here too, with a
+//! test that reaches it.
 
 use serde_json::json;
 
 use crate::contract;
-use crate::decision::{self, Choice, Kick, Options, PassKind};
-use crate::math::{DVec2, toward};
-use crate::modules::{RestartPass, Scored, TargetsTrace};
+use crate::decision::{self, Choice, Options};
+use crate::modules::{Scored, TargetsTrace};
 use crate::sim::{EngineEventKind, EventDetail, Simulation};
 use crate::streams::{Action, Key, PlayerKey};
 use crate::tactics::Instruction;
 use crate::trace::Point;
-use crate::traits::{
-    ActEnd, EARLY_CROSS_M, KILLER_GAIN_M, OverrideCause, SWITCH_M, TraitAct, TraitKind, TraitSet,
-    cause,
-};
+use crate::traits::{ActEnd, OverrideCause, TraitAct, TraitKind, TraitSet, cause};
 
 /// What a trait does when it wins its moment.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Forced {
     /// A pass to this team-mate instead.
     Pass(usize),
-    /// A shot instead.
-    Shot,
     /// The trait's own action, held until it ends.
     Act(ActEnd),
 }
@@ -217,12 +211,7 @@ impl Simulation {
                 TraitKind::DwellsOnBall | TraitKind::HoldsUpBall if options.hold.is_some() => {
                     (options, Choice::Hold)
                 }
-                TraitKind::RunsWithBallOften
-                | TraitKind::TriesTricks
-                | TraitKind::CutsInside
-                | TraitKind::HugsTouchline
-                    if options.dribble.is_some() =>
-                {
+                TraitKind::CutsInside | TraitKind::HugsTouchline if options.dribble.is_some() => {
                     (options, Choice::Dribble)
                 }
                 _ => (options, choice),
@@ -247,22 +236,11 @@ impl Simulation {
         choice: Choice,
     ) -> (Options, Choice) {
         let kinds = [
-            TraitKind::TriesKillerBalls,
-            TraitKind::TriesLobsAndChips,
-            TraitKind::CrossesEarly,
-            TraitKind::KicksLong,
-            TraitKind::PlaysShortSimplePasses,
-            TraitKind::PlaysOneTwos,
-            TraitKind::ThrowsShort,
             TraitKind::DwellsOnBall,
-            TraitKind::RunsWithBallOften,
             TraitKind::HoldsUpBall,
-            TraitKind::TriesTricks,
             TraitKind::ReleasesBallEarly,
             TraitKind::CutsInside,
             TraitKind::HugsTouchline,
-            TraitKind::SwitchesPlay,
-            TraitKind::ShootsFromDistance,
         ];
         let won = self.moment(c, &kinds, |sim, kind| {
             sim.carrier_choice(kind, c, scored, &options, choice)
@@ -280,7 +258,6 @@ impl Simulation {
                 o.pass = Some((score, j));
                 (o, Choice::Pass)
             }
-            Forced::Shot => (o, Choice::Shot),
             Forced::Act(ends) => {
                 self.trait_acts[c] = Some(TraitAct {
                     kind: won.kind,
@@ -313,10 +290,6 @@ impl Simulation {
         choice: Choice,
     ) -> Option<Forced> {
         let me = &self.players[c];
-        let side = &self.teams[me.team];
-        let attack_x = side.attack_x;
-        let pitch = self.config.pitch();
-        let keeper = c == self.keeper(me.team);
         // A release: a pass or a clearance about to be kicked. A shot is his own call and
         // stays one.
         let release = matches!(choice, Choice::Pass | Choice::Clear);
@@ -325,17 +298,6 @@ impl Simulation {
             _ => None,
         };
         let mates = &scored.candidates[..scored.count];
-        let d_to = |j: usize| (self.players[j].pos - me.pos).length();
-        let kind_to = |j: usize| {
-            PassKind::of(
-                me.pos,
-                self.players[j].pos,
-                d_to(j),
-                attack_x,
-                keeper,
-                pitch,
-            )
-        };
         let best = |keep: &dyn Fn(usize) -> bool| {
             mates
                 .iter()
@@ -345,59 +307,12 @@ impl Simulation {
         };
         let pass = |j: Option<usize>| j.filter(|&j| Some(j) != passing_to).map(Forced::Pass);
         let pressed = decision::pressed(&self.view(), c);
-        let from_line = pitch.half_length() - me.pos.x * attack_x;
         let wide = me.pos.y.abs() > contract::CROSS_WIDE_M;
         match kind {
-            TraitKind::TriesKillerBalls if release => {
-                let gain = |j: usize| (self.players[j].pos.x - me.pos.x) * attack_x;
-                let most = mates
-                    .iter()
-                    .map(|&(j, _)| j)
-                    .filter(|&j| gain(j) >= KILLER_GAIN_M)
-                    .max_by(|&a, &b| gain(a).total_cmp(&gain(b)).then(b.cmp(&a)));
-                pass(most)
-            }
-            TraitKind::TriesLobsAndChips if release => {
-                pass(best(&|j| kind_to(j) == PassKind::Chip))
-            }
-            TraitKind::CrossesEarly if release && wide && from_line > EARLY_CROSS_M => {
-                pass(best(&|j| kind_to(j) == PassKind::Cross))
-            }
-            TraitKind::KicksLong if release && keeper => {
-                pass(best(&|j| d_to(j) > contract::THROW_M))
-            }
-            TraitKind::PlaysShortSimplePasses
-                if choice == Choice::Clear || passing_to.is_some_and(|j| d_to(j) > SWITCH_M) =>
-            {
-                let shortest = mates
-                    .iter()
-                    .map(|&(j, _)| j)
-                    .min_by(|&a, &b| d_to(a).total_cmp(&d_to(b)).then(a.cmp(&b)));
-                pass(shortest)
-            }
-            TraitKind::PlaysOneTwos if release => {
-                let back = self
-                    .last_passer(c)
-                    .filter(|k| mates.iter().any(|&(j, _)| j == *k));
-                pass(back)
-            }
-            TraitKind::ThrowsShort
-                if keeper
-                    && (choice == Choice::Clear
-                        || passing_to.is_some_and(|j| d_to(j) > contract::THROW_M)) =>
-            {
-                pass(best(&|j| d_to(j) <= contract::THROW_M))
-            }
             TraitKind::DwellsOnBall if release && options.hold.is_some() => {
                 Some(Forced::Act(self.carry_end()))
             }
-            TraitKind::RunsWithBallOften if release && options.dribble.is_some() => {
-                Some(Forced::Act(self.carry_end()))
-            }
             TraitKind::HoldsUpBall if release && pressed && options.hold.is_some() => {
-                Some(Forced::Act(self.carry_end()))
-            }
-            TraitKind::TriesTricks if release && pressed && options.dribble.is_some() => {
                 Some(Forced::Act(self.carry_end()))
             }
             TraitKind::ReleasesBallEarly
@@ -418,16 +333,6 @@ impl Simulation {
                 };
                 (wanted != side).then(|| Forced::Act(self.carry_end()))
             }
-            TraitKind::SwitchesPlay if release => pass(best(&|j| {
-                d_to(j) > SWITCH_M && (self.players[j].pos.y - me.pos.y).abs() >= SWITCH_M
-            })),
-            TraitKind::ShootsFromDistance
-                if release
-                    && options.shot.is_some()
-                    && !pitch.in_penalty_area(me.pos, attack_x) =>
-            {
-                Some(Forced::Shot)
-            }
             _ => None,
         }
     }
@@ -436,104 +341,6 @@ impl Simulation {
     fn first_decision(&self) -> bool {
         let held = self.tick.saturating_sub(self.control_since);
         (1..=self.config.tuning.decision_interval_ticks.max(1)).contains(&held)
-    }
-
-    /// The restart taker's release: the kick `pass` the decision maker chose, or the trait's
-    /// pass when one of his traits wins the moment.
-    pub(crate) fn restart_override(
-        &mut self,
-        taker: usize,
-        pass: &RestartPass,
-        kind: crate::data::rules::StoppageKind,
-    ) -> Option<Kick> {
-        if pass.fallback || !self.may_override(taker) {
-            return None;
-        }
-        let kinds = [
-            TraitKind::TriesKillerBalls,
-            TraitKind::TriesLobsAndChips,
-            TraitKind::CrossesEarly,
-            TraitKind::KicksLong,
-            TraitKind::PlaysShortSimplePasses,
-            TraitKind::ThrowsShort,
-            TraitKind::SwitchesPlay,
-        ];
-        let me = self.players[taker];
-        let attack_x = self.teams[me.team].attack_x;
-        let keeper = taker == self.keeper(me.team);
-        let mates: Vec<(usize, f64)> = pass.candidates[..pass.count].to_vec();
-        let chosen = mates
-            .iter()
-            .max_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0)))
-            .map(|&(j, _)| j);
-        let won = self.moment(taker, &kinds, |sim, trait_kind| {
-            let pitch = sim.config.pitch();
-            let d_to = |j: usize| (sim.players[j].pos - me.pos).length();
-            let best = |keep: &dyn Fn(usize) -> bool| {
-                mates
-                    .iter()
-                    .filter(|&&(j, _)| keep(j))
-                    .max_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0)))
-                    .map(|&(j, _)| j)
-            };
-            let kind_to = |j: usize| {
-                PassKind::of(me.pos, sim.players[j].pos, d_to(j), attack_x, keeper, pitch)
-            };
-            let from_line = pitch.half_length() - me.pos.x * attack_x;
-            let pick = match trait_kind {
-                TraitKind::TriesKillerBalls => {
-                    let gain = |j: usize| (sim.players[j].pos.x - me.pos.x) * attack_x;
-                    mates
-                        .iter()
-                        .map(|&(j, _)| j)
-                        .filter(|&j| gain(j) >= KILLER_GAIN_M)
-                        .max_by(|&a, &b| gain(a).total_cmp(&gain(b)).then(b.cmp(&a)))
-                }
-                TraitKind::TriesLobsAndChips => best(&|j| kind_to(j) == PassKind::Chip),
-                TraitKind::CrossesEarly
-                    if me.pos.y.abs() > contract::CROSS_WIDE_M && from_line > EARLY_CROSS_M =>
-                {
-                    best(&|j| kind_to(j) == PassKind::Cross)
-                }
-                TraitKind::KicksLong if keeper => best(&|j| d_to(j) > contract::THROW_M),
-                TraitKind::PlaysShortSimplePasses if chosen.is_some_and(|j| d_to(j) > SWITCH_M) => {
-                    mates
-                        .iter()
-                        .map(|&(j, _)| j)
-                        .min_by(|&a, &b| d_to(a).total_cmp(&d_to(b)).then(a.cmp(&b)))
-                }
-                TraitKind::ThrowsShort
-                    if keeper && chosen.is_some_and(|j| d_to(j) > contract::THROW_M) =>
-                {
-                    best(&|j| d_to(j) <= contract::THROW_M)
-                }
-                TraitKind::SwitchesPlay => best(&|j| {
-                    d_to(j) > SWITCH_M && (sim.players[j].pos.y - me.pos.y).abs() >= SWITCH_M
-                }),
-                _ => None,
-            };
-            pick.filter(|&j| Some(j) != chosen).map(Forced::Pass)
-        })?;
-        let Forced::Pass(j) = won.forced else {
-            return None;
-        };
-        let t = &self.config.tuning;
-        let to = self.players[j].pos;
-        let d = (to - me.pos).length();
-        let dir = match toward(me.pos, to) {
-            v if v == DVec2::ZERO => DVec2::new(attack_x, 0.0),
-            v => v,
-        };
-        let loft = match kind {
-            crate::data::rules::StoppageKind::ThrowIn => decision::THROW_LOFT,
-            _ if d > 25.0 => 3.0 + d * 0.08,
-            _ => 0.0,
-        };
-        Some(Kick::Pass {
-            dir,
-            speed: decision::kick_speed(d, loft, t),
-            loft,
-        })
     }
 
     /// The new-carrier moment of the side out of possession: on the first decision after
@@ -585,10 +392,11 @@ impl Simulation {
 
     /// The possession-gain moment: side `team` gained the ball, so each of its players whose
     /// strong anchor trait goes against his duty may play the trait's anchor until the side
-    /// loses it. The other side's anchor overrides end.
+    /// loses it. The other side's anchor overrides end, and so does any anchor of `team` left
+    /// from an earlier spell: a new spell is a new moment, drawn afresh.
     pub(crate) fn gain_override(&mut self, team: usize) {
         for act in &mut self.trait_acts {
-            if act.is_some_and(|a| a.ends == ActEnd::Possession(1 - team)) {
+            if act.is_some_and(|a| matches!(a.ends, ActEnd::Possession(_))) {
                 *act = None;
             }
         }
@@ -673,6 +481,16 @@ impl Simulation {
         }
         self.chase_seen = 0;
         self.carrying &= !(1u32 << i);
+    }
+
+    /// A restart or a kick-off gives side `team` the ball: the other side's spell is over, so
+    /// its anchor overrides end and cannot come back when it next has the ball.
+    pub(crate) fn end_acts_on_restart(&mut self, team: usize) {
+        for act in &mut self.trait_acts {
+            if act.is_some_and(|a| a.ends == ActEnd::Possession(1 - team)) {
+                *act = None;
+            }
+        }
     }
 
     /// Ends every override whose action a dead ball ends: a carry, a press and a keeper's

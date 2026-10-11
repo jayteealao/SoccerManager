@@ -80,7 +80,7 @@ pub struct SquadPlayer {
     /// ([`crate::contract::personality_scales`]); no state moves them.
     pub personality: crate::contract::PersonalityScales,
     /// The mood he starts a match at, from the season inputs of his condition and his
-    /// ambition ([`crate::sim::mood::kick_off_mood`]); 0 without them.
+    /// ambition ([`crate::contract::mood::kick_off_mood`]); 0 without them.
     pub kick_off_mood: f64,
 }
 
@@ -240,7 +240,7 @@ impl Team {
                     crate::contract::personality_scales(&attributes, schema, &tuning.contract);
                 let traits: Vec<_> = entry.traits.iter().map(|(n, s)| (n.clone(), *s)).collect();
                 let condition = entry.condition.unwrap_or_default();
-                let kick_off_mood = crate::sim::mood::kick_off_mood(
+                let kick_off_mood = crate::contract::mood::kick_off_mood(
                     &condition,
                     &personality,
                     &tuning.contract.season(),

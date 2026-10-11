@@ -456,6 +456,54 @@ impl HookTuning {
     };
 }
 
+/// Declares a tuning table of one `f64` per row, each held to its range by the tuning check,
+/// with `ZERO` and its lookups by [`crate::traits::TraitKind`] from the same list, so a new
+/// trait is one line here. A row names its field (the trait's catalogue name), then `=>` and
+/// the trait it belongs to, or nothing for a value of the table that is no trait's.
+macro_rules! trait_table {
+    (
+        $(#[doc = $tdoc:literal])*
+        $table:ident {
+            $( $(#[doc = $doc:literal])* $field:ident $(=> $kind:ident)? in $min:literal..=$max:literal, )*
+        }
+    ) => {
+        $(#[doc = $tdoc])*
+        #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+        #[serde(deny_unknown_fields)]
+        pub struct $table {
+            $(
+                $(#[doc = $doc])*
+                #[garde(range(min = $min, max = $max))]
+                pub $field: f64,
+            )*
+        }
+
+        impl $table {
+            /// Every value 0.
+            pub const ZERO: $table = $table { $($field: 0.0,)* };
+
+            /// The value of trait `k`; 0 for a trait the table does not list.
+            pub fn of(&self, k: crate::traits::TraitKind) -> f64 {
+                #[allow(unreachable_patterns)]
+                match k {
+                    $($(crate::traits::TraitKind::$kind => self.$field,)?)*
+                    _ => 0.0,
+                }
+            }
+
+            /// Mutable access to the value of trait `k`, for a test that plants one; `None` for
+            /// a trait the table does not list.
+            pub fn of_mut(&mut self, k: crate::traits::TraitKind) -> Option<&mut f64> {
+                #[allow(unreachable_patterns)]
+                match k {
+                    $($(crate::traits::TraitKind::$kind => Some(&mut self.$field),)?)*
+                    _ => None,
+                }
+            }
+        }
+    };
+}
+
 /// The traits block (`engine.contract.traits`): how much each trait of play weighs on its
 /// choice, and the chance a strong trait overrides an instruction it goes against.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
@@ -482,64 +530,8 @@ impl TraitTuning {
         moderate_share: 0.0,
         low_mood: -25.0,
         carry_s: 1.5,
-        weights: TraitWeights {
-            cuts_inside: 0.0,
-            hugs_touchline: 0.0,
-            shoots_from_distance: 0.0,
-            places_shots: 0.0,
-            powers_shots: 0.0,
-            tries_lobs_and_chips: 0.0,
-            tries_killer_balls: 0.0,
-            plays_short_simple_passes: 0.0,
-            switches_play: 0.0,
-            crosses_early: 0.0,
-            runs_with_ball_often: 0.0,
-            rarely_dribbles: 0.0,
-            tries_tricks: 0.0,
-            tries_tricks_gate: 0.0,
-            plays_one_twos: 0.0,
-            holds_up_ball: 0.0,
-            releases_ball_early: 0.0,
-            dwells_on_ball: 0.0,
-            gets_forward: 0.0,
-            stays_back: 0.0,
-            arrives_late_in_box: 0.0,
-            moves_into_channels: 0.0,
-            presses_relentlessly: 0.0,
-            dives_into_tackles: 0.0,
-            stays_on_feet: 0.0,
-            goes_down_easily: 0.0,
-            argues_with_officials: 0.0,
-            rushes_out: 0.0,
-            stays_on_line: 0.0,
-            punches_rather_than_catches: 0.0,
-            kicks_long: 0.0,
-            throws_short: 0.0,
-        },
-        override_chance: OverrideChances {
-            tries_killer_balls: 0.0,
-            tries_lobs_and_chips: 0.0,
-            crosses_early: 0.0,
-            kicks_long: 0.0,
-            plays_short_simple_passes: 0.0,
-            plays_one_twos: 0.0,
-            throws_short: 0.0,
-            dwells_on_ball: 0.0,
-            runs_with_ball_often: 0.0,
-            holds_up_ball: 0.0,
-            tries_tricks: 0.0,
-            releases_ball_early: 0.0,
-            cuts_inside: 0.0,
-            hugs_touchline: 0.0,
-            switches_play: 0.0,
-            presses_relentlessly: 0.0,
-            gets_forward: 0.0,
-            arrives_late_in_box: 0.0,
-            stays_back: 0.0,
-            shoots_from_distance: 0.0,
-            rushes_out: 0.0,
-            stays_on_line: 0.0,
-        },
+        weights: TraitWeights::ZERO,
+        override_chance: OverrideChances::ZERO,
     };
 
     /// The shipped traits block; a test pins `content/tuning.json` to it.
@@ -610,272 +602,107 @@ impl TraitTuning {
     }
 }
 
-/// Each trait's weight on its choice. Score weights add to an option's score; metres move a
-/// target; shares scale a range, a reach, a speed or a turn; log-odds move a foul chance;
-/// a chance moves a card or a hold chance.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
-#[serde(deny_unknown_fields)]
-pub struct TraitWeights {
-    /// Share of a wide carry's sideways part turned toward the centre.
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub cuts_inside: f64,
-    /// Share of a wide carry's sideways part turned toward the touchline.
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub hugs_touchline: f64,
-    /// Score added to a shot from outside the penalty area, at the edge of the shooting range.
-    #[garde(range(min = 0.0, max = 3.0))]
-    pub shoots_from_distance: f64,
-    /// Share a placed shot aims nearer the post and loses in speed.
-    #[garde(range(min = 0.0, max = 0.9))]
-    pub places_shots: f64,
-    /// Share a powered shot gains in speed and in spread.
-    #[garde(range(min = 0.0, max = 0.9))]
-    pub powers_shots: f64,
-    /// Score added to a chip.
-    #[garde(range(min = 0.0, max = 3.0))]
-    pub tries_lobs_and_chips: f64,
-    /// Score added to a forward pass through a tight lane, at a full forward pass.
-    #[garde(range(min = 0.0, max = 3.0))]
-    pub tries_killer_balls: f64,
-    /// Score added to a short pass, and taken from a forward one.
-    #[garde(range(min = 0.0, max = 3.0))]
-    pub plays_short_simple_passes: f64,
-    /// Score added to a switch: a pass over 25 m that crosses 25 m of the pitch's width.
-    #[garde(range(min = 0.0, max = 3.0))]
-    pub switches_play: f64,
-    /// Score added to a cross from outside the final 18 m.
-    #[garde(range(min = 0.0, max = 3.0))]
-    pub crosses_early: f64,
-    /// Score added to the dribble.
-    #[garde(range(min = 0.0, max = 3.0))]
-    pub runs_with_ball_often: f64,
-    /// Score taken from the dribble.
-    #[garde(range(min = 0.0, max = 3.0))]
-    pub rarely_dribbles: f64,
-    /// Score added to a dribble with an opponent close.
-    #[garde(range(min = 0.0, max = 3.0))]
-    pub tries_tricks: f64,
-    /// Rating points of technique the take-on gate drops for a player who tries tricks.
-    #[garde(range(min = 0.0, max = 5.0))]
-    pub tries_tricks_gate: f64,
-    /// Score added to a pass back to the team-mate who passed to him.
-    #[garde(range(min = 0.0, max = 3.0))]
-    pub plays_one_twos: f64,
-    /// Score added to holding the ball with an opponent close.
-    #[garde(range(min = 0.0, max = 3.0))]
-    pub holds_up_ball: f64,
-    /// Score taken from holding the ball, and from the carry window.
-    #[garde(range(min = 0.0, max = 3.0))]
-    pub releases_ball_early: f64,
-    /// Score added to holding the ball; it also slows the hold's fall with time on the ball.
-    #[garde(range(min = 0.0, max = 3.0))]
-    pub dwells_on_ball: f64,
-    /// Metres his anchor moves up the pitch while his side has the ball.
-    #[garde(range(min = 0.0, max = 15.0))]
-    pub gets_forward: f64,
-    /// Metres his anchor moves back while his side has the ball.
-    #[garde(range(min = 0.0, max = 15.0))]
-    pub stays_back: f64,
-    /// Metres his target moves toward goal while his side has the ball in the final third.
-    #[garde(range(min = 0.0, max = 15.0))]
-    pub arrives_late_in_box: f64,
-    /// Metres his anchor moves toward the channel between full-back and centre-back while his
-    /// side has the ball.
-    #[garde(range(min = 0.0, max = 15.0))]
-    pub moves_into_channels: f64,
-    /// Share his press reach widens by.
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub presses_relentlessly: f64,
-    /// Log-odds his tackle's win and foul chances rise by.
-    #[garde(range(min = 0.0, max = 3.0))]
-    pub dives_into_tackles: f64,
-    /// Log-odds his tackle's foul chance falls by.
-    #[garde(range(min = 0.0, max = 3.0))]
-    pub stays_on_feet: f64,
-    /// Log-odds the foul chance of a tackle on him rises by.
-    #[garde(range(min = 0.0, max = 3.0))]
-    pub goes_down_easily: f64,
-    /// Chance added to his yellow-card chance on a foul (dissent).
-    #[garde(range(min = 0.0, max = 0.5))]
-    pub argues_with_officials: f64,
-    /// Share a keeper's chase range widens by.
-    #[garde(range(min = 0.0, max = 0.9))]
-    pub rushes_out: f64,
-    /// Share a keeper's chase range narrows by.
-    #[garde(range(min = 0.0, max = 0.9))]
-    pub stays_on_line: f64,
-    /// Chance taken from a keeper's hold of a save: he punches it away instead.
-    #[garde(range(min = 0.0, max = 0.9))]
-    pub punches_rather_than_catches: f64,
-    /// Score added to a keeper's kick over 30 m.
-    #[garde(range(min = 0.0, max = 3.0))]
-    pub kicks_long: f64,
-    /// Score added to a keeper's throw.
-    #[garde(range(min = 0.0, max = 3.0))]
-    pub throws_short: f64,
-}
-
-impl TraitWeights {
-    /// The weight of trait `k`; the take-on gate's points for tricks are
-    /// [`TraitWeights::tries_tricks_gate`].
-    pub fn of(&self, k: crate::traits::TraitKind) -> f64 {
-        use crate::traits::TraitKind as T;
-        match k {
-            T::CutsInside => self.cuts_inside,
-            T::HugsTouchline => self.hugs_touchline,
-            T::ShootsFromDistance => self.shoots_from_distance,
-            T::PlacesShots => self.places_shots,
-            T::PowersShots => self.powers_shots,
-            T::TriesLobsAndChips => self.tries_lobs_and_chips,
-            T::TriesKillerBalls => self.tries_killer_balls,
-            T::PlaysShortSimplePasses => self.plays_short_simple_passes,
-            T::SwitchesPlay => self.switches_play,
-            T::CrossesEarly => self.crosses_early,
-            T::RunsWithBallOften => self.runs_with_ball_often,
-            T::RarelyDribbles => self.rarely_dribbles,
-            T::TriesTricks => self.tries_tricks,
-            T::PlaysOneTwos => self.plays_one_twos,
-            T::HoldsUpBall => self.holds_up_ball,
-            T::ReleasesBallEarly => self.releases_ball_early,
-            T::DwellsOnBall => self.dwells_on_ball,
-            T::GetsForward => self.gets_forward,
-            T::StaysBack => self.stays_back,
-            T::ArrivesLateInBox => self.arrives_late_in_box,
-            T::MovesIntoChannels => self.moves_into_channels,
-            T::PressesRelentlessly => self.presses_relentlessly,
-            T::DivesIntoTackles => self.dives_into_tackles,
-            T::StaysOnFeet => self.stays_on_feet,
-            T::GoesDownEasily => self.goes_down_easily,
-            T::ArguesWithOfficials => self.argues_with_officials,
-            T::RushesOut => self.rushes_out,
-            T::StaysOnLine => self.stays_on_line,
-            T::PunchesRatherThanCatches => self.punches_rather_than_catches,
-            T::KicksLong => self.kicks_long,
-            T::ThrowsShort => self.throws_short,
-        }
+trait_table! {
+    /// Each trait's weight on its choice. Score weights add to an option's score; metres move a
+    /// target; shares scale a range, a reach, a speed or a turn; log-odds move a foul chance;
+    /// a chance moves a card or a hold chance. The take-on gate's points for tricks are
+    /// `tries_tricks_gate`, a value of the table that is no trait's weight.
+    TraitWeights {
+        /// Share of a wide carry's sideways part turned toward the centre.
+        cuts_inside => CutsInside in 0.0..=1.0,
+        /// Share of a wide carry's sideways part turned toward the touchline.
+        hugs_touchline => HugsTouchline in 0.0..=1.0,
+        /// Score added to a shot from outside the penalty area, at the edge of the shooting range.
+        shoots_from_distance => ShootsFromDistance in 0.0..=3.0,
+        /// Share a placed shot aims nearer the post and loses in speed.
+        places_shots => PlacesShots in 0.0..=0.9,
+        /// Share a powered shot gains in speed and in spread.
+        powers_shots => PowersShots in 0.0..=0.9,
+        /// Score added to a chip.
+        tries_lobs_and_chips => TriesLobsAndChips in 0.0..=3.0,
+        /// Score added to a forward pass through a tight lane, at a full forward pass.
+        tries_killer_balls => TriesKillerBalls in 0.0..=3.0,
+        /// Score added to a short pass, and taken from a forward one.
+        plays_short_simple_passes => PlaysShortSimplePasses in 0.0..=3.0,
+        /// Score added to a switch: a pass over 25 m that crosses 25 m of the pitch's width.
+        switches_play => SwitchesPlay in 0.0..=3.0,
+        /// Score added to a cross from outside the final 18 m.
+        crosses_early => CrossesEarly in 0.0..=3.0,
+        /// Score added to the dribble.
+        runs_with_ball_often => RunsWithBallOften in 0.0..=3.0,
+        /// Score taken from the dribble.
+        rarely_dribbles => RarelyDribbles in 0.0..=3.0,
+        /// Score added to a dribble with an opponent close.
+        tries_tricks => TriesTricks in 0.0..=3.0,
+        /// Rating points of technique the take-on gate drops for a player who tries tricks.
+        tries_tricks_gate in 0.0..=5.0,
+        /// Score added to a pass back to the team-mate who passed to him.
+        plays_one_twos => PlaysOneTwos in 0.0..=3.0,
+        /// Score added to holding the ball with an opponent close.
+        holds_up_ball => HoldsUpBall in 0.0..=3.0,
+        /// Score taken from holding the ball, and from the carry window.
+        releases_ball_early => ReleasesBallEarly in 0.0..=3.0,
+        /// Score added to holding the ball; it also slows the hold's fall with time on the ball.
+        dwells_on_ball => DwellsOnBall in 0.0..=3.0,
+        /// Metres his anchor moves up the pitch while his side has the ball.
+        gets_forward => GetsForward in 0.0..=15.0,
+        /// Metres his anchor moves back while his side has the ball.
+        stays_back => StaysBack in 0.0..=15.0,
+        /// Metres his target moves toward goal while his side has the ball in the final third.
+        arrives_late_in_box => ArrivesLateInBox in 0.0..=15.0,
+        /// Metres his anchor moves toward the channel between full-back and centre-back while his
+        /// side has the ball.
+        moves_into_channels => MovesIntoChannels in 0.0..=15.0,
+        /// Share his press reach widens by.
+        presses_relentlessly => PressesRelentlessly in 0.0..=1.0,
+        /// Log-odds his tackle's win and foul chances rise by.
+        dives_into_tackles => DivesIntoTackles in 0.0..=3.0,
+        /// Log-odds his tackle's foul chance falls by.
+        stays_on_feet => StaysOnFeet in 0.0..=3.0,
+        /// Log-odds the foul chance of a tackle on him rises by.
+        goes_down_easily => GoesDownEasily in 0.0..=3.0,
+        /// Chance added to his yellow-card chance on a foul (dissent).
+        argues_with_officials => ArguesWithOfficials in 0.0..=0.5,
+        /// Share a keeper's chase range widens by.
+        rushes_out => RushesOut in 0.0..=0.9,
+        /// Share a keeper's chase range narrows by.
+        stays_on_line => StaysOnLine in 0.0..=0.9,
+        /// Chance taken from a keeper's hold of a save: he punches it away instead.
+        punches_rather_than_catches => PunchesRatherThanCatches in 0.0..=0.9,
+        /// Score added to a keeper's kick over 30 m.
+        kicks_long => KicksLong in 0.0..=3.0,
+        /// Score added to a keeper's throw.
+        throws_short => ThrowsShort in 0.0..=3.0,
     }
 }
 
-/// The chance per moment that a strong trait overrides the instruction it goes against. A
-/// trait outside the conflict table ([`crate::traits::TraitKind::conflicts`]) never meets a
-/// moment, so its chance is not read; the shipped file holds 0 for it.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
-#[serde(deny_unknown_fields)]
-pub struct OverrideChances {
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub tries_killer_balls: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub tries_lobs_and_chips: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub crosses_early: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub kicks_long: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub plays_short_simple_passes: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub plays_one_twos: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub throws_short: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub dwells_on_ball: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub runs_with_ball_often: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub holds_up_ball: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub tries_tricks: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub releases_ball_early: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub cuts_inside: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub hugs_touchline: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub switches_play: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub presses_relentlessly: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub gets_forward: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub arrives_late_in_box: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub stays_back: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub shoots_from_distance: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub rushes_out: f64,
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub stays_on_line: f64,
-}
-
-impl OverrideChances {
-    /// The chance of trait `k`; 0 for a trait no instruction goes against.
-    pub fn of(&self, k: crate::traits::TraitKind) -> f64 {
-        use crate::traits::TraitKind as T;
-        match k {
-            T::TriesKillerBalls => self.tries_killer_balls,
-            T::TriesLobsAndChips => self.tries_lobs_and_chips,
-            T::CrossesEarly => self.crosses_early,
-            T::KicksLong => self.kicks_long,
-            T::PlaysShortSimplePasses => self.plays_short_simple_passes,
-            T::PlaysOneTwos => self.plays_one_twos,
-            T::ThrowsShort => self.throws_short,
-            T::DwellsOnBall => self.dwells_on_ball,
-            T::RunsWithBallOften => self.runs_with_ball_often,
-            T::HoldsUpBall => self.holds_up_ball,
-            T::TriesTricks => self.tries_tricks,
-            T::ReleasesBallEarly => self.releases_ball_early,
-            T::CutsInside => self.cuts_inside,
-            T::HugsTouchline => self.hugs_touchline,
-            T::SwitchesPlay => self.switches_play,
-            T::PressesRelentlessly => self.presses_relentlessly,
-            T::GetsForward => self.gets_forward,
-            T::ArrivesLateInBox => self.arrives_late_in_box,
-            T::StaysBack => self.stays_back,
-            T::ShootsFromDistance => self.shoots_from_distance,
-            T::RushesOut => self.rushes_out,
-            T::StaysOnLine => self.stays_on_line,
-            T::RarelyDribbles
-            | T::MovesIntoChannels
-            | T::PlacesShots
-            | T::PowersShots
-            | T::DivesIntoTackles
-            | T::StaysOnFeet
-            | T::GoesDownEasily
-            | T::ArguesWithOfficials
-            | T::PunchesRatherThanCatches => 0.0,
-        }
-    }
-
-    /// Mutable access to the chance of trait `k`, for a test that plants one; `None` for a
-    /// trait no instruction goes against.
-    pub fn of_mut(&mut self, k: crate::traits::TraitKind) -> Option<&mut f64> {
-        use crate::traits::TraitKind as T;
-        Some(match k {
-            T::TriesKillerBalls => &mut self.tries_killer_balls,
-            T::TriesLobsAndChips => &mut self.tries_lobs_and_chips,
-            T::CrossesEarly => &mut self.crosses_early,
-            T::KicksLong => &mut self.kicks_long,
-            T::PlaysShortSimplePasses => &mut self.plays_short_simple_passes,
-            T::PlaysOneTwos => &mut self.plays_one_twos,
-            T::ThrowsShort => &mut self.throws_short,
-            T::DwellsOnBall => &mut self.dwells_on_ball,
-            T::RunsWithBallOften => &mut self.runs_with_ball_often,
-            T::HoldsUpBall => &mut self.holds_up_ball,
-            T::TriesTricks => &mut self.tries_tricks,
-            T::ReleasesBallEarly => &mut self.releases_ball_early,
-            T::CutsInside => &mut self.cuts_inside,
-            T::HugsTouchline => &mut self.hugs_touchline,
-            T::SwitchesPlay => &mut self.switches_play,
-            T::PressesRelentlessly => &mut self.presses_relentlessly,
-            T::GetsForward => &mut self.gets_forward,
-            T::ArrivesLateInBox => &mut self.arrives_late_in_box,
-            T::StaysBack => &mut self.stays_back,
-            T::ShootsFromDistance => &mut self.shoots_from_distance,
-            T::RushesOut => &mut self.rushes_out,
-            T::StaysOnLine => &mut self.stays_on_line,
-            _ => return None,
-        })
+trait_table! {
+    /// The chance per moment that a strong trait overrides the instruction it goes against. A
+    /// trait outside the conflict table ([`crate::traits::TraitKind::conflicts`]) never meets a
+    /// moment, so its chance is not read; the shipped file holds 0 for it.
+    OverrideChances {
+        tries_killer_balls => TriesKillerBalls in 0.0..=1.0,
+        tries_lobs_and_chips => TriesLobsAndChips in 0.0..=1.0,
+        crosses_early => CrossesEarly in 0.0..=1.0,
+        kicks_long => KicksLong in 0.0..=1.0,
+        plays_short_simple_passes => PlaysShortSimplePasses in 0.0..=1.0,
+        plays_one_twos => PlaysOneTwos in 0.0..=1.0,
+        throws_short => ThrowsShort in 0.0..=1.0,
+        dwells_on_ball => DwellsOnBall in 0.0..=1.0,
+        runs_with_ball_often => RunsWithBallOften in 0.0..=1.0,
+        holds_up_ball => HoldsUpBall in 0.0..=1.0,
+        tries_tricks => TriesTricks in 0.0..=1.0,
+        releases_ball_early => ReleasesBallEarly in 0.0..=1.0,
+        cuts_inside => CutsInside in 0.0..=1.0,
+        hugs_touchline => HugsTouchline in 0.0..=1.0,
+        switches_play => SwitchesPlay in 0.0..=1.0,
+        presses_relentlessly => PressesRelentlessly in 0.0..=1.0,
+        gets_forward => GetsForward in 0.0..=1.0,
+        arrives_late_in_box => ArrivesLateInBox in 0.0..=1.0,
+        stays_back => StaysBack in 0.0..=1.0,
+        shoots_from_distance => ShootsFromDistance in 0.0..=1.0,
+        rushes_out => RushesOut in 0.0..=1.0,
+        stays_on_line => StaysOnLine in 0.0..=1.0,
     }
 }
 

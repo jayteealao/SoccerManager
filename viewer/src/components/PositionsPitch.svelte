@@ -70,9 +70,9 @@
     gap: 3px;
     padding: 0 4px;
     font: 700 9px/15px var(--fd);
-    color: var(--ink);
+    color: var(--position-chip-ink);
     white-space: nowrap;
-    background: var(--chip);
+    background: var(--position-chip);
     border: 1px solid var(--rule-2);
     border-radius: var(--radius-sm);
   }
@@ -82,7 +82,7 @@
   }
 
   .chip.none b {
-    color: var(--ink-3);
+    color: var(--ink-2);
   }
 
   .chip.natural {

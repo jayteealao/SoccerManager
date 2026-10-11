@@ -333,6 +333,42 @@ fn overrides_come_back_to_back_and_in_added_time() {
     assert!(pressure, "no override under pressure");
 }
 
+/// An anchor override lasts one spell of his side on the ball. Whenever a player's anchor
+/// comes into force as his side gains the ball, he won an override on that tick: an anchor
+/// left from an earlier spell, with a restart or a kick-off to the other side in between,
+/// never comes back with no draw and no event.
+#[test]
+fn an_anchor_from_an_earlier_spell_never_comes_back_without_a_draw() {
+    let pair = pair(TraitKind::GetsForward);
+    let i = index(0, pair.slot);
+    let mut starts = 0;
+    for seed in 0..3 {
+        let config = pair_config(seed, 90, &pair, Some(TraitStrength::Strong), Some(1.0));
+        let mut sim = Simulation::new(config).unwrap();
+        let (mut was_live, mut read) = (false, 0);
+        while !sim.is_over() {
+            sim.step();
+            let events = sim.events();
+            let won = events[read..]
+                .iter()
+                .any(|e| e.kind == EngineEventKind::TraitOverride && e.player == Some(i));
+            read = events.len();
+            let live = sim.trait_act(i).is_some();
+            let gained = sim.carrier().is_some_and(|c| sim.players()[c].team == 0);
+            if live && !was_live && gained {
+                starts += 1;
+                assert!(
+                    won,
+                    "seed {seed}, tick {}: his anchor came into force with no override",
+                    sim.tick()
+                );
+            }
+            was_live = live;
+        }
+    }
+    assert!(starts > 0, "no anchor came into force");
+}
+
 /// A scene: home midfielder 6 carries `releases_ball_early` strong at mood `mood`, his side
 /// plays at a slower tempo, its chance is 1, and he has just gained the ball at (-15, 0) with
 /// no opponent near him: the override events of his first two seconds on the ball.

@@ -111,6 +111,10 @@ impl Simulation {
     /// `changed` (his form moved), once.
     pub(crate) fn refresh_marked(&mut self, changed: u32) {
         let modifiers = self.config.modules.modifiers;
+        // No mood moves during the pass, so each side's mood is read once for all its players.
+        if self.config.tuning.contract.person().mood.team_weight != 0.0 {
+            self.team_moods = [self.team_mood(0), self.team_mood(1)];
+        }
         for i in 0..self.players.len() {
             let deltas = modifiers.effective(&self.view(), i);
             if deltas != self.players[i].deltas || changed & (1 << i) != 0 {

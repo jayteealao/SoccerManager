@@ -92,7 +92,7 @@ fn time_to_shift(config: &MatchConfig) -> u32 {
     ((foot.shift_s + 0.2) / config.tuning.dt).ceil() as u32
 }
 
-/// AC-19: a one-footed player (weaker foot 20) passing 35 m on his weaker side, pressed at
+/// A one-footed player (weaker foot 20) passing 35 m on his weaker side, pressed at
 /// 1 m, pays more than 0 and at most 5 points, and his pass is less accurate than the same
 /// pass on his strong side, which pays 0; the same weaker-side pass unpressed after holding
 /// the ball long enough to shift it pays 0.
@@ -221,7 +221,7 @@ fn presser_target(config: MatchConfig, strong: Side, weaker: u8) -> DVec2 {
     t.targets[presser]
 }
 
-/// AC-22: a defender closing a one-footed dribbler (right strong, weaker 20) stands toward
+/// A defender closing a one-footed dribbler (right strong, weaker 20) stands toward
 /// his strong side (his right, −y) by at least half of `show_m · 0.8`; a left-footer
 /// mirrors it; a two-footed dribbler gives no offset; with the foot block out of the tuning
 /// no carrier does.

@@ -109,7 +109,7 @@ fn every_attribute_feeds_a_stage_and_has_a_job_with_a_statistic() {
 
 // --- Personality and the small weights.
 
-/// Shape AC-4 of the record: no state family moves a personality value, and nothing panics,
+/// No state family moves a personality value, and nothing panics,
 /// with deltas on every state group and a form offset on the blend.
 #[test]
 fn no_state_moves_a_personality_value_and_nothing_panics() {
@@ -150,7 +150,7 @@ fn no_state_moves_a_personality_value_and_nothing_panics() {
     }
 }
 
-/// Shape AC-18: with a consistency degree per action, a form offset moves each action by its
+/// With a consistency degree per action, a form offset moves each action by its
 /// own degree. Degrees planted at 0.5 on the pass and 1.5 on the shot, a player at 10.0
 /// throughout and an offset of +0.5: `ln(F / 8) * width / 0.5` of every stage equals its
 /// action's degree, and a degree of 0 leaves a stage at 8.
@@ -186,7 +186,7 @@ fn each_action_moves_by_its_own_consistency_degree() {
     assert!(stages.f(shot) > stages.f(pass) && stages.f(pass) > 8.0);
 }
 
-/// Shape AC-5 of the record: in every stage with small weights, each small weight is lighter
+/// In every stage with small weights, each small weight is lighter
 /// than the lightest shown support, the main is the heaviest, and the blend reads them; a
 /// small weight as heavy as a shown support is refused.
 #[test]
@@ -666,7 +666,7 @@ fn weaker_foot_kicks(plant: impl Fn(&mut MatchConfig)) -> Vec<(&'static str, [f6
     .collect()
 }
 
-/// AC-20, full case: an 18 out of position, in low mood, tired, out of sharpness, at his
+/// The full worst case: an 18 out of position, in low mood, tired, out of sharpness, at his
 /// worst form, pressed and on his weakest foot at range plays no kick below a flat 11: the
 /// weaker foot's cost shrinks to the points the states left above the floor.
 #[test]
@@ -690,7 +690,7 @@ fn an_eighteen_on_his_weaker_foot_in_the_worst_case_plays_no_action_below_eleven
     }
 }
 
-/// AC-20's guarded failure for the weaker foot: with the floor out of reach (12.7 points) the
+/// The guarded failure for the weaker foot: with the floor out of reach (12.7 points) the
 /// same kicks fall below a flat 11, so the shrink, not the 5-point cap, holds the line.
 #[test]
 fn the_shrink_holds_the_weaker_foot_inside_the_floor() {

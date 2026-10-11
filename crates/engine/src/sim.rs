@@ -614,6 +614,9 @@ pub struct Simulation {
     /// Each side's bench mood: the side's mood events and the drift with a swing of 1, which
     /// a substitute enters at ([`mood`]).
     pub(crate) bench_mood: [f64; 2],
+    /// Each side's mood as the last refresh of effective values read it, so the team-mood
+    /// modifier reads it once per side, not once per player ([`Simulation::team_mood`]).
+    pub(crate) team_moods: [f64; 2],
     /// The trait override each player plays, by roster index, until its action ends
     /// ([`crate::traits`]).
     pub(crate) trait_acts: [Option<crate::traits::TraitAct>; 2 * PLAYERS_PER_TEAM],
@@ -796,6 +799,7 @@ impl Simulation {
             shooter: None,
             last_pass: None,
             bench_mood: [0.0; 2],
+            team_moods: [0.0; 2],
             trait_acts: [None; 2 * PLAYERS_PER_TEAM],
             carrying: 0,
             chase_seen: 0,
@@ -951,6 +955,10 @@ impl Simulation {
     /// (sharpness on the technical group, adaptation on the mental group, capped as in play)
     /// and fresh, in tenths: `[today, fresh]`. Reads the squad entry only; it writes nothing.
     /// A hidden value never moves it.
+    ///
+    /// It rebuilds the shipped condition and familiarity drops by hand rather than through
+    /// the match's modifier slots, so a slot set off or replaced still shows the shipped
+    /// drop in this pre-match range.
     pub fn squad_level_range(&self, team: usize, squad: usize) -> [u8; 2] {
         use crate::contract::body::BodyJobs;
         use crate::contract::states::{self, GROUP_COUNT};

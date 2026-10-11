@@ -36,6 +36,10 @@ pub const FORM_MATCHES: usize = 5;
 pub const MAX_CLUBS: usize = 500;
 /// The most matches the record keeps per club.
 pub const MAX_MATCHES: usize = 200;
+/// The most players the record keeps per club.
+pub const MAX_PLAYERS: usize = 1000;
+/// The largest season file the launcher reads, in bytes.
+pub const MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
 /// The level, in tenths, from which a player's goal is the high band's.
 const HIGH_FROM: u8 = 140;
 /// The level, in tenths, from which a player's goal is the middle band's.
@@ -267,7 +271,19 @@ impl Season {
                     part.matches.len()
                 ));
             }
+            if part.players.len() > MAX_PLAYERS {
+                return Err(format!(
+                    "club {club} has {} players; at most {MAX_PLAYERS}",
+                    part.players.len()
+                ));
+            }
             for (player, p) in &part.players {
+                if p.ratings.len() > MAX_MATCHES {
+                    return Err(format!(
+                        "club {club}: player {player} has {} ratings; at most {MAX_MATCHES}",
+                        p.ratings.len()
+                    ));
+                }
                 if let Some(r) = p.ratings.iter().find(|r| !(1.0..=10.0).contains(&r.rating)) {
                     return Err(format!(
                         "club {club}: player {player} has the rating {} in match {}; allowed 1.0 to 10.0",
@@ -279,10 +295,26 @@ impl Season {
         Ok(season)
     }
 
-    /// The record in `data`. A missing file gives an empty record; a file that does not read
-    /// gives an empty record and says so in a signal. Never fails the launch.
+    /// The record in `data`. A missing file gives an empty record; a file that does not read,
+    /// or is larger than [`MAX_FILE_BYTES`], gives an empty record and says so in a signal.
+    /// Never fails the launch.
     pub fn load(data: &Path) -> Season {
-        let Ok(text) = std::fs::read_to_string(data.join(SEASON_FILE)) else {
+        Season::load_within(data, MAX_FILE_BYTES)
+    }
+
+    /// [`Season::load`] with a file larger than `max_bytes` refused.
+    fn load_within(data: &Path, max_bytes: u64) -> Season {
+        let path = data.join(SEASON_FILE);
+        if let Ok(meta) = std::fs::metadata(&path)
+            && meta.len() > max_bytes
+        {
+            tracing::warn!(
+                signal = "launch.season_refused",
+                reason = %format!("the season file is {} bytes; at most {max_bytes}", meta.len())
+            );
+            return Season::default();
+        }
+        let Ok(text) = std::fs::read_to_string(&path) else {
             return Season::default();
         };
         Season::parse(&text).unwrap_or_else(|reason| {
@@ -299,26 +331,36 @@ impl Season {
     }
 
     /// Adds both sides of one finished match, each to its club, unless the club already holds
-    /// the match or the record is full; `files` are the two sides' team files, home first,
-    /// from which a player entering the record gets his goal. Returns how many player seasons
-    /// it added to.
+    /// the match or the record is full (a full club says so in a signal); `files` are the two
+    /// sides' team files, home first, from which a player entering the record gets his goal.
+    /// Returns how many clubs recorded the match: 0 when the record did not change.
     pub fn ingest(
         &mut self,
         stats: &MatchStats,
         files: [&TeamFile; 2],
         schema: &AttributeSchema,
     ) -> usize {
-        let mut added = 0;
+        let mut recorded = 0;
         for (side, file) in files.iter().enumerate() {
             let club = &stats.teams[side].id;
             if !self.clubs.contains_key(club) && self.clubs.len() >= MAX_CLUBS {
                 continue;
             }
             let part = self.clubs.entry(club.clone()).or_default();
-            if part.matches.contains(&stats.match_id) || part.matches.len() >= MAX_MATCHES {
+            if part.matches.contains(&stats.match_id) {
+                continue;
+            }
+            if part.matches.len() >= MAX_MATCHES {
+                tracing::warn!(
+                    signal = "launch.season_full",
+                    club = %club,
+                    match_id = %stats.match_id,
+                    matches = MAX_MATCHES
+                );
                 continue;
             }
             part.matches.push(stats.match_id.clone());
+            recorded += 1;
             for entry in stats.ratings.iter().filter(|r| r.team == side) {
                 let Some(player) = file.players.iter().find(|p| p.id == entry.id) else {
                     continue;
@@ -327,20 +369,19 @@ impl Season {
                     .players
                     .entry(entry.id.clone())
                     .or_insert_with(|| PlayerSeason::new(assign_goal(player, schema)));
-                p.starts += u32::from(entry.started);
-                p.minutes += entry.minutes;
-                p.goals += entry.goals;
-                p.assists += entry.assists;
-                p.clean_sheets += u32::from(entry.clean_sheet);
-                p.red_cards += entry.red;
+                p.starts = p.starts.saturating_add(u32::from(entry.started));
+                p.minutes = p.minutes.saturating_add(entry.minutes);
+                p.goals = p.goals.saturating_add(entry.goals);
+                p.assists = p.assists.saturating_add(entry.assists);
+                p.clean_sheets = p.clean_sheets.saturating_add(u32::from(entry.clean_sheet));
+                p.red_cards = p.red_cards.saturating_add(entry.red);
                 p.ratings.push(Rated {
                     match_id: stats.match_id.clone(),
                     rating: entry.rating.clamp(1.0, 10.0),
                 });
-                added += 1;
             }
         }
-        added
+        recorded
     }
 
     /// A copy of `file` at the current team-file version with each recorded player's recent
@@ -480,7 +521,7 @@ pub(crate) mod tests {
         sim
     }
 
-    /// Shape AC-25: two shipped clubs play three full seeded matches; each player's season
+    /// Two shipped clubs play three full seeded matches; each player's season
     /// starts, minutes, goals, assists, clean sheets, red cards and ratings are the sums over
     /// the three simulations' tallies; ingesting a match again adds nothing.
     #[test]
@@ -555,7 +596,7 @@ pub(crate) mod tests {
         assert_eq!(season, before, "a match ingested again adds nothing");
     }
 
-    /// Shape AC-27: every player of each of the ten shipped squads has exactly one goal, the
+    /// Every player of each of the ten shipped squads has exactly one goal, the
     /// table's kind for his listed position and level band.
     #[test]
     fn every_shipped_player_gets_the_tables_goal() {
@@ -713,11 +754,31 @@ pub(crate) mod tests {
             }
         });
         assert!(text.contains("501 clubs; at most 500"), "{text}");
+        let text = refused(&|d| {
+            let one = d["clubs"]["club-a"]["players"]["a-1"]["ratings"][0].clone();
+            d["clubs"]["club-a"]["players"]["a-1"]["ratings"] = vec![one; MAX_MATCHES + 1].into();
+        });
+        assert!(
+            text.contains("player a-1 has 201 ratings; at most 200"),
+            "{text}"
+        );
+        let text = refused(&|d| {
+            let one = d["clubs"]["club-a"]["players"]["a-1"].clone();
+            for k in 0..MAX_PLAYERS {
+                d["clubs"]["club-a"]["players"][format!("p-{k}")] = one.clone();
+            }
+        });
+        assert!(text.contains("1001 players; at most 1000"), "{text}");
+        // A file over the size limit loads empty and never fails the launch.
+        season.save(data).unwrap();
+        let size = std::fs::metadata(data.join(SEASON_FILE)).unwrap().len();
+        assert_eq!(Season::load_within(data, size), season);
+        assert_eq!(Season::load_within(data, size - 1), Season::default());
     }
 
     /// The copy: none for a club with no match; a copy with no input set plays the same seed
     /// to the same events as the shipped file; a copy of a club with three good matches loads
-    /// with the inputs, and its in-form player starts above neutral (shape AC-26 end to end).
+    /// with the inputs, and its in-form player starts above neutral: the kick-off mood, end to end.
     #[test]
     fn the_copy_carries_form_and_progress_into_the_next_match() {
         let (dir, content) = shipped();

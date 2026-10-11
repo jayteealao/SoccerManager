@@ -97,7 +97,7 @@ function known(p) {
   p.traits = { tries_killer_balls: 'strong', switches_play: 'strong', tries_tricks: 'moderate' };
 }
 
-/// AC-30 on screen: the panel's personality (but the matches-here count), mood, mind and form
+/// On screen: the panel's personality (but the matches-here count), mood, mind and form
 /// texts hold no digit, nor any aria label in them.
 async function noDigitsInPerson(page) {
   const texts = await panel(page).evaluate((el) => {
@@ -296,13 +296,28 @@ test('the attribute hover lists the actions on pointer and on focus, with no min
     await page.screenshot({ path: evidence(info, 'hover-pointer.png') });
     await clearPointer(page);
     await expect(pop).toHaveCount(0);
-    // Keyboard: Tab until the Crossing row has focus.
-    let reached = false;
-    for (let n = 0; n < 80 && !reached; n += 1) {
+    // Keyboard: Tab until an attribute row has focus (the attributes take one place in the Tab
+    // order), then the arrow keys to the Crossing row.
+    const onAttribute = () => page.evaluate(() => Boolean(document.activeElement?.matches('[data-attr]')));
+    let inAttributes = false;
+    for (let n = 0; n < 40 && !inAttributes; n += 1) {
       await page.keyboard.press('Tab');
-      reached = await row.evaluate((el) => el === document.activeElement);
+      inAttributes = await onAttribute();
     }
-    expect(reached, 'Tab reaches the Crossing row').toBe(true);
+    expect(inAttributes, 'Tab reaches the attribute rows').toBe(true);
+    // Down each group's column from its top, then right to the next group.
+    const focused = () => row.evaluate((el) => el === document.activeElement);
+    let reached = await focused();
+    for (let group = 0; group < 4 && !reached; group += 1) {
+      await page.keyboard.press('Home');
+      for (let n = 0; n < 30 && !(reached = await focused()); n += 1) {
+        await page.keyboard.press('ArrowDown');
+      }
+      if (!reached) {
+        await page.keyboard.press('ArrowRight');
+      }
+    }
+    expect(reached, 'the arrow keys reach the Crossing row').toBe(true);
     await expect(pop).toBeVisible();
     expect(await listed()).toEqual(byPointer);
     await expect(row).toHaveAttribute('aria-describedby', await pop.getAttribute('id'));

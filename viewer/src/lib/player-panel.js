@@ -137,15 +137,16 @@ export function ratingLines(list) {
 export const POSITION_ORDER = Object.freeze(['GK', 'CB', 'LB', 'RB', 'DM', 'CM', 'AM', 'LW', 'RW', 'ST']);
 
 /// Where each position's chip sits on the pitch, in percent of its width and height: the goal
-/// on the left, the left flank at the top, as board 1 draws it.
+/// on the left, the left flank at the top, as board 1 draws it. The three central midfield
+/// chips are staggered up and down, so neighbours never touch on a narrow pitch.
 export const PITCH_PLACES = Object.freeze({
   GK: { x: 7, y: 50 },
   CB: { x: 24, y: 50 },
   LB: { x: 28, y: 16 },
   RB: { x: 28, y: 84 },
-  DM: { x: 42, y: 50 },
-  CM: { x: 56, y: 50 },
-  AM: { x: 70, y: 50 },
+  DM: { x: 41, y: 67 },
+  CM: { x: 55, y: 33 },
+  AM: { x: 69, y: 67 },
   LW: { x: 76, y: 16 },
   RW: { x: 76, y: 84 },
   ST: { x: 90, y: 50 },

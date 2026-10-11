@@ -26,7 +26,7 @@ impl Modifier for OwnMoodV1 {
 
     fn effect(&self, view: &MatchView<'_>, i: usize) -> Effect {
         let w = view.tuning().contract.person().mood.own_weight;
-        mental(w * view.mood(i) / crate::sim::mood::FULL)
+        mental(w * view.mood(i) / crate::contract::mood::FULL)
     }
 }
 
@@ -50,8 +50,11 @@ impl Modifier for TeamMoodV1 {
 
     fn effect(&self, view: &MatchView<'_>, i: usize) -> Effect {
         let w = view.tuning().contract.person().mood.team_weight;
+        if w == 0.0 {
+            return mental(0.0);
+        }
         let team = view.player(i).team;
-        mental(w * view.team_mood(team) / crate::sim::mood::FULL)
+        mental(w * view.team_mood(team) / crate::contract::mood::FULL)
     }
 }
 

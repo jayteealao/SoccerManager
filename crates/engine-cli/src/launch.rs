@@ -141,6 +141,14 @@ impl Program {
             Program::Previous { version, .. } => version,
         }
     }
+
+    /// The match stream protocol the program speaks: the version the page asks its socket for.
+    fn protocol(&self) -> u16 {
+        match self {
+            Program::Current => protocol::PROTOCOL_VERSION,
+            Program::Previous { .. } => crate::engines::previous_protocol(),
+        }
+    }
 }
 
 /// What the start screen needs: the content the round preview and the saved match's pitch
@@ -976,22 +984,10 @@ impl Launcher {
         let (Some(home), Some(away)) = (file(0), file(1)) else {
             return;
         };
-        let before = worker
-            .season
-            .clubs
-            .values()
-            .map(|c| c.matches.len())
-            .sum::<usize>();
-        worker
-            .season
-            .ingest(stats, [home, away], &door.content.attributes);
         if worker
             .season
-            .clubs
-            .values()
-            .map(|c| c.matches.len())
-            .sum::<usize>()
-            == before
+            .ingest(stats, [home, away], &door.content.attributes)
+            == 0
         {
             return;
         }
@@ -1026,7 +1022,7 @@ impl Launcher {
         let mut status = serde_json::json!({
             "engine.state": worker.state.word(),
             "socket.port": port,
-            "protocol.version": protocol::PROTOCOL_VERSION,
+            "protocol.version": worker.program.protocol(),
             "engine.pid": worker.pid,
             "engine.path": self.engine.display().to_string(),
             "engine.reason": reason,
@@ -1357,5 +1353,67 @@ mod tests {
                 assert!(c.goal_progress.is_some());
             }
         }
+    }
+
+    /// While the previous release's engine plays a saved match, `/engine.json` names the
+    /// protocol that engine speaks, so the page's socket asks for a version it accepts; this
+    /// program's own matches name this build's protocol.
+    #[test]
+    fn the_status_names_the_protocol_of_the_program_that_plays() {
+        let data = std::env::temp_dir().join(format!("launch_protocol_{}", std::process::id()));
+        let missing = data.join("no-engine");
+        let previous = PreviousEngine {
+            program: missing.clone(),
+            content: missing.clone(),
+        };
+        let launcher = Launcher {
+            worker: Mutex::new(Worker {
+                state: State::Finished,
+                child: None,
+                pid: None,
+                generation: 1,
+                snapshot_tick: None,
+                match_id: "m-0".into(),
+                snapshot: data.join(engine::snapshot::FILE_NAME),
+                match_millis: 0,
+                program: Program::Current,
+                resumed_from: None,
+                refusal: None,
+                seed: 1,
+                teams: Vec::new(),
+                fixture: Vec::new(),
+                saved: None,
+                settings: Settings::default(),
+                views: Views::default(),
+                season: Season::default(),
+            }),
+            engine: missing,
+            previous: previous.clone(),
+            content_dir: None,
+            skin: "",
+            fixed_seed: None,
+            minutes: 1,
+            data,
+            front_door: None,
+            drop_client_at: Mutex::new(None),
+            fast_forward_to: None,
+            test_jump: false,
+        };
+        let status = |launcher: &Launcher| -> serde_json::Value {
+            let mut worker = launcher.lock();
+            serde_json::from_str(&launcher.json_locked(&mut worker)).unwrap()
+        };
+        assert_eq!(
+            status(&launcher)["protocol.version"],
+            protocol::PROTOCOL_VERSION
+        );
+        launcher.lock().program = Program::Previous {
+            engine: previous,
+            version: crate::engines::previous_version(),
+        };
+        let now = status(&launcher);
+        assert_eq!(now["protocol.version"], crate::engines::previous_protocol());
+        assert_eq!(now["engine.version"], crate::engines::previous_version());
+        assert!(crate::engines::previous_protocol() < protocol::PROTOCOL_VERSION);
     }
 }

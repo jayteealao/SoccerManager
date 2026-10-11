@@ -51,6 +51,10 @@
 
   /// The attribute whose hover is open, or null.
   let hovered = $state(null);
+  /// The screen element, to move focus between attribute rows.
+  let screenEl = $state(null);
+  /// A touch that focuses a row opens no hover.
+  let touchFocus = false;
   const hoverId = (name) => `attribute-hover-${name}`;
   /// Opens the hover of attribute `name`; a touch does not open it.
   function openHover(name, event) {
@@ -64,11 +68,61 @@
       hovered = null;
     }
   }
-  /// Escape closes the hover; the row keeps focus.
-  function hoverKey(name, event) {
-    if (event.key === 'Escape' && hovered === name) {
+  /// The column a hover would run past the screen's right edge from opens it to the left: the
+  /// second group in the three-column layout, the fourth (a goalkeeper's) in the wide one.
+  const edgeOf = (g) => [g === 1 ? 'edge-narrow' : '', g === 3 ? 'edge-wide' : ''].join(' ').trim();
+  /// Escape closes an open hover wherever focus is, so a hover opened by the pointer alone can
+  /// be dismissed too; a focused row keeps its focus.
+  function escapeHover(event) {
+    if (event.key === 'Escape' && hovered !== null) {
       event.stopPropagation();
       hovered = null;
+    }
+  }
+
+  /// The attribute row that holds the attributes' one place in the Tab order. The arrow keys,
+  /// Home and End move it, so a Tab walk passes the attributes in one step, not one per row.
+  let current = $state(null);
+  let tabStop = $derived.by(() => {
+    const names = model ? model.groups.flatMap((group) => group.rows.map((row) => row.name)) : [];
+    return names.includes(current) ? current : (names[0] ?? null);
+  });
+  /// Moves focus from row `r` of group `g` by an arrow key, Home or End; Escape closes the hover.
+  function rowKey(g, r, event) {
+    if (event.key === 'Escape') {
+      escapeHover(event);
+      return;
+    }
+    const groups = model.groups;
+    const last = (i) => groups[i].rows.length - 1;
+    let to = null;
+    switch (event.key) {
+      case 'ArrowDown':
+        to = [g, Math.min(r + 1, last(g))];
+        break;
+      case 'ArrowUp':
+        to = [g, Math.max(r - 1, 0)];
+        break;
+      case 'ArrowRight':
+        to = g + 1 < groups.length ? [g + 1, Math.min(r, last(g + 1))] : null;
+        break;
+      case 'ArrowLeft':
+        to = g > 0 ? [g - 1, Math.min(r, last(g - 1))] : null;
+        break;
+      case 'Home':
+        to = [g, 0];
+        break;
+      case 'End':
+        to = [g, last(g)];
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    if (to) {
+      const next = groups[to[0]].rows[to[1]].name;
+      current = next;
+      screenEl?.querySelector(`[data-attr="${next}"]`)?.focus();
     }
   }
   /// The class of a mood or form mark: only the mark takes a colour, never the word.
@@ -99,6 +153,8 @@
   }
 </script>
 
+<svelte:window onkeydown={escapeHover} />
+
 <AppShell
   section="squad"
   title={model?.name ?? 'Player'}
@@ -119,7 +175,7 @@
   {/snippet}
 
   {#if model}
-    <div class="screen" data-screen="player" data-player={model.id}>
+    <div class="screen" data-screen="player" data-player={model.id} bind:this={screenEl}>
       <InfoStrip {facts}>
         {#snippet lead()}
           <Crest team={session.teams?.[0] ?? null} width={22} height={24} />
@@ -128,7 +184,7 @@
 
       <div class="grid">
         <div class="col first">
-          <SectionLabel label="Competence by position" />
+          <SectionLabel label="Rated by position" />
           <div data-section="positions">
             {#if model.positions}
               <PositionsPitch chips={model.positions.chips} />
@@ -161,31 +217,44 @@
         </div>
 
         {#each model.groups as group, g (group.id)}
-          <div class="col">
+          <div class="col {edgeOf(g)}">
             <SectionLabel label={group.label} />
             <dl class="attrs">
-              {#each group.rows as row (row.name)}
-                <!-- The row is a tooltip trigger: it takes focus so the keyboard reaches the list
-                     of actions, as the pointer does; it does nothing when pressed.
+              {#each group.rows as row, r (row.name)}
+                <!-- The row is a tooltip trigger: it takes focus so the keyboard reaches the
+                     list of actions, as the pointer does; it does nothing when pressed. Only one
+                     row is in the Tab order; the arrow keys move between rows.
                      sdlc-debt: the a11y lint knows no focusable tooltip trigger that is not a
                      control; drop the ignore if the row becomes a disclosure button. -->
                 <!-- svelte-ignore a11y_no_static_element_interactions, a11y_no_noninteractive_tabindex -->
                 <div
                   class="attr"
                   data-attr={row.name}
-                  tabindex="0"
+                  tabindex={row.name === tabStop ? 0 : -1}
+                  aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home End"
                   aria-describedby={hovered === row.name ? hoverId(row.name) : undefined}
                   onpointerenter={(e) => openHover(row.name, e)}
                   onpointerleave={() => closeHover(row.name)}
-                  onfocus={() => openHover(row.name)}
+                  onpointerdown={(e) => (touchFocus = e.pointerType === 'touch')}
+                  onfocus={(e) => {
+                    current = row.name;
+                    if (touchFocus) {
+                      touchFocus = false;
+                      return;
+                    }
+                    openHover(row.name, e);
+                  }}
                   onblur={() => closeHover(row.name)}
-                  onkeydown={(e) => hoverKey(row.name, e)}
+                  onkeydown={(e) => rowKey(g, r, e)}
                 >
                   <dt>{row.label}<span class="sr"> ({row.word})</span></dt>
-                  <dd class="num {row.band}">{row.value}</dd>
-                  {#if hovered === row.name}
-                    <AttributeHover id={hoverId(row.name)} name={row.name} label={row.label} />
-                  {/if}
+                  <!-- The hover sits in the value, so the row holds only its term and value; it
+                       is placed beside the whole row. -->
+                  <dd><span class="num {row.band}">{row.value}</span>{#if hovered === row.name}<AttributeHover
+                        id={hoverId(row.name)}
+                        name={row.name}
+                        label={row.label}
+                      />{/if}</dd>
                 </div>
               {/each}
             </dl>
@@ -231,7 +300,7 @@
                 class:unknown={!model.mood.known}>{model.mood.text}</span
               >
             </p>
-            <p class="note">Hidden: eleven values act in matches. Words sharpen with matches at the club.</p>
+            <p class="note">Hidden: personality is shown in words only. Words sharpen with matches at the club.</p>
           </div>
         </div>
 
@@ -538,6 +607,13 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* A hover opens to the row's left from the column it would run past the screen's edge
+     from: a goalkeeper's fourth group in the wide layout, the second group in three columns. */
+  .col.edge-wide {
+    --hover-left: auto;
+    --hover-right: calc(100% + 8px);
+  }
+
   .v4 {
     color: var(--good);
   }
@@ -699,6 +775,16 @@
     .grid {
       grid-template-columns: repeat(3, minmax(0, 1fr));
       row-gap: 14px;
+    }
+
+    .col.edge-wide {
+      --hover-left: calc(100% + 8px);
+      --hover-right: auto;
+    }
+
+    .col.edge-narrow {
+      --hover-left: auto;
+      --hover-right: calc(100% + 8px);
     }
 
     .col:nth-child(4) {

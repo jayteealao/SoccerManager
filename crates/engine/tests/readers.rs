@@ -774,7 +774,7 @@ fn rows() -> Vec<Row> {
     ]
 }
 
-/// Shape AC-10 (the attribute part) and AC-23: every row's hook moves by at least its least
+/// Every row's hook moves by at least its least
 /// move from 5.0 to 18.0.
 #[test]
 fn every_new_attribute_moves_its_hook() {
@@ -811,7 +811,7 @@ fn determination_widens_the_press_only_while_behind() {
     );
 }
 
-/// Shape AC-18 in play: with form at +0.5, the shot (degree 1.3) rises more than the pass
+/// In play: with form at +0.5, the shot (degree 1.3) rises more than the pass
 /// (degree 0.9), each by its own degree, read through the blend a player's state rebuild uses.
 #[test]
 fn consistency_moves_each_action_by_its_degree() {

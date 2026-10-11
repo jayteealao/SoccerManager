@@ -86,7 +86,7 @@ fn every_job_has_exactly_one_rule() {
     assert_eq!(file.derived, vec!["build".to_string()]);
 }
 
-/// Shape AC-11: every job the version 4 catalogue added has a rule with the report-only flag,
+/// Every job the version 4 catalogue added has a rule with the report-only flag,
 /// and no other rule carries it, so the 40 older rules still fail the full run.
 #[test]
 fn the_new_rules_are_report_only() {
@@ -99,7 +99,7 @@ fn the_new_rules_are_report_only() {
     assert_eq!(file.rules.iter().filter(|r| r.report_only).count(), 21);
 }
 
-/// Shape AC-12: ambition, loyalty, money motivation and controversy, each at 1.0 and at 20.0
+/// Ambition, loyalty, money motivation and controversy, each at 1.0 and at 20.0
 /// for every player of the measured club, over six seeds: every match reads the same (every
 /// statistic's parts, the goal and expected-goal difference, and every match rating). No
 /// match reads the four values; ambition acts only through the season goal at kick-off, which

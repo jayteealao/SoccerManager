@@ -987,7 +987,7 @@ The launcher adds the ratings of the home side of the last match it ran, read fr
 | `schema_version` | 1 |
 | `clubs` | an object from club id to that club's part, at most 500 clubs |
 
-Each club's part holds `matches`, the match ids it played, oldest first (at most 200; the record then stops growing), and `players`, from player id to his season:
+Each club's part holds `matches`, the match ids it played, oldest first (at most 200; the record then stops growing and each further match logs the `launch.season_full` signal), and `players`, from player id to his season (at most 1,000 players a club, each with at most 200 ratings):
 
 | Field | Values |
 |---|---|
@@ -1012,7 +1012,7 @@ Its target is for a season of 38 matches, on a straight line between the value a
 
 His progress is measured against the pace of his club's matches so far: for a count, `100 × count / (target × matches / 38)`, kept to 0 to 200; for an average rating, `100 × mean / target` once he has a rating; for no own-fault absence, 100 without a red card and 0 with one. His recent form is the mean of his newest five ratings. Before a club's match after its first, the launcher writes a copy of each side's team file into the new match folder as `team-a.json` or `team-b.json`, at the current version, with each recorded player's `condition.recent_rating` and `condition.goal_progress` set, and the match is played from it, so its replay keeps them; a copy of a file converted from version 1 says `converted_from: 1`. Resume plays a saved match from the copies in its folder when they are there. A club with no match yet plays from its file as shipped.
 
-The launcher adds the last match it ran when the next match starts or the page next reads a club, once per match. A missing file is empty. A file that does not read, has another field, or breaks a limit is read as empty and logs the `launch.season_refused` signal. The launcher writes the file through a temporary file.
+The launcher adds the last match it ran when the next match starts or the page next reads a club, once per match. A missing file is empty. A file that does not read, has another field, breaks a limit, or is larger than 64 MiB is read as empty and logs the `launch.season_refused` signal. The launcher writes the file through a temporary file.
 
 ### The matchday bug report
 

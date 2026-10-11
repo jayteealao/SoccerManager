@@ -120,8 +120,8 @@ fn a_match_resumed_at_minute_sixty_rates_its_players_as_the_unbroken_match() {
     assert_eq!(resumed.match_ratings(), whole.match_ratings());
 }
 
-/// Over 80 seeds, the sample the stronger-side check uses, a side 15 percent stronger is rated
-/// higher on average than the default side.
+/// Over 80 seeds, the sample the stronger-side check uses, a side 15 percent stronger scores
+/// more goals in all than the default side and is rated higher on average.
 #[test]
 fn a_stronger_side_is_rated_higher() {
     let content = common::content();
@@ -140,13 +140,23 @@ fn a_stronger_side_is_rated_higher() {
                 .collect();
             side.iter().sum::<f64>() / side.len() as f64
         };
-        (mean(0), mean(1))
+        let goals = sim.summary().goals;
+        (mean(0), mean(1), goals)
     });
     let n = means.len() as f64;
     let strong_mean = means.iter().map(|m| m.0).sum::<f64>() / n;
     let other_mean = means.iter().map(|m| m.1).sum::<f64>() / n;
+    let strong_goals: u32 = means.iter().map(|m| m.2[0]).sum();
+    let other_goals: u32 = means.iter().map(|m| m.2[1]).sum();
+    println!(
+        "stronger side: {strong_goals} goals, rated {strong_mean:.3}; other: {other_goals} goals, rated {other_mean:.3}"
+    );
     assert!(
         strong_mean > other_mean,
         "stronger side {strong_mean:.2}, other {other_mean:.2}"
+    );
+    assert!(
+        strong_goals > other_goals,
+        "stronger side {strong_goals} goals, other {other_goals}"
     );
 }

@@ -291,7 +291,8 @@ One `match-event` row. The same object is written to
 A `trait-override` event names the player and his club and carries no `commentary`: a page
 builds its line from the three trait fields. For example,
 `{"event.type":"trait-override","player.id":"…","trait.name":"holds_up_ball","trait.cause":"pressure","trait.instruction":"tempo:faster",...}`.
-The current page does not show it yet.
+The page's match feed builds its line from these three fields, and the player panel counts
+the player's overrides after full time.
 
 A `script` event names no team or player and carries no `commentary`. Play goes on with the
 engine's own choice: zero option offsets, the referee's card, or the commentator's line. For

@@ -77,10 +77,11 @@ impl<'a> MatchView<'a> {
         self.sim.mood(i)
     }
 
-    /// The mood of `team`: its players' moods on the pitch, weighted by leadership.
+    /// The mood of `team`: its players' moods on the pitch, weighted by leadership, as the
+    /// current refresh of effective values read it (0 when the team-mood weight is 0).
     #[inline]
     pub fn team_mood(&self, team: usize) -> f64 {
-        self.sim.team_mood(team)
+        self.sim.team_moods[team]
     }
 
     /// The position player `i` plays now: his formation slot's.

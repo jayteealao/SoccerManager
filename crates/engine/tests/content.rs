@@ -562,7 +562,7 @@ fn add_copies(v: &mut serde_json::Value, count: usize) {
     }
 }
 
-/// Shape AC-1: 45 visible and 2 hidden attributes, 11 personality values; communication,
+/// The record: 45 visible and 2 hidden attributes, 11 personality values; communication,
 /// determination and bravery in the mental group, eccentricity in goalkeeping.
 #[test]
 fn the_shipped_catalogue_holds_forty_five_visible_two_hidden_and_eleven_personality_values() {
@@ -616,7 +616,7 @@ fn the_shipped_catalogue_holds_forty_five_visible_two_hidden_and_eleven_personal
     assert!(hidden_names.contains(&"temperament"));
 }
 
-/// Shape AC-2: 51 visible and hidden attributes are refused with the count; 50 load.
+/// The limit: 51 visible and hidden attributes are refused with the count; 50 load.
 #[test]
 fn a_catalogue_with_fifty_one_visible_and_hidden_attributes_is_refused_with_the_count() {
     let err = edited_catalogue(|v| add_copies(v, 4))
@@ -647,7 +647,7 @@ fn a_fifteenth_personality_value_is_refused() {
     assert!(err.contains("15 personality values; at most 14"), "{err}");
 }
 
-/// Shape AC-9: every attribute added in version 4 names a stage job, and every personality
+/// Every attribute added in version 4 names a stage job, and every personality
 /// value an occasion job or "inert in a match".
 #[test]
 fn every_new_attribute_names_a_stage_job_and_every_personality_value_an_occasion() {

@@ -94,6 +94,9 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         finished: _,
         // Rewritten before every use.
         scratch: _,
+        // Each side's mood as a refresh reads it, rewritten at the start of a refresh (when
+        // the team-mood weight acts) from the moods hashed with each player.
+        team_moods: _,
         // A shared copy of `config.tuning`, constant for the match.
         tuning: _,
         // Functions of each player's deltas and form (hashed in G3) and the team files.

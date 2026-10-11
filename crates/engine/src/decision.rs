@@ -533,7 +533,7 @@ impl DecisionModule for DecisionV1 {
         let flair_risk = t.contract.hooks().flair_risk;
         // Mood: a carrier in good mood shoots and plays forward more and holds less; in low
         // mood the reverse. 0 at a neutral mood and with no person block.
-        let mood_risk = t.contract.person().mood.risk * view.mood(c) / crate::sim::mood::FULL;
+        let mood_risk = t.contract.person().mood.risk * view.mood(c) / crate::contract::mood::FULL;
         // Traits of play: each trait he carries adds its weight to its choice; 0 without a
         // traits block or a trait.
         let traits = view.traits(c);

@@ -178,7 +178,7 @@ fn kick_off_mood(
     sim.mood(me)
 }
 
-/// Shape AC-26: a player in good form (7.5) and ahead of his season goal (150 percent of
+/// A player in good form (7.5) and ahead of his season goal (150 percent of
 /// the pace) starts above neutral, and an ambitious one (18) higher than one of little
 /// ambition (5); in poorer form (6.0) and behind his goal (40 percent) he starts below it, the
 /// ambitious one lower; with no season inputs, or with no season block in the tuning, he

@@ -26,6 +26,7 @@ pub mod curve;
 pub mod foot;
 pub mod hidden;
 pub mod level;
+pub mod mood;
 pub mod params;
 pub mod stages;
 pub mod states;

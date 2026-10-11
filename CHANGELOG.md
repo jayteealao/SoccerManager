@@ -18,12 +18,15 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 - Matches play differently for the same seed. Mood moved by the match and shaped by personality, familiarity away from the natural position, traits of play and their overrides, the weaker foot, consistency for each action, braking by agility, and the kick-off mood from the season record all act in play. A shared floor keeps a strong player from playing as a poor one when several effects stack.
 - The generated league changes once: `engine-cli generate` draws every new field, so the same seed gives a different league from earlier builds.
 - Team files are version 3 and the attribute file version 4. Older team files, attribute files and replays convert as they load: the new attributes come from related ones, personality values sit at the middle of the scale, the weaker foot is 50 percent, only the listed position is rated, and no player has a trait. Match setup names a club whose file converted.
-- The match stream's `condition` message carries each player's mood as a word.
+- The match stream protocol is version 7, up from 6. A squad entry can carry the player's position ratings, his feet, his traits of play, his personality as words and his kick-off mood as a word; the event message gains the `trait-override` type with its `trait.name`, `trait.cause` and `trait.instruction` fields, which the match record's event schema also lists; and the `condition` message carries each player's mood as a word. No field was removed and none changed meaning, so a version 6 message still reads. A version 4 replay file also stores the slot file and the trait catalogue it played with.
+- `GET /engine/views` also answers the club's season record.
+- The launcher writes `season.json` to the data folder, and a copy of each side's team file (`team-a.json`, `team-b.json`) with the player's recent form and goal progress into each match's folder.
 - A saved match from 0.2.0-beta.4 resumes on that release's engine.
 
 ### Fixed
 
 - The page no longer stops updating at the full-time report when two players of one side were booked at the same moment.
+- A player hurt or sent off once full time is reached no longer ends the finished match a second time as abandoned.
 
 ## [0.2.0-beta.4] - 2026-10-08
 

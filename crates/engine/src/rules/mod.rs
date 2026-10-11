@@ -306,6 +306,7 @@ impl Simulation {
         self.carrier = Some(kicker);
         self.control_since = self.tick;
         self.last_touch = Some(team);
+        self.end_acts_on_restart(team);
         self.restart_taker = Some(kicker);
         self.referee.offside = 0;
         self.enter_phase(Phase::Live, Cause::KickOffTaken);
@@ -870,6 +871,7 @@ impl Simulation {
         self.carrier = Some(dead.taker);
         self.control_since = self.tick;
         self.last_touch = Some(dead.team);
+        self.end_acts_on_restart(dead.team);
         self.restart_taker = Some(dead.taker);
         #[cfg(feature = "sensitivity")]
         if self.probe.is_some() {

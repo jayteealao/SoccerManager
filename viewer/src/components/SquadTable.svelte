@@ -73,7 +73,7 @@
             {:else if cell.ring}
               {#if cell.lead}<span aria-hidden="true">{cell.lead}{' '}</span>{/if}<span class="pc {cell.ring}" aria-hidden={cell.label ? 'true' : undefined}>{cell.text}</span>{#if cell.label}<span class="sr">{cell.label}</span>{/if}
             {:else if cell.mark}
-              <span class="mk" aria-hidden="true" style:color={cell.token ? `var(${cell.token})` : null}>{cell.mark}</span>
+              <span class="mk" aria-hidden="true" style:--mark-ink={cell.token ? `var(${cell.token})` : null}>{cell.mark}</span>
               {@render said(cell.text, cell.label)}
             {:else if cell.strong}
               <b class="num">{cell.text}</b>
@@ -245,11 +245,11 @@
     width: 10px;
     margin-right: 2px;
     text-align: center;
-    color: var(--ink-3);
+    color: var(--mark-ink, var(--ink-3));
   }
 
   tr.me .mk {
-    color: var(--cyan-ink) !important;
+    color: var(--cyan-ink);
   }
 
   .num {

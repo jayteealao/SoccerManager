@@ -20,8 +20,6 @@ use crate::contract::params::TraitTuning;
 use crate::data::traits::TraitStrength;
 use crate::tactics::Instruction;
 
-/// The metres toward the opponents' goal a killer ball gains at least.
-pub const KILLER_GAIN_M: f64 = 15.0;
 /// A switch is a pass longer than this, across at least this much of the pitch's width.
 pub const SWITCH_M: f64 = 25.0;
 /// An early cross starts farther than this from the goal line it attacks.
@@ -34,119 +32,70 @@ pub const CHANNEL_Y_M: f64 = 15.0;
 pub const LATE_RUN_DEPTH_M: f64 = 11.0;
 pub const LATE_RUN_WIDTH_M: f64 = 9.0;
 
-/// The traits the engine knows: the shipped catalogue's.
-pub const TRAIT_COUNT: usize = 31;
+/// Declares [`TraitKind`], [`TRAIT_COUNT`], [`TraitKind::ALL`] and [`TraitKind::name`] from
+/// one list, in catalogue order, so a new trait is one line here (and one line in each tuning
+/// table of `crate::contract::params`).
+macro_rules! trait_kinds {
+    ($($kind:ident => $name:literal,)*) => {
+        /// One trait of play, as the engine reads it. A catalogue name the engine does not
+        /// know is carried in the team file but plays no part.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+        pub enum TraitKind {
+            $($kind,)*
+        }
 
-/// One trait of play, as the engine reads it. A catalogue name the engine does not know is
-/// carried in the team file but plays no part.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum TraitKind {
-    CutsInside,
-    HugsTouchline,
-    ShootsFromDistance,
-    PlacesShots,
-    PowersShots,
-    TriesLobsAndChips,
-    TriesKillerBalls,
-    PlaysShortSimplePasses,
-    SwitchesPlay,
-    CrossesEarly,
-    RunsWithBallOften,
-    RarelyDribbles,
-    TriesTricks,
-    PlaysOneTwos,
-    HoldsUpBall,
-    ReleasesBallEarly,
-    DwellsOnBall,
-    GetsForward,
-    StaysBack,
-    ArrivesLateInBox,
-    MovesIntoChannels,
-    PressesRelentlessly,
-    DivesIntoTackles,
-    StaysOnFeet,
-    GoesDownEasily,
-    ArguesWithOfficials,
-    RushesOut,
-    StaysOnLine,
-    PunchesRatherThanCatches,
-    KicksLong,
-    ThrowsShort,
+        /// The traits the engine knows: the shipped catalogue's.
+        pub const TRAIT_COUNT: usize = [$($name,)*].len();
+
+        impl TraitKind {
+            /// Every trait, in catalogue order.
+            pub const ALL: [TraitKind; TRAIT_COUNT] = [$(TraitKind::$kind,)*];
+
+            /// The trait's catalogue name.
+            pub fn name(self) -> &'static str {
+                match self {
+                    $(TraitKind::$kind => $name,)*
+                }
+            }
+        }
+    };
+}
+
+trait_kinds! {
+    CutsInside => "cuts_inside",
+    HugsTouchline => "hugs_touchline",
+    ShootsFromDistance => "shoots_from_distance",
+    PlacesShots => "places_shots",
+    PowersShots => "powers_shots",
+    TriesLobsAndChips => "tries_lobs_and_chips",
+    TriesKillerBalls => "tries_killer_balls",
+    PlaysShortSimplePasses => "plays_short_simple_passes",
+    SwitchesPlay => "switches_play",
+    CrossesEarly => "crosses_early",
+    RunsWithBallOften => "runs_with_ball_often",
+    RarelyDribbles => "rarely_dribbles",
+    TriesTricks => "tries_tricks",
+    PlaysOneTwos => "plays_one_twos",
+    HoldsUpBall => "holds_up_ball",
+    ReleasesBallEarly => "releases_ball_early",
+    DwellsOnBall => "dwells_on_ball",
+    GetsForward => "gets_forward",
+    StaysBack => "stays_back",
+    ArrivesLateInBox => "arrives_late_in_box",
+    MovesIntoChannels => "moves_into_channels",
+    PressesRelentlessly => "presses_relentlessly",
+    DivesIntoTackles => "dives_into_tackles",
+    StaysOnFeet => "stays_on_feet",
+    GoesDownEasily => "goes_down_easily",
+    ArguesWithOfficials => "argues_with_officials",
+    RushesOut => "rushes_out",
+    StaysOnLine => "stays_on_line",
+    PunchesRatherThanCatches => "punches_rather_than_catches",
+    KicksLong => "kicks_long",
+    ThrowsShort => "throws_short",
 }
 
 impl TraitKind {
-    /// Every trait, in catalogue order.
-    pub const ALL: [TraitKind; TRAIT_COUNT] = [
-        TraitKind::CutsInside,
-        TraitKind::HugsTouchline,
-        TraitKind::ShootsFromDistance,
-        TraitKind::PlacesShots,
-        TraitKind::PowersShots,
-        TraitKind::TriesLobsAndChips,
-        TraitKind::TriesKillerBalls,
-        TraitKind::PlaysShortSimplePasses,
-        TraitKind::SwitchesPlay,
-        TraitKind::CrossesEarly,
-        TraitKind::RunsWithBallOften,
-        TraitKind::RarelyDribbles,
-        TraitKind::TriesTricks,
-        TraitKind::PlaysOneTwos,
-        TraitKind::HoldsUpBall,
-        TraitKind::ReleasesBallEarly,
-        TraitKind::DwellsOnBall,
-        TraitKind::GetsForward,
-        TraitKind::StaysBack,
-        TraitKind::ArrivesLateInBox,
-        TraitKind::MovesIntoChannels,
-        TraitKind::PressesRelentlessly,
-        TraitKind::DivesIntoTackles,
-        TraitKind::StaysOnFeet,
-        TraitKind::GoesDownEasily,
-        TraitKind::ArguesWithOfficials,
-        TraitKind::RushesOut,
-        TraitKind::StaysOnLine,
-        TraitKind::PunchesRatherThanCatches,
-        TraitKind::KicksLong,
-        TraitKind::ThrowsShort,
-    ];
-
-    /// The trait's catalogue name.
-    pub fn name(self) -> &'static str {
-        match self {
-            TraitKind::CutsInside => "cuts_inside",
-            TraitKind::HugsTouchline => "hugs_touchline",
-            TraitKind::ShootsFromDistance => "shoots_from_distance",
-            TraitKind::PlacesShots => "places_shots",
-            TraitKind::PowersShots => "powers_shots",
-            TraitKind::TriesLobsAndChips => "tries_lobs_and_chips",
-            TraitKind::TriesKillerBalls => "tries_killer_balls",
-            TraitKind::PlaysShortSimplePasses => "plays_short_simple_passes",
-            TraitKind::SwitchesPlay => "switches_play",
-            TraitKind::CrossesEarly => "crosses_early",
-            TraitKind::RunsWithBallOften => "runs_with_ball_often",
-            TraitKind::RarelyDribbles => "rarely_dribbles",
-            TraitKind::TriesTricks => "tries_tricks",
-            TraitKind::PlaysOneTwos => "plays_one_twos",
-            TraitKind::HoldsUpBall => "holds_up_ball",
-            TraitKind::ReleasesBallEarly => "releases_ball_early",
-            TraitKind::DwellsOnBall => "dwells_on_ball",
-            TraitKind::GetsForward => "gets_forward",
-            TraitKind::StaysBack => "stays_back",
-            TraitKind::ArrivesLateInBox => "arrives_late_in_box",
-            TraitKind::MovesIntoChannels => "moves_into_channels",
-            TraitKind::PressesRelentlessly => "presses_relentlessly",
-            TraitKind::DivesIntoTackles => "dives_into_tackles",
-            TraitKind::StaysOnFeet => "stays_on_feet",
-            TraitKind::GoesDownEasily => "goes_down_easily",
-            TraitKind::ArguesWithOfficials => "argues_with_officials",
-            TraitKind::RushesOut => "rushes_out",
-            TraitKind::StaysOnLine => "stays_on_line",
-            TraitKind::PunchesRatherThanCatches => "punches_rather_than_catches",
-            TraitKind::KicksLong => "kicks_long",
-            TraitKind::ThrowsShort => "throws_short",
-        }
-    }
-
     /// The trait named `name`, when the engine knows it.
     pub fn from_name(name: &str) -> Option<Self> {
         Self::ALL.iter().copied().find(|k| k.name() == name)
@@ -172,7 +121,8 @@ impl TraitKind {
     /// short simple passes, one-twos, the keeper's short throw, running with the ball, tricks,
     /// switches of play, shots from distance and staying on the line. No chance reaches 2
     /// overrides a match for them, and a throttle that forced more is ruled out, so they
-    /// leave the table. Their moments stay in the decision code: a row here brings one back.
+    /// leave the table. A row here needs the trait's moment in the override code, with a test
+    /// that reaches it.
     pub fn conflicts(self) -> &'static [Instruction] {
         use Instruction as I;
         match self {

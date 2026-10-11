@@ -165,7 +165,7 @@ pub fn foul_chance_on(tackler: Skills<'_>, yellows: u8, occasion: f64, t: &Tunin
 pub fn foul_occasion(view: &MatchView<'_>, tackler: usize, carrier: usize, running: bool) -> f64 {
     let o = view.tuning().contract.person().occasions;
     let (me, them) = (view.personality(tackler), view.personality(carrier));
-    let low = (-view.mood(tackler) / crate::sim::mood::FULL).max(0.0);
+    let low = (-view.mood(tackler) / crate::contract::mood::FULL).max(0.0);
     let mut shift = o.temper_foul * low * (1.0 - me.temperament) - o.dive_foul * them.sportsmanship;
     if running {
         shift -= o.cynical_foul * me.sportsmanship;

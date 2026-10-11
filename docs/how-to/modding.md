@@ -91,17 +91,23 @@ The rule pack decides how long each half lasts, how many substitutions each team
    target/release/engine-cli simulate --seed 1 --ticks-out check.ticks --team-a my-teams/club-00000007-00.json
    ```
 
-Each player must have every attribute of the attribute schema, and no other attribute. A version 2 file, which `generate` writes, holds each attribute as a rating from 1.0 to 20.0 with at most one decimal, for example `12.4`, and each player's `height` in centimetres (150 to 215), `age` in years (15 to 45), and `nationality` as three upper-case letters:
+Each player must have every attribute of the attribute schema, and no other attribute. A version 3 file, which `generate` writes, holds each attribute as a rating from 1.0 to 20.0 with at most one decimal, for example `12.4`, and each player's `height` in centimetres (150 to 215), `age` in years (15 to 45), and `nationality` as three upper-case letters. It also holds the player as a person: a rating at each of the ten positions in `positions` (his listed position is his natural one, and no other is above it), his feet in `foot` (the strong side, and the weaker foot as a whole percent of the strong one), and his traits of play in `traits`, which you can leave out when he has none:
 
 ```json
 { "id": "p-club-00000007-00-04", "name": "Jon Ashby", "shirt": 4, "position": "CB",
   "attributes": { "acceleration": 12.4, "pace": 11.0, "...": 1.0 },
+  "positions": { "CB": 14.2, "LB": 11.0, "RB": 11.5, "DM": 10.4, "GK": 1.0, "CM": 8.3,
+                 "AM": 5.1, "LW": 3.2, "RW": 3.0, "ST": 4.4 },
+  "foot": { "strong": "right", "weaker": 40 },
+  "traits": { "stays_back": "strong" },
   "height": 187, "age": 26, "nationality": "ENG" }
 ```
 
+The eleven personality values, such as `temperament` and `leadership`, are attributes like the others in `attributes`. The data-file reference lists every field and its bounds.
+
 The screens show each rating as its whole number, so 12.4 shows as 12 and 12.5 as 13.
 
-Every player of a version 2 file also holds the two hidden values, `consistency` and `injury_proneness`, as ratings like the others. Consistency sets how much his form moves from match to match and through a match: at 20.0 he plays to his ratings every time, at 1.0 his form swings most. Injury proneness sets how often he is injured: 10.0 is the average, higher is more often. No screen shows them as numbers. A player shows a word for each, such as "steady" or "rarely injured", once he has played matches for the club (`matches_at_club` in his condition block); before that both read as not yet known.
+Every player also holds the two hidden values, `consistency` and `injury_proneness`, as ratings like the others. Consistency sets how much his form moves from match to match and through a match: at 20.0 he plays to his ratings every time, at 1.0 his form swings most. Injury proneness sets how often he is injured: 10.0 is the average, higher is more often. No screen shows them as numbers. A player shows a word for each, such as "steady" or "rarely injured", once he has played matches for the club (`matches_at_club` in his condition block); before that both read as not yet known.
 
 ### Give a player his match condition
 
@@ -129,6 +135,8 @@ A version 1 file (`"schema_version": 1`) holds whole numbers from 1 to 100 and n
 3. Replace `injury_resistance` with `injury_proneness`: 21.0 less the converted resistance, so a resistance of 62 (12.4) becomes `8.6`. The engine converts it the same way.
 4. Add `"consistency": 10.0` to every player, as the engine does, or the value you want.
 5. Add `height`, `age`, and `nationality` to every player.
+
+The result is a version 2 file. It loads, and converts again as it loads: new attributes from related ones, every personality value at the middle of the scale, a weaker foot of 50, only his listed position rated, and no traits. The setup screen then says that the club uses an older team file. To write version 3, set `"schema_version": 3` and add the fields that the data-file reference lists in its table for version 2 files.
 
 A version 1 tactics file converts on load in the same way; the data-file reference lists its version 2 fields.
 

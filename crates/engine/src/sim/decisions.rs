@@ -265,8 +265,6 @@ impl Simulation {
                 }),
             );
         }
-        // The taker's release is a moment: a strong trait may play its own pass instead.
-        self.restart_override(taker, &pass, kind)
-            .unwrap_or(pass.kick)
+        pass.kick
     }
 }
