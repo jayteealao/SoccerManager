@@ -422,9 +422,13 @@ pub(crate) fn stats_message(sim: &Simulation) -> Stats {
 }
 
 /// Every wire slot's energy at the current tick, home first, three decimals, with each
-/// slot's overall level now and fresh in tenths ([`Simulation::overall_levels`]).
+/// slot's overall level now and fresh in tenths ([`Simulation::overall_levels`]) and his mood
+/// now as a word key ([`engine::sim::mood::mood_word`]), never a number.
 pub(crate) fn condition_message(sim: &Simulation) -> Condition {
     let (level, base) = sim.overall_levels();
+    let mood = (0..sim.players().len())
+        .map(|i| engine::sim::mood::mood_word(sim.mood(i)).to_string())
+        .collect();
     Condition {
         tick: sim.tick(),
         energy: sim
@@ -436,6 +440,7 @@ pub(crate) fn condition_message(sim: &Simulation) -> Condition {
         windows_used: sim.ledgers().map(|l| l.windows),
         level,
         base,
+        mood,
     }
 }
 
@@ -1258,6 +1263,94 @@ mod tests {
         assert!(!json.contains("\"player.mood\":-") && !json.contains("\"player.mood\":0"));
     }
 
+    /// The rank of a mood word key, from rattled (0) to confident (4).
+    fn mood_rank(word: &str) -> usize {
+        ["rattled", "low", "steady", "lifted", "confident"]
+            .iter()
+            .position(|w| *w == word)
+            .unwrap_or_else(|| panic!("not a mood word: {word}"))
+    }
+
+    /// The condition message carries each wire slot's mood as a word key: at kick-off the
+    /// home starters' words are the hello's kick-off words, and a scorer's word right after
+    /// his goal is at or above his word before it.
+    #[test]
+    fn the_condition_message_carries_each_slots_mood_as_a_word() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let mut home = a.clone();
+        for (p, (form, progress)) in [(100, 200), (10, 0)].into_iter().enumerate() {
+            let mut c = home.players[p].condition.unwrap_or_default();
+            c.recent_rating = Some(form);
+            c.goal_progress = Some(progress);
+            home.players[p].condition = Some(c);
+        }
+        let config = MatchConfig::new(42, 90, &loaded.content, [&home, b]).unwrap();
+        let sim = Simulation::new(config).unwrap();
+        let squad = &hello_teams(&sim, true)[HOME].squad;
+        let first = condition_message(&sim);
+        assert_eq!(first.mood.len(), 22);
+        for (i, word) in first.mood.iter().enumerate() {
+            let p = &sim.players()[i];
+            if p.team == HOME {
+                assert_eq!(
+                    Some(word.as_str()),
+                    squad[p.squad].mood.as_deref(),
+                    "slot {i}"
+                );
+            }
+        }
+        assert!(
+            first.mood.iter().any(|w| w == "confident"),
+            "{:?}",
+            first.mood
+        );
+        let json = serde_json::to_string(&ServerMessage::Condition(first)).unwrap();
+        assert!(!json.contains("\"mood\":[-") && !json.contains("\"mood\":[0"));
+
+        // A scorer's word right after his goal, over the first seeds with a goal. The words
+        // each tick come from the engine's mood, the message's words only at a goal: a
+        // condition message every tick of a debug match would take minutes.
+        let words = |sim: &Simulation| -> Vec<&'static str> {
+            (0..sim.players().len())
+                .map(|i| engine::sim::mood::mood_word(sim.mood(i)))
+                .collect()
+        };
+        let mut scored = 0;
+        for seed in 1..=20u64 {
+            let config = MatchConfig::new(seed, 90, &loaded.content, [a, b]).unwrap();
+            let mut sim = Simulation::new(config).unwrap();
+            let mut before = words(&sim);
+            while !sim.is_over() && scored < 3 {
+                sim.step();
+                let goals: Vec<usize> = sim
+                    .events()
+                    .iter()
+                    .filter(|e| e.kind == engine::EngineEventKind::Goal)
+                    .filter_map(|e| e.player.filter(|&i| Some(sim.players()[i].team) == e.team))
+                    .collect();
+                sim.take_events();
+                if !goals.is_empty() {
+                    let now = condition_message(&sim).mood;
+                    for i in goals {
+                        assert!(
+                            mood_rank(&now[i]) >= mood_rank(before[i]),
+                            "seed {seed}, scorer {i}: {} after his goal, {} before",
+                            now[i],
+                            before[i]
+                        );
+                        scored += 1;
+                    }
+                }
+                before = words(&sim);
+            }
+            if scored >= 3 {
+                break;
+            }
+        }
+        assert!(scored >= 3, "three goals in the first 20 seeds: {scored}");
+    }
+
     /// The condition message carries each slot's overall level now and fresh; a player who
     /// tires late in a seeded match plays below his fresh level, and the levels read the match
     /// without moving it.
@@ -1993,6 +2086,8 @@ mod tests {
             .map(str::to_string)
             .collect();
         hidden.push("injury_resistance".into());
+        // Mood is never a number either: the hello's kick-off word and the condition words.
+        hidden.push("mood".into());
         assert!(hidden.iter().any(|h| h == "consistency"), "{hidden:?}");
         let mut sim = Simulation::new(config).unwrap();
         let hello = serde_json::to_value(hello_teams(&sim, true)).unwrap();

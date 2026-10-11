@@ -71,7 +71,10 @@
             {:else if cell.band}
               <b class="num {cell.band}">{@render said(cell.text, cell.label)}</b>
             {:else if cell.ring}
-              <span class="pc {cell.ring}">{cell.text}</span>
+              {#if cell.lead}<span aria-hidden="true">{cell.lead}{' '}</span>{/if}<span class="pc {cell.ring}" aria-hidden={cell.label ? 'true' : undefined}>{cell.text}</span>{#if cell.label}<span class="sr">{cell.label}</span>{/if}
+            {:else if cell.mark}
+              <span class="mk" aria-hidden="true" style:color={cell.token ? `var(${cell.token})` : null}>{cell.mark}</span>
+              {@render said(cell.text, cell.label)}
             {:else if cell.strong}
               <b class="num">{cell.text}</b>
             {:else if cell.muted}
@@ -234,6 +237,19 @@
 
   .note {
     font-size: 9px;
+  }
+
+  /* Form's mark: only the mark takes a colour, the word stays in the row's ink. */
+  .mk {
+    display: inline-block;
+    width: 10px;
+    margin-right: 2px;
+    text-align: center;
+    color: var(--ink-3);
+  }
+
+  tr.me .mk {
+    color: var(--cyan-ink) !important;
   }
 
   .num {

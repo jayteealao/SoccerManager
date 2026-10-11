@@ -180,6 +180,10 @@ export function install(session, target = globalThis, door = () => null) {
     sentCommands: () => [...session.sent],
     pending: () => session.dugout.pending.all(session.renderedTick),
     lineup: () => session.dugout.lineupView(),
+    /// The hello's kick-off mood word key of each home squad player, by `player.id`.
+    squadMood: () => Object.fromEntries(session.squad.map((p) => [p['player.id'], p['player.mood'] ?? null])),
+    /// The hello's home squad `player.id`s, in squad order.
+    squadIds: () => session.squad.map((p) => p['player.id']),
     dugout: () => ({
       phase: session.dugout.phase,
       lead_holding: session.lead.holding,

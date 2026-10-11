@@ -281,6 +281,8 @@ export class MatchSession {
     /// release's engine plays it, and the tick it continues from.
     this.stepOpts = { version: null, resumeTick: null };
     this.teamNames = new Map();
+    /// Every player of the hello by `player.id`: his name, for the feed's trait line.
+    this.playerNames = new Map();
     this.halfTimes = 0;
     /// The type of every command sent, in order, for the browser drives.
     this.sent = [];
@@ -622,6 +624,9 @@ export class MatchSession {
     this.hello = hello;
     this.ground = groundOf(hello);
     this.teamNames = new Map(hello.teams.map((t) => [t['team.id'], t['team.name']]));
+    this.playerNames = new Map(
+      hello.teams.flatMap((t) => [...(t.roster ?? []), ...(t.squad ?? [])].map((p) => [p['player.id'], p['player.name']]))
+    );
     this.engineVersion = hello['engine.version'] ?? null;
     this.engineWord = stored ? 'Replay' : 'Engine connected';
     this.scrubMax = Math.max(1, hello.ticks_expected);
@@ -757,6 +762,17 @@ export class MatchSession {
       return null;
     }
     return formations[formation]?.slots?.[n]?.position ?? null;
+  }
+
+  /// The feed's trait override rows of squad player `index` in the match on show, once it is
+  /// at full time (the panel counts them "last match"); empty before full time, for a player
+  /// with none, or with no such player.
+  overridesOf(index) {
+    const id = this.squad[index]?.['player.id'];
+    if (!id || this.period !== 'FULL TIME') {
+      return [];
+    }
+    return this.feedRows.filter((row) => row.kind === KIND.traitOverride && row.player === id);
   }
 
   /// Opens the Squad screen from the view on show; it goes back there.
@@ -1143,7 +1159,7 @@ export class MatchSession {
     }
     const { reset, batch } = this.batcher.take(state.entries);
     if (reset || batch.length > 0) {
-      const rows = batch.map((event) => feedRow(event, this.teamNames));
+      const rows = batch.map((event) => feedRow(event, this.teamNames, this.playerNames));
       this.feedRows = reset ? rows : [...this.feedRows, ...rows];
       // Goals and cards are read out as they are released, never again on a rewind.
       const said = reset ? null : rows.findLast((row) => row.announce);
@@ -1408,6 +1424,9 @@ export class MatchSession {
       this.engineWord = 'Engine finished';
       this.setNotice('end', 'Full time. The whole match is here and plays back.');
       this.streamEnded = true;
+      // The launcher adds a finished match to the season record when the views are read, so
+      // the season, the goal progress and the form on the panel move without a relaunch.
+      this.loadViews({ again: true });
       if (this.skipRunning) {
         this.finishSkip();
         return;

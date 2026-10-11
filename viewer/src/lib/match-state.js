@@ -30,9 +30,9 @@ export const HIGHLIGHT_WORDS = Object.freeze({
 
 /// Event kinds kept out of the feed. The computer manager's reasoning is not a match event:
 /// its visible outcome arrives as its own tactics-change or substitution row. A trait
-/// override stays out until the feed gains its own row for it, which names the player, the
-/// trait, the instruction and the cause.
-export const HIDDEN_KINDS = new Set([KIND.aiDecision, KIND.traitOverride]);
+/// override is in the feed: its row names the player, the trait, the instruction and the
+/// cause (`feed.js`).
+export const HIDDEN_KINDS = new Set([KIND.aiDecision]);
 
 /// The index of the newest item in `sorted` (ascending by `.tick`) at or before `tick`, or -1.
 export function newestAtOrBefore(sorted, tick) {
@@ -87,6 +87,9 @@ function emptyView() {
     /// message at the tick; null before the first one or from an engine before protocol 6.
     level: null,
     base: null,
+    /// Each wire slot's mood now as a word key, from the newest condition message at the
+    /// tick; null before the first one or from an engine that sends none.
+    mood: null,
   };
 }
 
@@ -175,6 +178,7 @@ export class MatchState {
     view.windowsUsed = c < 0 ? null : (this.conditions[c].windows_used ?? null);
     view.level = c < 0 ? null : (this.conditions[c].level ?? null);
     view.base = c < 0 ? null : (this.conditions[c].base ?? null);
+    view.mood = c < 0 ? null : (this.conditions[c].mood ?? null);
     return view;
   }
 

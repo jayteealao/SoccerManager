@@ -354,3 +354,17 @@ test('no personality, mood, form or assistant text carries a digit, and none tak
     }
   }
 });
+
+test('after the match the override line counts his overrides and quotes the first', () => {
+  const overrides = [
+    { kind: 'trait-override', player: 'p-10', example: "holds up the ball against 'Higher tempo', under pressure" },
+    { kind: 'trait-override', player: 'p-10', example: "holds up the ball against 'Higher tempo', in a low mood" },
+  ];
+  const model = panelModel(player(31), [], { overrides });
+  assert.deepEqual(model.override, {
+    count: 2,
+    text: "2 times last match a trait beat an instruction — holds up the ball against 'Higher tempo', under pressure",
+  });
+  assert.equal(panelModel(player(31), [], { overrides: [] }).override, null);
+  assert.equal(panelModel(player(31), []).override, null);
+});

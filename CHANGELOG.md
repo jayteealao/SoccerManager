@@ -4,6 +4,27 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+- The player as a person. Each player has a rating at every position, a weaker foot as a percent of his strong foot, up to eight traits of play (such as cutting inside or holding up the ball), and eleven hidden personality values. Determination, bravery and communication are visible mental attributes, and new technical attributes (marking, off-ball movement, corners, free kicks, penalties, long throws and flair) and the goalkeeping attribute eccentricity each have a job in play.
+- The player panel shows his ratings by position on a pitch, his feet, his personality as one summary word with how sure the staff are and the assistant manager's view, his mood today, his traits of play, and his season: the story so far, his season goal and his form. Hover or focus an attribute to see the actions it drives.
+- The Squad screen has new columns: the rating at his natural position, the rating at a chosen position, the weaker foot, form, and the season goal with the count so far. The Rated at filter keeps only the players rated at least 10, 13 or 16 at a chosen position.
+- The Touchline shows each player's mood as a word with an up or down mark, and names a player who plays away from his natural position.
+- The match feed shows a line when a player's strong trait of play beats an instruction, with the player, what he did, the instruction and why (under pressure or in a low mood). After the match his panel counts these.
+- The launcher keeps a season record per player (starts, minutes, goals, assists, clean sheets, ratings and red cards) and a season goal, and his form and progress set his mood at kick-off in the next match.
+
+### Changed
+
+- Matches play differently for the same seed. Mood moved by the match and shaped by personality, familiarity away from the natural position, traits of play and their overrides, the weaker foot, consistency for each action, braking by agility, and the kick-off mood from the season record all act in play. A shared floor keeps a strong player from playing as a poor one when several effects stack.
+- The generated league changes once: `engine-cli generate` draws every new field, so the same seed gives a different league from earlier builds.
+- Team files are version 3 and the attribute file version 4. Older team files, attribute files and replays convert as they load: the new attributes come from related ones, personality values sit at the middle of the scale, the weaker foot is 50 percent, only the listed position is rated, and no player has a trait. Match setup names a club whose file converted.
+- The match stream's `condition` message carries each player's mood as a word.
+- A saved match from 0.2.0-beta.4 resumes on that release's engine.
+
+### Fixed
+
+- The page no longer stops updating at the full-time report when two players of one side were booked at the same moment.
+
 ## [0.2.0-beta.4] - 2026-10-08
 
 A prerelease for testers. Matches play differently from 0.2.0-beta.3 for the same seed: every action reads the players' ratings through the new attribute contract, on a scale of 1 to 20 in tenths, and a player's condition, height and age now play.

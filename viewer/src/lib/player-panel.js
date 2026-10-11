@@ -23,6 +23,9 @@ import {
   sureness,
 } from './hidden-words.js';
 import { BAND_WORDS, bandOf, ratingText, wholeOf } from './scale.js';
+import { footWord, formWord, goalText, progressWord } from './person-words.js';
+
+export { footWord, formWord, goalText, progressWord };
 
 /// The engine's body references (`content/tuning.json` → `engine.contract.body`): the height
 /// and the age at which the body jobs have no effect. A test checks them against the file.
@@ -181,15 +184,6 @@ export function positionChips(positions, natural) {
   };
 }
 
-/// The word of a weaker foot of `percent`: one-footed under 35, decent from 35, two-footed
-/// from 80.
-export function footWord(percent) {
-  if (percent < 35) {
-    return 'one-footed';
-  }
-  return percent < 80 ? 'decent' : 'two-footed';
-}
-
 /// The feet rows: the strong foot at 100 and the weaker foot as a percent with its word and the
 /// band of the percent read as a 1-20 whole, and the note on when it costs him. Null when the
 /// hello carries no feet (before protocol 7).
@@ -249,33 +243,6 @@ export function personalityModel(personality, matches) {
 /// The mood today from the hello's `player.mood` word key (`hidden-words.js` `moodWord`).
 export function moodModel(mood, matches) {
   return moodWord(mood, matches);
-}
-
-/// The form word of the season's `form` (the mean of his last five ratings): in form from 7.2,
-/// out of form at 6.3 and below, steady between; not yet known with none.
-export function formWord(form) {
-  if (typeof form !== 'number' || !Number.isFinite(form)) {
-    return { known: false, key: null, text: NOT_YET_KNOWN, mark: null, token: null };
-  }
-  if (form >= 7.2) {
-    return { known: true, key: 'in_form', text: 'In form', mark: '▲', token: '--good' };
-  }
-  if (form <= 6.3) {
-    return { known: true, key: 'out_of_form', text: 'Out of form', mark: '▼', token: '--warn' };
-  }
-  return { known: true, key: 'steady_form', text: 'Steady form', mark: '=', token: null };
-}
-
-/// The progress word of the season's `progress` (percent of the pace of his goal): ahead from
-/// 110, on track from 90, behind below; null before a match.
-export function progressWord(progress) {
-  if (typeof progress !== 'number' || !Number.isFinite(progress)) {
-    return null;
-  }
-  if (progress >= 110) {
-    return 'ahead';
-  }
-  return progress >= 90 ? 'on track' : 'behind';
 }
 
 /// The assistant manager's first sentence, by summary word.
@@ -404,33 +371,6 @@ export function overrideLine(count, example = null) {
 /// The last ratings the season line draws.
 export const SEASON_LINE_POINTS = 6;
 
-/// The goal of `goal` (`{ kind, target }`) in words, with the count so far from `p`.
-function goalText(goal, p) {
-  const t = Number(goal?.target);
-  const n = (v) => (Number.isFinite(v) ? Math.round(v) : 0);
-  switch (goal?.kind) {
-    case 'goals':
-      return { aim: `Score ${n(t)} goals`, so: `${p.goals} of ${n(t)}` };
-    case 'assists':
-      return { aim: `Make ${n(t)} assists`, so: `${p.assists} of ${n(t)}` };
-    case 'clean_sheets':
-      return { aim: `Keep ${n(t)} clean sheets`, so: `${p.clean_sheets} of ${n(t)}` };
-    case 'starts':
-      return { aim: `Start ${n(t)} matches`, so: `${p.starts} of ${n(t)}` };
-    case 'average_rating': {
-      const avg = p.ratings.length ? ratingText(p.ratings.reduce((a, r) => a + r.rating, 0) / p.ratings.length) : null;
-      return { aim: `Average a rating of ${ratingText(t)}`, so: avg ? `${avg} so far` : 'no rating yet' };
-    }
-    case 'no_own_fault_absence':
-      return {
-        aim: 'Miss no match through his own fault',
-        so: p.red_cards === 0 ? 'none missed' : `${p.red_cards} sent off`,
-      };
-    default:
-      return null;
-  }
-}
-
 /// The season block from the player's part of the views answer's `season` (`p`, or null when
 /// the answer carries no season): the last six ratings for the line, So far, Story, Goal and
 /// Form. With no match yet it reads "No matches this season yet." with his goal at nothing.
@@ -545,7 +485,7 @@ export function stateRows({ mood, form, condition, sharpness, natural, played, p
 /// The whole panel of squad `player`. `ratings` is his stored and live match ratings, oldest
 /// first (`[{ match, rating }]`). `season` is his part of the views answer's season (or
 /// null); `played` the position code of his slot today (or null).
-export function panelModel(player, ratings = [], { season = null, played = null } = {}) {
+export function panelModel(player, ratings = [], { season = null, played = null, overrides = [] } = {}) {
   if (!player) {
     return null;
   }
@@ -599,13 +539,14 @@ export function panelModel(player, ratings = [], { season = null, played = null 
     level: typeof player['player.level'] === 'number' ? wholeOf(player['player.level']) : null,
     hidden,
     ratings: lines,
-    ...personPart(player, matches, season, played),
+    ...personPart(player, matches, season, played, overrides),
   };
 }
 
 /// The person's parts of the panel: positions, feet, personality with the assistant's view,
-/// mood, traits, the override line slot, the season and the state rows.
-function personPart(player, matches, season, played) {
+/// mood, traits, the override line (from `overrides`, the feed's trait override rows of his
+/// last match, each with its `example` words), the season and the state rows.
+function personPart(player, matches, season, played, overrides) {
   const positions = player['player.positions'] ?? null;
   const position = player['player.position'] ?? null;
   const personality = player['player.personality'] ?? null;
@@ -618,7 +559,7 @@ function personPart(player, matches, season, played) {
     assistant: assistantView({ personality, mood: player['player.mood'], season, matches }),
     mood,
     traits: Array.isArray(player['player.traits']) || personality ? traitRows(player['player.traits']) : null,
-    override: null,
+    override: Array.isArray(overrides) && overrides.length > 0 ? overrideLine(overrides.length, overrides[0].example ?? null) : null,
     season: seasonModel(season),
     state: stateRows({
       mood,

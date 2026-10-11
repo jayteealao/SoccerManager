@@ -24,15 +24,13 @@ import path from 'node:path';
 import { expect, test } from '@playwright/test';
 
 import { contrastReport } from '../support/contrast.mjs';
-import { CONTENT, REPO, frontDoor, tempDir } from '../support/engine.mjs';
+import { CONTENT, frontDoor, tempDir } from '../support/engine.mjs';
 import { kickOffFromStart, open, settled, toFullTime } from '../support/front.mjs';
 import { clearPointer, snap } from '../support/page.mjs';
+import { contentWithPersonHome, relistStrikers, removeDir } from '../support/person.mjs';
 
 /// Past the end of any match: a match with this fast-forward plays straight through.
 const PAST_THE_END = 1_000_000;
-/// A version 3 team file, from the engine's test fixtures: every player with ratings by
-/// position, feet, traits and every personality value.
-const V3_HOME = path.join(REPO, 'crates', 'engine', 'tests', 'fixtures', 'teams', 'v3-good.json');
 const CATALOGUE = JSON.parse(fs.readFileSync(path.join(CONTENT, 'attributes.json'), 'utf8'));
 const TACTICS = JSON.parse(fs.readFileSync(path.join(CONTENT, 'tactics.json'), 'utf8'));
 const PERSONALITY = CATALOGUE.attributes.filter((a) => a.group === 'personality').map((a) => a.name);
@@ -82,27 +80,6 @@ async function openPanel(page, index = 0) {
   await expect(panel(page)).toBeVisible();
   await settled(page);
 }
-
-/// A copy of the content folder whose home team file is the version 3 fixture, under the
-/// shipped home club's name and id, with `edit` applied to it. Returns the folder and the team as written.
-function contentWithPersonHome(edit = () => {}) {
-  const dir = tempDir('content-person-home');
-  fs.cpSync(CONTENT, dir, { recursive: true });
-  const team = JSON.parse(fs.readFileSync(V3_HOME, 'utf8'));
-  // The shipped home club's identity, so it stays the home side (clubs order by id).
-  team.club = JSON.parse(fs.readFileSync(path.join(CONTENT, 'teams', 'default-a.json'), 'utf8')).club;
-  edit(team);
-  fs.writeFileSync(path.join(dir, 'teams', 'default-a.json'), `${JSON.stringify(team, null, 2)}\n`);
-  return { dir, team };
-}
-
-const removeDir = (dir) => {
-  try {
-    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
-  } catch {
-    // A file still held open by an exiting process; the system temporary folder keeps it.
-  }
-};
 
 /// Player `p` of a version 3 team at `matches` matches at the club.
 const atClub = (p, matches) => {
@@ -391,12 +368,7 @@ test('the design states: not yet known, converted with no traits and an empty se
   // Out of position: the version 3 strikers relisted as attacking midfielders (rated highest
   // there), so the shipped pick puts a player listed elsewhere in a striker's slot.
   {
-    const { dir, team } = contentWithPersonHome((t) => {
-      for (const p of t.players.filter((q) => q.position === 'ST')) {
-        p.position = 'AM';
-        p.positions.AM = Math.min(20, Math.max(...Object.values(p.positions)) + 0.5);
-      }
-    });
+    const { dir, team } = contentWithPersonHome(relistStrikers);
     const engine = await frontDoor({ env: { SM_CONTENT_DIR: dir } });
     try {
       await toTactics(page, engine.url);

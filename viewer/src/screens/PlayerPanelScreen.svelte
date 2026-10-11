@@ -45,6 +45,7 @@
     panelModel(player, session.squadRatings.get(player?.['player.id']) ?? [], {
       season,
       played: session.slotPositionOf?.(session.panelPlayer) ?? null,
+      overrides: session.overridesOf?.(session.panelPlayer) ?? [],
     })
   );
 

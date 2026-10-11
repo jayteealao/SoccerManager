@@ -12,6 +12,11 @@
 // lands in a stub; the rendered contrast check. Screenshots of the default, menu-open and
 // sorted states are kept as evidence; the default view is compared with its baseline at each
 // window size in the @sizes test.
+//
+// The person columns, on a version 3 home team: Natural, the Rated-at position's rating, Weaker
+// foot, Form and Season goal are added through the Columns menu; Rated at CM with 13+ keeps only
+// the players rated 13 or more there; the rated column sorts high to low; no form cell holds a
+// digit.
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -21,6 +26,7 @@ import { contrastReport } from '../support/contrast.mjs';
 import { frontDoor, tempDir } from '../support/engine.mjs';
 import { open, settled } from '../support/front.mjs';
 import { clearPointer, snap } from '../support/page.mjs';
+import { contentWithPersonHome, noDigitsIn, removeDir } from '../support/person.mjs';
 
 const until = (page, fn, arg, timeout = 120_000) => page.waitForFunction(fn, arg, { timeout, polling: 100 });
 
@@ -212,5 +218,70 @@ test('the Squad screen: a Tab walk never lands in a stub, and the rendered contr
     expect(report.failures, JSON.stringify(report.failures, null, 2)).toEqual([]);
   } finally {
     engine.cleanUp();
+  }
+});
+
+test('the person columns: added through the menu, filtered by a rating at a position, and sorted', async ({ page }, info) => {
+  test.setTimeout(4 * 60_000);
+  const { dir, team } = contentWithPersonHome();
+  const engine = await frontDoor({ env: { SM_CONTENT_DIR: dir } });
+  try {
+    await toTactics(page, engine.url);
+    await openSquad(page);
+    const all = await squad(page).locator('[data-squad-table] tbody tr[data-row]').count();
+    expect(all).toBe(team.players.length);
+    const chip = squad(page).locator('[data-columns-chip]');
+    await chip.click();
+    const menu = squad(page).locator('[data-column-menu]');
+    for (const id of ['natural', 'rated', 'foot', 'form', 'season']) {
+      await menu.locator(`button[data-add="${id}"]`).click();
+      await expect(menu.locator(`li[data-shown="${id}"]`)).toBeVisible();
+    }
+    await menu.locator('[data-done]').click();
+    await expect(menu).toHaveCount(0);
+    const shown = await headers(page);
+    for (const id of ['natural', 'rated', 'foot', 'form', 'season']) {
+      expect(shown).toContain(id);
+    }
+    await expect(squad(page).locator('th[data-col="rated"]')).toContainText('ST');
+
+    // Rated at CM, 13 and up.
+    await squad(page).locator('select[data-rated-at]').selectOption('CM');
+    await squad(page).locator('select[data-rated-min]').selectOption('13');
+    await expect(squad(page).locator('th[data-col="rated"]')).toContainText('CM');
+    await expect(squad(page).locator('[data-filter-line]')).toContainText('Filter · Rated at CM · 13+');
+    const cells = () =>
+      squad(page)
+        .locator('[data-squad-table] tbody tr[data-row] td[data-cell="rated"]')
+        .evaluateAll((tds) =>
+          tds.map((td) => {
+            const drawn = td.cloneNode(true);
+            for (const sr of drawn.querySelectorAll('.sr')) sr.remove();
+            return drawn.textContent.trim();
+          })
+        );
+    const rated = await cells();
+    expect(rated.length).toBeGreaterThan(0);
+    expect(rated.length).toBeLessThan(all);
+    for (const text of rated) {
+      expect(text).toMatch(/^\d+$/);
+      expect(Number(text)).toBeGreaterThanOrEqual(13);
+    }
+    const expected = team.players.filter((p) => Math.round(p.positions?.CM ?? 0) >= 13).length;
+    expect(rated.length).toBe(expected);
+
+    // Sorted by the rated column, high to low.
+    await squad(page).locator('th[data-col="rated"] button').click();
+    await expect(squad(page).locator('[data-squad-table]')).toHaveAttribute('data-sort', 'rated:down');
+    const sorted = (await cells()).map(Number);
+    expect(sorted).toEqual([...sorted].sort((a, b) => b - a));
+    await expect(squad(page).locator('[data-filter-line]')).toContainText('sorted by CM rating');
+    await noDigitsIn(page, '[data-screen="squad"] td[data-cell="form"]');
+    await clearPointer(page);
+    await settled(page);
+    await page.screenshot({ path: evidence(info, 'squad-person-columns.png') });
+  } finally {
+    engine.cleanUp();
+    removeDir(dir);
   }
 });

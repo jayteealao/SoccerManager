@@ -75,7 +75,8 @@ one), `player.traits` (his traits of play, each a `name` and a `strength`) and
 `player.personality` (each personality value as a word and a confidence, never a number) and
 `player.mood` (his mood at kick-off as a word, never a number). The event message gains one event type, `trait-override`, and three optional fields
 (`trait.name`, `trait.cause` and `trait.instruction`): a player's strong trait of play broke
-one of his team's instructions. No field was removed and none changed meaning, and the tick
+one of his team's instructions. The `condition` message gains `mood`, each wire slot's mood now
+as a word, never a number. No field was removed and none changed meaning, and the tick
 frames are unchanged, so a protocol 6 message still reads; a reader shows the fields it lacks
 as unknown.
 
@@ -368,6 +369,7 @@ Sent right after each periodic `stats` message, not at full time.
 | `windows_used` | array of two integers | substitution windows each team has used, home first; `[0, 0]` when an earlier build sent none |
 | `level` | array of 22 integers | each wire slot's overall level now, in tenths of 1 to 20, with his tiredness and the other states taken in; absent before version 6 |
 | `base` | array of 22 integers | each wire slot's overall level fresh, in tenths, beside `level`; the Touchline's Level column reads `13 of 15` when the shown whole number of `level` is below that of `base` |
+| `mood` | array of 22 strings | each wire slot's mood now as a word key: `confident`, `lifted`, `steady`, `low` or `rattled`. It starts at the hello's `player.mood` and moves with goals, misses, cards and the score; never a number. Absent before version 7 |
 
 ### change-state
 
