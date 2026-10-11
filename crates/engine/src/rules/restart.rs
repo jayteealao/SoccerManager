@@ -6,19 +6,19 @@
 //! While the ball is dead, every player steers to a restart target: the formation anchor
 //! around the restart spot, moved where a law requires it. Opponents keep 9.15 m from the ball
 //! at a free kick, a corner, and a kick-off, stay outside the penalty area at a goal kick, and
-//! at a penalty everyone but the taker and the defending goalkeeper waits outside the area
-//! and 9.15 m from the mark. The taker may restart once the tuned delay has passed, the taker
-//! is at the ball, and every player the law moves has moved.
+//! at a penalty everyone but the taker and the defending goalkeeper waits outside the area,
+//! behind the mark and 9.15 m from it. The taker may restart once the tuned delay has passed,
+//! the taker is at the ball, and every player the law moves has moved.
 
 use crate::data::rules::StoppageKind;
 use crate::math::{self, DVec2, toward};
 use crate::modules::{MatchView, ModuleCard, RestartsModule};
-use crate::pitch::{KICK_DISTANCE, PENALTY_AREA_DEPTH, PENALTY_AREA_WIDTH, Pitch};
+use crate::pitch::{KICK_DISTANCE, PENALTY_AREA_DEPTH, PENALTY_AREA_WIDTH, PENALTY_MARK, Pitch};
 use crate::player::Player;
 use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::Tuning;
 
-use super::positions::on_goal_line;
+use super::positions::{behind_the_mark, on_goal_line};
 
 /// Distance opponents keep from a throw-in (IFAB Law 15).
 pub(crate) const THROW_IN_DISTANCE: f64 = 2.0;
@@ -241,6 +241,31 @@ fn out_of_area(pitch: &Pitch, p: DVec2, side: f64) -> DVec2 {
     }
 }
 
+/// Where a player other than the taker and the defending goalkeeper waits at a penalty kicked
+/// from `spot` at the `side` end, from his place `base` (IFAB Law 14): outside the area,
+/// 9.15 m from the mark, and behind it. A place beside the area but nearer the goal line than
+/// the mark, which a long ground's deep anchors give, moves back to the area's line first.
+fn penalty_place(pitch: &Pitch, base: DVec2, spot: DVec2, side: f64) -> DVec2 {
+    let keep = KICK_DISTANCE + TARGET_MARGIN;
+    let behind = DVec2::new(-side, 0.0);
+    let at = outside_on_pitch(
+        pitch,
+        out_of_area(pitch, base, side),
+        spot,
+        keep,
+        behind,
+        0.5,
+    );
+    if at.x * side <= pitch.half_length() - PENALTY_MARK - TARGET_MARGIN {
+        return at;
+    }
+    let back = DVec2::new(
+        side * (pitch.half_length() - PENALTY_AREA_DEPTH - 1.0),
+        at.y,
+    );
+    outside_on_pitch(pitch, back, spot, keep, behind, 0.5)
+}
+
 /// The restart target of player `i`.
 pub fn target(
     dead: &DeadBall,
@@ -290,15 +315,7 @@ pub fn target(
             if opponent && team.keeper_slot() == p.slot {
                 DVec2::new(side * (pitch.half_length() - 0.3), 0.0)
             } else {
-                let behind = DVec2::new(-side, 0.0);
-                outside_on_pitch(
-                    pitch,
-                    out_of_area(pitch, base, side),
-                    dead.spot,
-                    keep,
-                    behind,
-                    0.5,
-                )
+                penalty_place(pitch, base, dead.spot, side)
             }
         }
         _ => base,
@@ -367,7 +384,8 @@ pub fn shootout_ready(
 }
 
 /// `true` when the restart may be taken at `tick`: the delay has passed, the taker is at the
-/// ball, and every player the law moves has moved.
+/// ball, and every player the law moves has moved (at a penalty: out of the area, 9.15 m from
+/// the mark and behind it).
 pub fn is_ready(
     dead: &DeadBall,
     tick: u32,
@@ -406,7 +424,9 @@ pub fn is_ready(
                     // Law 14: the defending keeper on his goal line between the posts.
                     on_goal_line(pitch, p.pos, side, t.restart_ready_radius)
                 } else {
-                    !pitch.in_penalty_area(p.pos, side) && distance >= KICK_DISTANCE - JUDGE_MARGIN
+                    !pitch.in_penalty_area(p.pos, side)
+                        && distance >= KICK_DISTANCE - JUDGE_MARGIN
+                        && behind_the_mark(pitch, p.pos, side)
                 }
             }
             _ => true,
@@ -570,6 +590,21 @@ mod tests {
                 assert!((at - spot).length() >= KICK_DISTANCE);
             }
         }
+    }
+
+    /// A place beside the area and nearer the goal line than the mark moves behind the mark and
+    /// stays outside the area, on a 120 by 90 ground (a seed-18 match once faulted there); a
+    /// place already behind the mark keeps its spot.
+    #[test]
+    fn a_place_beside_the_area_moves_behind_the_mark_at_a_penalty() {
+        let pitch = Pitch::new(120.0, 90.0).unwrap();
+        let spot = pitch.penalty_spot(-1.0);
+        let at = penalty_place(&pitch, DVec2::new(-50.7, -23.67), spot, -1.0);
+        assert!(behind_the_mark(&pitch, at, -1.0), "{at}");
+        assert!(!pitch.in_penalty_area(at, -1.0), "{at}");
+        assert!((at - spot).length() >= KICK_DISTANCE, "{at}");
+        let kept = DVec2::new(-40.0, -30.0);
+        assert_eq!(penalty_place(&pitch, kept, spot, -1.0), kept);
     }
 
     /// The kick-off places of the 4-4-2 and the 4-3-3 for both teams, in metres from the home
