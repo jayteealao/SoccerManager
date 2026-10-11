@@ -529,6 +529,8 @@ pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
                         .filter(|def| def.is_personality())
                         .map(|def| (def.name.clone(), hidden_word(config, player, &def.name)))
                         .collect(),
+                    // The kick-off mood leaves only as a word key, never a number.
+                    mood: Some(engine::sim::mood::mood_word(player.kick_off_mood).to_string()),
                 })
                 .collect()
         } else {
@@ -1221,6 +1223,39 @@ mod tests {
             )
         );
         assert_eq!(subs.windows_exempt, ["half_time"]);
+    }
+
+    /// Each home squad entry carries his kick-off mood as a word key: steady with no season
+    /// inputs, confident or rattled when his form and goal progress are planted at the ends.
+    #[test]
+    fn a_page_lineup_hello_carries_the_kick_off_mood_as_a_word() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let mut home = a.clone();
+        for (p, (form, progress)) in [(100, 200), (10, 0)].into_iter().enumerate() {
+            let mut c = home.players[p].condition.unwrap_or_default();
+            c.recent_rating = Some(form);
+            c.goal_progress = Some(progress);
+            home.players[p].condition = Some(c);
+        }
+        let config = MatchConfig::new(42, 2, &loaded.content, [&home, b]).unwrap();
+        let sim = Simulation::new(config).unwrap();
+        let squad = &hello_teams(&sim, true)[HOME].squad;
+        assert_eq!(
+            squad[0].mood.as_deref(),
+            Some("confident"),
+            "{:?}",
+            squad[0]
+        );
+        assert_eq!(squad[1].mood.as_deref(), Some("rattled"), "{:?}", squad[1]);
+        assert!(
+            squad[2..]
+                .iter()
+                .all(|e| e.mood.as_deref() == Some("steady")),
+            "no season inputs: steady"
+        );
+        let json = serde_json::to_string(squad).unwrap();
+        assert!(!json.contains("\"player.mood\":-") && !json.contains("\"player.mood\":0"));
     }
 
     /// The condition message carries each slot's overall level now and fresh; a player who

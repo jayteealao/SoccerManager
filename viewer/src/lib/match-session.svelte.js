@@ -727,6 +727,38 @@ export class MatchSession {
     return mergeRatings(this.squadViews?.ratings ?? {}, this.liveRatings);
   }
 
+  /// The home club's season part of the views answer (`views.js` `readSeason`), or null when
+  /// the answer carries none (an engine-served page, a replay, before the answer).
+  get squadSeason() {
+    return this.squadViews?.season ?? null;
+  }
+
+  /// The position code of the formation slot squad player `index` plays today: the draft
+  /// lineup and formation before kick-off, the kicked-off lineup and the formation in force
+  /// after it. Null on the bench, for a stored match or a replay, or with no lineup.
+  slotPositionOf(index) {
+    const dugout = this.dugout;
+    dugout.version;
+    const formations = dugout.schema?.formations;
+    if (!Number.isInteger(index) || !Array.isArray(formations)) {
+      return null;
+    }
+    let lineup = null;
+    let formation = null;
+    if (dugout.preMatch && dugout.editor) {
+      lineup = dugout.editor.slots;
+      formation = dugout.editor.formation;
+    } else if (Array.isArray(dugout.lineup)) {
+      lineup = dugout.lineup;
+      formation = dugout.tactics?.formation ?? dugout.confirmed?.formation;
+    }
+    const n = Array.isArray(lineup) ? lineup.indexOf(index) : -1;
+    if (n < 0) {
+      return null;
+    }
+    return formations[formation]?.slots?.[n]?.position ?? null;
+  }
+
   /// Opens the Squad screen from the view on show; it goes back there.
   openSquad() {
     if (this.view !== 'squad' && this.view !== 'player') {

@@ -68,12 +68,12 @@ each slot's overall level now and fresh. No field was removed and none changed m
 value is still never a number, and no number under a hidden attribute's name is ever sent.
 The tick frames are unchanged.
 
-Version 7 carries the player as a person. A `squad` entry gains five optional fields:
+Version 7 carries the player as a person. A `squad` entry gains six optional fields:
 `player.positions` (his rating at each of the ten positions, in tenths, by position code),
 `player.strong_foot`, `player.weaker_foot` (the weaker foot as a whole percent of the strong
 one), `player.traits` (his traits of play, each a `name` and a `strength`) and
-`player.personality` (each personality value as a word and a confidence, never a number). The
-event message gains one event type, `trait-override`, and three optional fields
+`player.personality` (each personality value as a word and a confidence, never a number) and
+`player.mood` (his mood at kick-off as a word, never a number). The event message gains one event type, `trait-override`, and three optional fields
 (`trait.name`, `trait.cause` and `trait.instruction`): a player's strong trait of play broke
 one of his team's instructions. No field was removed and none changed meaning, and the tick
 frames are unchanged, so a protocol 6 message still reads; a reader shows the fields it lacks
@@ -196,6 +196,7 @@ Each entry of `squad` carries `player.id`, `player.name`, `player.shirt`, and
 | `player.weaker_foot` | integer | the weaker foot as a whole percent of the strong one, 1 to 100 (50 for a converted player). Absent before version 7 |
 | `player.traits` | array of objects | his traits of play, each a `name` from the trait catalogue (`traits.json`) and a `strength`; absent when he has none and before version 7 |
 | `player.personality` | object | each personality value, by name, as a word and a confidence like the hidden values below; never a number. Absent before version 7 |
+| `player.mood` | string | his mood at kick-off as a word key: `confident`, `lifted`, `steady`, `low` or `rattled`, from his recent form and his progress toward his season goal; never a number. Absent before version 7 |
 
 Each trait is an object:
 

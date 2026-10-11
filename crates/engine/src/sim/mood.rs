@@ -114,6 +114,32 @@ pub fn kick_off_mood(c: &Condition, p: &PersonalityScales, s: &SeasonTuning) -> 
     (form + goal).clamp(-s.cap, s.cap)
 }
 
+/// The lowest mood, in percent of a full mood, that reads `confident`.
+pub const CONFIDENT_FROM: f64 = 30.0;
+/// The lowest mood that reads `lifted`.
+pub const LIFTED_FROM: f64 = 10.0;
+/// The mood above which a mood reads `steady` (below `lifted`).
+pub const STEADY_ABOVE: f64 = -10.0;
+/// The mood above which a mood reads `low`; at or below it, `rattled`.
+pub const LOW_ABOVE: f64 = -30.0;
+
+/// The word key of `mood` (percent of a full mood): `confident` from 30, `lifted` from 10,
+/// `steady` above −10, `low` above −30, `rattled` at −30 and below. The page owns the text of
+/// each key; a mood never leaves the engine as a number.
+pub fn mood_word(mood: f64) -> &'static str {
+    if mood >= CONFIDENT_FROM {
+        "confident"
+    } else if mood >= LIFTED_FROM {
+        "lifted"
+    } else if mood > STEADY_ABOVE {
+        "steady"
+    } else if mood > LOW_ABOVE {
+        "low"
+    } else {
+        "rattled"
+    }
+}
+
 /// `mood` moved toward `target` by at most `step`.
 fn toward(mood: f64, target: f64, step: f64) -> f64 {
     if mood < target {
@@ -287,6 +313,21 @@ mod tests {
         assert_eq!(calm, 0.0, "a top pressure handler feels no late pressure");
         let neutral = PersonTuning::NEUTRAL.mood;
         assert_eq!(drift_target([2, 0], 0, 89, -1.0, &neutral), 0.0);
+    }
+
+    #[test]
+    fn the_mood_word_follows_its_five_bands() {
+        assert_eq!(mood_word(FULL), "confident");
+        assert_eq!(mood_word(30.0), "confident");
+        assert_eq!(mood_word(29.9), "lifted");
+        assert_eq!(mood_word(10.0), "lifted");
+        assert_eq!(mood_word(9.9), "steady");
+        assert_eq!(mood_word(0.0), "steady");
+        assert_eq!(mood_word(-9.9), "steady");
+        assert_eq!(mood_word(-10.0), "low");
+        assert_eq!(mood_word(-29.9), "low");
+        assert_eq!(mood_word(-30.0), "rattled");
+        assert_eq!(mood_word(-FULL), "rattled");
     }
 
     #[test]
