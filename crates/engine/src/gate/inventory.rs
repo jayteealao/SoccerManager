@@ -72,6 +72,9 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         shooter,
         last_pass,
         bench_mood,
+        trait_acts,
+        carrying,
+        chase_seen,
         restart_taker,
         clearers_tried,
         // Test seams under the `scenario` feature; no release build has them.
@@ -153,6 +156,15 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     for (team, mood) in bench_mood.iter().enumerate() {
         w.f64_at(|| format!("bench_mood[{team}]"), *mood);
     }
+    w.mark(Bytes, || "trait_acts".into());
+    for act in trait_acts {
+        let (kind, end, value) = crate::traits::TraitAct::encode(*act);
+        w.u8(kind);
+        w.u8(end);
+        w.u32(value);
+    }
+    w.u32(*carrying);
+    w.u32(*chase_seen);
     w.mark(Bytes, || "clearers_tried".into());
     w.u32(*clearers_tried);
     w.mark(Bytes, || "restart_taker".into());
@@ -522,6 +534,16 @@ fn event(w: &mut Writer, e: &EngineEvent) {
         }
         // Filtered out by the caller.
         Some(EventDetail::Script(_)) => w.u8(5),
+        Some(EventDetail::Override {
+            trait_kind,
+            cause,
+            instruction,
+        }) => {
+            w.u8(6);
+            w.u8(trait_kind.index());
+            w.u8(*cause as u8);
+            w.u8(*instruction as u8);
+        }
     }
     w.opt_u32(*period);
     w.opt_u32(*shootout_round);

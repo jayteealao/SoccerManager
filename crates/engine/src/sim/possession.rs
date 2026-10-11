@@ -437,6 +437,7 @@ impl Simulation {
         self.referee.offside = 0;
         self.keeper_beaten = false;
         let team = self.players[i].team;
+        let changed = self.last_touch != Some(team);
         #[cfg(feature = "sensitivity")]
         if self.probe.is_some() {
             let (at, tick) = (self.players[i].pos, self.tick);
@@ -476,5 +477,11 @@ impl Simulation {
         self.carrier = Some(i);
         self.control_since = self.tick;
         self.script_cache = None;
+        // The gain ends the overrides it ends, and a side that gains the ball is a moment
+        // for its anchor traits.
+        self.end_acts_on_gain(i);
+        if changed {
+            self.gain_override(team);
+        }
     }
 }

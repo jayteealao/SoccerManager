@@ -10,6 +10,7 @@ mod hooks;
 mod manager;
 pub mod mood;
 mod movement;
+mod overrides;
 mod possession;
 pub mod tally;
 
@@ -301,6 +302,12 @@ pub enum EventDetail {
     },
     /// A plugin hook failed or was switched off.
     Script(ScriptNote),
+    /// A strong trait of play overrode `instruction` for `cause`.
+    Override {
+        trait_kind: crate::traits::TraitKind,
+        cause: crate::traits::OverrideCause,
+        instruction: crate::tactics::Instruction,
+    },
 }
 
 /// What happened during a tick that a consumer outside the engine must know about. The
@@ -340,11 +347,14 @@ pub enum EngineEventKind {
     /// A plugin hook failed or was switched off; the detail names the hook and the outcome.
     /// Play goes on with the engine's own choice.
     Script,
+    /// `player` of `team` overrode an instruction with a strong trait of play; the detail
+    /// names the trait, the cause and the instruction.
+    TraitOverride,
 }
 
 impl EngineEventKind {
     /// Every event kind, in declaration order.
-    pub const ALL: [EngineEventKind; 18] = [
+    pub const ALL: [EngineEventKind; 19] = [
         EngineEventKind::KickOff,
         EngineEventKind::Goal,
         EngineEventKind::HalfTime,
@@ -363,6 +373,7 @@ impl EngineEventKind {
         EngineEventKind::ChangeApplied,
         EngineEventKind::ChangeRejected,
         EngineEventKind::Script,
+        EngineEventKind::TraitOverride,
     ];
 
     /// The kind as the event contract spells it. Both change verdicts travel as
@@ -386,6 +397,7 @@ impl EngineEventKind {
             EngineEventKind::AiDecision => "ai-decision",
             EngineEventKind::ChangeApplied | EngineEventKind::ChangeRejected => "tactics-change",
             EngineEventKind::Script => "script",
+            EngineEventKind::TraitOverride => "trait-override",
         }
     }
 
@@ -602,6 +614,13 @@ pub struct Simulation {
     /// Each side's bench mood: the side's mood events and the drift with a swing of 1, which
     /// a substitute enters at ([`mood`]).
     pub(crate) bench_mood: [f64; 2],
+    /// The trait override each player plays, by roster index, until its action ends
+    /// ([`crate::traits`]).
+    pub(crate) trait_acts: [Option<crate::traits::TraitAct>; 2 * PLAYERS_PER_TEAM],
+    /// Roster bits: carriers whose last decision was a dribble, so the next one is no new
+    /// carry; and keepers who already met this loose ball's moment.
+    pub(crate) carrying: u32,
+    pub(crate) chase_seen: u32,
     /// The restart taker until his first kick or until another player touches the ball;
     /// his first kick is a restart kick. Every dead ball clears it.
     pub(crate) restart_taker: Option<usize>,
@@ -777,6 +796,9 @@ impl Simulation {
             shooter: None,
             last_pass: None,
             bench_mood: [0.0; 2],
+            trait_acts: [None; 2 * PLAYERS_PER_TEAM],
+            carrying: 0,
+            chase_seen: 0,
             #[cfg(feature = "scenario")]
             census: ShotCensus::default(),
             #[cfg(feature = "scenario")]
@@ -1327,6 +1349,7 @@ impl Simulation {
             }
         }
         if let Some(stoppage) = self.stoppage {
+            self.end_acts_on_stoppage();
             self.apply_changes(stoppage);
             self.script_cache = None;
         }
@@ -1411,7 +1434,14 @@ impl Simulation {
         let mut shooter = None;
         self.end_shot();
         self.clearers_tried = 0;
+        // A kick starts a new flight: each keeper meets its loose ball afresh.
+        self.chase_seen = 0;
         if let Some(c) = self.carrier {
+            // The kick ends his carry or hold.
+            if self.trait_acts[c].is_some_and(|a| matches!(a.ends, crate::traits::ActEnd::Tick(_)))
+            {
+                self.trait_acts[c] = None;
+            }
             let team = self.players[c].team;
             self.pass_in_flight = None;
             // A shot is always a shot; otherwise the restart taker's first kick is a restart
@@ -1666,7 +1696,8 @@ mod tests {
             .find(|events| events.iter().any(|e| e.kind == EngineEventKind::Goal))
             .expect("a match from seeds 9 to 39 scores");
         for e in &events {
-            // The manager's own events and the whistles at the end of a half name nobody.
+            // The manager's own events and the whistles at the end of a half name nobody; an
+            // override names the player who overrode.
             let named = !matches!(
                 e.kind,
                 EngineEventKind::HalfTime

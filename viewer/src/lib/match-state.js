@@ -15,6 +15,7 @@ export const KIND = Object.freeze({
   injury: 'injury',
   tacticsChange: 'tactics-change',
   aiDecision: 'ai-decision',
+  traitOverride: 'trait-override',
   halfTime: 'half-time',
   fullTime: 'full-time',
 });
@@ -28,8 +29,10 @@ export const HIGHLIGHT_WORDS = Object.freeze({
 });
 
 /// Event kinds kept out of the feed. The computer manager's reasoning is not a match event:
-/// its visible outcome arrives as its own tactics-change or substitution row.
-export const HIDDEN_KINDS = new Set([KIND.aiDecision]);
+/// its visible outcome arrives as its own tactics-change or substitution row. A trait
+/// override stays out until the feed gains its own row for it, which names the player, the
+/// trait, the instruction and the cause.
+export const HIDDEN_KINDS = new Set([KIND.aiDecision, KIND.traitOverride]);
 
 /// The index of the newest item in `sorted` (ascending by `.tick`) at or before `tick`, or -1.
 export function newestAtOrBefore(sorted, tick) {

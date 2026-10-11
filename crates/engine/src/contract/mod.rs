@@ -31,8 +31,8 @@ pub mod states;
 
 pub use curve::{contest, factor, logistic, logit, share};
 pub use params::{
-    ActionMap, ActionParams, ContractTuning, CurveTuning, HookTuning, LapseTuning, PersonTuning,
-    SpeedTuning,
+    ActionMap, ActionParams, ContractTuning, CurveTuning, HookTuning, LapseTuning, OverrideChances,
+    PersonTuning, SpeedTuning, TraitTuning, TraitWeights,
 };
 pub use stages::{GateDef, GateDefs, StageTable, Weighted, stage_values};
 
@@ -503,6 +503,9 @@ pub struct Gates {
     pub take_on_try: bool,
     /// Log-odds his take-on loses in a tackle; 0 when he pulls it off.
     pub take_on_penalty: f64,
+    /// Rating points of technique he lacks to try a take-on; 0 when he tries one. A trait
+    /// of play that tries tricks reads it.
+    pub take_on_short: f64,
 }
 
 impl Gates {
@@ -512,6 +515,7 @@ impl Gates {
         chip_penalty: 0.0,
         take_on_try: true,
         take_on_penalty: 0.0,
+        take_on_short: 0.0,
     };
 }
 

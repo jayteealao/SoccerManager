@@ -50,7 +50,12 @@
 //!   his form's match part, and after the players each side's bench mood (f64), so a resumed
 //!   match moves every mood as the unbroken match does. The shot in flight and the last
 //!   completed pass, which mood also reads, are cleared at every stoppage, so no snapshot
-//!   holds them.
+//!   holds them. Version 14 also stores the trait overrides in force, after the bench moods:
+//!   for each player in roster order the trait (u8, 255 for none), how its action ends (u8:
+//!   at a tick, with the carrier, with possession, with the loose ball) and the end's value
+//!   (u32); then the roster bits of the carriers whose carry is under way and of the keepers
+//!   who met the loose ball's moment (u32 each). A stoppage ends every override but an
+//!   anchor's, so a resumed match plays its anchors as the unbroken match does.
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -869,6 +874,14 @@ fn encode(sim: &Simulation, w: &mut Writer) {
     for mood in sim.bench_mood {
         w.f64_at(String::new, mood);
     }
+    for act in sim.trait_acts {
+        let (kind, end, value) = crate::traits::TraitAct::encode(act);
+        w.u8(kind);
+        w.u8(end);
+        w.u32(value);
+    }
+    w.u32(sim.carrying);
+    w.u32(sim.chase_seen);
     w.u32(sim.queue.next);
     // A queue holds far fewer than 4 billion changes.
     w.u32(sim.queue.pending.len() as u32);
@@ -1118,6 +1131,12 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
     for team in 0..2 {
         sim.bench_mood[team] = r.f64()?;
     }
+    for i in 0..sim.trait_acts.len() {
+        let (kind, end, value) = (r.u8()?, r.u8()?, r.u32()?);
+        sim.trait_acts[i] = crate::traits::TraitAct::decode(kind, end, value)?;
+    }
+    sim.carrying = r.u32()?;
+    sim.chase_seen = r.u32()?;
     for (i, (d, form)) in deltas.into_iter().enumerate() {
         sim.set_state(i, d, form);
     }

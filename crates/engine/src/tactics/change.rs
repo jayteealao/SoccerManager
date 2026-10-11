@@ -507,6 +507,8 @@ impl Simulation {
         let mut incoming = side.player(slot, on, at);
         incoming.target = self.players[i].target;
         self.players[i] = incoming;
+        // The player who left takes his override with him.
+        self.trait_acts[i] = None;
         self.stages[i] = side.squad[on].stages;
         self.draw_form_on_entry(i);
         // A goalkeeper coming on for an outfield player keeping goal takes over the goal, so

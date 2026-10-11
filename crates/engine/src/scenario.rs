@@ -72,6 +72,18 @@ impl Scene {
     }
 
     /// The team that touched the ball last.
+    /// `passer`'s completed pass reached `receiver`, who keeps the ball for his side.
+    pub fn last_pass(mut self, passer: usize, receiver: usize) -> Self {
+        self.sim.last_pass = Some((passer, receiver));
+        self
+    }
+
+    /// The carrier gained the ball at `tick`.
+    pub fn control_since(mut self, tick: u32) -> Self {
+        self.sim.control_since = tick;
+        self
+    }
+
     pub fn last_touch(mut self, team: usize) -> Self {
         self.sim.last_touch = Some(team);
         self
@@ -304,6 +316,63 @@ impl Scene {
 
     /// Player `i` plays his formation slot's position as his natural one: his rating there is
     /// raised to his highest.
+    /// Player `i` carries trait `name` at `strength`, or not at all with `None`.
+    pub fn with_trait(
+        mut self,
+        i: usize,
+        name: &str,
+        strength: Option<crate::data::traits::TraitStrength>,
+    ) -> Self {
+        let kind = crate::traits::TraitKind::from_name(name)
+            .unwrap_or_else(|| panic!("{name} is not a trait"));
+        let (team, squad) = (self.sim.players[i].team, self.sim.players[i].squad);
+        self.sim.teams[team].squad[squad].set_trait(kind, strength);
+        self
+    }
+
+    /// `team` holds instruction `index` (in the order of
+    /// [`crate::data::tactics::INSTRUCTIONS`]) at the level named `level`; the plan is rebuilt.
+    pub fn instruction(self, team: usize, index: usize, level: &str) -> Self {
+        let levels = self.sim.config.tactics.instructions.level_names(index);
+        let l = levels
+            .iter()
+            .position(|n| *n == level)
+            .unwrap_or_else(|| panic!("{level} is not a level of instruction {index}"));
+        self.retactic(team, |t| t.instructions[index] = l as u8)
+    }
+
+    /// The player in formation slot `slot` of `team` plays duty `duty`; the plan is rebuilt.
+    pub fn duty(self, team: usize, slot: usize, duty: &str) -> Self {
+        let d = self
+            .sim
+            .config
+            .tactics
+            .duty_index(duty)
+            .unwrap_or_else(|| panic!("{duty} is not a duty"));
+        self.retactic(team, |t| t.roles[slot].duty = d as u8)
+    }
+
+    /// `team` plays mentality `level`; the plan is rebuilt.
+    pub fn mentality(self, team: usize, level: &str) -> Self {
+        let m = self
+            .sim
+            .config
+            .tactics
+            .mentality_index(level)
+            .unwrap_or_else(|| panic!("{level} is not a mentality"));
+        self.retactic(team, |t| t.mentality = m as u8)
+    }
+
+    /// `team`'s tactics changed by `change`, with the plan and formation rebuilt.
+    fn retactic(mut self, team: usize, change: impl FnOnce(&mut crate::tactics::Tactics)) -> Self {
+        let mut tactics = self.sim.teams[team].tactics;
+        change(&mut tactics);
+        let schema = self.sim.config.tactics.clone();
+        let tuning = self.sim.config.tuning.clone();
+        self.sim.teams[team].set_tactics(tactics, &schema, &tuning);
+        self
+    }
+
     pub fn familiar(mut self, i: usize) -> Self {
         let played = self.sim.played_position(i);
         let k = crate::data::team::Position::ALL

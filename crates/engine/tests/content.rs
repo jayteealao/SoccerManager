@@ -1020,3 +1020,65 @@ fn the_person_block_ships_reads_neutral_when_absent_and_refuses_a_wide_floor() {
     let err = engine::Content::from_files(&wide).unwrap_err().to_string();
     assert!(err.contains("engine.contract.person.floor_drop"), "{err}");
 }
+
+/// The shipped tuning carries the traits block; a tuning file without it loads and plays a
+/// ten-minute match, with players carrying strong traits, exactly as one whose trait values
+/// are all 0; and a chance above 1 is refused, naming the field.
+#[test]
+fn the_traits_block_ships_reads_as_no_trait_when_absent_and_refuses_a_chance_above_one() {
+    use engine::contract::TraitTuning;
+    use engine::data::ContentFiles;
+    use engine::data::traits::TraitStrength;
+    use engine::traits::TraitKind;
+    let shipped = ContentFiles::read(&common::content_dir()).unwrap();
+    let content = engine::Content::from_files(&shipped).unwrap();
+    assert_eq!(
+        content.tuning.engine.contract.traits,
+        Some(TraitTuning::shipped())
+    );
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    let contract = tuning["engine"]["contract"].as_object_mut().unwrap();
+    assert!(contract.remove("traits").is_some());
+    let mut old = shipped.clone();
+    old.tuning = serde_json::to_vec(&tuning).unwrap();
+    let old = engine::Content::from_files(&old).unwrap();
+    assert_eq!(*old.tuning.engine.contract.traits(), TraitTuning::NONE);
+    let [a, b] = common::default_teams(&old);
+    let play = |config: engine::MatchConfig| {
+        let mut sim = engine::Simulation::new(config).unwrap();
+        while !sim.is_over() {
+            sim.step();
+        }
+        sim.finish();
+        sim.take_events()
+    };
+    let mut absent = engine::MatchConfig::new(7, 10, &old, [&a, &b]).unwrap();
+    for (slot, kind) in [
+        (5, TraitKind::RunsWithBallOften),
+        (6, TraitKind::TriesKillerBalls),
+        (0, TraitKind::KicksLong),
+    ] {
+        let squad = absent.players[slot].squad;
+        absent.teams[0].squad[squad].set_trait(kind, Some(TraitStrength::Strong));
+    }
+    let mut zero = absent.clone();
+    zero.tuning.contract.traits = Some(TraitTuning::NONE);
+    let (absent, zero) = (play(absent), play(zero));
+    assert_eq!(absent, zero, "the events differ");
+    assert!(
+        absent
+            .iter()
+            .all(|e| e.kind != engine::EngineEventKind::TraitOverride)
+    );
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    tuning["engine"]["contract"]["traits"]["override_chance"]["tries_killer_balls"] = 1.5.into();
+    let mut high = shipped.clone();
+    high.tuning = serde_json::to_vec(&tuning).unwrap();
+    let err = engine::Content::from_files(&high).unwrap_err().to_string();
+    assert!(
+        err.contains("engine.contract.traits.override_chance.tries_killer_balls"),
+        "{err}"
+    );
+}

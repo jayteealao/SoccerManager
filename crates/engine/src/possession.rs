@@ -64,19 +64,31 @@ fn shot_contest(view: &MatchView<'_>) -> Option<usize> {
 }
 
 /// The chance keeper `k` holds a save: the tuned hold threshold as the base of a contest of
-/// his hold stage (handling) against the average player.
+/// his hold stage (handling) against the average player, less his punching trait's weight (he
+/// punches it away instead).
 pub fn hold_chance(view: &MatchView<'_>, k: usize) -> f64 {
     let t = view.tuning();
     let c = &t.contract;
     let p = c.actions.of(ActionKind::Hold);
-    curve::contest(
+    let hold = curve::contest(
         t.shots.save_hold,
         p.k(),
         view.skills(k).f(Stage::HOLD_EXECUTE),
         curve::f(10.0, &c.curve),
         p.floor(),
         p.ceiling(),
-    )
+    );
+    let traits = view.traits(k);
+    if traits.is_empty() {
+        hold
+    } else {
+        (hold
+            - traits.weight(
+                crate::traits::TraitKind::PunchesRatherThanCatches,
+                c.traits(),
+            ))
+        .max(0.0)
+    }
 }
 
 /// Each outfield defender of the side that did not shoot within his block reach
@@ -352,7 +364,7 @@ fn tacklers(view: &MatchView<'_>, c: usize) -> Option<u32> {
 
 pub const POSSESSION_V1_CARD: ModuleCard = ModuleCard {
     purpose: "Says who may contest the ball: the nearest player to a loose ball and whether a fast ball can be caught, the defenders who may block a shot or clear a cross and along which line, whether the keeper reaches a shot and holds it, the side of a parry, and the opponents who may tackle the carrier.",
-    inputs: "Every player's position, team, activity, and foul hold-back; the ball; the carrier and when he gained the ball; the shot or pass in flight and who already tried to stop it; whether the keeper was beaten; the keepers; each team's attack direction; the tick; and the engine tuning.",
+    inputs: "Every player's position, team, activity, and foul hold-back; the ball; the carrier and when he gained the ball; the shot or pass in flight and who already tried to stop it; whether the keeper was beaten; the keepers and their traits of play; each team's attack direction; the tick; and the engine tuning.",
     outputs: "The loose-ball winner and catch chance, the blockers, clearers, and tacklers as roster masks with their chances, the keeper who can save, the save-hold threshold, the parry side, and the clearance line.",
     tuning: &[
         "reach_radius",
@@ -370,6 +382,7 @@ pub const POSSESSION_V1_CARD: ModuleCard = ModuleCard {
         "clearances.wide_chance",
         "clearances.cross_reach",
         "clearances.cross_spread",
+        "contract.traits",
     ],
     calibration: "possession_pct",
     keys: POSSESSION_KEYS,

@@ -101,6 +101,24 @@ impl<'a> MatchView<'a> {
         self.sim.personality(i)
     }
 
+    /// Player `i`'s traits of play, from his squad entry.
+    #[inline]
+    pub fn traits(&self, i: usize) -> &'a crate::traits::TraitSet {
+        self.sim.traits(i)
+    }
+
+    /// The team-mate whose completed pass reached player `i`, while his side keeps the ball.
+    #[inline]
+    pub fn last_passer(&self, i: usize) -> Option<usize> {
+        self.sim.last_passer(i)
+    }
+
+    /// The trait override player `i` plays now, while its action lasts.
+    #[inline]
+    pub fn trait_act(&self, i: usize) -> Option<crate::traits::TraitAct> {
+        self.sim.trait_act(i)
+    }
+
     /// The current tick.
     #[inline]
     pub fn tick(&self) -> u32 {

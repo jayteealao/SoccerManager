@@ -50,7 +50,16 @@ pub struct ContractTuning {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]
     pub person: Option<PersonTuning>,
+    /// The traits of play: each trait's weight on its choice and the chance a strong trait
+    /// overrides an instruction it goes against. Optional, so a tuning file written before
+    /// them still loads, and then no trait acts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub traits: Option<TraitTuning>,
 }
+
+/// The traits values a tuning file without a traits block reads: no weight, no chance.
+static NO_TRAITS: TraitTuning = TraitTuning::NONE;
 
 impl ContractTuning {
     /// The hook values: the file's, or [`HookTuning::NEUTRAL`] when it has none.
@@ -63,6 +72,12 @@ impl ContractTuning {
     #[inline]
     pub fn person(&self) -> PersonTuning {
         self.person.unwrap_or(PersonTuning::NEUTRAL)
+    }
+
+    /// The traits values: the file's, or [`TraitTuning::NONE`] when it has none.
+    #[inline]
+    pub fn traits(&self) -> &TraitTuning {
+        self.traits.as_ref().unwrap_or(&NO_TRAITS)
     }
 }
 
@@ -299,6 +314,429 @@ impl HookTuning {
         anchor_space_m: 0.0,
         rash_chase: 0.0,
     };
+}
+
+/// The traits block (`engine.contract.traits`): how much each trait of play weighs on its
+/// choice, and the chance a strong trait overrides an instruction it goes against.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct TraitTuning {
+    /// The share of a trait's weight a moderate trait plays at; a strong one plays all of it.
+    #[garde(range(min = 0.0, max = 0.9))]
+    pub moderate_share: f64,
+    /// A mood at or below this, percent of a full mood, is a low mood for an override.
+    #[garde(range(min = -100.0, max = 0.0))]
+    pub low_mood: f64,
+    /// Seconds an override that holds or carries the ball lasts.
+    #[garde(range(min = 0.2, max = 5.0))]
+    pub carry_s: f64,
+    #[garde(dive)]
+    pub weights: TraitWeights,
+    #[garde(dive)]
+    pub override_chance: OverrideChances,
+}
+
+impl TraitTuning {
+    /// No trait acts: every weight and every chance 0.
+    pub const NONE: TraitTuning = TraitTuning {
+        moderate_share: 0.0,
+        low_mood: -25.0,
+        carry_s: 1.5,
+        weights: TraitWeights {
+            cuts_inside: 0.0,
+            hugs_touchline: 0.0,
+            shoots_from_distance: 0.0,
+            places_shots: 0.0,
+            powers_shots: 0.0,
+            tries_lobs_and_chips: 0.0,
+            tries_killer_balls: 0.0,
+            plays_short_simple_passes: 0.0,
+            switches_play: 0.0,
+            crosses_early: 0.0,
+            runs_with_ball_often: 0.0,
+            rarely_dribbles: 0.0,
+            tries_tricks: 0.0,
+            tries_tricks_gate: 0.0,
+            plays_one_twos: 0.0,
+            holds_up_ball: 0.0,
+            releases_ball_early: 0.0,
+            dwells_on_ball: 0.0,
+            gets_forward: 0.0,
+            stays_back: 0.0,
+            arrives_late_in_box: 0.0,
+            moves_into_channels: 0.0,
+            presses_relentlessly: 0.0,
+            dives_into_tackles: 0.0,
+            stays_on_feet: 0.0,
+            goes_down_easily: 0.0,
+            argues_with_officials: 0.0,
+            rushes_out: 0.0,
+            stays_on_line: 0.0,
+            punches_rather_than_catches: 0.0,
+            kicks_long: 0.0,
+            throws_short: 0.0,
+        },
+        override_chance: OverrideChances {
+            tries_killer_balls: 0.0,
+            tries_lobs_and_chips: 0.0,
+            crosses_early: 0.0,
+            kicks_long: 0.0,
+            plays_short_simple_passes: 0.0,
+            plays_one_twos: 0.0,
+            throws_short: 0.0,
+            dwells_on_ball: 0.0,
+            runs_with_ball_often: 0.0,
+            holds_up_ball: 0.0,
+            tries_tricks: 0.0,
+            releases_ball_early: 0.0,
+            cuts_inside: 0.0,
+            hugs_touchline: 0.0,
+            switches_play: 0.0,
+            presses_relentlessly: 0.0,
+            gets_forward: 0.0,
+            arrives_late_in_box: 0.0,
+            stays_back: 0.0,
+            shoots_from_distance: 0.0,
+            rushes_out: 0.0,
+            stays_on_line: 0.0,
+        },
+    };
+
+    /// The shipped traits block; a test pins `content/tuning.json` to it.
+    pub const fn shipped() -> TraitTuning {
+        TraitTuning {
+            moderate_share: 0.5,
+            low_mood: -25.0,
+            carry_s: 1.5,
+            weights: TraitWeights {
+                cuts_inside: 0.6,
+                hugs_touchline: 0.6,
+                shoots_from_distance: 0.6,
+                places_shots: 0.25,
+                powers_shots: 0.2,
+                tries_lobs_and_chips: 0.4,
+                tries_killer_balls: 0.8,
+                plays_short_simple_passes: 0.4,
+                switches_play: 0.4,
+                crosses_early: 0.4,
+                runs_with_ball_often: 0.3,
+                rarely_dribbles: 0.3,
+                tries_tricks: 0.4,
+                tries_tricks_gate: 2.0,
+                plays_one_twos: 0.4,
+                holds_up_ball: 0.4,
+                releases_ball_early: 0.3,
+                dwells_on_ball: 0.3,
+                gets_forward: 5.0,
+                stays_back: 5.0,
+                arrives_late_in_box: 6.0,
+                moves_into_channels: 4.0,
+                presses_relentlessly: 0.3,
+                dives_into_tackles: 0.4,
+                stays_on_feet: 0.4,
+                goes_down_easily: 0.4,
+                argues_with_officials: 0.05,
+                rushes_out: 0.3,
+                stays_on_line: 0.3,
+                punches_rather_than_catches: 0.25,
+                kicks_long: 0.4,
+                throws_short: 0.4,
+            },
+            override_chance: OverrideChances {
+                tries_killer_balls: 0.0,
+                tries_lobs_and_chips: 0.0,
+                crosses_early: 0.0,
+                kicks_long: 0.0,
+                plays_short_simple_passes: 0.0,
+                plays_one_twos: 0.0,
+                throws_short: 0.0,
+                dwells_on_ball: 0.12,
+                runs_with_ball_often: 0.0,
+                holds_up_ball: 0.028,
+                tries_tricks: 0.0,
+                releases_ball_early: 0.28,
+                cuts_inside: 1.0,
+                hugs_touchline: 1.0,
+                switches_play: 0.0,
+                presses_relentlessly: 0.19,
+                gets_forward: 1.0,
+                arrives_late_in_box: 0.027,
+                stays_back: 0.17,
+                shoots_from_distance: 0.0,
+                rushes_out: 0.065,
+                stays_on_line: 0.0,
+            },
+        }
+    }
+}
+
+/// Each trait's weight on its choice. Score weights add to an option's score; metres move a
+/// target; shares scale a range, a reach, a speed or a turn; log-odds move a foul chance;
+/// a chance moves a card or a hold chance.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct TraitWeights {
+    /// Share of a wide carry's sideways part turned toward the centre.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub cuts_inside: f64,
+    /// Share of a wide carry's sideways part turned toward the touchline.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub hugs_touchline: f64,
+    /// Score added to a shot from outside the penalty area, at the edge of the shooting range.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub shoots_from_distance: f64,
+    /// Share a placed shot aims nearer the post and loses in speed.
+    #[garde(range(min = 0.0, max = 0.9))]
+    pub places_shots: f64,
+    /// Share a powered shot gains in speed and in spread.
+    #[garde(range(min = 0.0, max = 0.9))]
+    pub powers_shots: f64,
+    /// Score added to a chip.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub tries_lobs_and_chips: f64,
+    /// Score added to a forward pass through a tight lane, at a full forward pass.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub tries_killer_balls: f64,
+    /// Score added to a short pass, and taken from a forward one.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub plays_short_simple_passes: f64,
+    /// Score added to a switch: a pass over 25 m that crosses 25 m of the pitch's width.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub switches_play: f64,
+    /// Score added to a cross from outside the final 18 m.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub crosses_early: f64,
+    /// Score added to the dribble.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub runs_with_ball_often: f64,
+    /// Score taken from the dribble.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub rarely_dribbles: f64,
+    /// Score added to a dribble with an opponent close.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub tries_tricks: f64,
+    /// Rating points of technique the take-on gate drops for a player who tries tricks.
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub tries_tricks_gate: f64,
+    /// Score added to a pass back to the team-mate who passed to him.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub plays_one_twos: f64,
+    /// Score added to holding the ball with an opponent close.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub holds_up_ball: f64,
+    /// Score taken from holding the ball, and from the carry window.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub releases_ball_early: f64,
+    /// Score added to holding the ball; it also slows the hold's fall with time on the ball.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub dwells_on_ball: f64,
+    /// Metres his anchor moves up the pitch while his side has the ball.
+    #[garde(range(min = 0.0, max = 15.0))]
+    pub gets_forward: f64,
+    /// Metres his anchor moves back while his side has the ball.
+    #[garde(range(min = 0.0, max = 15.0))]
+    pub stays_back: f64,
+    /// Metres his target moves toward goal while his side has the ball in the final third.
+    #[garde(range(min = 0.0, max = 15.0))]
+    pub arrives_late_in_box: f64,
+    /// Metres his anchor moves toward the channel between full-back and centre-back while his
+    /// side has the ball.
+    #[garde(range(min = 0.0, max = 15.0))]
+    pub moves_into_channels: f64,
+    /// Share his press reach widens by.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub presses_relentlessly: f64,
+    /// Log-odds his tackle's win and foul chances rise by.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub dives_into_tackles: f64,
+    /// Log-odds his tackle's foul chance falls by.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub stays_on_feet: f64,
+    /// Log-odds the foul chance of a tackle on him rises by.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub goes_down_easily: f64,
+    /// Chance added to his yellow-card chance on a foul (dissent).
+    #[garde(range(min = 0.0, max = 0.5))]
+    pub argues_with_officials: f64,
+    /// Share a keeper's chase range widens by.
+    #[garde(range(min = 0.0, max = 0.9))]
+    pub rushes_out: f64,
+    /// Share a keeper's chase range narrows by.
+    #[garde(range(min = 0.0, max = 0.9))]
+    pub stays_on_line: f64,
+    /// Chance taken from a keeper's hold of a save: he punches it away instead.
+    #[garde(range(min = 0.0, max = 0.9))]
+    pub punches_rather_than_catches: f64,
+    /// Score added to a keeper's kick over 30 m.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub kicks_long: f64,
+    /// Score added to a keeper's throw.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub throws_short: f64,
+}
+
+impl TraitWeights {
+    /// The weight of trait `k`; the take-on gate's points for tricks are
+    /// [`TraitWeights::tries_tricks_gate`].
+    pub fn of(&self, k: crate::traits::TraitKind) -> f64 {
+        use crate::traits::TraitKind as T;
+        match k {
+            T::CutsInside => self.cuts_inside,
+            T::HugsTouchline => self.hugs_touchline,
+            T::ShootsFromDistance => self.shoots_from_distance,
+            T::PlacesShots => self.places_shots,
+            T::PowersShots => self.powers_shots,
+            T::TriesLobsAndChips => self.tries_lobs_and_chips,
+            T::TriesKillerBalls => self.tries_killer_balls,
+            T::PlaysShortSimplePasses => self.plays_short_simple_passes,
+            T::SwitchesPlay => self.switches_play,
+            T::CrossesEarly => self.crosses_early,
+            T::RunsWithBallOften => self.runs_with_ball_often,
+            T::RarelyDribbles => self.rarely_dribbles,
+            T::TriesTricks => self.tries_tricks,
+            T::PlaysOneTwos => self.plays_one_twos,
+            T::HoldsUpBall => self.holds_up_ball,
+            T::ReleasesBallEarly => self.releases_ball_early,
+            T::DwellsOnBall => self.dwells_on_ball,
+            T::GetsForward => self.gets_forward,
+            T::StaysBack => self.stays_back,
+            T::ArrivesLateInBox => self.arrives_late_in_box,
+            T::MovesIntoChannels => self.moves_into_channels,
+            T::PressesRelentlessly => self.presses_relentlessly,
+            T::DivesIntoTackles => self.dives_into_tackles,
+            T::StaysOnFeet => self.stays_on_feet,
+            T::GoesDownEasily => self.goes_down_easily,
+            T::ArguesWithOfficials => self.argues_with_officials,
+            T::RushesOut => self.rushes_out,
+            T::StaysOnLine => self.stays_on_line,
+            T::PunchesRatherThanCatches => self.punches_rather_than_catches,
+            T::KicksLong => self.kicks_long,
+            T::ThrowsShort => self.throws_short,
+        }
+    }
+}
+
+/// The chance per moment that a strong trait overrides the instruction it goes against. A
+/// trait outside the conflict table ([`crate::traits::TraitKind::conflicts`]) never meets a
+/// moment, so its chance is not read; the shipped file holds 0 for it.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct OverrideChances {
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub tries_killer_balls: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub tries_lobs_and_chips: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub crosses_early: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub kicks_long: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub plays_short_simple_passes: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub plays_one_twos: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub throws_short: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub dwells_on_ball: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub runs_with_ball_often: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub holds_up_ball: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub tries_tricks: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub releases_ball_early: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub cuts_inside: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub hugs_touchline: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub switches_play: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub presses_relentlessly: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub gets_forward: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub arrives_late_in_box: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub stays_back: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub shoots_from_distance: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub rushes_out: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub stays_on_line: f64,
+}
+
+impl OverrideChances {
+    /// The chance of trait `k`; 0 for a trait no instruction goes against.
+    pub fn of(&self, k: crate::traits::TraitKind) -> f64 {
+        use crate::traits::TraitKind as T;
+        match k {
+            T::TriesKillerBalls => self.tries_killer_balls,
+            T::TriesLobsAndChips => self.tries_lobs_and_chips,
+            T::CrossesEarly => self.crosses_early,
+            T::KicksLong => self.kicks_long,
+            T::PlaysShortSimplePasses => self.plays_short_simple_passes,
+            T::PlaysOneTwos => self.plays_one_twos,
+            T::ThrowsShort => self.throws_short,
+            T::DwellsOnBall => self.dwells_on_ball,
+            T::RunsWithBallOften => self.runs_with_ball_often,
+            T::HoldsUpBall => self.holds_up_ball,
+            T::TriesTricks => self.tries_tricks,
+            T::ReleasesBallEarly => self.releases_ball_early,
+            T::CutsInside => self.cuts_inside,
+            T::HugsTouchline => self.hugs_touchline,
+            T::SwitchesPlay => self.switches_play,
+            T::PressesRelentlessly => self.presses_relentlessly,
+            T::GetsForward => self.gets_forward,
+            T::ArrivesLateInBox => self.arrives_late_in_box,
+            T::StaysBack => self.stays_back,
+            T::ShootsFromDistance => self.shoots_from_distance,
+            T::RushesOut => self.rushes_out,
+            T::StaysOnLine => self.stays_on_line,
+            T::RarelyDribbles
+            | T::MovesIntoChannels
+            | T::PlacesShots
+            | T::PowersShots
+            | T::DivesIntoTackles
+            | T::StaysOnFeet
+            | T::GoesDownEasily
+            | T::ArguesWithOfficials
+            | T::PunchesRatherThanCatches => 0.0,
+        }
+    }
+
+    /// Mutable access to the chance of trait `k`, for a test that plants one; `None` for a
+    /// trait no instruction goes against.
+    pub fn of_mut(&mut self, k: crate::traits::TraitKind) -> Option<&mut f64> {
+        use crate::traits::TraitKind as T;
+        Some(match k {
+            T::TriesKillerBalls => &mut self.tries_killer_balls,
+            T::TriesLobsAndChips => &mut self.tries_lobs_and_chips,
+            T::CrossesEarly => &mut self.crosses_early,
+            T::KicksLong => &mut self.kicks_long,
+            T::PlaysShortSimplePasses => &mut self.plays_short_simple_passes,
+            T::PlaysOneTwos => &mut self.plays_one_twos,
+            T::ThrowsShort => &mut self.throws_short,
+            T::DwellsOnBall => &mut self.dwells_on_ball,
+            T::RunsWithBallOften => &mut self.runs_with_ball_often,
+            T::HoldsUpBall => &mut self.holds_up_ball,
+            T::TriesTricks => &mut self.tries_tricks,
+            T::ReleasesBallEarly => &mut self.releases_ball_early,
+            T::CutsInside => &mut self.cuts_inside,
+            T::HugsTouchline => &mut self.hugs_touchline,
+            T::SwitchesPlay => &mut self.switches_play,
+            T::PressesRelentlessly => &mut self.presses_relentlessly,
+            T::GetsForward => &mut self.gets_forward,
+            T::ArrivesLateInBox => &mut self.arrives_late_in_box,
+            T::StaysBack => &mut self.stays_back,
+            T::ShootsFromDistance => &mut self.shoots_from_distance,
+            T::RushesOut => &mut self.rushes_out,
+            T::StaysOnLine => &mut self.stays_on_line,
+            _ => return None,
+        })
+    }
 }
 
 /// The curve `F(r) = scale · e^((r − center) / width)`.
@@ -746,6 +1184,7 @@ impl Default for ContractTuning {
                 },
                 floor_drop: 7.0,
             }),
+            traits: Some(TraitTuning::shipped()),
         }
     }
 }

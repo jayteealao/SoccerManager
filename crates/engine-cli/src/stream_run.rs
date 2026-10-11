@@ -766,6 +766,7 @@ pub(crate) fn event_type(kind: EngineEventKind) -> EventType {
         EngineEventKind::Substitution => EventType::Substitution,
         EngineEventKind::AiDecision => EventType::AiDecision,
         EngineEventKind::Script => EventType::Script,
+        EngineEventKind::TraitOverride => EventType::TraitOverride,
         EngineEventKind::ChangeApplied | EngineEventKind::ChangeRejected => {
             EventType::TacticsChange
         }
@@ -823,7 +824,7 @@ pub(crate) fn match_event(
         Some(EventDetail::Ai { code }) => Some(code.code().to_string()),
         _ => None,
     };
-    MatchEvent::play(
+    let row = MatchEvent::play(
         owner_id,
         match_id,
         event.tick,
@@ -844,7 +845,15 @@ pub(crate) fn match_event(
         event.shootout_scored,
         event.shootout_scores,
     )
-    .decided_by(event.decided_by.map(|d| d.code().to_string()))
+    .decided_by(event.decided_by.map(|d| d.code().to_string()));
+    match event.detail {
+        Some(EventDetail::Override {
+            trait_kind,
+            cause,
+            instruction,
+        }) => row.trait_override(trait_kind.name(), cause.code(), instruction.code()),
+        _ => row,
+    }
 }
 
 /// One engine event as the rows it becomes: the event with its commentary line, which the

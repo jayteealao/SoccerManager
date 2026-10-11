@@ -56,3 +56,7 @@ required-features = ["sensitivity"]
 [[test]]
 name = "sensitivity_full"
 required-features = ["sensitivity"]
+
+[[test]]
+name = "overrides"
+required-features = ["sensitivity"]

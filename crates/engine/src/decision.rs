@@ -19,6 +19,11 @@
 //! determination widens a presser's reach while his side trails, eccentricity widens a
 //! keeper's chase range, and the set-piece skills set a restart's delivery, a direct free
 //! kick's strike and a throw-in's range.
+//!
+//! Each trait of play a player carries weighs on its choice here ([`crate::traits`]): the
+//! scores of shots, passes, dribbles and holds, a carry's direction from a wide channel, a
+//! shot's aim and power, a restart's target, the anchors of a side with the ball, the press
+//! reach and a keeper's chase range. An override in force plays the trait's action instead.
 
 use crate::contract::{self, Stage};
 use crate::data::rules::StoppageKind;
@@ -32,7 +37,11 @@ use crate::plugin::OptionOffsets;
 use crate::rules::offside;
 use crate::sim::{WIDE_SPREAD, wide_of_goal};
 use crate::streams::{Action, map_range};
+use crate::tactics::Instruction;
 use crate::team::PLAYERS_PER_TEAM;
+use crate::traits::{
+    CHANNEL_Y_M, EARLY_CROSS_M, LATE_RUN_DEPTH_M, LATE_RUN_WIDTH_M, SWITCH_M, TraitKind,
+};
 use crate::tuning::Tuning;
 use serde_json::json;
 
@@ -205,7 +214,7 @@ impl PassKind {
 }
 
 /// `true` when an active opponent of player `c` stands within the pressing distance.
-fn pressed(view: &MatchView<'_>, c: usize) -> bool {
+pub(crate) fn pressed(view: &MatchView<'_>, c: usize) -> bool {
     let me = view.player(c);
     view.players()
         .iter()
@@ -313,6 +322,12 @@ impl DecisionModule for DecisionV1 {
                         continue;
                     }
                     let anchor = teams[p.team].anchor(p.slot, ball_xy, p.team == team, t);
+                    // With the ball, a player's traits move his anchor.
+                    let anchor = if p.team == team && !view.traits(i).is_empty() {
+                        trait_anchor(view, i, anchor)
+                    } else {
+                        anchor
+                    };
                     // Out of possession, a player who keeps his place less well than the
                     // average (shape stage under 1) trails his anchor by the shortfall.
                     let lag = 1.0 - p.derived.knobs.shape;
@@ -330,7 +345,14 @@ impl DecisionModule for DecisionV1 {
                         } else {
                             1.0
                         };
-                        if d < reach * p.derived.knobs.press * effort && d < pressers[count - 1].0 {
+                        // A player who presses relentlessly presses from farther.
+                        let relentless = 1.0
+                            + view
+                                .traits(i)
+                                .weight(TraitKind::PressesRelentlessly, t.contract.traits());
+                        if d < reach * p.derived.knobs.press * effort * relentless
+                            && d < pressers[count - 1].0
+                        {
                             // Insert in distance order among the first `count` places.
                             let mut k = count - 1;
                             while k > 0 && pressers[k - 1].0 > d {
@@ -347,7 +369,16 @@ impl DecisionModule for DecisionV1 {
                 // the ball once they are close.
                 let run = players[c].vel;
                 let engage = t.press_engage;
-                for &(_, i) in &pressers[..count] {
+                // A player whose relentless pressing overrode his side's low press presses
+                // this carrier too.
+                let relentless = (0..n).filter(|&i| {
+                    players[i].team == def
+                        && view
+                            .trait_act(i)
+                            .is_some_and(|a| a.kind == TraitKind::PressesRelentlessly)
+                });
+                let chosen = pressers[..count].iter().map(|&(_, i)| i);
+                for i in chosen.chain(relentless) {
                     if i != usize::MAX {
                         let p = &players[i];
                         // Within engaging range the presser goes for the ball itself.
@@ -448,6 +479,18 @@ impl DecisionModule for DecisionV1 {
         // Mood: a carrier in good mood shoots and plays forward more and holds less; in low
         // mood the reverse. 0 at a neutral mood and with no person block.
         let mood_risk = t.contract.person().mood.risk * view.mood(c) / crate::sim::mood::FULL;
+        // Traits of play: each trait he carries adds its weight to its choice; 0 without a
+        // traits block or a trait.
+        let traits = view.traits(c);
+        let tw = t.contract.traits();
+        let has_traits = !traits.is_empty();
+        let tr = |k: TraitKind| {
+            if has_traits {
+                traits.weight(k, tw)
+            } else {
+                0.0
+            }
+        };
 
         // Pressure and space around the carrier.
         let mut nearest_opp = f64::INFINITY;
@@ -502,6 +545,12 @@ impl DecisionModule for DecisionV1 {
             } else {
                 Stage::LONG_SHOT_CHOOSE
             };
+            // Shooting from distance: outside the area, more the farther out.
+            let distance = if choose == Stage::LONG_SHOT_CHOOSE {
+                tr(TraitKind::ShootsFromDistance) * goal_dist / t.shot_range
+            } else {
+                0.0
+            };
             Some(
                 w.shot_base + w.shot_lane * ((lane.min(5.0) - 2.5) / 2.5)
                     - w.shot_distance * goal_dist / t.shot_range
@@ -509,7 +558,8 @@ impl DecisionModule for DecisionV1 {
                     + skill(choose)
                     + plan.shoot
                     + role.shoot
-                    + mood_risk,
+                    + mood_risk
+                    + distance,
             )
         } else {
             None
@@ -573,6 +623,42 @@ impl DecisionModule for DecisionV1 {
                 + plan.slots[mate.slot].long_ball_target * (d / 45.0)
                 + flair
                 + mood_risk * forward;
+            let score = if has_traits {
+                let switch = d > SWITCH_M && (mate.pos.y - carrier.pos.y).abs() >= SWITCH_M;
+                let early = kind == PassKind::Cross
+                    && view.pitch().half_length() - carrier.pos.x * side.attack_x > EARLY_CROSS_M;
+                let back = view.last_passer(c) == Some(j);
+                score
+                    + tr(TraitKind::TriesKillerBalls) * forward * (1.0 - lane / 6.0)
+                    + tr(TraitKind::PlaysShortSimplePasses) * (1.0 - d / 45.0 - forward)
+                    + if kind == PassKind::Chip {
+                        tr(TraitKind::TriesLobsAndChips)
+                    } else {
+                        0.0
+                    }
+                    + if switch {
+                        tr(TraitKind::SwitchesPlay)
+                    } else {
+                        0.0
+                    }
+                    + if early {
+                        tr(TraitKind::CrossesEarly)
+                    } else {
+                        0.0
+                    }
+                    + if back {
+                        tr(TraitKind::PlaysOneTwos)
+                    } else {
+                        0.0
+                    }
+                    + match kind {
+                        PassKind::Kick => tr(TraitKind::KicksLong),
+                        PassKind::Throw => tr(TraitKind::ThrowsShort),
+                        _ => 0.0,
+                    }
+            } else {
+                score
+            };
             passes[pass_count] = (j, score);
             pass_count += 1;
         }
@@ -582,7 +668,12 @@ impl DecisionModule for DecisionV1 {
         // The carry window: an unpressed carrier who has just gained the ball keeps it
         // rather than releasing it at once. A shot is never charged.
         let carry = if !pressed && held_s < w.carry_s {
-            w.carry_cost
+            // A player who releases the ball early pays less for leaving the window.
+            if has_traits {
+                (w.carry_cost - tr(TraitKind::ReleasesBallEarly)).max(0.0)
+            } else {
+                w.carry_cost
+            }
         } else {
             0.0
         };
@@ -603,9 +694,26 @@ impl DecisionModule for DecisionV1 {
                 + lone_dribble;
             let hold =
                 w.hold + plan.hold - plan.tempo - w.hold_per_s * held_s + lone_hold - mood_risk;
+            let (dribble, hold, tricks) = if has_traits {
+                let pressed_only = |k: TraitKind| if pressed { tr(k) } else { 0.0 };
+                let dwell = tr(TraitKind::DwellsOnBall);
+                // A player who dwells on the ball loses less of the hold's score with time.
+                let slower = w.hold_per_s * held_s * dwell / (1.0 + dwell);
+                (
+                    dribble + tr(TraitKind::RunsWithBallOften) - tr(TraitKind::RarelyDribbles)
+                        + pressed_only(TraitKind::TriesTricks),
+                    hold + dwell + slower - tr(TraitKind::ReleasesBallEarly)
+                        + pressed_only(TraitKind::HoldsUpBall),
+                    gates.take_on_short
+                        <= traits.share(TraitKind::TriesTricks, tw) * tw.weights.tries_tricks_gate,
+                )
+            } else {
+                (dribble, hold, false)
+            };
             // The skill gate: a pressed carrier whose technique is under the take-on's
-            // threshold does not try to dribble past; he may still hold.
-            let dribble = (!pressed || gates.take_on_try).then_some(dribble);
+            // threshold does not try to dribble past; he may still hold. A player who tries
+            // tricks needs less technique.
+            let dribble = (!pressed || gates.take_on_try || tricks).then_some(dribble);
             Some((dribble, hold))
         };
         let own_third = carrier.pos.x * attack.x < -view.pitch().half_length() / 3.0;
@@ -711,7 +819,6 @@ impl DecisionModule for DecisionV1 {
         let team = carrier.team;
         let side = &view.teams()[team];
         let goal = side.target_goal();
-        let attack = DVec2::new(side.attack_x, 0.0);
         match choice {
             Choice::Shot => CarrierPlan::Shot {
                 goal,
@@ -737,18 +844,24 @@ impl DecisionModule for DecisionV1 {
             },
             Choice::Dribble => {
                 // Dribble toward goal, drifting away from the nearest opponent.
-                let to_goal = goal - carrier.pos;
-                let goal_dist = to_goal.length();
-                let dir_goal = if goal_dist > 1e-6 {
-                    to_goal / goal_dist
+                let (dir_goal, perp, side) = dribble_line(view, c, options.nearest_opp_pos);
+                // From a wide channel, cutting inside turns the drift toward the centre and
+                // hugging the touchline toward the line; an override turns it all the way.
+                let traits = view.traits(c);
+                let side = if traits.is_empty() || carrier.pos.y.abs() <= contract::CROSS_WIDE_M {
+                    side
                 } else {
-                    attack
-                };
-                let perp = DVec2::new(-dir_goal.y, dir_goal.x);
-                let side = if (options.nearest_opp_pos - carrier.pos).dot(perp) > 0.0 {
-                    -1.0
-                } else {
-                    1.0
+                    let tw = t.contract.traits();
+                    let inside = inside_side(carrier.pos, perp);
+                    let (cut, hug) = match view.trait_act(c).map(|a| a.kind) {
+                        Some(TraitKind::CutsInside) => (1.0, 0.0),
+                        Some(TraitKind::HugsTouchline) => (0.0, 1.0),
+                        _ => (
+                            traits.weight(TraitKind::CutsInside, tw),
+                            traits.weight(TraitKind::HugsTouchline, tw),
+                        ),
+                    };
+                    side + (inside - side) * cut + (-inside - side) * hug
                 };
                 let target = carrier.pos + dir_goal * 8.0 + perp * (4.0 * side);
                 CarrierPlan::Move {
@@ -861,16 +974,33 @@ impl DecisionModule for DecisionV1 {
         } else {
             1.0
         };
+        // A player who places his shots aims nearer the post and strikes softer; one who
+        // powers them strikes harder and wider.
+        let traits = view.traits(c);
+        let (place, power) = if traits.is_empty() {
+            (0.0, 0.0)
+        } else {
+            let tw = t.contract.traits();
+            (
+                traits.weight(TraitKind::PlacesShots, tw),
+                traits.weight(TraitKind::PowersShots, tw),
+            )
+        };
         let reach = pitch::GOAL_WIDTH / 2.0 * (0.4 + 0.5 * finishing);
+        let reach = if place > 0.0 {
+            (reach * (1.0 + place)).min(pitch::GOAL_WIDTH / 2.0 * 0.95)
+        } else {
+            reach
+        };
         let aim = DVec2::new(goal.x, side * map_range(0.5 * reach, reach, draws.aim));
-        let spread = t.shot_noise * (1.5 - finishing) * spread_scale;
+        let spread = t.shot_noise * (1.5 - finishing) * spread_scale * (1.0 + power);
         let dir = rotate(
             toward(carrier.pos, aim),
             map_range(-spread, spread, draws.spread),
         );
         Kick::Shot {
             dir,
-            speed: t.shot_speed,
+            speed: t.shot_speed * (1.0 - 0.5 * place) * (1.0 + power),
             loft: map_range(0.0, t.shots.loft_max, draws.loft),
         }
     }
@@ -909,6 +1039,10 @@ impl DecisionModule for DecisionV1 {
         let mut candidates = [(0usize, 0.0f64); MATES];
         let mut count = 0;
         let mut best: Option<(f64, DVec2)> = None;
+        // The taker's traits move his pick, in metres of the score: a killer ball's gain, a
+        // short pass's length, and a keeper's long kick or short throw at a goal kick.
+        let traits = view.traits(taker);
+        let keeper = taker == view.keeper(me.team);
         for (j, mate) in players.iter().enumerate() {
             if j == taker || mate.team != me.team || !mate.active() {
                 continue;
@@ -920,6 +1054,21 @@ impl DecisionModule for DecisionV1 {
             let score = match cross_at {
                 Some(mark) => -(mate.pos - mark).length(),
                 None => -d + 0.2 * (mate.pos - me.pos).dot(attack),
+            };
+            let score = if traits.is_empty() || cross_at.is_some() {
+                score
+            } else {
+                let tw = c.traits();
+                let tr = |k: TraitKind| traits.weight(k, tw);
+                let gain = (mate.pos - me.pos).dot(attack).max(0.0);
+                let distribution = match (keeper, d > contract::THROW_M) {
+                    (true, true) => tr(TraitKind::KicksLong) * RESTART_TRAIT_M,
+                    (true, false) => tr(TraitKind::ThrowsShort) * RESTART_TRAIT_M,
+                    _ => 0.0,
+                };
+                score + tr(TraitKind::TriesKillerBalls) * 0.5 * gain
+                    - tr(TraitKind::PlaysShortSimplePasses) * 0.5 * d
+                    + distribution
             };
             candidates[count] = (j, score);
             count += 1;
@@ -971,6 +1120,82 @@ impl DecisionModule for DecisionV1 {
     }
 }
 
+/// The metres of a restart's score a keeper's full long-kick or short-throw weight is worth.
+const RESTART_TRAIT_M: f64 = 20.0;
+
+/// The line of player `c`'s dribble: toward the goal he attacks, and the side across it,
+/// `perp` times `side`, he drifts to, away from the opponent nearest him at
+/// `nearest_opp_pos`.
+pub(crate) fn dribble_line(
+    view: &MatchView<'_>,
+    c: usize,
+    nearest_opp_pos: DVec2,
+) -> (DVec2, DVec2, f64) {
+    let carrier = view.player(c);
+    let side = &view.teams()[carrier.team];
+    let to_goal = side.target_goal() - carrier.pos;
+    let goal_dist = to_goal.length();
+    let dir_goal = if goal_dist > 1e-6 {
+        to_goal / goal_dist
+    } else {
+        DVec2::new(side.attack_x, 0.0)
+    };
+    let perp = DVec2::new(-dir_goal.y, dir_goal.x);
+    let drift = if (nearest_opp_pos - carrier.pos).dot(perp) > 0.0 {
+        -1.0
+    } else {
+        1.0
+    };
+    (dir_goal, perp, drift)
+}
+
+/// The side across `perp` that points from `pos` toward the centre line: 1 or −1.
+pub(crate) fn inside_side(pos: DVec2, perp: DVec2) -> f64 {
+    if perp.y * pos.y > 0.0 { -1.0 } else { 1.0 }
+}
+
+/// A player's anchor while his side has the ball, moved by his traits: up or back the pitch
+/// (getting forward, staying back), toward the channel between full-back and centre-back,
+/// and toward goal while the ball is in the final third (arriving late in the box). An
+/// override in force plays its action instead: the attack or defend duty's depth, or the late
+/// run into the penalty area.
+fn trait_anchor(view: &MatchView<'_>, i: usize, anchor: DVec2) -> DVec2 {
+    let p = view.player(i);
+    if i == view.keeper(p.team) {
+        return anchor;
+    }
+    let traits = view.traits(i);
+    let tw = view.tuning().contract.traits();
+    let side = &view.teams()[p.team];
+    let attack_x = side.attack_x;
+    let pitch = view.pitch();
+    let (sx, sy) = pitch.scale();
+    let act = view.trait_act(i).map(|a| a.kind);
+    let mut at = anchor;
+    let duty = side.plan.slots[p.slot].depth;
+    at.x += match act {
+        Some(TraitKind::GetsForward) => (side.plan.attack_depth - duty) * sx,
+        Some(TraitKind::StaysBack) => (side.plan.defend_depth - duty) * sx,
+        _ => traits.weight(TraitKind::GetsForward, tw) - traits.weight(TraitKind::StaysBack, tw),
+    } * attack_x;
+    let channel = traits.weight(TraitKind::MovesIntoChannels, tw);
+    if channel > 0.0 {
+        let to = CHANNEL_Y_M * sy * if at.y < 0.0 { -1.0 } else { 1.0 };
+        at.y += (to - at.y).clamp(-channel, channel);
+    }
+    if view.ball().pos.x * attack_x > pitch.half_length() / 3.0 {
+        if act == Some(TraitKind::ArrivesLateInBox) {
+            at = DVec2::new(
+                (pitch.half_length() - LATE_RUN_DEPTH_M) * attack_x,
+                at.y.clamp(-LATE_RUN_WIDTH_M, LATE_RUN_WIDTH_M),
+            );
+        } else {
+            at.x += traits.weight(TraitKind::ArrivesLateInBox, tw) * attack_x;
+        }
+    }
+    pitch.clamp(at, 0.5)
+}
+
 /// The chance per minute of play that player `i` lapses: the tuned chance, growing past
 /// the late minute by `late_growth` per 30 minutes, times `2 · (1 − share)` of his shape
 /// choose stage (concentration), which is 1 at rating 10.
@@ -1002,9 +1227,49 @@ fn hold_lapses(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER]) {
 /// the average keeper's chase distance times his rush factor, widened by his eccentricity
 /// (`hooks.rash_chase`).
 pub(crate) fn keeper_chase_m(view: &MatchView<'_>, gk: usize) -> f64 {
+    if view.traits(gk).is_empty() {
+        return chase_base(view, gk);
+    }
+    // An override holds his action: the trait's range, or his line.
+    match view.trait_act(gk).map(|a| a.kind) {
+        Some(TraitKind::RushesOut) => keeper_ranges(view, gk).1,
+        Some(TraitKind::StaysOnLine) => 0.0,
+        _ => keeper_ranges(view, gk).0,
+    }
+}
+
+/// Keeper `gk`'s chase range before his traits.
+fn chase_base(view: &MatchView<'_>, gk: usize) -> f64 {
     let d = &view.player(gk).derived;
     let rash = view.tuning().contract.hooks().rash_chase;
     KEEPER_CHASE_M * d.knobs.rush * (1.0 + rash * d.occasion.eccentricity)
+}
+
+/// Keeper `gk`'s chase ranges with his traits: the range he plays (rushing out widens it and
+/// staying on his line narrows it, unless his side's line height asks the opposite, which then
+/// holds him to the base range), and his rushing-out trait's own range.
+pub(crate) fn keeper_ranges(view: &MatchView<'_>, gk: usize) -> (f64, f64) {
+    let base = chase_base(view, gk);
+    let traits = view.traits(gk);
+    let tw = view.tuning().contract.traits();
+    let p = view.player(gk);
+    let held = view.teams()[p.team].plan.held[p.slot];
+    let rush = traits.weight(TraitKind::RushesOut, tw);
+    let stay = traits.weight(TraitKind::StaysOnLine, tw);
+    let rush_played = if held & Instruction::LineDeep.bit() != 0 {
+        0.0
+    } else {
+        rush
+    };
+    let stay_played = if held & Instruction::LineHigh.bit() != 0 {
+        0.0
+    } else {
+        stay
+    };
+    (
+        base * (1.0 + rush_played - stay_played),
+        base * (1.0 + rush),
+    )
 }
 
 /// `true` when keeper `gk` chasing a ball `distance` metres away is a rash chase: one an
@@ -1185,7 +1450,7 @@ fn cover(
 
 pub const DECISION_V1_CARD: ModuleCard = ModuleCard {
     purpose: "Sets every player's target (anchors, the lone forward's line hold, timed runs against the offside line, pressing, goal-side cover, chasing) and decides the carrier's option, pass, clearance, shot, and restart kick.",
-    inputs: "Every player's position, velocity, target, activity, slot, lapse, and effective values through the attribute contract (the carrier's see, choose, execute and pressure stages of passes, chips, crosses, shots, long shots, penalties, dribbles and keeper distribution, his skill gates and flair, the restart taker's corner, free-kick and long-throw stages, and every player's press, intercept, shape, rush, marking and off-ball run values, determination and eccentricity); the carrier's mood, pressure handling and professionalism; both teams' shapes and plans; the score; the ball; the carrier and how long he has held the ball; the tick; and the engine tuning.",
+    inputs: "Every player's position, velocity, target, activity, slot, lapse, and effective values through the attribute contract (the carrier's see, choose, execute and pressure stages of passes, chips, crosses, shots, long shots, penalties, dribbles and keeper distribution, his skill gates and flair, the restart taker's corner, free-kick and long-throw stages, and every player's press, intercept, shape, rush, marking and off-ball run values, determination and eccentricity); the carrier's mood, pressure handling and professionalism; every player's traits of play and the override he plays, and the carrier's last passer; both teams' shapes, plans and the instructions they hold; the score; the ball; the carrier and how long he has held the ball; the tick; and the engine tuning.",
     outputs: "Every player's target, the carrier's option scores and choice, and the kick of a pass, clearance, shot, or restart.",
     tuning: &[
         "decision",
@@ -1196,6 +1461,7 @@ pub const DECISION_V1_CARD: ModuleCard = ModuleCard {
         "contract.person.mood.risk",
         "contract.person.occasions.professionalism",
         "contract.person.occasions.penalty_pressure",
+        "contract.traits",
         "shots.penalty_spread",
         "shot_range",
         "aim_noise",
@@ -1231,6 +1497,7 @@ pub const DECISION_V1_CARD: ModuleCard = ModuleCard {
         Action::ShotSpread,
         Action::ShotLoft,
         Action::Lapse,
+        Action::TraitOverride,
     ],
 };
 

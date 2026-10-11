@@ -40,6 +40,7 @@ pub mod streams;
 pub mod tactics;
 pub mod team;
 pub mod trace;
+pub mod traits;
 pub mod tuning;
 pub mod validate;
 

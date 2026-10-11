@@ -47,6 +47,7 @@ pub const MOVED_KEYS: &[Action] = &[
     Action::Header,
     Action::FormMatch,
     Action::FormPeriod,
+    Action::TraitOverride,
 ];
 
 /// What one module is.
