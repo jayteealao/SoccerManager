@@ -9,8 +9,9 @@
 //   messages of `fixtures/matchday-states.json` on the page's own socket (through a relay),
 //   so the rows are the same every run;
 // - the north star, "Match live · goal at another ground", in both skins at 1280 by 800, from
-//   a real engine and its real matchday: seed 7 held 100 ticks after the first goal at
-//   another ground, played across that goal so the list outlines it.
+//   a real engine and its real matchday: seed 5 held 100 ticks after the first goal at
+//   another ground (tick 106,441), played across that goal so the list outlines it. Seed 7
+//   has no goal at another ground now that restarts wait as long as real ones.
 // The light skin is chosen by configuration only (a content copy's slots.json).
 //
 // Also here: a Tab walk that never stops inside the list, the rendered contrast check on the
@@ -30,6 +31,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STATES = JSON.parse(fs.readFileSync(path.join(HERE, 'fixtures', 'matchday-states.json'), 'utf8')).states;
 const SKINS = ['broadcast-blue', 'interim-light'];
 const SEED = 7;
+/// The north star's seed: the lowest whose matchday has a goal at another ground before the
+/// fast-forward ends.
+const NORTH_STAR_SEED = 5;
 
 const content = {};
 
@@ -60,9 +64,9 @@ async function open(page, url, skin) {
   await page.evaluate(() => document.fonts.ready);
 }
 
-async function serve(skin, to, { matchday }) {
+async function serve(skin, to, { matchday, seed = SEED }) {
   return startEngine({
-    args: ['--seed', String(SEED), '--web', VIEWER, ...fastForward(to), ...matchdayArgs({ matchday })],
+    args: ['--seed', String(seed), '--web', VIEWER, ...fastForward(to), ...matchdayArgs({ matchday })],
     env: skin === 'broadcast-blue' ? {} : { SM_CONTENT_DIR: content.light },
   });
 }
@@ -185,7 +189,7 @@ for (const skin of SKINS) {
 
     test('north star: match live with a goal at another ground', { tag: '@sizes' }, async ({ page }, info) => {
       test.setTimeout(8 * 60_000);
-      const engine = await serve(skin, 150_000, { matchday: true });
+      const engine = await serve(skin, 150_000, { matchday: true, seed: NORTH_STAR_SEED });
       try {
         await open(page, engine.url, skin);
         await kickOffAndPauseAt(page, 1_000);

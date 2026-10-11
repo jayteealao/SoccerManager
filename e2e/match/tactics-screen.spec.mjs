@@ -93,6 +93,8 @@ async function playTo(page, tick) {
   await until(page, () => window.__touchline.lineup().phase === 'live', undefined, 15_000);
   await page.getByRole('group', { name: 'Playback' }).getByRole('button', { name: '8x', exact: true }).click();
   await until(page, (t) => window.__touchline.history().newest_tick >= t, tick, 240_000);
+  // The walk-on before kick-off plays first; pause once the pitch draws match ticks.
+  await until(page, () => window.__touchline.lastRenderedTick() > 0, undefined, 60_000);
   await action(page).click();
   await expect(action(page)).toHaveText('Resume');
 }
