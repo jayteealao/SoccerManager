@@ -53,6 +53,10 @@
 //!   his pace, and after the players each side's bench mood (f64), so a resumed match moves
 //!   every mood as the unbroken match does. The shot in flight and the last completed pass,
 //!   which mood also reads, are cleared at every stoppage, so no snapshot holds them.
+//!   Version 16 adds the restart wait: a dead ball stores, after its taker, where the ball
+//!   left play (two f64), the tick the ball appears at the spot (u32), the drawn extra in
+//!   ticks (u32), the quick restart as a byte, and the hard limit (u32), so a match resumed
+//!   while the ball waits where it left play resumes the same wait.
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -83,7 +87,7 @@ use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
 use crate::team::PLAYERS_PER_TEAM;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 15;
+pub const VERSION: u16 = 16;
 /// The earliest layout version the strict reader still reads: version 8 has no matchday mark.
 const FIRST_READ: u16 = 8;
 /// The released builds from before the snapshot recorded its engine version: the full commit
@@ -926,6 +930,11 @@ fn encode(sim: &Simulation, w: &mut Writer) {
             w.u32(d.since);
             w.u32(d.ready_at);
             w.index(Some(d.taker));
+            w.v2_at(&String::new, d.exit);
+            w.u32(d.appear_at);
+            w.u32(d.extra);
+            w.u8(u8::from(d.quick));
+            w.u32(d.hard_at);
         }
         Phase::FullTime => w.u8(2),
     }
@@ -1207,6 +1216,11 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
                 since: r.u32()?,
                 ready_at: r.u32()?,
                 taker: r.some_index(PLAYERS)?,
+                exit: r.v2()?,
+                appear_at: r.u32()?,
+                extra: r.u32()?,
+                quick: r.bool()?,
+                hard_at: r.u32()?,
             })
         }
         2 => Phase::FullTime,
@@ -1401,7 +1415,7 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 15"),
+                .contains("unknown version 1; this build reads 16"),
             "{err}"
         );
     }

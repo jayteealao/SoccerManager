@@ -256,15 +256,7 @@ mod tests {
     }
 
     fn dead(kind: StoppageKind, team: usize, spot: DVec2, taker: usize) -> DeadBall {
-        DeadBall {
-            kind,
-            team,
-            spot,
-            direct: true,
-            since: 0,
-            ready_at: 0,
-            taker,
-        }
+        DeadBall::fixed(kind, team, spot, true, 0, 0, taker)
     }
 
     fn faults(config: &MatchConfig, restart: Restart, ball: DVec2) -> Vec<Fault> {

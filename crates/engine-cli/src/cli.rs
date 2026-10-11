@@ -37,7 +37,7 @@ pub enum Command {
     Generate(GenerateOpts),
     /// Stream one match live over the local socket to one viewer.
     Serve(ServeOpts),
-    /// Serve the viewer page and run the engine; restart it after a crash.
+    /// Serve the viewer and run the engine; restart it after a crash.
     Launch(LaunchOpts),
     /// Record one whole match stream to a fixture file.
     Record(RecordOpts),
@@ -45,21 +45,47 @@ pub enum Command {
     Replay(ReplayOpts),
     /// Play a recorded match again from its replay file alone.
     Resimulate(ResimulateOpts),
-    /// Find the first tick where two engine versions differ on a replay.
+    /// Find the first tick where two engines differ on a replay.
     Bisect(BisectOpts),
     /// Continue a match from its latest snapshot to full time.
     Resume(ResumeOpts),
     /// Play many AI-managed matches and check the realism bands.
     Calibrate(CalibrateOpts),
-    /// Replay the 22 gate matches and compare them with the golden file.
+    /// Replay the 22 gate matches and compare with the golden file.
     Gate(GateOpts),
     /// Check each commit's golden-file change against the ledger rules.
     Guard(GuardOpts),
     /// Fit the fast model, check it, or refuse a stale fit.
     FastModel(FastModelOpts),
+    /// Write the wait table: real waits less the visible steps.
+    RestartWaits(RestartWaitsOpts),
     /// Time a whole matchday on a limited number of cores; a test seam.
     #[command(hide = true)]
     MatchdayTiming(TimingOpts),
+}
+
+/// The restart wait table command.
+#[derive(Debug, Args)]
+pub struct RestartWaitsOpts {
+    /// The measured real data holding idsse_dead.csv.
+    #[arg(
+        long = "real-data",
+        value_name = "DIR",
+        long_help = "The folder of measured real data holding idsse_dead.csv, the\n\
+                     real dead spells; default the main checkout's .scratch/out,\n\
+                     as calibrate --real-data. Only the typ, dur, minute and\n\
+                     margin columns are read."
+    )]
+    pub real_data: Option<PathBuf>,
+    /// Seeds of the matches that measure the visible steps: N or A-B.
+    #[arg(long, default_value = "1-8", value_name = "SEEDS")]
+    pub seeds: String,
+    /// Minutes of play of each measuring match.
+    #[arg(long, default_value_t = 90)]
+    pub minutes: u32,
+    /// Where the table goes, usually content/restart-waits.json.
+    #[arg(long, value_name = "FILE")]
+    pub out: PathBuf,
 }
 
 /// The hidden timing run of a matchday.

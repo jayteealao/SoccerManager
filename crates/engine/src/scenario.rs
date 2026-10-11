@@ -2,8 +2,8 @@
 //! running velocity and foul cooldown), the ball, the
 //! carrier, the clock and its period, the score, the cards, energy, substitutions used, the
 //! managers, the change queue, the knockout switch, the outcomes of the next shoot-out kicks,
-//! the referee's and injury rolls' next draws, and the plugin hooks to where a test needs
-//! them.
+//! the referee's and injury rolls' next draws, the draws of the next restarts' waits, and the
+//! plugin hooks to where a test needs them.
 //! Only this crate's tests build it (the `scenario` feature), so a release build never
 //! contains it.
 
@@ -234,15 +234,9 @@ impl Scene {
             .carrier(None);
         let sim = &mut self.sim;
         sim.last_touch = Some(team);
-        sim.seat_phase(crate::rules::Phase::DeadBall(crate::rules::DeadBall {
-            kind,
-            team,
-            spot,
-            direct,
-            since: sim.tick,
-            ready_at: sim.tick,
-            taker,
-        }));
+        sim.seat_phase(crate::rules::Phase::DeadBall(
+            crate::rules::DeadBall::fixed(kind, team, spot, direct, sim.tick, 0, taker),
+        ));
         self
     }
 
@@ -431,6 +425,14 @@ impl Scene {
     /// does; each kick is still played on the pitch.
     pub fn shootout_kicks(mut self, outcomes: &[bool]) -> Self {
         self.sim.forced_kicks.extend(outcomes.iter().copied());
+        self
+    }
+
+    /// The next restarts take `quick` for the quick-restart draw and `wait_draw` (0 to 1) for
+    /// the drawn extra's uniform draw instead of their streams; `None` leaves that draw to its
+    /// stream.
+    pub fn pin_restart(mut self, quick: Option<bool>, wait_draw: Option<f64>) -> Self {
+        self.sim.pinned_restart = Some(crate::sim::PinnedRestart { quick, wait_draw });
         self
     }
 

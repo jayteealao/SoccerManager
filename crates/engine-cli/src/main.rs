@@ -21,6 +21,7 @@ mod replay;
 mod replay_inputs;
 mod report;
 mod resimulate;
+mod restart_waits;
 mod resume;
 mod serve;
 mod simulate;
@@ -118,6 +119,7 @@ fn main() {
         cli::Command::Gate(opts) => gate::run(content_dir, &opts),
         cli::Command::Guard(opts) => guard::run(&opts),
         cli::Command::FastModel(opts) => fast_model::run(content_dir, &opts),
+        cli::Command::RestartWaits(opts) => restart_waits::run(content_dir, &opts),
         cli::Command::MatchdayTiming(opts) => matchday::timing::run(content_dir, &opts),
     };
     match result {

@@ -82,6 +82,9 @@ pub struct Derived {
     /// The mean share of his determination and professionalism: how a tired player saves
     /// energy ([`crate::pace`]).
     pub tired_mix: f64,
+    /// The mean share of his decisions and flair: how often he restarts quickly when the rule
+    /// allows it ([`crate::rules::restart::quick_chance`]).
+    pub quick_share: f64,
     /// The skills that act on an occasion without leading a stage: flair, determination,
     /// eccentricity.
     pub occasion: contract::OccasionSkills,
@@ -187,6 +190,7 @@ impl Derived {
         };
         let aerial_reach = knob(A::AerialReach, Stage::AERIAL_REACH_EXECUTE);
         let (work_share, tired_mix) = blend.pace_shares(a);
+        let quick_share = blend.quick_share(a);
         let max_accel = c.accel.anchor * knob(A::Sprint, Stage::SPRINT_EXECUTE);
         // Agility owns stopping: the turn factor scales the braking anchor. With no hooks a
         // player brakes with his acceleration, as before.
@@ -223,6 +227,7 @@ impl Derived {
             },
             work_share,
             tired_mix,
+            quick_share,
             occasion,
         };
         (derived, stages)

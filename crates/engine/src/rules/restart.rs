@@ -7,14 +7,26 @@
 //! around the restart spot, moved where a law requires it. Opponents keep 9.15 m from the ball
 //! at a free kick, a corner, and a kick-off, stay outside the penalty area at a goal kick, and
 //! at a penalty everyone but the taker and the defending goalkeeper waits outside the area,
-//! behind the mark and 9.15 m from it. The taker may restart once the tuned delay has passed,
-//! the taker is at the ball, and every player the law moves has moved.
+//! behind the mark and 9.15 m from it.
+//!
+//! A stoppage lasts its visible steps plus a drawn extra. The visible steps are done once the
+//! taker is at the ball and every player the law moves has moved; the drawn extra comes from
+//! the restart wait table (`content/restart-waits.json`) and stands for the unseen part, such
+//! as fetching the ball: the ball waits where it left play for the extra, then appears at the
+//! spot, and the restart is taken the extra after the visible steps are done. A team leading
+//! late takes the table's late-lead factor times the extra, and a leading team with time
+//! wasting on its time-wasting level times it again. At a throw-in, a free kick or a goal kick
+//! the taker may restart quickly, with no extra, when a team-mate is free and the opponents
+//! are out of shape. Content without the table waits the tuning's fixed delays instead, with
+//! no fetch and no quick restart.
 
 use crate::data::rules::StoppageKind;
 use crate::math::{self, DVec2, toward};
 use crate::modules::{MatchView, ModuleCard, RestartsModule};
+use crate::pace::Job;
 use crate::pitch::{KICK_DISTANCE, PENALTY_AREA_DEPTH, PENALTY_AREA_WIDTH, PENALTY_MARK, Pitch};
 use crate::player::Player;
+use crate::streams::Action;
 use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::Tuning;
 
@@ -43,21 +55,66 @@ pub struct DeadBall {
     pub direct: bool,
     /// The tick the ball went dead.
     pub since: u32,
-    /// The first tick the restart may be taken.
+    /// The first tick the restart may be taken, once its visible steps are done. With a wait
+    /// table it is [`DeadBall::UNSET`] until the visible steps are first done, then that tick
+    /// plus the drawn extra. Without one, and at a shoot-out kick, it is the fixed delay after
+    /// `since`.
     pub ready_at: u32,
     /// The roster index of the player who takes the restart.
     pub taker: usize,
+    /// Where the ball left play: the crossing point, the place of a foul or an injury, or the
+    /// net. The ball waits here until `appear_at`.
+    pub exit: DVec2,
+    /// The tick the ball appears at the spot: `since` plus the drawn extra. The record of this
+    /// tick carries the restart flag.
+    pub appear_at: u32,
+    /// The drawn extra, in ticks: 0 at a quick restart and without a wait table.
+    pub extra: u32,
+    /// `true` when the taker restarts quickly, with no drawn extra.
+    pub quick: bool,
+    /// The tick by which the restart is taken whatever the players are doing.
+    pub hard_at: u32,
 }
 
 impl DeadBall {
-    /// The tick by which the restart is taken whatever the players are doing: three times
-    /// the delay, and at least one tick after the ball went dead.
+    /// `ready_at` before the visible steps are done.
+    pub const UNSET: u32 = u32::MAX;
+
+    /// A dead ball that waits a fixed `delay` from `since` with the ball already at the spot:
+    /// the restart of content without a wait table and the shoot-out kick. The hard limit is
+    /// three times the delay, and at least one tick after the ball went dead.
+    pub fn fixed(
+        kind: StoppageKind,
+        team: usize,
+        spot: DVec2,
+        direct: bool,
+        since: u32,
+        delay: u32,
+        taker: usize,
+    ) -> Self {
+        Self {
+            kind,
+            team,
+            spot,
+            direct,
+            since,
+            ready_at: since + delay,
+            taker,
+            exit: spot,
+            appear_at: since,
+            extra: 0,
+            quick: false,
+            hard_at: since + (3 * delay).max(1),
+        }
+    }
+
+    /// The tick by which the restart is taken whatever the players are doing.
     pub fn hard_limit(&self) -> u32 {
-        self.since + (3 * (self.ready_at - self.since)).max(1)
+        self.hard_at
     }
 }
 
-/// Ticks a restart of `kind` waits before it may be taken.
+/// Ticks a restart of `kind` waits before it may be taken, without a wait table.
 pub fn delay_ticks(kind: StoppageKind, t: &Tuning) -> u32 {
     let d = &t.restart_delay_s;
     let seconds = match kind {
@@ -383,19 +440,10 @@ pub fn shootout_ready(
     })
 }
 
-/// `true` when the restart may be taken at `tick`: the delay has passed, the taker is at the
-/// ball, and every player the law moves has moved (at a penalty: out of the area, 9.15 m from
-/// the mark and behind it).
-pub fn is_ready(
-    dead: &DeadBall,
-    tick: u32,
-    players: &[Player],
-    teams: &[Team; 2],
-    t: &Tuning,
-) -> bool {
-    if tick < dead.ready_at {
-        return false;
-    }
+/// `true` when the visible steps of the restart are done: the taker is at the ball, and every
+/// player the law moves has moved (at a penalty: out of the area, 9.15 m from the mark and
+/// behind it). The wait before the restart is taken is the loop's.
+pub fn steps_done(dead: &DeadBall, players: &[Player], teams: &[Team; 2], t: &Tuning) -> bool {
     let taker = &players[dead.taker];
     if (taker.pos - taker_target(dead, teams)).length() > t.restart_ready_radius {
         return false;
@@ -434,13 +482,132 @@ pub fn is_ready(
     })
 }
 
-/// Restarts, version 1: the Laws' takers, distances, and readiness above, the tuned delays,
-/// and a longer wait for a leading team that wastes time.
+/// `true` when `team` leads in the late window of regulation: the last `late_minutes` of the
+/// pace tuning, the same late the pace selector reads.
+fn leads_late(view: &MatchView<'_>, team: usize) -> bool {
+    let goals = view.goals();
+    let minute = view.referee().clock.minute(view.tick()).0;
+    goals[team] > goals[1 - team]
+        && minute + view.tuning().pace.late_minutes >= view.rules().regulation_minutes()
+}
+
+/// The drawn extra of a restart of `kind` by `team` for the uniform draw `u`, in ticks: the
+/// wait table's draw, times the late-lead factor when `team` leads late, times its
+/// time-wasting level when it leads with time wasting on. 0 without a wait table.
+pub fn extra_ticks(view: &MatchView<'_>, kind: StoppageKind, team: usize, u: f64) -> u32 {
+    let Some(waits) = view.restart_waits() else {
+        return 0;
+    };
+    let mut seconds = waits.draw(kind, u);
+    if leads_late(view, team) {
+        seconds *= waits.late_lead_factor;
+    }
+    let goals = view.goals();
+    let wasting = view.teams()[team].plan.time_wasting;
+    if goals[team] > goals[1 - team] && wasting > 1.0 {
+        seconds *= wasting;
+    }
+    // At most 600 s times factors of at most 5 and 20, so the cast fits.
+    (seconds / view.tuning().dt).round() as u32
+}
+
+/// The chance that the taker of `dead` restarts quickly, with no drawn extra: 0 without a wait
+/// table, at a kind the table does not allow, when his team wastes time, when no team-mate is
+/// free (an outfield team-mate on the pitch within `free_mate_m` of the spot with no opponent
+/// within `free_space_m` of him), or when the opponents are in shape (at least their
+/// mentality minimum of outfield players goal-side of the spot, never more than their outfield
+/// players less one). Otherwise the table's chance, higher when his team trails and with his
+/// decisions and flair.
+pub fn quick_chance(view: &MatchView<'_>, dead: &DeadBall) -> f64 {
+    let Some(waits) = view.restart_waits() else {
+        return 0.0;
+    };
+    let teams = view.teams();
+    if !waits.quick_kind(dead.kind) || teams[dead.team].plan.time_wasting > 1.0 {
+        return 0.0;
+    }
+    let q = &waits.quick;
+    let players = view.players();
+    let team = dead.team;
+    let other = 1 - team;
+    let keepers = [view.keeper(0), view.keeper(1)];
+    let outfield = |side: usize| {
+        players
+            .iter()
+            .enumerate()
+            .filter(move |&(i, p)| p.team == side && p.active() && i != keepers[side])
+    };
+    let free = outfield(team).any(|(i, mate)| {
+        i != dead.taker
+            && (mate.pos - dead.spot).length() <= q.free_mate_m
+            && players
+                .iter()
+                .filter(|o| o.team == other && o.active())
+                .all(|o| (o.pos - mate.pos).length() > q.free_space_m)
+    });
+    if !free {
+        return 0.0;
+    }
+    let side = &teams[other];
+    let active = outfield(other).count();
+    let minimum = side.plan.rest_defence.min(active.saturating_sub(1));
+    let behind = outfield(other)
+        .filter(|(_, p)| (p.pos.x - dead.spot.x) * side.attack_x < 0.0)
+        .count();
+    if behind >= minimum {
+        return 0.0;
+    }
+    let goals = view.goals();
+    q.chance(
+        goals[team] < goals[other],
+        players[dead.taker].derived.quick_share,
+    )
+}
+
+/// The job of player `i` at `dead`: `Return` (NORMAL) for an opponent the law moves (inside
+/// the distance the law asks from the ball, or inside the area at a goal kick or a penalty),
+/// `Wait` (CALM) for everyone else, the taker included.
+pub fn job(dead: &DeadBall, i: usize, players: &[Player], teams: &[Team; 2]) -> Job {
+    let p = &players[i];
+    if i == dead.taker || p.team == dead.team {
+        return Job::Wait;
+    }
+    let pitch = teams[p.team].pitch();
+    let distance = (p.pos - dead.spot).length();
+    let moved = match dead.kind {
+        StoppageKind::FreeKick | StoppageKind::Corner | StoppageKind::KickOff => {
+            distance < KICK_DISTANCE
+        }
+        StoppageKind::ThrowIn => distance < THROW_IN_DISTANCE,
+        StoppageKind::Injury => distance < DROP_BALL_DISTANCE,
+        StoppageKind::GoalKick | StoppageKind::Penalty => {
+            pitch.in_penalty_area(p.pos, end_of(dead.spot))
+        }
+        _ => false,
+    };
+    if moved { Job::Return } else { Job::Wait }
+}
+
+/// Restarts, version 1: the Laws' takers, distances, and visible steps above, the drawn extra
+/// of the wait table (or the tuned delays without one), quick restarts, and a longer wait for
+/// a leading team late and for one that wastes time.
 pub struct RestartsV1;
 
 impl RestartsModule for RestartsV1 {
     fn taker(&self, view: &MatchView<'_>, kind: StoppageKind, team: usize, spot: DVec2) -> usize {
         taker(kind, team, spot, view.players(), view.teams())
+    }
+
+    fn extra_ticks(&self, view: &MatchView<'_>, kind: StoppageKind, team: usize, u: f64) -> u32 {
+        extra_ticks(view, kind, team, u)
+    }
+
+    fn quick_chance(&self, view: &MatchView<'_>, dead: &DeadBall) -> f64 {
+        quick_chance(view, dead)
+    }
+
+    fn job(&self, view: &MatchView<'_>, dead: &DeadBall, i: usize) -> Job {
+        job(dead, i, view.players(), view.teams())
     }
 
     fn delay_ticks(&self, view: &MatchView<'_>, kind: StoppageKind, team: usize) -> u32 {
@@ -467,7 +634,7 @@ impl RestartsModule for RestartsV1 {
         }
     }
 
-    fn ready(&self, view: &MatchView<'_>, dead: &DeadBall, now: u32) -> bool {
+    fn steps_done(&self, view: &MatchView<'_>, dead: &DeadBall, now: u32) -> bool {
         match view.referee().shootout.as_ref() {
             Some(shootout) => shootout_ready(
                 view.pitch(),
@@ -477,7 +644,7 @@ impl RestartsModule for RestartsV1 {
                 shootout.keepers,
                 view.tuning(),
             ),
-            None => is_ready(dead, now, view.players(), view.teams(), view.tuning()),
+            None => steps_done(dead, view.players(), view.teams(), view.tuning()),
         }
     }
 
@@ -493,17 +660,20 @@ impl RestartsModule for RestartsV1 {
 }
 
 pub const RESTARTS_V1_CARD: ModuleCard = ModuleCard {
-    purpose: "Runs restarts and dead balls: who takes each restart, how long it waits, where every player stands while the ball is dead, when it may be taken, and the kick-off positions.",
-    inputs: "The dead ball, the players' positions and status, both teams' shapes, attack directions, and time-wasting plans, the score, the shoot-out keepers, and the engine tuning.",
-    outputs: "The taker, the delay in ticks, each player's restart target, whether the restart is ready, and each kick-off position; the loop applies them.",
+    purpose: "Runs restarts and dead balls: who takes each restart, how long it waits (its visible steps plus a drawn extra from the restart wait table, during which the ball waits where it left play), quick restarts, each player's job and restart target while the ball is dead, when the visible steps are done, and the kick-off positions.",
+    inputs: "The dead ball, the players' positions, status and decisions-and-flair share, both teams' shapes, attack directions, mentality minimums and time-wasting plans, the score and the clock, the shoot-out keepers, the restart wait table, and the engine tuning.",
+    outputs: "The taker, the drawn extra in ticks (or the fixed delay without a wait table), the quick-restart chance, each player's job and restart target, whether the visible steps are done, and each kick-off position; the loop draws and applies them.",
     tuning: &[
         "restart_delay_s",
         "dt",
         "restart_ready_radius",
         "plan.time_wasting",
+        "plan.rest_defence",
+        "pace.late_minutes",
+        "restart_waits",
     ],
-    calibration: "none: restart placement and timing follow the Laws; no band measures them",
-    keys: &[],
+    calibration: "none: the drawn extras come from real restart waits minus the engine's measured visible steps (engine-cli restart-waits); placement and readiness follow the Laws",
+    keys: &[Action::RestartWait, Action::QuickRestart],
 };
 
 #[cfg(test)]
@@ -512,15 +682,7 @@ mod tests {
     use crate::data::test_support::shipped_config;
 
     fn dead(kind: StoppageKind, team: usize, spot: DVec2, taker: usize) -> DeadBall {
-        DeadBall {
-            kind,
-            team,
-            spot,
-            direct: true,
-            since: 0,
-            ready_at: 0,
-            taker,
-        }
+        DeadBall::fixed(kind, team, spot, true, 0, 0, taker)
     }
 
     #[test]
@@ -801,11 +963,10 @@ mod tests {
         let t = Tuning::default();
         assert_eq!(delay_ticks(StoppageKind::ThrowIn, &t), 150);
         assert_eq!(delay_ticks(StoppageKind::Penalty, &t), 750);
-        let d = DeadBall {
-            since: 100,
-            ready_at: 250,
-            ..dead(StoppageKind::ThrowIn, 0, DVec2::ZERO, 0)
-        };
+        // Without a wait table the hard limit is three times the delay.
+        let d = DeadBall::fixed(StoppageKind::ThrowIn, 0, DVec2::ZERO, true, 100, 150, 0);
+        assert_eq!(d.ready_at, 250);
         assert_eq!(d.hard_limit(), 550);
+        assert_eq!((d.appear_at, d.extra, d.exit), (100, 0, DVec2::ZERO));
     }
 }

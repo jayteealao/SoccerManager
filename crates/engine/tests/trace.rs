@@ -194,7 +194,8 @@ fn every_action_and_event_kind_maps_to_a_point() {
     assert_eq!(names.len(), 38, "every point has its own name");
     assert_eq!(
         Action::ALL.iter().filter(|a| trace::is_chance(**a)).count(),
-        21
+        // The quick restart is a chance; the restart wait is a drawn length, not one.
+        22
     );
 }
 

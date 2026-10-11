@@ -119,6 +119,12 @@ impl<'a> MatchView<'a> {
         self.sim.config.pitch()
     }
 
+    /// The restart wait table of the match, `None` when the content has none.
+    #[inline]
+    pub fn restart_waits(&self) -> Option<&'a crate::data::restart_waits::RestartWaits> {
+        self.sim.config.restart_waits.as_ref()
+    }
+
     /// The fatigue tuning of the match.
     #[inline]
     pub fn fatigue(&self) -> &'a FatigueTuning {

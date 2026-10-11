@@ -386,15 +386,7 @@ mod tests {
     use crate::rules::DeadBall;
 
     fn dead(kind: StoppageKind) -> Phase {
-        Phase::DeadBall(DeadBall {
-            kind,
-            team: 0,
-            spot: DVec2::ZERO,
-            direct: true,
-            since: 0,
-            ready_at: 0,
-            taker: 0,
-        })
+        Phase::DeadBall(DeadBall::fixed(kind, 0, DVec2::ZERO, true, 0, 0, 0))
     }
 
     #[test]

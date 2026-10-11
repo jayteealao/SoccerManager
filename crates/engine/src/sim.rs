@@ -86,6 +86,9 @@ pub struct MatchConfig {
     pub hidden: crate::contract::hidden::HiddenTuning,
     /// The weights of the match rating, from the tuning file. Never changes in a match.
     pub match_rating: crate::match_rating::MatchRatingTuning,
+    /// The restart wait table, from the content; `None` plays the tuning file's fixed restart
+    /// delays. Never changes in a match.
+    pub restart_waits: Option<crate::data::restart_waits::RestartWaits>,
     /// The home team's ground. Never changes in a match. Private: `set_pitch` writes it and
     /// the teams' copies together.
     pitch: Pitch,
@@ -167,6 +170,7 @@ impl MatchConfig {
             modules: content.modules,
             hidden: content.tuning.hidden.clone(),
             match_rating: content.tuning.match_rating.clone(),
+            restart_waits: content.restart_waits.clone(),
             pitch,
         })
     }
@@ -555,6 +559,14 @@ pub(crate) struct ScriptCache {
     pub offsets: crate::plugin::OptionOffsets,
 }
 
+/// Test seam: the draws the next restarts are given instead of their streams. `quick` pins
+/// whether the taker restarts quickly; `wait_draw` pins the uniform draw of the drawn extra.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct PinnedRestart {
+    pub quick: Option<bool>,
+    pub wait_draw: Option<f64>,
+}
+
 /// One running match.
 pub struct Simulation {
     pub(crate) config: MatchConfig,
@@ -626,6 +638,13 @@ pub struct Simulation {
     /// The defenders (one bit per roster index) who have already tried to clear the fast
     /// pass in flight. Cleared with a kick and with `pass_in_flight`.
     pub(crate) clearers_tried: u32,
+    /// `true` from the placement of a half's kick-off until the walk-on to it is taken
+    /// ([`Simulation::take_walk_on`]): the walk-on is shown before the half's first record and
+    /// is not match time. No play reads it, and a snapshot is written after it is taken.
+    pub(crate) walk_on_due: bool,
+    /// Test seam: the draws the next restarts are given instead of their streams.
+    #[cfg(feature = "scenario")]
+    pub(crate) pinned_restart: Option<PinnedRestart>,
     /// Test seam: how each shot ended.
     #[cfg(feature = "scenario")]
     pub(crate) census: ShotCensus,
@@ -802,6 +821,9 @@ impl Simulation {
             shooter: None,
             last_pass: None,
             bench_mood: [0.0; 2],
+            walk_on_due: false,
+            #[cfg(feature = "scenario")]
+            pinned_restart: None,
             #[cfg(feature = "scenario")]
             census: ShotCensus::default(),
             #[cfg(feature = "scenario")]
@@ -1263,12 +1285,16 @@ impl Simulation {
     }
 
     /// Plays to full time, emitting one record per tick and announcing every stoppage
-    /// through the sink's stoppage hook, then closes the match.
+    /// through the sink's stoppage hook, then closes the match. Before the first record of
+    /// each half the sink receives the walk-on to it.
     pub fn run<S: TickSink>(&mut self, sink: &mut S) -> Result<(), EngineError> {
         while !self.is_over() {
             self.step();
             self.drain_trace(sink)?;
             sink.on_step(self)?;
+            if let Some(walk_on) = self.take_walk_on() {
+                sink.on_walk_on(&walk_on)?;
+            }
             sink.on_tick(&self.record())?;
             if let Some(stoppage) = self.stoppage {
                 sink.on_stoppage(&stoppage, self)?;
@@ -1276,6 +1302,24 @@ impl Simulation {
         }
         self.finish();
         self.drain_trace(sink)
+    }
+
+    /// The walk-on to the places the players stand on now, when a half's kick-off was placed
+    /// and its walk-on has not been taken: call it after a step and before the step's record,
+    /// so the walk-on ends on the half's first record. `None` otherwise. Each half's walk-on
+    /// is taken once.
+    pub fn take_walk_on(&mut self) -> Option<crate::walk_on::WalkOn> {
+        if !std::mem::take(&mut self.walk_on_due) {
+            return None;
+        }
+        Some(crate::walk_on::WalkOn::build(
+            self.referee.clock.half,
+            self.tick,
+            self.config.tuning.pace.limits_ms[1],
+            self.config.tuning.dt,
+            &self.players,
+            &self.teams,
+        ))
     }
 
     /// Hands the debug trace records of the last step to the sink, in debug mode.
@@ -1375,8 +1419,16 @@ impl Simulation {
             }
             Phase::DeadBall(dead) => {
                 self.summary.dead_ball_ticks += 1;
-                self.pace_off();
-                self.dead_ball_tick(&dead, &t);
+                // With a wait table, every player walks or stands while the ball is dead, save
+                // an opponent the law moves away from it; at a shoot-out kick and without the
+                // table the pace is off, as before the selector.
+                if self.config.restart_waits.is_some() && self.referee.shootout.is_none() {
+                    self.dead_ball_tick(&dead, &t);
+                    self.pace_tick();
+                } else {
+                    self.pace_off();
+                    self.dead_ball_tick(&dead, &t);
+                }
                 self.slide_reset();
             }
             Phase::FullTime => {}

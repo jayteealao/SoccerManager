@@ -1,8 +1,8 @@
 //! The running rule checker: the tick rules of [`Validator::check`] and the event rules of
 //! [`Validator::check_events`], judged while the match plays. It keeps no tick list: each
 //! record is judged when it arrives, and only small state stays (the team shapes in force,
-//! the previous ball, each player's drift count, the restart ticks and spots, the
-//! substitutions, the half-time ticks and the violations found). Three rules need the whole
+//! the previous ball and positions, each player's drift count, the restart ticks and spots,
+//! the substitutions, the half-time ticks and the violations found). Three rules need the whole
 //! match and are judged at [`RunningCheck::finish`]: `restart_spot` (an event naming a
 //! restart's spot can come after the record in the stream), `full_time_last` (full time
 //! comes after the last record) and the half-time exemption of `substitution_limits`.
@@ -36,10 +36,11 @@ type Key = (usize, u8);
 const IN_BOUNDS: u8 = 0;
 const SEPARATION: u8 = 1;
 const BALL_SPEED: u8 = 2;
-const RESTART_SPOT: u8 = 3;
-const ANCHOR_TOLERANCE: u8 = 4;
+const PLAYER_SPEED: u8 = 3;
+const RESTART_SPOT: u8 = 4;
+const ANCHOR_TOLERANCE: u8 = 5;
 /// The tick rules' count: the first places of [`RunningCheck::RULES`].
-const TICK_RULES: usize = 5;
+const TICK_RULES: usize = 6;
 
 /// A squared distance a little above `MIN_SEPARATION²`: a pair at or beyond it is far
 /// enough apart that its exact distance need not be taken.
@@ -159,6 +160,16 @@ pub struct RunningCheck {
     pending_shapes: VecDeque<(u32, [Team; 2])>,
     records: usize,
     prev_ball: Option<DVec2>,
+    /// The previous record's player positions and which of them were parked.
+    prev_players: Option<([DVec2; PLAYER_COUNT], [bool; PLAYER_COUNT])>,
+    /// The most a player may move between two records ([`max_step`]).
+    max_step: f64,
+    /// The roster slot each substitution names, with its tick: the substitute enters there.
+    entries: Vec<(u32, usize)>,
+    /// The spot of the restart whose ball has not yet appeared at it: from a restart event
+    /// until a record with the restart flag or with the ball at the spot. The anchor rule
+    /// reads it as the ball.
+    fetch_spot: Option<DVec2>,
     far_ticks: [u32; PLAYER_COUNT],
     prev_dist: [[f64; 2]; PLAYER_COUNT],
     shootout_from: Option<u32>,
@@ -190,11 +201,12 @@ pub struct RunningCheck {
 }
 
 impl RunningCheck {
-    /// Every rule it judges: the five tick rules, then the twelve event rules.
-    pub const RULES: [&'static str; 17] = [
+    /// Every rule it judges: the six tick rules, then the twelve event rules.
+    pub const RULES: [&'static str; 18] = [
         "in_bounds",
         "separation",
         "ball_speed",
+        "player_speed",
         "restart_spot",
         "anchor_tolerance",
         "kick_off_first",
@@ -218,11 +230,15 @@ impl RunningCheck {
     /// A checker for a match judged by `tuning` and `rules`, whose teams start in `teams`.
     pub fn new(tuning: Tuning, teams: [Team; 2], rules: StreamRules) -> Self {
         Self {
+            max_step: max_step(&tuning),
             tuning,
             shapes: teams,
             pending_shapes: VecDeque::new(),
             records: 0,
             prev_ball: None,
+            prev_players: None,
+            entries: Vec::new(),
+            fetch_spot: None,
             far_ticks: [0; PLAYER_COUNT],
             prev_dist: [[f64::INFINITY; 2]; PLAYER_COUNT],
             shootout_from: None,
@@ -273,6 +289,12 @@ impl RunningCheck {
     pub fn event(&mut self, e: &EngineEvent) {
         if let Some(spot) = e.spot {
             self.spots.push((e.tick, spot));
+            self.fetch_spot = Some(spot);
+        }
+        if e.kind == EngineEventKind::Substitution
+            && let Some(p) = e.player
+        {
+            self.entries.push((e.tick, p));
         }
         if e.shootout_round.is_some() {
             self.shootout_from = Some(self.shootout_from.map_or(e.tick, |t| t.min(e.tick)));
@@ -469,9 +491,32 @@ impl RunningCheck {
             }
         }
         self.prev_ball = Some(ball);
+        // The first record of a half places the kick-off: no jump is judged on it.
+        let half_start = self.half_times.last() == Some(&r.tick);
+        if let Some((prev, prev_parked)) = &self.prev_players
+            && !half_start
+        {
+            for i in 0..PLAYER_COUNT {
+                let entered = self.entries.contains(&(r.tick, i));
+                if parked[i] || prev_parked[i] || entered {
+                    continue;
+                }
+                let step = (pos[i] - prev[i]).length();
+                if step > self.max_step {
+                    bad(PLAYER_SPEED, "player_speed", Some(i), step / self.tuning.dt);
+                }
+            }
+        }
+        self.prev_players = Some((pos, parked));
         if r.restart {
             // An event naming this tick's spot can come after the record: judged at finish.
             self.restarts.push((idx, r.tick, ball));
+        }
+        // While the ball waits where it left play, the players set up around the restart
+        // spot: the anchor rule reads the spot as the ball until the ball appears there.
+        let reference = self.fetch_spot.unwrap_or(ball);
+        if r.restart || (ball - reference).length() <= RESTART_SPOT_TOLERANCE {
+            self.fetch_spot = None;
         }
 
         let shootout = self.shootout_from.is_some_and(|from| r.tick >= from);
@@ -485,14 +530,14 @@ impl RunningCheck {
             // The record does not say which team has the ball, so the nearer of the slot's
             // two anchors counts.
             let d_anchor = [true, false]
-                .map(|has| (*p - teams[team].anchor(slot, ball, has, &self.tuning)).length());
+                .map(|has| (*p - teams[team].anchor(slot, reference, has, &self.tuning)).length());
             let d_anchor = d_anchor[0].min(d_anchor[1]).min(kick_off_place_distance(
                 &teams[team],
                 slot,
                 *p,
-                ball,
+                reference,
             ));
-            let d_ball = (*p - ball).length();
+            let d_ball = (*p - reference).length();
             let prev_dist = self.prev_dist[i];
             let closing = d_ball < prev_dist[0] - 1e-3 || d_anchor < prev_dist[1] - 1e-3;
             self.prev_dist[i] = [d_ball, d_anchor];
@@ -513,11 +558,13 @@ impl RunningCheck {
     /// total for each tick rule past the cap.
     pub fn finish(mut self) -> Violations {
         // The same stable sort and lookup as `Validator::for_match` and `check`, so a tick
-        // with two spots resolves to the same one.
+        // with two spots resolves to the same one: each restart record is judged against the
+        // latest restart spot named at or before its tick, since the ball may appear at the
+        // spot some ticks after the stoppage named it.
         self.spots.sort_by_key(|(tick, _)| *tick);
         for &(idx, tick, ball) in &self.restarts {
-            if let Ok(at) = self.spots.binary_search_by_key(&tick, |(t, _)| *t) {
-                let off = (ball - self.spots[at].1).length();
+            if let Some(spot) = latest_spot(&self.spots, tick) {
+                let off = (ball - spot).length();
                 if off > RESTART_SPOT_TOLERANCE {
                     self.tick_found.push(
                         (idx, RESTART_SPOT),
@@ -624,6 +671,23 @@ impl TickSink for RunningCheck {
         self.tick(record);
         Ok(())
     }
+}
+
+/// The most a player may move between two consecutive records: the top speed of the tuning's
+/// speed map (pace 1 to 20) for one tick, plus the minimum player distance, the most one
+/// separation push moves him.
+pub(crate) fn max_step(t: &Tuning) -> f64 {
+    let top = (10..=200)
+        .map(|tenths| t.contract.speed.top_speed(f64::from(tenths) / 10.0))
+        .fold(0.0, f64::max);
+    top * t.dt + t.min_player_distance
+}
+
+/// The spot of the latest restart named at or before `tick` in `spots` (sorted by tick; of two
+/// on one tick, the later in the list).
+pub(crate) fn latest_spot(spots: &[(u32, DVec2)], tick: u32) -> Option<DVec2> {
+    let after = spots.partition_point(|(t, _)| *t <= tick);
+    after.checked_sub(1).map(|at| spots[at].1)
 }
 
 /// While the ball waits on the centre spot for a kick-off, the referee stands each player on
@@ -745,10 +809,12 @@ mod tests {
     fn todays_five_validator_cases_give_the_same_report() {
         let mut overlap = record(10);
         overlap.players[1] = overlap.players[0];
-        let out = running(&teams(), &[], &[record(9), overlap]);
+        // The overlap is the first record, so player 1 has no step to judge: a jump onto
+        // player 0 from the record before would also break the player speed rule.
+        let out = running(&teams(), &[], &[overlap]);
         assert_eq!(out.len(), 1);
         assert_eq!((out.kept()[0].rule, out.kept()[0].tick), ("separation", 10));
-        same(&teams(), &[], &[record(9), overlap]);
+        same(&teams(), &[], &[overlap]);
 
         let mut fast = record(2);
         fast.ball = [0.9, 0.0, 0.0];

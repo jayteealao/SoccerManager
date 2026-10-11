@@ -178,9 +178,9 @@ impl Trace {
     }
 }
 
-/// `true` for the 21 actions whose draw is tested against a probability. The other 18 are
-/// value draws: score noise, aims, angles, lofts, the keeper's dive, and added time. The
-/// list is outside the stream table, so the scheme digest does not change.
+/// `true` for the 22 actions whose draw is tested against a probability. The other 21 are
+/// value draws: score noise, aims, angles, lofts, the keeper's dive, form, added time and the
+/// restart wait. The list is outside the stream table, so the scheme digest does not change.
 pub fn is_chance(action: Action) -> bool {
     match action {
         Action::ClearWide
@@ -203,7 +203,8 @@ pub fn is_chance(action: Action) -> bool {
         | Action::InjuryTackle
         | Action::Lapse
         | Action::Header
-        | Action::PaceSprint => true,
+        | Action::PaceSprint
+        | Action::QuickRestart => true,
         Action::FormMatch | Action::FormPeriod => false,
         Action::ShotScore
         | Action::PassScore
@@ -222,7 +223,8 @@ pub fn is_chance(action: Action) -> bool {
         | Action::CrossLoft
         | Action::ExtraTimeAdded
         | Action::AddedTime
-        | Action::KeeperDive => false,
+        | Action::KeeperDive
+        | Action::RestartWait => false,
     }
 }
 
@@ -423,6 +425,8 @@ pub fn points_of(action: Action) -> &'static [Point] {
         // An urgent job starts on a live tick, whose decision pass traces the press and
         // cover, or the chase of a loose ball.
         Action::PaceSprint => &[Point::Press, Point::Chase],
+        // Both are drawn as the ball goes dead.
+        Action::RestartWait | Action::QuickRestart => &[Point::DeadBall],
     }
 }
 

@@ -223,19 +223,29 @@ pub trait ClockModule: Send + Sync + 'static {
     fn shootout_decided(&self, view: &MatchView<'_>, scores: [u32; 2], taken: [u32; 2]) -> bool;
 }
 
-/// Restarts and dead balls: the taker, the wait, where each player stands while the ball
-/// is dead, when the restart may be taken, and the kick-off positions. It draws nothing.
+/// Restarts and dead balls: the taker, the wait, where each player stands and what job he
+/// has while the ball is dead, when the visible steps are done, and the kick-off positions.
+/// The loop draws the `RestartWait` key for [`RestartsModule::extra_ticks`] and the
+/// `QuickRestart` key against [`RestartsModule::quick_chance`].
 pub trait RestartsModule: Send + Sync + 'static {
     /// The player of `team` who takes a restart of `kind` at `spot`.
     fn taker(&self, view: &MatchView<'_>, kind: StoppageKind, team: usize, spot: DVec2) -> usize;
-    /// Ticks a restart of `kind` by `team` waits before it may be taken.
+    /// Ticks a restart of `kind` by `team` waits before it may be taken, without a wait table.
     fn delay_ticks(&self, view: &MatchView<'_>, kind: StoppageKind, team: usize) -> u32;
+    /// The drawn extra of a restart of `kind` by `team`, in ticks, given the uniform draw `u`;
+    /// 0 without a wait table.
+    fn extra_ticks(&self, view: &MatchView<'_>, kind: StoppageKind, team: usize, u: f64) -> u32;
+    /// The chance that the taker of `dead` restarts quickly, with no drawn extra.
+    fn quick_chance(&self, view: &MatchView<'_>, dead: &DeadBall) -> f64;
+    /// The job of player `i` while `dead` waits, which sets his pace.
+    fn job(&self, view: &MatchView<'_>, dead: &DeadBall, i: usize) -> crate::pace::Job;
     /// Ticks a shoot-out kick waits before it may be taken.
     fn shootout_delay_ticks(&self, view: &MatchView<'_>) -> u32;
     /// Where player `i` stands while `dead` waits.
     fn target(&self, view: &MatchView<'_>, dead: &DeadBall, i: usize) -> DVec2;
-    /// `true` when `dead` may be taken at tick `now`.
-    fn ready(&self, view: &MatchView<'_>, dead: &DeadBall, now: u32) -> bool;
+    /// `true` when the visible steps of `dead` are done at tick `now`: the taker at the ball
+    /// and every player the law moves moved (at a shoot-out kick, also its delay passed).
+    fn steps_done(&self, view: &MatchView<'_>, dead: &DeadBall, now: u32) -> bool;
     /// Where the player in `slot` of `team` stands for a kick-off by `kicking`.
     fn kick_off_position(
         &self,

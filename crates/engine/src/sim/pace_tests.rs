@@ -370,15 +370,15 @@ fn a_leading_team_wastes_time_only_at_a_dead_ball() {
 
     // The ball goes dead: the home team's NORMAL jobs drop to CALM, its URGENT jobs stay.
     let spot = sim.ball.xy();
-    sim.seat_phase(Phase::DeadBall(DeadBall {
-        kind: StoppageKind::ThrowIn,
-        team: 0,
+    sim.seat_phase(Phase::DeadBall(DeadBall::fixed(
+        StoppageKind::ThrowIn,
+        0,
         spot,
-        direct: false,
-        since: sim.tick,
-        ready_at: sim.tick + 100,
-        taker: 6,
-    }));
+        false,
+        sim.tick,
+        100,
+        6,
+    )));
     sim.pace_tick();
     let dead = normal_home(&sim);
     assert!(!dead.is_empty(), "a home player has a NORMAL job");

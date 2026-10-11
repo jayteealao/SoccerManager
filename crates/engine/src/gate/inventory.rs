@@ -76,7 +76,12 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         bench_mood,
         restart_taker,
         clearers_tried,
+        // Read by no play: it marks a half's walk-on due between the step that places the
+        // kick-off and the driver that takes the walk-on before the record.
+        walk_on_due: _,
         // Test seams under the `scenario` feature; no release build has them.
+        #[cfg(feature = "scenario")]
+            pinned_restart: _,
         #[cfg(feature = "scenario")]
             census: _,
         #[cfg(feature = "scenario")]
@@ -223,6 +228,11 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
             w.u32(d.since);
             w.u32(d.ready_at);
             w.index(Some(d.taker));
+            w.v2_at(&|| "referee.phase.exit".into(), d.exit);
+            w.u32(d.appear_at);
+            w.u32(d.extra);
+            w.bool(d.quick);
+            w.u32(d.hard_at);
         }
         Phase::FullTime => w.u8(2),
     }

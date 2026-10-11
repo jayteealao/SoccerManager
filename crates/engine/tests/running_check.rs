@@ -17,11 +17,12 @@ use engine::{
     Tuning, Validator, Violation,
 };
 
-/// Every rule the two checkers judge: five tick rules, then the twelve event rules.
-const RULES: [&str; 17] = [
+/// Every rule the two checkers judge: six tick rules, then the twelve event rules.
+const RULES: [&str; 18] = [
     "in_bounds",
     "separation",
     "ball_speed",
+    "player_speed",
     "restart_spot",
     "anchor_tolerance",
     "event_order",
@@ -203,6 +204,16 @@ fn tick_plants() -> Vec<Plant> {
     plants.push(plant("ball too fast", "ball_speed", k, None, &|r| {
         r[k].ball[0] += 3.0
     }));
+
+    // Player 3 moved 5 m on one tick inside a half: a jump no top speed allows.
+    let k = 3000;
+    plants.push(plant(
+        "player jumps 5 m",
+        "player_speed",
+        k,
+        Some(3),
+        &|r| r[k].players[3][0] += 5.0,
+    ));
 
     // The ball 1 m off the spot on a restart tick that names a spot.
     let k = base
@@ -517,6 +528,7 @@ fn the_fixed_set_plants_every_rule() {
         "in_bounds",
         "separation",
         "ball_speed",
+        "player_speed",
         "restart_spot",
         "anchor_tolerance",
     ]);

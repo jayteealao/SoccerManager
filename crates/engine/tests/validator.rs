@@ -41,9 +41,19 @@ fn a_corrupted_stream_reports_the_overlap() {
     let events = sim.take_events();
     let validator = Validator::for_match(config.tuning.clone(), sim.team_timeline(), &events);
     let violations = validator.check(&sink.records);
-    assert_eq!(violations.len(), 1, "{violations:?}");
-    assert_eq!(violations[0].rule, "separation");
-    assert_eq!(violations[0].tick, sink.records[10].tick);
+    // Player 1 jumps onto player 0 and back: one overlap, and a jump on each of the two steps
+    // that the player speed rule judges.
+    let rules: Vec<(&str, u32)> = violations.iter().map(|v| (v.rule, v.tick)).collect();
+    let tick = sink.records[10].tick;
+    assert_eq!(
+        rules,
+        [
+            ("separation", tick),
+            ("player_speed", tick),
+            ("player_speed", tick + 1)
+        ],
+        "{violations:?}"
+    );
 }
 
 /// The full engine's event stream of a seeded match, with the rules it is judged by.

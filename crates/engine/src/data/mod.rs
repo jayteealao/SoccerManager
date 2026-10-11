@@ -6,6 +6,7 @@ pub mod attributes;
 pub mod convert;
 pub mod generator;
 pub mod names;
+pub mod restart_waits;
 pub mod rules;
 pub mod tactics;
 pub mod team;
@@ -41,6 +42,9 @@ pub const RULES_FILE: &str = "rules/default.json";
 pub const TACTICS_FILE: &str = "tactics.json";
 /// The trait catalogue: the traits of play a team file may give a player.
 pub const TRAITS_FILE: &str = "traits.json";
+/// The restart wait table: how long each kind of stoppage waits beyond its visible steps. It is
+/// optional; content without it plays the tuning file's fixed restart delays.
+pub const RESTART_WAITS_FILE: &str = "restart-waits.json";
 pub const TEAM_A_FILE: &str = "teams/default-a.json";
 pub const TEAM_B_FILE: &str = "teams/default-b.json";
 /// The English commentary lines. The file stays out of `Content` and its digest: editing a
@@ -516,7 +520,8 @@ pub fn hex12(digest: &[u8]) -> String {
     digest.iter().take(6).map(|b| format!("{b:02x}")).collect()
 }
 
-/// The bytes of the five content files, as read from a content folder or a replay file.
+/// The bytes of the five content files, and of the restart wait table when the content has
+/// one, as read from a content folder or a replay file.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ContentFiles {
     pub attributes: Vec<u8>,
@@ -524,18 +529,27 @@ pub struct ContentFiles {
     pub rules: Vec<u8>,
     pub tactics: Vec<u8>,
     pub traits: Vec<u8>,
+    /// The restart wait table, `None` when the content has none.
+    pub restart_waits: Option<Vec<u8>>,
 }
 
 impl ContentFiles {
-    /// Reads the five files from `dir`, each once.
+    /// Reads the five files from `dir`, each once, and the restart wait table when the folder
+    /// holds one.
     pub fn read(dir: &ContentDir) -> Result<Self, EngineError> {
         let read = |rel: &str| read_bytes(&dir.path(rel), rel);
+        let waits = dir.path(RESTART_WAITS_FILE);
         Ok(Self {
             attributes: read(ATTRIBUTES_FILE)?,
             tuning: read(TUNING_FILE)?,
             rules: read(RULES_FILE)?,
             tactics: read(TACTICS_FILE)?,
             traits: read(TRAITS_FILE)?,
+            restart_waits: if waits.is_file() {
+                Some(read(RESTART_WAITS_FILE)?)
+            } else {
+                None
+            },
         })
     }
 }
@@ -549,7 +563,10 @@ pub struct Content {
     pub tactics: TacticsSchema,
     /// The trait catalogue: the traits of play a team file may give a player.
     pub traits: traits::TraitCatalogue,
-    /// SHA-256 over the five file digests in order: attributes, tuning, rules, tactics, traits.
+    /// The restart wait table, `None` when the content has none: the fixed delays play then.
+    pub restart_waits: Option<restart_waits::RestartWaits>,
+    /// SHA-256 over the five file digests in order: attributes, tuning, rules, tactics, traits,
+    /// then, when the content has a restart wait table, a tag and its digest.
     /// When a flag state differs from the file's, the list of flags that are on is hashed
     /// in as well.
     pub digest: [u8; 32],
@@ -671,6 +688,11 @@ impl Content {
             });
         }
         let traits = traits::load_traits_bytes(&files.traits, TRAITS_FILE)?;
+        let waits = files
+            .restart_waits
+            .as_deref()
+            .map(|bytes| restart_waits::load_restart_waits_bytes(bytes, RESTART_WAITS_FILE))
+            .transpose()?;
         // The generator gives a keeper only the keeper traits, so each must be a trait.
         if let Some(name) = tuning.value.generator.person.as_ref().and_then(|p| {
             p.traits
@@ -696,6 +718,11 @@ impl Content {
         hasher.update(rules.digest);
         hasher.update(tactics.digest);
         hasher.update(traits.digest);
+        // Content without a wait table keeps the digest it had before the table existed.
+        if let Some(waits) = &waits {
+            hasher.update(b"restart_waits:");
+            hasher.update(waits.digest);
+        }
         let digest: [u8; 32] = hasher.finalize().into();
         let written_stands = tactics.value.stands;
         let written = Self {
@@ -704,6 +731,7 @@ impl Content {
             rules: rules.value,
             tactics: tactics.value,
             traits: traits.value,
+            restart_waits: waits.map(|w| w.value),
             digest,
             flags: ActiveFlags::default(),
             modules,

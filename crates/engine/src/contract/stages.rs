@@ -94,6 +94,9 @@ pub struct Blend {
     /// The indices of work rate, determination and professionalism, which the pace selector
     /// reads as rating shares; `None` for one the schema does not hold.
     pace: [Option<usize>; 3],
+    /// The indices of decisions and flair, which the quick-restart chance reads as rating
+    /// shares; `None` for one the schema does not hold.
+    quick: [Option<usize>; 2],
     /// Per stage: the consistency degree of its action, how far a form offset moves it.
     degrees: [f64; STAGE_COUNT],
 }
@@ -132,6 +135,7 @@ impl Blend {
             counts,
             totals,
             pace: ["work_rate", "determination", "professionalism"].map(|name| schema.index(name)),
+            quick: ["decisions", "flair"].map(|name| schema.index(name)),
             degrees,
         }
     }
@@ -140,17 +144,18 @@ impl Blend {
     /// his tired mix (the mean share of determination and professionalism). A rating the
     /// schema does not hold reads the floor, as every missing rating does.
     pub fn pace_shares(&self, a: &Attributes) -> (f64, f64) {
-        let share = |slot: Option<usize>| {
-            crate::contract::share_of(slot.map_or(
-                crate::rating::Rating::from_tenths(crate::rating::MIN_TENTHS),
-                |i| a.get(i),
-            ))
-        };
         let [work, determination, professionalism] = self.pace;
         (
-            share(work),
-            (share(determination) + share(professionalism)) / 2.0,
+            rating_share(a, work),
+            (rating_share(a, determination) + rating_share(a, professionalism)) / 2.0,
         )
+    }
+
+    /// The quick-restart share of a player with ratings `a`: the mean share of his decisions
+    /// and flair. A rating the schema does not hold reads the floor.
+    pub fn quick_share(&self, a: &Attributes) -> f64 {
+        let [decisions, flair] = self.quick;
+        (rating_share(a, decisions) + rating_share(a, flair)) / 2.0
     }
 
     /// The consistency degree of stage `i`.
@@ -209,6 +214,15 @@ impl Blend {
         }
         out
     }
+}
+
+/// The share (0 to 1) of the rating at `slot` in `a`; a slot the schema does not hold reads the
+/// floor, as every missing rating does.
+fn rating_share(a: &Attributes, slot: Option<usize>) -> f64 {
+    crate::contract::share_of(slot.map_or(
+        crate::rating::Rating::from_tenths(crate::rating::MIN_TENTHS),
+        |i| a.get(i),
+    ))
 }
 
 /// The stage values of a player with ratings `a` under `schema` and the contract block `c`.

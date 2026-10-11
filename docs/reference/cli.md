@@ -561,6 +561,25 @@ Output: the parameters, then one line per figure with the full-engine value, the
 
 Exit codes: 0 when the fit is written, the check passes, or the fit matches the golden results; 1 when a flag is refused, a file cannot be read or written, a gate fixture differs, a full-engine match breaks an event-stream rule, the fit file is of an older format, or the fit is stale; 2 when a figure is outside its tolerance (`fit` then writes no fit file).
 
+## restart-waits
+
+Write the restart wait table, `content/restart-waits.json`, from real restart waits less the engine's own visible steps. A stoppage lasts its visible steps (the taker reaching the ball, the players the law moves walking back) plus a drawn extra wait; the table holds the extra.
+
+```text
+engine-cli restart-waits --out <FILE> [OPTIONS]
+```
+
+| Flag | Value | Default | Meaning |
+|---|---|---|---|
+| `--out` | path | required | Where the table goes, usually `content/restart-waits.json`. |
+| `--real-data` | folder | the main checkout's `.scratch/out`, as `calibrate --real-data` | The measured real data holding `idsse_dead.csv`, the real dead spells. Only its `typ`, `dur`, `minute` and `margin` columns are read. |
+| `--seeds` | `N` or `A-B` | `1-8` | Seeds of the matches that measure the visible steps. |
+| `--minutes` | 1 or more | 90 | Minutes of play of each measuring match. |
+
+The command plays the seeded matches with a zero table (every extra 0, no quick restart) and takes, per kind of stoppage, the median of the visible steps: the seconds from the ball going dead to the tick the restart is taken. Per kind it writes the 21 quantiles (0, 5, ..., 100 percent) of the real length less that median, never below 0. A real spell of a team leading from the engine's late window on is left out, since the engine applies the late-lead factor to those itself. Ball in play is never an input. The table's `source` lines name the real file, the spell counts and the measuring seeds; the steps limits, the late-lead factor and the quick-restart values are kept from the content folder's current table, or written at their starting values when it has none. The written table is checked with the same loader the engine uses. Output: one JSON line with the spell count, the spells left out, and per kind the median visible steps, the matches' restart count and the median extra.
+
+Exit codes: 0 when the table is written; 1 when a flag is refused, the real file cannot be read or lacks a column, or the written table fails its check.
+
 ## Debug trace file
 
 `simulate --debug-trace <file>` writes the debug trace of one match as JSON Lines. Debug mode is switched on when the match is built, before the opening kick-off; a build without the `debug-trace` cargo feature (default on) refuses the flag.

@@ -46,6 +46,7 @@ pub mod team;
 pub mod trace;
 pub mod tuning;
 pub mod validate;
+pub mod walk_on;
 
 pub use ai::{AiCode, Manager};
 pub use commentary::{Commentary, Commentator};
@@ -71,6 +72,7 @@ pub use tactics::change::{
 pub use tactics::{RoleDuty, Tactics, TacticsPatch};
 pub use tuning::Tuning;
 pub use validate::{RunningCheck, StreamRules, Validator, Violation};
+pub use walk_on::{WalkOn, WalkPath};
 
 /// Ticks per simulated second.
 pub const TICKS_PER_SECOND: u32 = 50;

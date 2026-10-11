@@ -1,12 +1,15 @@
-//! The tick-stream validator: pitch bounds, player separation, ball speed, formation anchor
-//! tolerance in open play, and the ball's place at a restart. The anchor rule flags a player
-//! that is far from the ball, far from its anchor, and closing on neither for the grace
-//! period (idle drift). A sent-off or injured player at its parking spot beside the pitch is
-//! exempt from every player rule. A substitute enters at the halfway line on the touchline,
-//! inside the pitch, on a restart tick; no rule limits a player's jump, so the entry breaks
-//! none. The anchors follow the team shapes in force at each tick: the teams change ends at
-//! half-time, a line closes up after a sending-off or an injury and reopens when a
-//! substitute replaces the injured player, and a tactics change moves every anchor. From the
+//! The tick-stream validator: pitch bounds, player separation, ball speed, player speed,
+//! formation anchor tolerance in open play, and the ball's place at a restart. The anchor rule
+//! flags a player that is far from the ball, far from its anchor, and closing on neither for
+//! the grace period (idle drift); while the ball waits where it left play before it appears at
+//! a restart spot, the spot stands for the ball. A sent-off or injured player at its parking
+//! spot beside the pitch is exempt from every player rule. The player-speed rule limits each
+//! player's move between two records to the top of the speed map for one tick plus one
+//! separation push; the first record of a half (the kick-off placed after the walk-on) and the
+//! slot a substitution names on its tick (the substitute enters at the halfway line on the
+//! touchline) are exempt. The anchors follow the team shapes in force at each tick: the teams
+//! change ends at half-time, a line closes up after a sending-off or an injury and reopens when
+//! a substitute replaces the injured player, and a tactics change moves every anchor. From the
 //! first kick of a penalty shoot-out on, the players wait in the centre circle and the anchor
 //! rule no longer applies.
 //!
@@ -100,6 +103,10 @@ pub struct Validator {
     spots: Vec<(u32, DVec2)>,
     /// The tick of the first shoot-out kick, if the match went to a shoot-out.
     shootout_from: Option<u32>,
+    /// The ticks of half-time and each extra-time break: the next half's first record.
+    half_times: Vec<u32>,
+    /// The roster slot each substitution names, with its tick.
+    entries: Vec<(u32, usize)>,
 }
 
 impl Validator {
@@ -110,6 +117,8 @@ impl Validator {
             timeline: vec![(0, teams)],
             spots: Vec::new(),
             shootout_from: None,
+            half_times: Vec::new(),
+            entries: Vec::new(),
         }
     }
 
@@ -130,11 +139,23 @@ impl Validator {
             .filter(|e| e.shootout_round.is_some())
             .map(|e| e.tick)
             .min();
+        let half_times = events
+            .iter()
+            .filter(|e| e.kind == EngineEventKind::HalfTime)
+            .map(|e| e.tick)
+            .collect();
+        let entries = events
+            .iter()
+            .filter(|e| e.kind == EngineEventKind::Substitution)
+            .filter_map(|e| e.player.map(|p| (e.tick, p)))
+            .collect();
         Self {
             tuning,
             timeline: timeline.to_vec(),
             spots,
             shootout_from,
+            half_times,
+            entries,
         }
     }
 
@@ -144,6 +165,11 @@ impl Validator {
         let mut far_ticks = [0u32; PLAYER_COUNT];
         let mut prev_dist = [[f64::INFINITY; 2]; PLAYER_COUNT];
         let mut prev_ball: Option<DVec2> = None;
+        let mut prev_players: Option<([DVec2; PLAYER_COUNT], [bool; PLAYER_COUNT])> = None;
+        let max_step = running::max_step(&self.tuning);
+        // The restart spot whose ball has not yet appeared there, and the next spot to read.
+        let mut fetch_spot: Option<DVec2> = None;
+        let mut next_spot = 0;
         let mut shape = 0;
         for r in records {
             while shape + 1 < self.timeline.len() && self.timeline[shape + 1].0 <= r.tick {
@@ -199,10 +225,29 @@ impl Validator {
                 }
             }
             prev_ball = Some(ball);
-            if r.restart
-                && let Ok(at) = self.spots.binary_search_by_key(&r.tick, |(tick, _)| *tick)
+            if let Some((prev, prev_parked)) = &prev_players
+                && !self.half_times.contains(&r.tick)
             {
-                let off = (ball - self.spots[at].1).length();
+                for i in 0..PLAYER_COUNT {
+                    if parked[i] || prev_parked[i] || self.entries.contains(&(r.tick, i)) {
+                        continue;
+                    }
+                    let step = (pos[i] - prev[i]).length();
+                    if step > max_step {
+                        out.push(Violation {
+                            tick: r.tick,
+                            rule: "player_speed",
+                            player: Some(i),
+                            value: step / self.tuning.dt,
+                        });
+                    }
+                }
+            }
+            prev_players = Some((pos, parked));
+            if r.restart
+                && let Some(spot) = running::latest_spot(&self.spots, r.tick)
+            {
+                let off = (ball - spot).length();
                 if off > RESTART_SPOT_TOLERANCE {
                     out.push(Violation {
                         tick: r.tick,
@@ -211,6 +256,18 @@ impl Validator {
                         value: off,
                     });
                 }
+            }
+
+            while let Some(&(tick, spot)) = self.spots.get(next_spot)
+                && tick <= r.tick
+            {
+                fetch_spot = Some(spot);
+                next_spot += 1;
+            }
+            // While the ball waits where it left play, the spot stands for the ball.
+            let reference = fetch_spot.unwrap_or(ball);
+            if r.restart || (ball - reference).length() <= RESTART_SPOT_TOLERANCE {
+                fetch_spot = None;
             }
 
             let shootout = self.shootout_from.is_some_and(|from| r.tick >= from);
@@ -223,17 +280,18 @@ impl Validator {
                 let slot = i % PLAYERS_PER_TEAM;
                 // The record does not say which team has the ball, so the nearer of the
                 // slot's two anchors counts.
-                let d_anchor = [true, false]
-                    .map(|has| (*p - teams[team].anchor(slot, ball, has, &self.tuning)).length());
+                let d_anchor = [true, false].map(|has| {
+                    (*p - teams[team].anchor(slot, reference, has, &self.tuning)).length()
+                });
                 let d_anchor = d_anchor[0]
                     .min(d_anchor[1])
                     .min(running::kick_off_place_distance(
                         &teams[team],
                         slot,
                         *p,
-                        ball,
+                        reference,
                     ));
-                let d_ball = (*p - ball).length();
+                let d_ball = (*p - reference).length();
                 let closing = d_ball < prev_dist[i][0] - 1e-3 || d_anchor < prev_dist[i][1] - 1e-3;
                 prev_dist[i] = [d_ball, d_anchor];
                 let drifting = d_ball > self.tuning.anchor_ball_distance
@@ -451,7 +509,9 @@ mod tests {
         let v = Validator::new(Tuning::default(), [bare(0), bare(1)]);
         let mut r = record(10);
         r.players[1] = r.players[0];
-        let out = v.check(&[record(9), r]);
+        // One record only: from a record before it, player 1's move onto player 0 would also
+        // break the player speed rule.
+        let out = v.check(&[r]);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].rule, "separation");
         assert_eq!(out[0].tick, 10);

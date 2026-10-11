@@ -48,6 +48,8 @@ pub const MOVED_KEYS: &[Action] = &[
     Action::FormMatch,
     Action::FormPeriod,
     Action::PaceSprint,
+    Action::RestartWait,
+    Action::QuickRestart,
 ];
 
 /// What one module is.

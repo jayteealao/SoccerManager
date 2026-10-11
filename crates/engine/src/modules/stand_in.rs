@@ -264,14 +264,23 @@ impl RestartsModule for StandIn<dyn RestartsModule> {
     fn delay_ticks(&self, view: &MatchView<'_>, kind: StoppageKind, team: usize) -> u32 {
         self.0.delay_ticks(view, kind, team)
     }
+    fn extra_ticks(&self, view: &MatchView<'_>, kind: StoppageKind, team: usize, u: f64) -> u32 {
+        self.0.extra_ticks(view, kind, team, u)
+    }
+    fn quick_chance(&self, view: &MatchView<'_>, dead: &DeadBall) -> f64 {
+        self.0.quick_chance(view, dead)
+    }
+    fn job(&self, view: &MatchView<'_>, dead: &DeadBall, i: usize) -> crate::pace::Job {
+        self.0.job(view, dead, i)
+    }
     fn shootout_delay_ticks(&self, view: &MatchView<'_>) -> u32 {
         self.0.shootout_delay_ticks(view)
     }
     fn target(&self, view: &MatchView<'_>, dead: &DeadBall, i: usize) -> DVec2 {
         self.0.target(view, dead, i)
     }
-    fn ready(&self, view: &MatchView<'_>, dead: &DeadBall, now: u32) -> bool {
-        self.0.ready(view, dead, now)
+    fn steps_done(&self, view: &MatchView<'_>, dead: &DeadBall, now: u32) -> bool {
+        self.0.steps_done(view, dead, now)
     }
     fn kick_off_position(
         &self,
