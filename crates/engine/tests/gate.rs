@@ -711,14 +711,14 @@ fn band_result_holds_every_band(entry: &golden::LedgerEntry, index: usize) {
     }
 }
 
-/// The regeneration kept what the gate measures: gate schema 4 with state inventory 4, and
+/// The regeneration kept what the gate measures: gate schema 5 with state inventory 5, and
 /// the fixture list of the golden-file guard, by its digest at the guard's commit.
 #[test]
 fn the_regeneration_kept_the_gate_schema_and_the_fixture_list() {
     use sha2::{Digest, Sha256};
     let file = committed();
-    assert_eq!(file.gate_schema, 4);
-    assert_eq!(file.inventory_version, 4);
+    assert_eq!(file.gate_schema, 5);
+    assert_eq!(file.inventory_version, 5);
     let list = serde_json::to_string(&file.fixtures).unwrap();
     let hex: String = Sha256::digest(list.as_bytes())
         .iter()
