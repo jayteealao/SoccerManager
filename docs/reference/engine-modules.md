@@ -136,6 +136,10 @@ A player's traits of play reach play through the modules: the match view gives e
 
 The override of an instruction is loop work, in `sim/overrides.rs`. At a moment of play (a carrier's release or first decision, the start of a carry from a wide channel, a new opposing carrier for a presser, a side gaining the ball, a loose ball near a keeper), the loop reads the player's strong traits that go against an instruction his team holds for him, his pressure and his mood, and draws the `trait_override` key on his own key. A win replaces the decision's choice for that action and writes a `trait-override` event. The decision module's card lists the key.
 
+## The weaker foot
+
+The decision module reads each player's feet through the match view (`MatchView::foot`) with the values of the foot block (`engine.contract.foot`, [data files](data-files.md#contract)). A pass, chip, cross, open shot or long shot to the side of the kicker's weaker foot, without time to shift the ball, loses rating points on its execute and pressure stages, shrunk to the shared floor when the person block is present; a closing presser stands toward a carrier's strong side by how one-footed he is. The cost and the offset are pure reads of the moment: no draw, event or state is added, and the decision module's card names `contract.foot` among its tuning.
+
 ## Hook slots
 
 The three `engine.hook.*` slots connect the plugin hooks of a script pack to the central loop. The module of a hook slot is an adapter: it builds what the hook sees and reads only the view. The loop keeps the hooks, their failure counts and the watchdog mark. The off version of a hook slot makes the loop consult no hook at that point, so the engine's own option scores, card or commentary line stand. A hook-slot card owns no action key. The Rhai adapter between a script pack and the hooks carries its own card, `RHAI_ADAPTER_CARD` in the `script` crate.

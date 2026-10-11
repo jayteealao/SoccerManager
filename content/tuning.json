@@ -496,6 +496,17 @@
           "rushes_out": 0.065,
           "stays_on_line": 0.0
         }
+      },
+      "foot": {
+        "cost_cap": 5.0,
+        "base": 0.4,
+        "pressure_weight": 0.3,
+        "range_weight": 0.3,
+        "pressure_m": 5.0,
+        "range_m": 40.0,
+        "either_deg": 20.0,
+        "shift_s": 0.6,
+        "show_m": 1.5
       }
     }
   },

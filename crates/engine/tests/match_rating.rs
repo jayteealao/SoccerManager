@@ -119,12 +119,14 @@ fn a_match_resumed_at_minute_sixty_rates_its_players_as_the_unbroken_match() {
     assert_eq!(resumed.match_ratings(), whole.match_ratings());
 }
 
+/// Over 80 seeds, the sample the stronger-side check uses, a side 15 percent stronger is rated
+/// higher on average than the default side.
 #[test]
 fn a_stronger_side_is_rated_higher() {
     let content = common::content();
     let [a, b] = common::default_teams(&content);
     let strong = common::stronger(&a);
-    let means = common::run_many(1..=20, |seed| {
+    let means = common::run_many(1..=80, |seed| {
         let mut sim =
             Simulation::new(MatchConfig::new(seed, 90, &content, [&strong, &b]).unwrap()).unwrap();
         sim.run(&mut NullSink).unwrap();

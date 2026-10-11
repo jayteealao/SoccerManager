@@ -330,6 +330,17 @@ impl Scene {
         self
     }
 
+    /// Player `i`'s strong foot is `strong` and his weaker foot `weaker` percent of it (1 to
+    /// 100), in his squad entry.
+    pub fn foot(mut self, i: usize, strong: crate::data::team::Side, weaker: u8) -> Self {
+        let (team, squad) = (self.sim.players[i].team, self.sim.players[i].squad);
+        self.sim.teams[team].squad[squad].foot = crate::data::team::Foot {
+            strong,
+            weaker: weaker.clamp(1, 100),
+        };
+        self
+    }
+
     /// `team` holds instruction `index` (in the order of
     /// [`crate::data::tactics::INSTRUCTIONS`]) at the level named `level`; the plan is rebuilt.
     pub fn instruction(self, team: usize, index: usize, level: &str) -> Self {

@@ -57,7 +57,7 @@ fn engine_events(config: engine::MatchConfig) -> (Vec<engine::EngineEvent>, Stre
 /// The event-stream rules hold for the full engine before they judge anything else: seeds 1
 /// to 5 over 90 minutes; seeds 9, 11, 21 and 28, which bring injuries; a 10-minute match,
 /// which adds no time; a knockout match (seed 1) played through extra time and a shoot-out,
-/// with a substitution the rule pack refuses; and seeds 33 and 11 between two generated
+/// with a substitution the rule pack refuses; and seeds 16 and 11 between two generated
 /// top-flight clubs (league seed 1), which bring a second yellow and a straight red.
 #[test]
 fn the_full_engines_event_streams_keep_the_event_rules() {
@@ -83,7 +83,7 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
     );
     streams.push(("knockout seed 1".into(), (events, rules)));
     let league = engine::data::generate_league(1, 2, &content);
-    for seed in [33, 11] {
+    for seed in [16, 11] {
         let generated =
             engine::MatchConfig::new(seed, 90, &content, [&league[0], &league[1]]).unwrap();
         streams.push((format!("generated seed {seed}"), engine_events(generated)));

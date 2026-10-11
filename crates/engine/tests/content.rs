@@ -1082,3 +1082,50 @@ fn the_traits_block_ships_reads_as_no_trait_when_absent_and_refuses_a_chance_abo
         "{err}"
     );
 }
+
+/// The shipped tuning carries the foot block; a tuning file without it loads and plays a
+/// ten-minute match exactly as one whose foot cost cap and showing distance are 0; and a cost
+/// cap above 5 points is refused, naming the field.
+#[test]
+fn the_foot_block_ships_reads_as_no_cost_when_absent_and_refuses_a_cap_above_five() {
+    use engine::contract::FootTuning;
+    use engine::data::ContentFiles;
+    let shipped = ContentFiles::read(&common::content_dir()).unwrap();
+    let content = engine::Content::from_files(&shipped).unwrap();
+    assert_eq!(
+        content.tuning.engine.contract.foot,
+        Some(FootTuning::shipped())
+    );
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    let contract = tuning["engine"]["contract"].as_object_mut().unwrap();
+    assert!(contract.remove("foot").is_some());
+    let mut old = shipped.clone();
+    old.tuning = serde_json::to_vec(&tuning).unwrap();
+    let old = engine::Content::from_files(&old).unwrap();
+    assert_eq!(old.tuning.engine.contract.foot(), FootTuning::NONE);
+    let [a, b] = common::default_teams(&old);
+    let play = |config: engine::MatchConfig| {
+        let mut sim = engine::Simulation::new(config).unwrap();
+        while !sim.is_over() {
+            sim.step();
+        }
+        sim.finish();
+        sim.take_events()
+    };
+    let absent = engine::MatchConfig::new(7, 10, &old, [&a, &b]).unwrap();
+    let mut zero = absent.clone();
+    zero.tuning.contract.foot = Some(FootTuning {
+        cost_cap: 0.0,
+        show_m: 0.0,
+        ..FootTuning::shipped()
+    });
+    assert_eq!(play(absent), play(zero), "the events differ");
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    tuning["engine"]["contract"]["foot"]["cost_cap"] = 5.5.into();
+    let mut high = shipped.clone();
+    high.tuning = serde_json::to_vec(&tuning).unwrap();
+    let err = engine::Content::from_files(&high).unwrap_err().to_string();
+    assert!(err.contains("engine.contract.foot.cost_cap"), "{err}");
+}

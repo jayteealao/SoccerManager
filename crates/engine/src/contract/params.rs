@@ -56,6 +56,13 @@ pub struct ContractTuning {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]
     pub traits: Option<TraitTuning>,
+    /// The weaker foot in play: the cost of a kick on the weaker side without time to shift
+    /// the ball, and how far a closing defender shows a one-footed carrier onto it. Optional,
+    /// so a tuning file written before it still loads, and then no kick pays and no defender
+    /// shows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub foot: Option<FootTuning>,
 }
 
 /// The traits values a tuning file without a traits block reads: no weight, no chance.
@@ -78,6 +85,79 @@ impl ContractTuning {
     #[inline]
     pub fn traits(&self) -> &TraitTuning {
         self.traits.as_ref().unwrap_or(&NO_TRAITS)
+    }
+
+    /// The foot values: the file's, or [`FootTuning::NONE`] when it has none.
+    #[inline]
+    pub fn foot(&self) -> FootTuning {
+        self.foot.unwrap_or(FootTuning::NONE)
+    }
+}
+
+/// The foot block (`engine.contract.foot`). A kick to the side of a player's weaker foot,
+/// without time to move the ball onto his strong one, loses up to `cost_cap` rating points on
+/// its execute and pressure stages, in proportion to how much weaker the foot is and more
+/// under pressure and over distance.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct FootTuning {
+    /// The most rating points a kick by the weakest foot can lose; never above 5.
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub cost_cap: f64,
+    /// The share of the cost every weaker-side kick without time pays.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub base: f64,
+    /// The share the closest pressure adds.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub pressure_weight: f64,
+    /// The share the longest range adds.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub range_weight: f64,
+    /// The nearest opponent adds no pressure from this many metres away, all of it at 0.
+    #[garde(range(min = 0.5, max = 20.0))]
+    pub pressure_m: f64,
+    /// A kick this many metres long or longer adds all of the range share.
+    #[garde(range(min = 5.0, max = 80.0))]
+    pub range_m: f64,
+    /// Within this many degrees of straight ahead either foot kicks: the strong one.
+    #[garde(range(min = 0.0, max = 90.0))]
+    pub either_deg: f64,
+    /// Seconds an unpressed carrier needs on the ball to move it onto his strong foot.
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub shift_s: f64,
+    /// Metres a closing presser stands toward the strong side of the most one-footed
+    /// carrier.
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub show_m: f64,
+}
+
+impl FootTuning {
+    /// No foot in play: no kick pays and no presser shows.
+    pub const NONE: FootTuning = FootTuning {
+        cost_cap: 0.0,
+        base: 0.0,
+        pressure_weight: 0.0,
+        range_weight: 0.0,
+        pressure_m: 5.0,
+        range_m: 40.0,
+        either_deg: 20.0,
+        shift_s: 0.6,
+        show_m: 0.0,
+    };
+
+    /// The shipped foot block; a test pins `content/tuning.json` to it.
+    pub const fn shipped() -> FootTuning {
+        FootTuning {
+            cost_cap: 5.0,
+            base: 0.4,
+            pressure_weight: 0.3,
+            range_weight: 0.3,
+            pressure_m: 5.0,
+            range_m: 40.0,
+            either_deg: 20.0,
+            shift_s: 0.6,
+            show_m: 1.5,
+        }
     }
 }
 
@@ -1185,6 +1265,7 @@ impl Default for ContractTuning {
                 floor_drop: 7.0,
             }),
             traits: Some(TraitTuning::shipped()),
+            foot: Some(FootTuning::shipped()),
         }
     }
 }
@@ -1270,6 +1351,22 @@ mod tests {
         }
         let text = c.validate().unwrap_err().to_string();
         assert!(text.contains("person.floor_drop"), "{text}");
+    }
+
+    #[test]
+    fn a_file_without_the_foot_block_reads_no_cost_and_a_cap_above_five_is_refused() {
+        let c = ContractTuning {
+            foot: None,
+            ..Default::default()
+        };
+        assert_eq!(c.foot(), FootTuning::NONE);
+        assert!(c.validate().is_ok());
+        let mut c = ContractTuning::default();
+        if let Some(f) = c.foot.as_mut() {
+            f.cost_cap = 5.5;
+        }
+        let text = c.validate().unwrap_err().to_string();
+        assert!(text.contains("foot.cost_cap"), "{text}");
     }
 
     #[test]

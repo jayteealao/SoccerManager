@@ -95,6 +95,12 @@ impl<'a> MatchView<'a> {
         self.sim.position_ratings(i)
     }
 
+    /// Player `i`'s strong foot and his weaker foot's percent, from his squad entry.
+    #[inline]
+    pub fn foot(&self, i: usize) -> crate::data::team::Foot {
+        self.sim.foot(i)
+    }
+
     /// Player `i`'s personality scales, from his squad entry.
     #[inline]
     pub fn personality(&self, i: usize) -> crate::contract::PersonalityScales {

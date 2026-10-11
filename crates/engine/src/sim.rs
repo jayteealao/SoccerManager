@@ -1008,6 +1008,13 @@ impl Simulation {
         &self.teams[p.team].squad[p.squad].positions
     }
 
+    /// Player `i`'s feet, from his squad entry.
+    #[inline]
+    pub fn foot(&self, i: usize) -> crate::data::team::Foot {
+        let p = &self.players[i];
+        self.teams[p.team].squad[p.squad].foot
+    }
+
     /// Player `i`'s match condition inputs, from his squad entry.
     #[inline]
     pub fn condition(&self, i: usize) -> crate::data::team::Condition {

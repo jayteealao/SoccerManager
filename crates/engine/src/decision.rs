@@ -221,20 +221,68 @@ pub(crate) fn pressed(view: &MatchView<'_>, c: usize) -> bool {
         .any(|p| p.team != me.team && p.active() && (p.pos - me.pos).length() < contract::PRESSED_M)
 }
 
-/// The execution share of a kick: the execute stage's share, blended with the pressure
-/// stage's when an opponent is close, then moved down by `penalty` in log-odds (a gated skill
-/// the body cannot pull off).
+/// The distance in metres from player `c` to the nearest active opponent; infinite with none.
+pub(crate) fn nearest_opponent_m(view: &MatchView<'_>, c: usize) -> f64 {
+    let me = view.player(c);
+    view.players()
+        .iter()
+        .filter(|p| p.team != me.team && p.active())
+        .map(|p| (p.pos - me.pos).length())
+        .fold(f64::INFINITY, f64::min)
+}
+
+/// The weaker-foot cost, in rating points before the floor's shrink, of a kick by player `c`
+/// in direction `dir` over `distance` metres ([`contract::foot`]): 0 on his strong side, and
+/// 0 with time to shift the ball, which he has at a dead ball (`dead_ball`) or when he is
+/// not pressed and has held the ball `contract.foot.shift_s` seconds. 0 with no foot block.
+pub fn foot_cost(
+    view: &MatchView<'_>,
+    c: usize,
+    dir: DVec2,
+    distance: f64,
+    dead_ball: bool,
+) -> f64 {
+    let t = view.tuning();
+    let ft = t.contract.foot();
+    if ft.cost_cap <= 0.0 {
+        return 0.0;
+    }
+    let foot = view.foot(c);
+    let side = contract::foot::kick_side(view.player(c).facing, dir, foot, ft.either_deg);
+    if side == contract::foot::KickSide::Strong {
+        return 0.0;
+    }
+    let held = f64::from(view.tick().saturating_sub(view.control_since())) * t.dt;
+    let has_time = dead_ball || (held >= ft.shift_s && !pressed(view, c));
+    let nearest = nearest_opponent_m(view, c);
+    contract::foot::cost_points(foot, side, has_time, nearest, distance, &ft)
+}
+
+/// The execution share of player `c`'s kick: the execute stage's share, blended with the
+/// pressure stage's when an opponent is close, each lowered by the weaker-foot cost `foot`
+/// (rating points, shrunk to each stage's floor when the person block is present), then moved
+/// down by `penalty` in log-odds (a gated skill the body cannot pull off).
 fn execution(
-    stages: contract::Skills<'_>,
+    view: &MatchView<'_>,
+    c: usize,
     execute: Stage,
     pressure: Option<Stage>,
     pressed: bool,
     penalty: f64,
+    foot: f64,
 ) -> f64 {
-    let share = match pressure {
-        Some(p) if pressed => stages.pressed_share(execute, p),
-        _ => stages.share(execute),
-    };
+    let ct = &view.tuning().contract;
+    // The shared floor binds only with a person block, as in the state rebuild.
+    let floor = ct.person.map(|p| p.floor_drop);
+    let share = contract::foot::kick_share(
+        view.skills(c).stages,
+        view.base_skills(c).stages,
+        execute,
+        pressure.filter(|_| pressed),
+        foot,
+        floor,
+        ct,
+    );
     if penalty > 0.0 && share > 0.0 && share < 1.0 {
         contract::logistic(contract::logit(share) - penalty)
     } else {
@@ -369,6 +417,13 @@ impl DecisionModule for DecisionV1 {
                 // the ball once they are close.
                 let run = players[c].vel;
                 let engage = t.press_engage;
+                // Outside engaging range a presser stands toward the carrier's strong side,
+                // showing a one-footed carrier onto his weaker foot.
+                let show = contract::foot::show_offset(
+                    players[c].facing,
+                    view.foot(c),
+                    t.contract.foot().show_m,
+                );
                 // A player whose relentless pressing overrode his side's low press presses
                 // this carrier too.
                 let relentless = (0..n).filter(|&i| {
@@ -386,8 +441,8 @@ impl DecisionModule for DecisionV1 {
                             ball_xy
                         } else {
                             let horizon = INTERCEPT_HORIZON_S * p.derived.knobs.intercept;
-                            view.pitch()
-                                .clamp(intercept(p.pos, p.max_speed(), ball_xy, run, horizon), 0.5)
+                            let meet = intercept(p.pos, p.max_speed(), ball_xy, run, horizon);
+                            view.pitch().clamp(meet + show, 0.5)
                         };
                     }
                 }
@@ -890,9 +945,16 @@ impl DecisionModule for DecisionV1 {
             0.0
         };
         let under = pressure.is_some() && pressed(view, c);
-        let skill = execution(view.skills(c), execute, pressure, under, penalty);
+        let line = toward(carrier.pos, mate_pos);
+        // A keeper's distribution pays no weaker-foot cost.
+        let foot = if keeper {
+            0.0
+        } else {
+            foot_cost(view, c, line, d, false)
+        };
+        let skill = execution(view, c, execute, pressure, under, penalty, foot);
         let noise = t.aim_noise * (1.5 - skill);
-        let dir = rotate(toward(carrier.pos, mate_pos), map_range(-noise, noise, aim));
+        let dir = rotate(line, map_range(-noise, noise, aim));
         let loft = if d > 25.0 { 3.0 + d * 0.08 } else { 0.0 };
         let speed = kick_speed(d, loft, t);
         Kick::Pass { dir, speed, loft }
@@ -965,7 +1027,18 @@ impl DecisionModule for DecisionV1 {
             _ => 1.0,
         };
         let under = pressure.is_some() && pressed(view, c);
-        let finishing = execution(view.skills(c), execute, pressure, under, 0.0).clamp(0.0, 1.0);
+        // The weaker foot: the side and range of the strike at the goal, before its aim and
+        // noise. A penalty and a direct free kick are placed dead balls, so the taker always
+        // has time to strike with his strong foot.
+        let dead_ball = matches!(kind, ShotKind::Penalty | ShotKind::FreeKick);
+        let foot = foot_cost(
+            view,
+            c,
+            toward(carrier.pos, goal),
+            (goal - carrier.pos).length(),
+            dead_ball,
+        );
+        let finishing = execution(view, c, execute, pressure, under, 0.0, foot).clamp(0.0, 1.0);
         let keeper = view.player(keeper);
         let side = if !keeper.active() {
             if draws.side == Some(true) { 1.0 } else { -1.0 }
@@ -1450,7 +1523,7 @@ fn cover(
 
 pub const DECISION_V1_CARD: ModuleCard = ModuleCard {
     purpose: "Sets every player's target (anchors, the lone forward's line hold, timed runs against the offside line, pressing, goal-side cover, chasing) and decides the carrier's option, pass, clearance, shot, and restart kick.",
-    inputs: "Every player's position, velocity, target, activity, slot, lapse, and effective values through the attribute contract (the carrier's see, choose, execute and pressure stages of passes, chips, crosses, shots, long shots, penalties, dribbles and keeper distribution, his skill gates and flair, the restart taker's corner, free-kick and long-throw stages, and every player's press, intercept, shape, rush, marking and off-ball run values, determination and eccentricity); the carrier's mood, pressure handling and professionalism; every player's traits of play and the override he plays, and the carrier's last passer; both teams' shapes, plans and the instructions they hold; the score; the ball; the carrier and how long he has held the ball; the tick; and the engine tuning.",
+    inputs: "Every player's position, velocity, target, activity, slot, lapse, and effective values through the attribute contract (the carrier's see, choose, execute and pressure stages of passes, chips, crosses, shots, long shots, penalties, dribbles and keeper distribution, his skill gates and flair, the restart taker's corner, free-kick and long-throw stages, and every player's press, intercept, shape, rush, marking and off-ball run values, determination and eccentricity); the carrier's mood, pressure handling and professionalism; the kicker's feet, facing and nearest opponent for the weaker-foot cost, and the carrier's feet and facing for the closing pressers' offset; every player's traits of play and the override he plays, and the carrier's last passer; both teams' shapes, plans and the instructions they hold; the score; the ball; the carrier and how long he has held the ball; the tick; and the engine tuning.",
     outputs: "Every player's target, the carrier's option scores and choice, and the kick of a pass, clearance, shot, or restart.",
     tuning: &[
         "decision",
@@ -1462,6 +1535,8 @@ pub const DECISION_V1_CARD: ModuleCard = ModuleCard {
         "contract.person.occasions.professionalism",
         "contract.person.occasions.penalty_pressure",
         "contract.traits",
+        "contract.foot",
+        "contract.person.floor_drop",
         "shots.penalty_spread",
         "shot_range",
         "aim_noise",

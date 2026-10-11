@@ -23,6 +23,7 @@
 pub mod body;
 pub mod consistency;
 pub mod curve;
+pub mod foot;
 pub mod hidden;
 pub mod level;
 pub mod params;
@@ -31,8 +32,8 @@ pub mod states;
 
 pub use curve::{contest, factor, logistic, logit, share};
 pub use params::{
-    ActionMap, ActionParams, ContractTuning, CurveTuning, HookTuning, LapseTuning, OverrideChances,
-    PersonTuning, SpeedTuning, TraitTuning, TraitWeights,
+    ActionMap, ActionParams, ContractTuning, CurveTuning, FootTuning, HookTuning, LapseTuning,
+    OverrideChances, PersonTuning, SpeedTuning, TraitTuning, TraitWeights,
 };
 pub use stages::{GateDef, GateDefs, StageTable, Weighted, stage_values};
 

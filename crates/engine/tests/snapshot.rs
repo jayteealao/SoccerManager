@@ -16,16 +16,16 @@ use engine::{
 };
 use sha2::{Digest, Sha256};
 
-/// The continuation test resumes the seed-5 match from the first stoppage at or after this
+/// The continuation test resumes the seed-7 match from the first stoppage at or after this
 /// tick, early in the second half, before the AI manager's substitutions and tactics changes.
 const FROM_TICK: u32 = 50 * TICKS_PER_MINUTE;
 
-/// The seed-5, 90-minute match on the shipped content and default teams: after `FROM_TICK` it
+/// The seed-7, 90-minute match on the shipped content and default teams: after `FROM_TICK` it
 /// brings substitutions and an applied tactics change.
 fn resume_match() -> engine::MatchConfig {
     let content = content();
     let [a, b] = default_teams(&content);
-    engine::MatchConfig::new(5, 90, &content, [&a, &b]).unwrap()
+    engine::MatchConfig::new(7, 90, &content, [&a, &b]).unwrap()
 }
 const OWNER: [u8; 16] = [7; 16];
 
