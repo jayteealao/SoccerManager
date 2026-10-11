@@ -123,8 +123,18 @@ pub fn next_velocity(players: &[Player], i: usize, t: &Tuning) -> DVec2 {
 fn steer(p: &Player, push: DVec2, t: &Tuning) -> DVec2 {
     let max_speed = p.pace.speed.min(p.max_speed());
     let max_accel = p.max_accel();
-    let desired = arrive(p.pos, p.target, max_speed, max_accel, t.arrive_radius) + push;
-    let mut change = clamp_len(desired - p.vel, max_accel * t.dt);
+    let max_decel = p.max_decel();
+    // Arriving brakes over the distance his braking needs.
+    let desired = arrive(p.pos, p.target, max_speed, max_decel, t.arrive_radius) + push;
+    let raw = desired - p.vel;
+    // A change against his run is braking, which his agility sets; any other change is
+    // acceleration. With both equal this is the one clamp it always was.
+    let limit = if max_decel != max_accel && raw.dot(p.vel) < 0.0 {
+        max_decel
+    } else {
+        max_accel
+    };
+    let mut change = clamp_len(raw, limit * t.dt);
     // The turn factor scales the part of the change across the way he faces (a unit vector);
     // the average player's factor is exactly 1, which leaves the change as it is.
     let turn = p.derived.turn;
@@ -208,14 +218,16 @@ impl SteeringModule for SteeringV1 {
 }
 
 pub const STEERING_V1_CARD: ModuleCard = ModuleCard {
-    purpose: "Steers each player toward its target: arrive with braking, plus separation from close players, within its speed and acceleration.",
-    inputs: "Every player's position, velocity, target, activity, effective pace, and the speed of his chosen pace level, and the engine tuning.",
+    purpose: "Steers each player toward its target: arrive with braking, plus separation from close players, within its speed, acceleration and braking.",
+    inputs: "Every player's position, velocity, target, activity, and effective pace, acceleration, turning and braking (agility), and the speed of his chosen pace level, and the engine tuning.",
     outputs: "The next velocity of one player, and every player's position once players closer than the minimum distance are pushed apart.",
     tuning: &[
         "arrive_radius",
         "separation_radius",
         "separation_strength",
         "min_player_distance",
+        "contract.accel",
+        "contract.hooks",
         "dt",
     ],
     calibration: "none: movement maths, no realism band",
@@ -321,6 +333,39 @@ mod tests {
             players[0].pos.x
         );
         assert!(max_x < 20.5, "overshot to {max_x}");
+    }
+
+    /// Shape AC-21: two players differing only in agility, both stopping from a sprint at the
+    /// same speed: the higher-agility player stops in a shorter distance.
+    #[test]
+    fn the_higher_agility_player_stops_in_a_shorter_distance() {
+        let t = Tuning::default();
+        let schema = crate::data::test_support::shipped_content().attributes;
+        let agility = schema.index("agility").unwrap();
+        let stop = |tenths: u8| {
+            let mut p = flat_player(0, 100, &t);
+            p.attributes.values[agility] = crate::rating::Rating::from_tenths(tenths);
+            p.derived = crate::player::Derived::from_attributes(&p.attributes, &schema, &t).0;
+            p.vel = DVec2::new(7.0, 0.0);
+            p.facing = DVec2::X;
+            let mut players = vec![p];
+            let start = players[0].pos;
+            for _ in 0..1_000 {
+                players[0].target = players[0].pos;
+                let v = next_velocity(&players, 0, &t);
+                players[0].vel = v;
+                players[0].pos += v * t.dt;
+                if v.length() < 0.05 {
+                    break;
+                }
+            }
+            (players[0].pos - start).length()
+        };
+        let (low, high) = (stop(50), stop(180));
+        assert!(
+            high < low,
+            "agility 18 stops in {high:.3} m, agility 5 in {low:.3} m"
+        );
     }
 
     #[test]

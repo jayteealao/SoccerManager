@@ -24,7 +24,7 @@ use crate::data::rules::{RulePack, StoppageKind};
 use crate::decision::Kick;
 use crate::fatigue::InjurySource;
 use crate::math::DVec2;
-use crate::modules::{PeriodEnd, ShootoutLineup};
+use crate::modules::{PeriodEnd, ShootoutLineup, ShotKind};
 use crate::pitch::{Exit, Line};
 use crate::player::Status;
 use crate::sim::{DecidedBy, EngineEventKind, EventDetail, Simulation};
@@ -276,6 +276,7 @@ impl Simulation {
         }
         self.restart = true;
         self.last_kicker = None;
+        self.last_pass = None;
         self.pass_in_flight = None;
         self.possession_phase = None;
         self.restart_taker = None;
@@ -330,11 +331,22 @@ impl Simulation {
         if let Some(m) = self.measures.as_deref_mut() {
             m.goal(team, self.tick);
         }
+        // A shot that went in is no miss.
+        self.shooter = None;
         if let Some(k) = self.last_kicker
             && self.players[k].team == team
         {
             self.tally(k, crate::sim::tally::Count::Goal);
+            self.mood_event(k, crate::sim::mood::MoodEvent::Goal);
+            if let Some((passer, receiver)) = self.last_pass
+                && receiver == k
+                && passer != k
+            {
+                self.mood_event(passer, crate::sim::mood::MoodEvent::Assist);
+            }
         }
+        self.team_mood_event(team, crate::sim::mood::MoodEvent::TeamGoalFor);
+        self.team_mood_event(1 - team, crate::sim::mood::MoodEvent::TeamGoalAgainst);
         self.tally_conceded(1 - team);
         #[cfg(feature = "sensitivity")]
         if self.shot_in_flight == Some(team)
@@ -444,6 +456,7 @@ impl Simulation {
             m.dead(self.tick);
         }
         self.tally(i, crate::sim::tally::Count::Foul);
+        self.mood_event(c, crate::sim::mood::MoodEvent::Fouled);
         // The offender makes no tackle attempt until the cooldown has passed, advantage or not.
         self.players[i].foul_ready = self.tick.saturating_add(t.foul_cooldown_ticks);
         let own_end = -self.teams[offender.team].attack_x;
@@ -566,6 +579,14 @@ impl Simulation {
         let team = self.players[i].team;
         discipline::book(&mut self.players[i], card);
         let sent_off = judge.sends_off(card);
+        self.mood_event(
+            i,
+            if sent_off {
+                crate::sim::mood::MoodEvent::RedCard
+            } else {
+                crate::sim::mood::MoodEvent::Card
+            },
+        );
         if card != Card::Red {
             self.summary.yellow[team] += 1;
             self.tally(i, crate::sim::tally::Count::Yellow);
@@ -597,7 +618,7 @@ impl Simulation {
         // the bench keeper.
         self.ai[team].due = true;
         self.timeline.push((self.tick + 1, self.teams.clone()));
-        if let Some(short) = self.config.modules.clock.abandoned(&self.view()) {
+        if let Some(short) = self.short_team() {
             tracing::warn!(
                 signal = "rules.abandoned",
                 tick = self.tick + 1,
@@ -608,6 +629,15 @@ impl Simulation {
             self.referee.abandoned = true;
             self.enter_phase(Phase::FullTime, Cause::Abandoned);
         }
+    }
+
+    /// The team below the rule pack's minimum, unless the match is already over: a player
+    /// hurt or sent off once full time is reached does not end the match a second time.
+    fn short_team(&self) -> Option<usize> {
+        if self.referee.phase == Phase::FullTime {
+            return None;
+        }
+        self.config.modules.clock.abandoned(&self.view())
     }
 
     /// Records a match abandoned because `short` fell below the rule pack's minimum.
@@ -706,10 +736,8 @@ impl Simulation {
             Phase::FullTime => {}
         }
         // An injury on the full-time tick (the fatigue pass runs after the clock) ends
-        // nothing: the match is already over.
-        if self.referee.phase != Phase::FullTime
-            && let Some(short) = self.config.modules.clock.abandoned(&self.view())
-        {
+        // nothing: the match is already over, and `short_team` says so.
+        if let Some(short) = self.short_team() {
             tracing::warn!(
                 signal = "rules.abandoned",
                 tick = self.tick + 1,
@@ -754,6 +782,7 @@ impl Simulation {
         self.keeper_beaten = false;
         self.restart = true;
         self.last_kicker = None;
+        self.last_pass = None;
         self.pass_in_flight = None;
         self.possession_phase = None;
         self.slide_reset();
@@ -852,9 +881,12 @@ impl Simulation {
         self.take_restart(dead, t);
     }
 
-    /// The taker restarts play. A throw-in, a corner, a goal kick, an indirect free kick, and a
-    /// penalty are kicked at once, and only the free kick can put a player offside; after any other
-    /// restart the taker holds the ball and decides on the next tick.
+    /// The taker restarts play. A throw-in, a corner, a goal kick, a free kick, and a penalty
+    /// are kicked at once, and only the free kick can put a player offside; after any other
+    /// restart the taker holds the ball and decides on the next tick. A direct free kick within
+    /// `hooks.free_kick_range_m` of goal is struck at goal with the free-kick stage; beyond it,
+    /// it is delivered toward the penalty mark. With no hooks in the tuning (range 0) the
+    /// taker of a direct free kick holds the ball and decides, as before.
     fn take_restart(&mut self, dead: &DeadBall, t: &Tuning) {
         if self.referee.shootout.is_some() {
             self.take_shootout_kick(dead, t);
@@ -870,25 +902,38 @@ impl Simulation {
         if let Some(m) = self.measures.as_deref_mut() {
             m.restart_taken(dead.kind, dead.team, self.tick);
         }
+        #[cfg(feature = "sensitivity")]
+        if self.probe.is_some() {
+            self.probe_restart(dead);
+        }
+        let range = t.contract.hooks().free_kick_range_m;
+        let goal = self.teams[dead.team].target_goal();
         let kick = match dead.kind {
             StoppageKind::ThrowIn | StoppageKind::Corner => {
-                Some((self.restart_pass(dead.taker, dead.kind), false))
+                Some((self.restart_pass(dead.taker, dead.kind, false), false))
             }
             StoppageKind::GoalKick => {
                 let kick = self
                     .decide_carrier(dead.taker)
-                    .unwrap_or_else(|| self.restart_pass(dead.taker, dead.kind));
+                    .unwrap_or_else(|| self.restart_pass(dead.taker, dead.kind, false));
                 Some((kick, false))
             }
             StoppageKind::FreeKick if !dead.direct => {
-                Some((self.restart_pass(dead.taker, dead.kind), true))
+                Some((self.restart_pass(dead.taker, dead.kind, false), true))
+            }
+            StoppageKind::FreeKick if range > 0.0 && (dead.spot - goal).length() <= range => {
+                let keeper = self.keeper(1 - dead.team);
+                let kick = self.shot_kick(dead.taker, goal, keeper, ShotKind::FreeKick);
+                Some((kick, true))
+            }
+            StoppageKind::FreeKick if range > 0.0 => {
+                Some((self.restart_pass(dead.taker, dead.kind, true), true))
             }
             // IFAB Law 14: a penalty is a direct kick at goal from the mark, never a pass, a
             // dribble, or a held ball, and nobody may close the taker down before it is taken.
             StoppageKind::Penalty => {
-                let goal = self.teams[dead.team].target_goal();
                 let keeper = self.keeper(1 - dead.team);
-                let kick = self.shot_kick(dead.taker, goal, keeper, t.shots.penalty_spread);
+                let kick = self.shot_kick(dead.taker, goal, keeper, ShotKind::Penalty);
                 self.trace_restart_taken(dead, "penalty");
                 self.kick_ball(kick, t, false, true);
                 return;
@@ -1166,6 +1211,7 @@ impl Simulation {
         self.keeper_beaten = false;
         self.restart = true;
         self.last_kicker = None;
+        self.last_pass = None;
         self.pass_in_flight = None;
         self.possession_phase = None;
         self.restart_taker = None;
@@ -1216,7 +1262,7 @@ impl Simulation {
         let end = state.end;
         let goal = self.config.pitch().goal_centre(end);
         self.enter_phase(Phase::Live, Cause::ShootoutKickTaken);
-        let kick = self.shot_kick(dead.taker, goal, keeper, t.shots.penalty_spread);
+        let kick = self.shot_kick(dead.taker, goal, keeper, ShotKind::Penalty);
         let diver = crate::streams::PlayerKey::of(&self.players[keeper]);
         let dive = self
             .streams

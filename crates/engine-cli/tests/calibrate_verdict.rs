@@ -19,11 +19,16 @@ fn exe() -> &'static str {
 
 /// A short calibrate run of the equal suite into `out`, on `content`.
 fn calibrate(data: &Path, content: &Path, out: &Path, args: &[&str]) -> Output {
+    calibrate_on("9", data, content, out, args)
+}
+
+/// [`calibrate`] from `seed`.
+fn calibrate_on(seed: &str, data: &Path, content: &Path, out: &Path, args: &[&str]) -> Output {
     bin(data)
         .arg("--content-dir")
         .arg(content)
         .arg("calibrate")
-        .args(["--seed", "9", "--suite", "equal", "--minutes", "5"])
+        .args(["--seed", seed, "--suite", "equal", "--minutes", "5"])
         .args(["--jobs", "4"])
         .args(args)
         .arg("--out")
@@ -185,14 +190,17 @@ fn a_change_run_without_power_never_passes_and_reports_its_stages_and_rules() {
 
 /// A flag that moves one measure by more than its band's smallest shift is reported
 /// as a move of that band, and the joint verdict fails. The flag is first shown to move the
-/// measure in two plain runs, and the same change run without the flag shows no move.
+/// measure in two plain runs, and the same change run without the flag shows no move. The runs
+/// start from seed 1, the lowest whose 12 short matches show the move (seed 9 until the
+/// player record's mood and personality came in, when its 12 matches moved 0.29 cards).
 #[test]
 fn a_flag_that_shifts_a_measure_fails_its_band_and_the_joint_verdict() {
     let data = temp("engine-cli-verdict", "shift");
     let content = flagged(&data);
     let plain = |name: &str, args: &[&str]| {
         let run = data.join(name);
-        let out = calibrate(
+        let out = calibrate_on(
+            "1",
             &data,
             &content,
             &run,
@@ -210,7 +218,8 @@ fn a_flag_that_shifts_a_measure_fails_its_band_and_the_joint_verdict() {
 
     let change = |name: &str, args: &[&str]| {
         let run = data.join(name);
-        let out = calibrate(
+        let out = calibrate_on(
+            "1",
             &data,
             &content,
             &run,
@@ -705,10 +714,10 @@ fn a_plain_run_keeps_the_formations_checks_per_pairing_unchanged() {
     let out = formations(&data, &content, &run, &["--matches", "8"]);
     let r = report(&out, &run);
     let expected = json!([
-        {"band": "goalless_share", "pairing": "4-4-2 v 4-2-3-1", "value": 0.75, "lo": 0.04, "hi": 0.12, "pass": false, "se": 0.15309},
-        {"band": "goalless_share", "pairing": "4-4-2 v 4-3-3", "value": 0.625, "lo": 0.04, "hi": 0.12, "pass": false, "se": 0.17116},
-        {"band": "goals_per_match", "pairing": "4-4-2 v 4-2-3-1", "value": 0.25, "lo": 2.4, "hi": 3.2, "pass": false, "se": 0.15309},
-        {"band": "goals_per_match", "pairing": "4-4-2 v 4-3-3", "value": 0.375, "lo": 2.4, "hi": 3.2, "pass": false, "se": 0.17116},
+        {"band": "goalless_share", "pairing": "4-4-2 v 4-2-3-1", "value": 1.0, "lo": 0.04, "hi": 0.12, "pass": false, "se": 0.0},
+        {"band": "goalless_share", "pairing": "4-4-2 v 4-3-3", "value": 0.75, "lo": 0.04, "hi": 0.12, "pass": false, "se": 0.15309},
+        {"band": "goals_per_match", "pairing": "4-4-2 v 4-2-3-1", "value": 0.0, "lo": 2.4, "hi": 3.2, "pass": false, "se": 0.0},
+        {"band": "goals_per_match", "pairing": "4-4-2 v 4-3-3", "value": 0.25, "lo": 2.4, "hi": 3.2, "pass": false, "se": 0.15309},
         {"band": "ten_plus_goals_share", "pairing": "4-4-2 v 4-2-3-1", "value": 0.0, "lo": 0.0, "hi": 0.005, "pass": true, "se": 0.0},
         {"band": "ten_plus_goals_share", "pairing": "4-4-2 v 4-3-3", "value": 0.0, "lo": 0.0, "hi": 0.005, "pass": true, "se": 0.0}
     ]);

@@ -368,6 +368,10 @@ mod tests {
 
     #[test]
     fn the_pin_names_the_previous_release() {
-        assert_eq!(previous_version(), "0.2.0-beta.1");
+        assert_eq!(previous_version(), "0.2.0-beta.4");
+        let pin: serde_json::Value = serde_json::from_str(PIN).unwrap();
+        assert_eq!(pin["tag"], "v0.2.0-beta.4");
+        assert_eq!(pin["version"], "0.2.0-beta.4");
+        assert_eq!(pin["commit"], "9b711cec8d92de220fab3f80d6bc427ec80d7dbc");
     }
 }

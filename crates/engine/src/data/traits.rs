@@ -3,7 +3,9 @@
 //! hook) and, when it has one, its opposite, which no player may carry beside it. A player
 //! carries a trait at a strength: moderate or strong.
 //!
-//! This build loads and checks the catalogue; the team files and play read it in later work.
+//! The catalogue is part of the content and its digest: a team file naming a trait it does not
+//! hold, or two opposites on one player, is refused. A replay written before the catalogue
+//! joined the content builds with [`FROZEN_TRAITS_V1`], the catalogue as it first shipped.
 
 use garde::Validate;
 use serde::{Deserialize, Serialize};
@@ -55,7 +57,16 @@ impl TraitCatalogue {
     pub fn get(&self, name: &str) -> Option<&TraitDef> {
         self.traits.iter().find(|t| t.name == name)
     }
+
+    /// The opposite of trait `name`, when it has one.
+    pub fn opposite(&self, name: &str) -> Option<&str> {
+        self.get(name).and_then(|t| t.opposite.as_deref())
+    }
 }
+
+/// The trait catalogue as it first shipped, which a replay without its own trait file builds
+/// with. Never edited: tuning the shipped file leaves it alone.
+pub const FROZEN_TRAITS_V1: &str = include_str!("../contract/frozen-traits-v1.json");
 
 fn check_strengths(strengths: &[TraitStrength], _ctx: &()) -> garde::Result {
     for (i, s) in strengths.iter().enumerate() {
@@ -159,6 +170,17 @@ mod tests {
             c.get("cuts_inside").unwrap().hook,
             "dribble_direction_from_wide"
         );
+    }
+
+    #[test]
+    fn the_frozen_copy_loads_and_equals_the_shipped_file_today() {
+        let frozen = load_traits_bytes(FROZEN_TRAITS_V1.as_bytes(), "frozen").unwrap();
+        let path = crate::data::test_support::shipped_dir().path("traits.json");
+        let shipped = load_traits_bytes(&std::fs::read(path).unwrap(), "traits.json").unwrap();
+        assert_eq!(frozen.value, shipped.value);
+        assert_eq!(frozen.digest, shipped.digest);
+        assert_eq!(frozen.value.opposite("cuts_inside"), Some("hugs_touchline"));
+        assert_eq!(frozen.value.opposite("switches_play"), None);
     }
 
     #[test]

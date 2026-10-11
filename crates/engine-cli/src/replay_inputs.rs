@@ -1,6 +1,6 @@
 //! The inputs of a recorded match, by value, and the one way a match is built from them.
 //!
-//! `record` reads the ten input files from disk once and stores their bytes in the replay
+//! `record` reads the input files from disk once and stores their bytes in the replay
 //! file; `resimulate` takes the same bytes back from the file. Both build the match through
 //! [`build`], which reads no file, so the bytes a replay file stores are exactly the bytes
 //! its match was played from, and a re-simulated match cannot read the checkout. Only
@@ -10,9 +10,10 @@
 use std::path::Path;
 
 use anyhow::{Context, bail};
+use engine::data::traits::FROZEN_TRAITS_V1;
 use engine::data::{
     ATTRIBUTES_FILE, COMMENTARY_FILE, ContentFiles, RULES_FILE, SLOTS_FILE, TACTICS_FILE,
-    TEAM_A_FILE, TEAM_B_FILE, TUNING_FILE,
+    TEAM_A_FILE, TEAM_B_FILE, TRAITS_FILE, TUNING_FILE,
 };
 use engine::{Commentary, Content, MatchConfig, Simulation};
 use script::{Backstop, LoadedPack, Pack};
@@ -33,10 +34,16 @@ const CORE_ROLES: [&str; 7] = [
 /// existed lacks it and plays with the built-in default selection, the only one then.
 const SLOTS_ROLE: &str = "slots";
 
+/// The trait catalogue's role. It follows the slot file. A replay file written before the
+/// catalogue joined the content lacks it and builds with the catalogue as it first shipped
+/// ([`FROZEN_TRAITS_V1`]); its team files hold no traits.
+const TRAITS_ROLE: &str = "traits";
+
 /// The script pack's roles. They come last and are present only when the match ran a pack.
 const PACK_ROLES: [&str; 2] = ["pack_manifest", "pack_script"];
 
-/// The input files of one match: the core roles, the slot file, and the pack files, in the
+/// The input files of one match: the core roles, the slot file, the trait catalogue, and the
+/// pack files, in the
 /// order the replay file stores them.
 pub struct InputFiles(pub Vec<InputFile>);
 
@@ -85,6 +92,7 @@ impl InputFiles {
             SLOTS_FILE,
             read_bytes(&dir.path(SLOTS_FILE), SLOTS_FILE)?,
         ));
+        files.push(file(TRAITS_ROLE, TRAITS_FILE, content.traits));
         if let Some(pack_dir) = script_pack {
             // The folder checks (the entry stays inside the folder) run on the disk layout.
             let pack = Pack::read(pack_dir).inspect_err(|err| {
@@ -110,22 +118,29 @@ impl InputFiles {
     /// The inputs a replay file holds, checked to be the roles a match needs.
     pub fn from_record(fixture: &Fixture) -> anyhow::Result<Self> {
         let roles: Vec<&str> = fixture.inputs.iter().map(|f| f.role.as_str()).collect();
-        let accepted = [false, true].into_iter().any(|slots| {
-            [false, true].into_iter().any(|pack| {
-                let mut wanted = CORE_ROLES.to_vec();
-                if slots {
-                    wanted.push(SLOTS_ROLE);
-                }
-                if pack {
-                    wanted.extend(PACK_ROLES);
-                }
-                roles == wanted
-            })
-        });
+        // The trait catalogue is stored only after the slot file, which every replay that has
+        // the catalogue also has.
+        let accepted = [(false, false), (true, false), (true, true)]
+            .into_iter()
+            .any(|(slots, traits)| {
+                [false, true].into_iter().any(|pack| {
+                    let mut wanted = CORE_ROLES.to_vec();
+                    if slots {
+                        wanted.push(SLOTS_ROLE);
+                    }
+                    if traits {
+                        wanted.push(TRAITS_ROLE);
+                    }
+                    if pack {
+                        wanted.extend(PACK_ROLES);
+                    }
+                    roles == wanted
+                })
+            });
         if !accepted {
             bail!(
-                "the replay file's inputs are {} ; a match needs {}, then optionally {SLOTS_ROLE}, \
-                 then optionally {}",
+                "the replay file's inputs are {} ; a match needs {}, then optionally {SLOTS_ROLE} \
+                 and {TRAITS_ROLE}, then optionally {}",
                 roles.join(", "),
                 CORE_ROLES.join(", "),
                 PACK_ROLES.join(" and ")
@@ -169,6 +184,10 @@ pub fn build(
         tuning: inputs.role("tuning")?.bytes.clone(),
         rules: inputs.role("rules")?.bytes.clone(),
         tactics: inputs.role("tactics")?.bytes.clone(),
+        // A file without the trait catalogue builds with the catalogue as it first shipped.
+        traits: inputs
+            .get(TRAITS_ROLE)
+            .map_or_else(|| FROZEN_TRAITS_V1.as_bytes().to_vec(), |f| f.bytes.clone()),
     })?;
     // A file without the slot file plays with the built-in default selection.
     let content = match inputs.get(SLOTS_ROLE) {
@@ -227,4 +246,50 @@ pub fn build(
         commentary,
         keyframe_interval,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn shipped() -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content")
+    }
+
+    fn settings() -> MatchSettings {
+        MatchSettings {
+            seed: 42,
+            minutes: 1,
+            knockout: false,
+            managers: [stream::ManagerKind::Ai, stream::ManagerKind::Ai],
+        }
+    }
+
+    /// A recorded match stores the trait catalogue after the slot file; a replay written before
+    /// the catalogue joined the content lacks it, is accepted, and builds with the catalogue as
+    /// it first shipped, which is the shipped one today, so the match is the same match.
+    #[test]
+    fn a_replay_without_the_trait_catalogue_builds_with_the_frozen_copy() {
+        let inputs = InputFiles::read(Some(&shipped()), None, None, None).unwrap();
+        let roles: Vec<&str> = inputs.0.iter().map(|f| f.role.as_str()).collect();
+        assert_eq!(roles[7..], [SLOTS_ROLE, TRAITS_ROLE]);
+        let held = inputs.get(TRAITS_ROLE).unwrap();
+        assert_eq!(held.name, TRAITS_FILE);
+        assert_eq!(held.bytes, FROZEN_TRAITS_V1.as_bytes());
+
+        let older = InputFiles(
+            inputs
+                .0
+                .iter()
+                .filter(|f| f.role != TRAITS_ROLE)
+                .cloned()
+                .collect(),
+        );
+        let with = build(&inputs, &settings(), Backstop::Never, false).unwrap();
+        let without = build(&older, &settings(), Backstop::Never, false).unwrap();
+        assert_eq!(
+            with.sim.config().content_hash,
+            without.sim.config().content_hash
+        );
+    }
 }

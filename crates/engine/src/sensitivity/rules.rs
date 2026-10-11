@@ -68,11 +68,21 @@ pub enum Measure {
     RatingSpread,
     LateEnergyLoss,
     MentalRating,
+    CoverDistance,
+    TimedRuns,
+    CornerDelivery,
+    FreeKickSuccess,
+    PenaltiesScored,
+    ThrowDistance,
+    FlairAttempts,
+    RashChases,
+    PressesBehind,
+    HeadersInTraffic,
 }
 
 impl Measure {
     /// Every measure, in declaration order.
-    pub const ALL: [Measure; 38] = [
+    pub const ALL: [Measure; 48] = [
         Measure::PassCompletion,
         Measure::TakeOnCompletion,
         Measure::ReceiptLoss,
@@ -111,6 +121,16 @@ impl Measure {
         Measure::RatingSpread,
         Measure::LateEnergyLoss,
         Measure::MentalRating,
+        Measure::CoverDistance,
+        Measure::TimedRuns,
+        Measure::CornerDelivery,
+        Measure::FreeKickSuccess,
+        Measure::PenaltiesScored,
+        Measure::ThrowDistance,
+        Measure::FlairAttempts,
+        Measure::RashChases,
+        Measure::PressesBehind,
+        Measure::HeadersInTraffic,
     ];
 
     /// The measure's index in [`Measure::ALL`].
@@ -194,6 +214,24 @@ pub struct RuleDef {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(skip)]
     pub reason: Option<String>,
+    /// A rule that runs and reports: its word is printed, but the full run does not fail on
+    /// it. The rules of the jobs the version 4 catalogue added carry it.
+    #[serde(default, skip_serializing_if = "is_false")]
+    #[garde(skip)]
+    pub report_only: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
+/// What a rule expects of its statistic: a move in its job's direction, or no move at all
+/// for a value that is inert in a match.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Expect {
+    Move,
+    NoMove,
 }
 
 impl RuleDef {
@@ -249,21 +287,14 @@ pub struct SensitivityFile {
     pub five_match: FiveMatch,
 }
 
-/// One job as its owner names it: the label and the direction of its statistic.
+/// One job as its owner names it: the label and the direction of its statistic, and whether
+/// it is inert in a match.
 struct JobText<'a> {
     name: &'a str,
     kind: JobKind,
     statistic: &'a str,
     direction: Direction,
-}
-
-/// `true` for a job the version 4 catalogue added, which has no rule yet.
-///
-/// sdlc-debt: a temporary skip of the coverage check for the 21 version 4 attributes; the work
-/// that gives each new job its report-only rule deletes this skip, and the check then covers
-/// every job again.
-fn awaits_its_rule(name: &str) -> bool {
-    crate::data::convert::V4_ADDED.contains(&name)
+    inert: bool,
 }
 
 /// Every job the rules must cover: each attribute of `schema`, then the three body jobs.
@@ -276,6 +307,7 @@ fn jobs<'a>(schema: &'a AttributeSchema, body: &'a BodyJobs) -> Vec<JobText<'a>>
             kind: JobKind::Attribute,
             statistic: &a.job.statistic,
             direction: a.job.direction,
+            inert: a.job.stage == crate::data::attributes::JobStage::Inert,
         })
         .collect();
     for (name, row) in [
@@ -288,6 +320,7 @@ fn jobs<'a>(schema: &'a AttributeSchema, body: &'a BodyJobs) -> Vec<JobText<'a>>
             kind: JobKind::Body,
             statistic: &row.statistic,
             direction: row.direction,
+            inert: false,
         });
     }
     out
@@ -406,7 +439,6 @@ impl SensitivityFile {
         }
         if let Some(job) = all
             .iter()
-            .filter(|j| !awaits_its_rule(j.name))
             .find(|j| !self.rules.iter().any(|r| r.job == j.name))
         {
             return Err(("rules".into(), format!("job {} has no rule", job.name)));
@@ -442,6 +474,15 @@ impl SensitivityFile {
             .into_iter()
             .find(|j| j.name == rule.job)
             .map_or(Direction::Up, |j| j.direction)
+    }
+
+    /// What `rule` expects: no move for a job inert in a match, a move otherwise.
+    pub fn expect(&self, rule: &RuleDef, schema: &AttributeSchema, body: &BodyJobs) -> Expect {
+        let inert = jobs(schema, body)
+            .into_iter()
+            .find(|j| j.name == rule.job)
+            .is_some_and(|j| j.inert);
+        if inert { Expect::NoMove } else { Expect::Move }
     }
 }
 
@@ -496,15 +537,28 @@ mod tests {
             &content.tuning.engine.contract.body,
         )
         .unwrap();
-        let awaiting = content
-            .attributes
-            .attributes
-            .iter()
-            .filter(|a| awaits_its_rule(&a.name))
-            .count();
-        assert_eq!(awaiting, 21);
-        assert_eq!(file.rules.len(), content.attributes.len() - awaiting + 3);
+        assert_eq!(file.rules.len(), content.attributes.len() + 3);
         assert_eq!(file.derived, vec!["build".to_string()]);
+        let flagged: Vec<&str> = file
+            .rules
+            .iter()
+            .filter(|r| r.report_only)
+            .map(|r| r.job.as_str())
+            .collect();
+        assert_eq!(flagged.len(), 21);
+        for job in flagged {
+            assert!(crate::data::convert::V4_ADDED.contains(&job), "{job}");
+        }
+        let inert: Vec<&str> = file
+            .rules
+            .iter()
+            .filter(|r| {
+                file.expect(r, &content.attributes, &content.tuning.engine.contract.body)
+                    == Expect::NoMove
+            })
+            .map(|r| r.job.as_str())
+            .collect();
+        assert_eq!(inert, ["loyalty", "money_motivation", "controversy"]);
     }
 
     #[test]
@@ -527,18 +581,20 @@ mod tests {
     }
 
     #[test]
-    fn the_skip_covers_only_the_new_attributes() {
-        assert!(awaits_its_rule("marking") && awaits_its_rule("controversy"));
-        assert!(!awaits_its_rule("vision") && !awaits_its_rule("consistency"));
-        // A job outside the version 4 additions still needs its rule.
-        let (field, reason) = refusal(edited(|v| {
-            v["rules"]
-                .as_array_mut()
-                .unwrap()
-                .retain(|r| r["job"] != "consistency");
-        }));
-        assert_eq!(field, "rules");
-        assert!(reason.contains("job consistency has no rule"), "{reason}");
+    fn a_new_job_without_its_rule_is_refused_too() {
+        for job in ["marking", "controversy", "consistency"] {
+            let (field, reason) = refusal(edited(|v| {
+                v["rules"]
+                    .as_array_mut()
+                    .unwrap()
+                    .retain(|r| r["job"] != job);
+            }));
+            assert_eq!(field, "rules");
+            assert!(
+                reason.contains(&format!("job {job} has no rule")),
+                "{reason}"
+            );
+        }
     }
 
     #[test]

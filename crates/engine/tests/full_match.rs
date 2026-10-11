@@ -16,9 +16,9 @@ fn ninety_minutes_play_to_full_time_under_the_laws() {
     let path = common::temp_path("full");
     let content = common::content();
     let [a, b] = common::default_teams(&content);
-    // Seed 1: the lowest seed whose match keeps both sides' foul counts inside the sanity
-    // band (seed 5 until the team stands went off).
-    let config = engine::MatchConfig::new(1, 90, &content, [&a, &b]).unwrap();
+    // Seed 15: a match whose foul and free-kick counts sit inside the sanity band for both
+    // sides (seed 1 left one side with three fouls once the new attributes reached play).
+    let config = engine::MatchConfig::new(15, 90, &content, [&a, &b]).unwrap();
     let most = config.max_ticks();
     assert_eq!(most, 360_000);
     let mut sim = Simulation::new(config.clone()).unwrap();

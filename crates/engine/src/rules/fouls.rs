@@ -135,10 +135,17 @@ pub fn dribble_win_chance(tackler: Skills<'_>, carrier: Skills<'_>, t: &Tuning) 
 /// already shown `yellows` cards tackles more carefully: the chance is multiplied by the
 /// booked factor.
 pub fn foul_chance(tackler: Skills<'_>, yellows: u8, t: &Tuning) -> f64 {
+    foul_chance_on(tackler, yellows, 0.0, t)
+}
+
+/// [`foul_chance`] with `occasion` more log-odds from the personality occasions of the tackle
+/// ([`foul_occasion`]).
+pub fn foul_chance_on(tackler: Skills<'_>, yellows: u8, occasion: f64, t: &Tuning) -> f64 {
     let c = &t.contract;
     let ten = curve::f(10.0, &c.curve);
     let shift = t.foul_aggression_weight * (tackler.f(Stage::TACKLE_CHOOSE) - ten)
-        - t.foul_tackling_weight * (tackler.f(Stage::TACKLE_EXECUTE) - ten);
+        - t.foul_tackling_weight * (tackler.f(Stage::TACKLE_EXECUTE) - ten)
+        + occasion;
     let p = c.actions.of(ActionKind::Tackle);
     let booked = if yellows >= 1 {
         t.foul_booked_factor
@@ -146,6 +153,23 @@ pub fn foul_chance(tackler: Skills<'_>, yellows: u8, t: &Tuning) -> f64 {
         1.0
     };
     (curve::shifted(t.foul_base, shift, p.floor(), p.ceiling()) * booked).clamp(0.0, 1.0)
+}
+
+/// The log-odds the personality occasions add to a tackle's foul chance: a tackler in low
+/// mood fouls more after a setback, the less so the better his temperament
+/// (`temper_foul · max(0, −mood) · (1 − temperament)`); an unsporting tackler fouls a running
+/// carrier cynically (`cynical_foul · −sportsmanship`); and an unsporting carrier goes down
+/// under contact (`dive_foul · −sportsmanship`). 0 for average players in a neutral or good
+/// mood.
+pub fn foul_occasion(view: &MatchView<'_>, tackler: usize, carrier: usize, running: bool) -> f64 {
+    let o = view.tuning().contract.person().occasions;
+    let (me, them) = (view.personality(tackler), view.personality(carrier));
+    let low = (-view.mood(tackler) / crate::sim::mood::FULL).max(0.0);
+    let mut shift = o.temper_foul * low * (1.0 - me.temperament) - o.dive_foul * them.sportsmanship;
+    if running {
+        shift -= o.cynical_foul * me.sportsmanship;
+    }
+    shift
 }
 
 /// The share of fouls on `carrier` after which his team loses the ball: `foul_ball_loss` for
@@ -209,6 +233,12 @@ impl FoulsModule for FoulsV1 {
         let t = view.tuning();
         let p = view.player(tackler);
         let (me, them) = (view.skills(tackler), view.skills(carrier));
+        let occasion = foul_occasion(
+            view,
+            tackler,
+            carrier,
+            view.player(carrier).vel.length() > RUNNING_SPEED,
+        );
         let carrier = view.player(carrier);
         let p_win = if carrier.vel.length() > RUNNING_SPEED {
             let mut p_win = running_win_chance(me, them, t);
@@ -221,7 +251,7 @@ impl FoulsModule for FoulsV1 {
         };
         TackleChances {
             p_win,
-            p_foul: foul_chance(me, p.yellow, t),
+            p_foul: foul_chance_on(me, p.yellow, occasion, t),
             ball_loss: ball_loss(them, t),
         }
     }
@@ -250,7 +280,7 @@ impl FoulsModule for FoulsV1 {
 
 pub const FOULS_V1_CARD: ModuleCard = ModuleCard {
     purpose: "Decides each tackle attempt (clean win, foul, or miss) and the card for a foul.",
-    inputs: "Through the attribute contract: the tackler's tackle execute and choose stages (tackling, aggression), the carrier's dribble, shield and stay-up stages (dribbling, strength, balance) and take-on gate; the carrier's speed, the tackler's yellow cards, and the engine tuning.",
+    inputs: "Through the attribute contract: the tackler's tackle execute and choose stages (tackling, aggression), the carrier's dribble, shield and stay-up stages (dribbling, strength, balance) and take-on gate; the carrier's speed, the tackler's yellow cards, the tackler's mood, temperament and sportsmanship and the carrier's sportsmanship, and the engine tuning.",
     outputs: "The tackle chances and outcome, the card thresholds, and the card; the loop applies the foul and the card.",
     tuning: &[
         "tackle_win_base",
@@ -266,6 +296,9 @@ pub const FOULS_V1_CARD: ModuleCard = ModuleCard {
         "contract.curve",
         "contract.actions.tackle",
         "contract.actions.stay_up",
+        "contract.person.occasions.temper_foul",
+        "contract.person.occasions.cynical_foul",
+        "contract.person.occasions.dive_foul",
     ],
     calibration: "yellow_cards_per_team",
     keys: &[Action::Tackle, Action::FoulCard],

@@ -998,7 +998,8 @@
                     "move": { "$ref": "#/$defs/ruleInterval" },
                     "share": { "$ref": "#/$defs/ruleInterval" },
                     "roles": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0, "maximum": 1 } },
-                    "word": { "enum": ["pass", "fail", "not_sure"] }
+                    "word": { "enum": ["pass", "fail", "not_sure"] },
+                    "report_only": { "type": "boolean" }
                   }
                 }
               }

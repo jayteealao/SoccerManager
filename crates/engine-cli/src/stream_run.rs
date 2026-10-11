@@ -8,6 +8,7 @@
 //! the home team, and it names the change on its verdict event by the identifier the page
 //! was given, because the two queues number their changes independently.
 
+use engine::data::traits::TraitStrength;
 use engine::observe::{MatchFigures, round_to};
 use engine::record::TickSink;
 use engine::tactics::planned::PlannedChange;
@@ -18,7 +19,7 @@ use engine::{
 use protocol::{
     CardKind, ChangeKind, ChangeOutcome, ChangeState, ChangeStateNote, Condition, Confidence,
     EventType, HiddenWord, MatchEvent, RatingWire, Ratings, RosterEntry, ServerMessage, SlotRole,
-    SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup,
+    SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup, TraitWire,
 };
 use std::cell::RefCell;
 
@@ -502,6 +503,32 @@ pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
                     matches_at_club: player.condition.matches_at_club,
                     level: Some(range[1]),
                     plays_between: Some(range),
+                    positions: engine::data::Position::ALL
+                        .iter()
+                        .zip(player.positions)
+                        .map(|(code, rating)| (code.code().to_string(), rating.tenths()))
+                        .collect(),
+                    strong_foot: Some(player.foot.strong.code().to_string()),
+                    weaker_foot: Some(player.foot.weaker),
+                    traits: player
+                        .traits
+                        .iter()
+                        .map(|(name, strength)| TraitWire {
+                            name: name.clone(),
+                            strength: match strength {
+                                TraitStrength::Moderate => "moderate",
+                                TraitStrength::Strong => "strong",
+                            }
+                            .to_string(),
+                        })
+                        .collect(),
+                    // Personality leaves only as a word and a confidence, never a number.
+                    personality: schema
+                        .attributes
+                        .iter()
+                        .filter(|def| def.is_personality())
+                        .map(|def| (def.name.clone(), hidden_word(config, player, &def.name)))
+                        .collect(),
                 })
                 .collect()
         } else {
@@ -1112,10 +1139,41 @@ mod tests {
             assert_eq!((entry.sharpness, entry.matches_at_club), (None, None));
             let level = entry.level.expect("a level");
             assert!((10..=200).contains(&level), "{entry:?}");
-            // No condition inputs: today's level is the fresh one.
-            assert_eq!(entry.plays_between, Some([level, level]), "{entry:?}");
+            // No condition inputs: today's best is the fresh level. A starter the lineup puts
+            // away from his listed position may play below it (familiarity).
+            let [low, high] = entry.plays_between.expect("a range");
+            assert!(high == level && low <= level, "{entry:?}");
+            // Protocol 7: the converted player is rated at his listed position only, has a
+            // weaker foot of 50 percent, no traits, and his personality only as words not yet
+            // known.
+            assert_eq!(entry.positions.len(), 10, "{entry:?}");
+            let natural = entry.positions[&entry.position];
+            assert!(entry.positions.values().all(|&t| t <= natural), "{entry:?}");
+            assert!(
+                entry
+                    .positions
+                    .iter()
+                    .all(|(code, &t)| *code == entry.position || t == 10),
+                "{entry:?}"
+            );
+            assert!(matches!(
+                entry.strong_foot.as_deref(),
+                Some("left" | "right")
+            ));
+            assert_eq!(entry.weaker_foot, Some(50));
+            assert!(entry.traits.is_empty());
+            let personality = schema
+                .attributes
+                .iter()
+                .filter(|d| d.is_personality())
+                .count();
+            assert_eq!(entry.personality.len(), personality, "{entry:?}");
+            for word in entry.personality.values() {
+                assert_eq!(word.confidence, Confidence::NotYetKnown, "{entry:?}");
+                assert_eq!(word.word, None, "{entry:?}");
+            }
         }
-        assert_eq!(protocol::PROTOCOL_VERSION, 6);
+        assert_eq!(protocol::PROTOCOL_VERSION, 7);
         let setup = teams[HOME]
             .setup
             .as_ref()
@@ -1170,10 +1228,21 @@ mod tests {
         let first = condition_message(&sim);
         assert_eq!(first.level.len(), 22);
         assert_eq!(first.base.len(), 22);
-        assert_eq!(
-            first.level, first.base,
-            "fresh at kick-off with no condition inputs"
-        );
+        // Fresh at kick-off with no condition inputs: each player at his fresh level, below it
+        // only away from his natural position (familiarity).
+        for (i, (level, base)) in first.level.iter().zip(&first.base).enumerate() {
+            let positions = sim.position_ratings(i);
+            let natural = positions.iter().max().copied();
+            let k = engine::data::team::Position::ALL
+                .iter()
+                .position(|&q| q == sim.played_position(i));
+            let at_home = k.map(|k| positions[k]) == natural;
+            if at_home {
+                assert_eq!(level, base, "player {i}");
+            } else {
+                assert!(level < base, "player {i}: {level} against {base}");
+            }
+        }
         let minute_75 = (75.0 * 60.0 / sim.tuning().dt).round() as u32;
         for _ in 0..minute_75 {
             sim.step();

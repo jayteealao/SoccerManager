@@ -1,6 +1,7 @@
 //! The contract block of the tuning file (`engine.contract`): the curve, each action's
 //! strength and limits, the top-speed map, the acceleration anchor, the concentration
-//! lapses, the state caps, the body jobs, and consistency.
+//! lapses, the state caps, the body jobs, consistency, and the values of the nearest hooks
+//! through which the newer attributes reach play.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -36,6 +37,268 @@ pub struct ContractTuning {
     /// The spread of each player's play around his ratings.
     #[garde(dive)]
     pub consistency: super::consistency::ConsistencyTuning,
+    /// The values of the nearest hooks: braking, effort when behind, flair, the direct free
+    /// kick, restart delivery, the back line's organisation, the space an attacker makes at
+    /// his anchor, and a keeper's rash chases. Optional, so a tuning file written before them
+    /// (as an old replay embeds it) still loads, and then every hook plays as before them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub hooks: Option<HookTuning>,
+    /// The player as a person in play: mood, familiarity, the personality occasions and the
+    /// shared floor. Optional, so a tuning file written before them still loads, and then
+    /// mood stays 0, familiarity costs nothing, no occasion acts and no floor binds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub person: Option<PersonTuning>,
+}
+
+impl ContractTuning {
+    /// The hook values: the file's, or [`HookTuning::NEUTRAL`] when it has none.
+    #[inline]
+    pub fn hooks(&self) -> HookTuning {
+        self.hooks.unwrap_or(HookTuning::NEUTRAL)
+    }
+
+    /// The person values: the file's, or [`PersonTuning::NEUTRAL`] when it has none.
+    #[inline]
+    pub fn person(&self) -> PersonTuning {
+        self.person.unwrap_or(PersonTuning::NEUTRAL)
+    }
+}
+
+/// The person block (`engine.contract.person`).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct PersonTuning {
+    #[garde(dive)]
+    pub mood: MoodTuning,
+    #[garde(dive)]
+    pub familiarity: FamiliarityTuning,
+    #[garde(dive)]
+    pub occasions: OccasionTuning,
+    /// The most rating points every temporary effect together may take from a stage: no
+    /// stage reads below its base value less this many points on the curve.
+    #[garde(range(min = 0.5, max = 12.7))]
+    pub floor_drop: f64,
+}
+
+impl PersonTuning {
+    /// No person values: no impulse, no drift, no mood weight, no familiarity cost, no
+    /// occasion, and no floor.
+    pub const NEUTRAL: PersonTuning = PersonTuning {
+        mood: MoodTuning {
+            goal: 0.0,
+            assist: 0.0,
+            big_miss: 0.0,
+            error: 0.0,
+            card: 0.0,
+            red_card: 0.0,
+            fouled: 0.0,
+            duel_won: 0.0,
+            duel_lost: 0.0,
+            team_goal_for: 0.0,
+            team_goal_against: 0.0,
+            big_chance_xg: 1.0,
+            drift_per_minute: 0.0,
+            score_weight: 0.0,
+            late_from_minute: 120,
+            late_pressure: 0.0,
+            temperament_weight: 0.0,
+            pressure_weight: 0.0,
+            leadership_weight: 0.0,
+            own_weight: 0.0,
+            team_weight: 0.0,
+            risk: 0.0,
+        },
+        familiarity: FamiliarityTuning {
+            cost_per_point: 0.0,
+            versatility_weight: 0.0,
+            adaptability_weight: 0.0,
+        },
+        occasions: OccasionTuning {
+            professionalism: 0.0,
+            penalty_pressure: 0.0,
+            temper_foul: 0.0,
+            cynical_foul: 0.0,
+            dive_foul: 0.0,
+            adaptation: 0.0,
+        },
+        floor_drop: f64::INFINITY,
+    };
+}
+
+/// Mood: the impulse of each event in percent of a full mood, the drift, the swing and how
+/// mood reaches play.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct MoodTuning {
+    /// The scorer.
+    #[garde(range(min = -100.0, max = 100.0))]
+    pub goal: f64,
+    /// The player whose completed pass reached the scorer.
+    #[garde(range(min = -100.0, max = 100.0))]
+    pub assist: f64,
+    /// The shooter of a big chance that ended without a goal.
+    #[garde(range(min = -100.0, max = 100.0))]
+    pub big_miss: f64,
+    /// The passer whose open-play pass the other side controlled.
+    #[garde(range(min = -100.0, max = 100.0))]
+    pub error: f64,
+    /// A player shown a yellow card.
+    #[garde(range(min = -100.0, max = 100.0))]
+    pub card: f64,
+    /// A player sent off.
+    #[garde(range(min = -100.0, max = 100.0))]
+    pub red_card: f64,
+    /// A fouled player.
+    #[garde(range(min = -100.0, max = 100.0))]
+    pub fouled: f64,
+    /// The tackler who won the ball.
+    #[garde(range(min = -100.0, max = 100.0))]
+    pub duel_won: f64,
+    /// The carrier who lost it.
+    #[garde(range(min = -100.0, max = 100.0))]
+    pub duel_lost: f64,
+    /// Every player of the scoring side.
+    #[garde(range(min = -100.0, max = 100.0))]
+    pub team_goal_for: f64,
+    /// Every player of the conceding side.
+    #[garde(range(min = -100.0, max = 100.0))]
+    pub team_goal_against: f64,
+    /// A shot of at least these expected goals that ends without a goal is a big miss.
+    #[garde(range(min = 0.05, max = 1.0))]
+    pub big_chance_xg: f64,
+    /// How far a mood drifts toward its target in a minute, percent.
+    #[garde(range(min = 0.0, max = 50.0))]
+    pub drift_per_minute: f64,
+    /// The drift target per goal of lead, at most two goals either way, percent.
+    #[garde(range(min = 0.0, max = 50.0))]
+    pub score_weight: f64,
+    /// The minute from which a game within one goal weighs on a player.
+    #[garde(range(min = 0, max = 120))]
+    pub late_from_minute: u32,
+    /// How far that lowers the drift target of the player who handles pressure worst,
+    /// percent; half of it for an average player.
+    #[garde(range(min = 0.0, max = 50.0))]
+    pub late_pressure: f64,
+    /// How much temperament narrows the swing.
+    #[garde(range(min = 0.0, max = 0.9))]
+    pub temperament_weight: f64,
+    /// How much pressure handling narrows the swing.
+    #[garde(range(min = 0.0, max = 0.9))]
+    pub pressure_weight: f64,
+    /// How much leadership adds to a player's weight in his side's mood.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub leadership_weight: f64,
+    /// Rating points on the mental group at a full own mood.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub own_weight: f64,
+    /// Rating points on the mental group at a full team mood.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub team_weight: f64,
+    /// How much a full mood raises the score of a shot and of a forward pass and lowers the
+    /// score of holding the ball; a low mood the reverse.
+    #[garde(range(min = 0.0, max = 2.0))]
+    pub risk: f64,
+}
+
+/// Familiarity: the cost of playing away from the natural position.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct FamiliarityTuning {
+    /// Rating points lost per point of gap between the natural rating and the rating at the
+    /// position played, before the family cap.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub cost_per_point: f64,
+    /// How much versatility narrows the cost.
+    #[garde(range(min = 0.0, max = 0.9))]
+    pub versatility_weight: f64,
+    /// How much adaptability narrows the cost.
+    #[garde(range(min = 0.0, max = 0.9))]
+    pub adaptability_weight: f64,
+}
+
+/// The personality occasions.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct OccasionTuning {
+    /// How much professionalism lowers the chance of a concentration lapse.
+    #[garde(range(min = 0.0, max = 0.9))]
+    pub professionalism: f64,
+    /// How much pressure handling narrows a penalty's spread.
+    #[garde(range(min = 0.0, max = 0.9))]
+    pub penalty_pressure: f64,
+    /// Log-odds a tackler in a full low mood adds to his foul chance, for an average
+    /// temperament.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub temper_foul: f64,
+    /// Log-odds an unsporting tackler adds to his foul chance on a running carrier, per unit
+    /// of sportsmanship skill below the average.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub cynical_foul: f64,
+    /// Log-odds an unsporting carrier adds to the foul chance of a tackle on him (he goes
+    /// down), per unit of sportsmanship skill below the average.
+    #[garde(range(min = 0.0, max = 3.0))]
+    pub dive_foul: f64,
+    /// How much adaptability narrows the adaptation drop.
+    #[garde(range(min = 0.0, max = 0.9))]
+    pub adaptation: f64,
+}
+
+/// The values of the nearest hooks (`engine.contract.hooks`). Each hook is neutral for a
+/// rating-10 player, so the average player plays as before and the spread between players is
+/// what moves; the direct free kick and the restart delivery noise are the exceptions, since
+/// play had neither before.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct HookTuning {
+    /// The braking of a player whose turn stage is rating 10, m/s²; his turn factor (agility
+    /// leading) scales it.
+    #[garde(range(min = 0.5, max = 30.0))]
+    pub decel_anchor: f64,
+    /// How much a presser's determination widens his press reach while his side trails.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub behind_effort: f64,
+    /// How much a carrier's flair raises the score of a forward pass.
+    #[garde(range(min = 0.0, max = 2.0))]
+    pub flair_risk: f64,
+    /// How many rating points of technique the take-on and chip gates drop for a top flair
+    /// player.
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub flair_gate: f64,
+    /// A direct free kick within this many metres of goal is shot; beyond it, delivered.
+    #[garde(range(min = 0.0, max = 40.0))]
+    pub free_kick_range_m: f64,
+    /// The largest turn of a corner or free-kick delivery by an average taker, radians.
+    #[garde(range(min = 0.0, max = 0.5))]
+    pub restart_noise: f64,
+    /// The weight of the back line's own organisation beside the keeper's.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub organise_back_line: f64,
+    /// How far an attacker with good off-ball movement moves his anchor away from the
+    /// nearest defender, metres at the top of the scale.
+    #[garde(range(min = 0.0, max = 6.0))]
+    pub anchor_space_m: f64,
+    /// How much a keeper's eccentricity widens the range from which he comes off his line.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub rash_chase: f64,
+}
+
+impl HookTuning {
+    /// Every hook as play was before the hooks: braking with the acceleration, no effort when
+    /// behind, no flair term, no direct free kick taken, no delivery noise, the keeper alone
+    /// organising the line, no anchor space and no rash chase.
+    pub const NEUTRAL: HookTuning = HookTuning {
+        decel_anchor: 0.0,
+        behind_effort: 0.0,
+        flair_risk: 0.0,
+        flair_gate: 0.0,
+        free_kick_range_m: 0.0,
+        restart_noise: 0.0,
+        organise_back_line: 0.0,
+        anchor_space_m: 0.0,
+        rash_chase: 0.0,
+    };
 }
 
 /// The curve `F(r) = scale · e^((r − center) / width)`.
@@ -122,11 +385,9 @@ pub fn uses(action: ActionKind) -> [bool; 4] {
         | A::Organise
         | A::Rush => [true, false, false, true],
         A::Shield => [false, false, false, false],
-        // The five actions the record added: their stages are blended, but play reads none of
-        // their values yet, so they carry no tuning entry.
-        A::Mark | A::OffBallRun | A::Corner | A::FreeKick | A::LongThrow => {
-            [false, false, false, false]
-        }
+        // The five actions the record added; each may be absent ([`neutral_when_absent`]).
+        A::Mark | A::OffBallRun | A::LongThrow => [true, false, false, true],
+        A::Corner | A::FreeKick => [true, false, false, false],
         A::Pass
         | A::Chip
         | A::Cross
@@ -140,6 +401,17 @@ pub fn uses(action: ActionKind) -> [bool; 4] {
         | A::KeeperKick
         | A::KeeperThrow => [true, false, false, false],
     }
+}
+
+/// `true` for an action a tuning file may leave out, which then reads neutral (strength 0:
+/// share 0.5, factor 1): the five actions the record added, so a tuning file written before
+/// they had values (as an old replay embeds it) still loads and plays as it did.
+pub fn neutral_when_absent(action: ActionKind) -> bool {
+    use ActionKind as A;
+    matches!(
+        action,
+        A::Mark | A::OffBallRun | A::Corner | A::FreeKick | A::LongThrow
+    )
 }
 
 /// One value per action, read by index on the hot path; in a file, an object keyed by the
@@ -213,7 +485,7 @@ fn check_actions(map: &ActionMap<ActionParams>, _ctx: &()) -> garde::Result {
         let [k, base, limits, spread] = uses(a);
         let name = a.name();
         let Some(p) = map.get(a) else {
-            if k || base || limits || spread {
+            if (k || base || limits || spread) && !neutral_when_absent(a) {
                 return Err(garde::Error::new(format!("action {name} is missing")));
             }
             continue;
@@ -386,9 +658,11 @@ impl Default for ContractTuning {
                 | A::AerialReach
                 | A::Organise
                 | A::Rush => Some(knob(0.054, 0.2)),
-                A::Shield | A::Mark | A::OffBallRun | A::Corner | A::FreeKick | A::LongThrow => {
-                    None
-                }
+                A::Shield => None,
+                A::Mark => Some(knob(0.054, 0.4)),
+                A::OffBallRun => Some(knob(0.054, 0.2)),
+                A::LongThrow => Some(knob(0.054, 0.5)),
+                A::Corner | A::FreeKick => Some(k_only(0.054)),
                 A::Shot => Some(k_only(0.07)),
                 A::LongShot => Some(k_only(0.02)),
                 A::Dribble => Some(k_only(0.071)),
@@ -421,6 +695,57 @@ impl Default for ContractTuning {
                 period_max: 0.75,
                 period_minutes: 10,
             },
+            hooks: Some(HookTuning {
+                decel_anchor: 5.5,
+                behind_effort: 0.3,
+                flair_risk: 0.4,
+                flair_gate: 2.0,
+                free_kick_range_m: 30.0,
+                restart_noise: 0.06,
+                organise_back_line: 0.5,
+                anchor_space_m: 2.0,
+                rash_chase: 0.3,
+            }),
+            person: Some(PersonTuning {
+                mood: MoodTuning {
+                    goal: 30.0,
+                    assist: 15.0,
+                    big_miss: -20.0,
+                    error: -4.0,
+                    card: -10.0,
+                    red_card: -25.0,
+                    fouled: 3.0,
+                    duel_won: 3.0,
+                    duel_lost: -3.0,
+                    team_goal_for: 8.0,
+                    team_goal_against: -10.0,
+                    big_chance_xg: 0.3,
+                    drift_per_minute: 4.0,
+                    score_weight: 15.0,
+                    late_from_minute: 75,
+                    late_pressure: 10.0,
+                    temperament_weight: 0.5,
+                    pressure_weight: 0.4,
+                    leadership_weight: 1.0,
+                    own_weight: 0.8,
+                    team_weight: 0.4,
+                    risk: 0.25,
+                },
+                familiarity: FamiliarityTuning {
+                    cost_per_point: 0.15,
+                    versatility_weight: 0.5,
+                    adaptability_weight: 0.3,
+                },
+                occasions: OccasionTuning {
+                    professionalism: 0.5,
+                    penalty_pressure: 0.3,
+                    temper_foul: 0.6,
+                    cynical_foul: 0.4,
+                    dive_foul: 0.3,
+                    adaptation: 0.3,
+                },
+                floor_drop: 7.0,
+            }),
         }
     }
 }
@@ -461,6 +786,51 @@ mod tests {
         c.actions.0[ActionKind::Tackle as usize] = Some(k_only(0.2));
         let text = c.validate().unwrap_err().to_string();
         assert!(text.contains("action tackle: floor is missing"), "{text}");
+    }
+
+    #[test]
+    fn the_five_new_actions_may_be_absent_and_read_neutral_but_no_other() {
+        let mut c = ContractTuning::default();
+        for a in [
+            ActionKind::Mark,
+            ActionKind::OffBallRun,
+            ActionKind::Corner,
+            ActionKind::FreeKick,
+            ActionKind::LongThrow,
+        ] {
+            c.actions.0[a as usize] = None;
+            assert_eq!(c.actions.of(a).k(), 0.0);
+        }
+        assert!(c.validate().is_ok());
+        c.actions.0[ActionKind::Press as usize] = None;
+        let text = c.validate().unwrap_err().to_string();
+        assert!(text.contains("action press is missing"), "{text}");
+    }
+
+    #[test]
+    fn a_file_without_hooks_reads_them_neutral() {
+        let c = ContractTuning {
+            hooks: None,
+            ..Default::default()
+        };
+        assert_eq!(c.hooks(), HookTuning::NEUTRAL);
+        assert!(c.validate().is_ok());
+    }
+
+    #[test]
+    fn a_file_without_the_person_block_reads_it_neutral_and_a_wide_floor_is_refused() {
+        let c = ContractTuning {
+            person: None,
+            ..Default::default()
+        };
+        assert_eq!(c.person(), PersonTuning::NEUTRAL);
+        assert!(c.validate().is_ok());
+        let mut c = ContractTuning::default();
+        if let Some(p) = c.person.as_mut() {
+            p.floor_drop = 13.0;
+        }
+        let text = c.validate().unwrap_err().to_string();
+        assert!(text.contains("person.floor_drop"), "{text}");
     }
 
     #[test]

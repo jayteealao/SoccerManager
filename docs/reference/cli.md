@@ -92,7 +92,7 @@ Generate fictional clubs as team files, one file for each club.
 | `--out` | folder | required | The folder for the team files. The command creates the folder when it does not exist. |
 | `--force` | none | off | Overwrite team files that exist. |
 
-Output: one version 2 team file for each club, named `<club.id>.json`, with every rating on 1.0 to 20.0 and each player's height, age, and nationality. A drawn rating under 1.0 (a goalkeeping attribute of an outfield player) is written as 1.0, and the command prints how many it lifted on standard output, for example `lifted 31 values below 1.0 to 1.0`. The tuning file's `generator.body` block is required; without it the command exits 1.
+Output: one version 3 team file for each club, named `<club.id>.json`, with every rating on 1.0 to 20.0, each player's height, age, and nationality, and his position ratings, feet, traits of play and personality values. A drawn rating under 1.0 (a goalkeeping attribute of an outfield player) is written as 1.0, and the command prints how many it lifted on standard output, for example `lifted 31 values below 1.0 to 1.0`. The tuning file's `generator.body` and `generator.person` blocks are required; without either the command exits 1.
 
 Exit codes: 0 or 1.
 
@@ -261,7 +261,7 @@ Continue a match from its newest snapshot to full time. A knockout match resumes
 A snapshot resumes only on the build that wrote it. The snapshot records the release version of that build, and `resume` picks the program by that version:
 
 - A snapshot from this version: this program continues it.
-- A snapshot from the previous release (0.2.0-beta.1): the previous release's program, shipped as `previous/engine-cli` beside this program, continues it with its own `previous/content` folder. `resume` passes that program's output and exit code through, and logs `resume.delegated`.
+- A snapshot from the previous release (0.2.0-beta.4): the previous release's program, shipped as `previous/engine-cli` beside this program, continues it with its own `previous/content` folder. `resume` passes that program's output and exit code through, and logs `resume.delegated`.
 - Any other snapshot: refused, with a message that names the version that saved it, for example `snapshot refused: this match was saved by Touchline 0.1.0, two or more versions back; ...`. The file stays on disk.
 
 | Flag | Value | Default | Meaning |

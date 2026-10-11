@@ -157,10 +157,11 @@ fn a_full_match_on_100_by_64_with_the_second_team_at_home() {
     full_match_on(100.0, 64.0, 1);
 }
 
-/// The 120 by 90 matches play seed 2, the lowest seed whose match brings at least five
+/// The 120 by 90 matches play seed 1, the lowest seed whose match brings at least five
 /// throw-ins on this wide ground in both home orders (seed 42 until the team stands went off,
-/// when it brought three and four).
-const WIDE_GROUND_SEED: u64 = 2;
+/// when it brought three and four; seed 2 until the player record came in, when it brought
+/// two in each order).
+const WIDE_GROUND_SEED: u64 = 1;
 
 #[test]
 fn a_full_match_on_120_by_90_with_the_first_team_at_home() {

@@ -8,6 +8,7 @@ mod decisions;
 mod fatigue;
 mod hooks;
 mod manager;
+pub mod mood;
 mod movement;
 mod pace;
 #[cfg(test)]
@@ -609,6 +610,16 @@ pub struct Simulation {
     pub(crate) shot_on_target: bool,
     pub(crate) shot_quality: f64,
     pub(crate) blockers_tried: u32,
+    /// The shot in flight's expected goals and its shooter, for the big-miss judgement when
+    /// it ends without a goal. Cleared with the shot.
+    pub(crate) shot_xg: f64,
+    pub(crate) shooter: Option<usize>,
+    /// The last completed open-play pass as `(passer, receiver)` while his side keeps the
+    /// ball, for the assist. Every dead ball clears it, like `last_kicker`.
+    pub(crate) last_pass: Option<(usize, usize)>,
+    /// Each side's bench mood: the side's mood events and the drift with a swing of 1, which
+    /// a substitute enters at ([`mood`]).
+    pub(crate) bench_mood: [f64; 2],
     /// The restart taker until his first kick or until another player touches the ball;
     /// his first kick is a restart kick. Every dead ball clears it.
     pub(crate) restart_taker: Option<usize>,
@@ -787,6 +798,10 @@ impl Simulation {
             shot_on_target: false,
             shot_quality: 0.0,
             blockers_tried: 0,
+            shot_xg: 0.0,
+            shooter: None,
+            last_pass: None,
+            bench_mood: [0.0; 2],
             #[cfg(feature = "scenario")]
             census: ShotCensus::default(),
             #[cfg(feature = "scenario")]
@@ -973,13 +988,50 @@ impl Simulation {
         families[Family::Body as usize][Group::Technical as usize] =
             BodyJobs::drop(&body.sharpness, entry.condition.sharpness);
         families[Family::Mind as usize][Group::Mental as usize] =
-            BodyJobs::drop(&body.adaptation, entry.condition.adaptation);
+            BodyJobs::drop(&body.adaptation, entry.condition.adaptation)
+                * crate::modules::modifier::condition::adaptation_scale(
+                    &entry.personality,
+                    &self.config.tuning,
+                );
+        // A player in the lineup plays his slot's position; a bench player reads his natural
+        // position, which costs nothing.
+        let side = &self.teams[team];
+        if let Some(slot) = side.lineup.iter().position(|&s| s == squad) {
+            let drop = states::familiarity_drop(
+                &entry.positions,
+                self.slot_position(team, slot),
+                &entry.personality,
+                &self.config.tuning.contract.person().familiarity,
+            );
+            families[Family::Familiarity as usize][Group::Technical as usize] = drop;
+            families[Family::Familiarity as usize][Group::Mental as usize] = drop;
+        }
         let deltas = states::capped(families, &self.config.tuning.contract.states);
         let today = states::effective(&entry.attributes, schema, deltas);
         [
             overall_level(&today, schema, entry.position),
             overall_level(&entry.attributes, schema, entry.position),
         ]
+    }
+
+    /// The position formation slot `slot` of `team` plays in the formation in force.
+    pub fn slot_position(&self, team: usize, slot: usize) -> crate::data::team::Position {
+        let formation = usize::from(self.teams[team].tactics.formation);
+        self.config.tactics.formations[formation].slots[slot].position
+    }
+
+    /// The position player `i` plays now: his formation slot's.
+    pub fn played_position(&self, i: usize) -> crate::data::team::Position {
+        let p = &self.players[i];
+        self.slot_position(p.team, p.slot)
+    }
+
+    /// Player `i`'s rating at each position, in [`crate::data::team::Position::ALL`] order,
+    /// from his squad entry.
+    #[inline]
+    pub fn position_ratings(&self, i: usize) -> &[crate::rating::Rating; 10] {
+        let p = &self.players[i];
+        &self.teams[p.team].squad[p.squad].positions
     }
 
     /// Player `i`'s match condition inputs, from his squad entry.
@@ -998,7 +1050,8 @@ impl Simulation {
 
     /// Sets player `i`'s state deltas and form offset and derives his effective values from
     /// them: his squad entry's when all are 0, otherwise blended again from his ratings moved
-    /// by both ([`crate::contract::states::effective_with_form`]) through the contract.
+    /// by his deltas ([`crate::contract::states::effective`]), with the form offset moving each
+    /// stage by its action's consistency degree after the blend.
     pub(crate) fn set_state(
         &mut self,
         i: usize,
@@ -1012,19 +1065,22 @@ impl Simulation {
             self.stages[i] = entry.stages;
         } else {
             let schema = &self.config.attributes;
-            let ratings = crate::contract::states::effective_with_form(
-                &entry.attributes,
-                schema,
-                deltas,
-                form,
-                &self.config.tuning.contract.states,
-            );
-            let (derived, stages) = crate::player::Derived::from_blend(
+            let ratings = crate::contract::states::effective(&entry.attributes, schema, deltas);
+            // The shared floor binds only with a person block in the tuning.
+            let floor = self
+                .config
+                .tuning
+                .contract
+                .person
+                .map(|person| (&entry.stages, person.floor_drop));
+            let (derived, stages) = crate::player::Derived::from_blend_floored(
                 &ratings,
                 &self.blend,
                 schema,
                 &self.config.tuning,
                 entry.body,
+                form,
+                floor,
             );
             self.players[i].derived = derived;
             self.stages[i] = stages;
@@ -1464,6 +1520,8 @@ impl Simulation {
                 }
                 self.shot_in_flight = Some(team);
                 self.shot_quality = quality;
+                self.shot_xg = xg;
+                self.shooter = Some(c);
                 shooter = Some((team, attack_x, c));
             } else if restart_kick {
                 self.summary.restart_kicks[team] += 1;
@@ -1492,10 +1550,7 @@ impl Simulation {
                 self.pass_in_flight = Some(team);
                 #[cfg(feature = "sensitivity")]
                 if self.probe.is_some() {
-                    let (from, attack_x) = (self.ball.xy(), self.teams[team].attack_x);
-                    if let Some(p) = self.probe.as_deref_mut() {
-                        p.kicked_pass(c, team, from, attack_x);
-                    }
+                    self.probe_pass(c, team);
                 }
                 #[cfg(feature = "measures")]
                 if let Some(m) = self.measures.as_deref_mut() {
@@ -1540,8 +1595,15 @@ impl Simulation {
         self.keeper_beaten = false;
     }
 
-    /// Ends the shot in flight, if any.
+    /// Ends the shot in flight, if any. A shot of at least the big-chance expected goals that
+    /// ends here, not in a goal (the goal takes its shooter first), is a big miss.
     pub(crate) fn end_shot(&mut self) {
+        if let Some(s) = self.shooter.take()
+            && self.shot_xg >= self.config.tuning.contract.person().mood.big_chance_xg
+        {
+            self.mood_event(s, mood::MoodEvent::BigMiss);
+        }
+        self.shot_xg = 0.0;
         self.shot_in_flight = None;
         self.shot_on_target = false;
         self.shot_quality = 0.0;

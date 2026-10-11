@@ -235,13 +235,25 @@ fn each_position_settles_at_its_stand_from_its_slot_with_each_team_in_possession
             } else {
                 (1.0 - p.derived.knobs.shape).max(0.0)
             };
+            // In possession a player with off-ball movement above the average takes space at
+            // his stand: his timed run moves his target across by up to that share of
+            // `hooks.anchor_space_m` ([`crate::decision`]).
+            let run = if p.team == team {
+                let s = sim
+                    .skills(i)
+                    .skill(crate::contract::Stage::OFF_BALL_RUN_EXECUTE)
+                    .max(0.0);
+                sim.config.tuning.contract.hooks().anchor_space_m * s
+            } else {
+                0.0
+            };
             assert!(
-                (p.target - want).length() <= lag * (p.pos - want).length() + 1e-9,
+                (p.target - want).length() <= lag * (p.pos - want).length() + run + 1e-9,
                 "team {team} in possession: player {i} target {} against {want}",
                 p.target
             );
             assert!(
-                (p.pos - want).length() < 1.0,
+                (p.pos - want).length() < 1.0 + run,
                 "team {team} in possession: player {i} stands at {} against {want}",
                 p.pos
             );

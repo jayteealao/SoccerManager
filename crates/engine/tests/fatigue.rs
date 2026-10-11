@@ -110,7 +110,10 @@ fn fatigue_runs_on_through_extra_time_without_a_step_at_ninety_minutes() {
     use engine::rules::clock::TICKS_PER_MINUTE;
 
     let i = index(0, PLAYER);
-    let mut sim = Scene::new(calm_match(90).with_knockout())
+    // Without the person block, so a late mood does not join the fatigue deltas checked here.
+    let mut config = calm_match(90).with_knockout();
+    config.tuning.contract.person = None;
+    let mut sim = Scene::new(config)
         .manager(0, engine::Manager::Human)
         .manager(1, engine::Manager::Human)
         .at_minute(89)

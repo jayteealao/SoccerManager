@@ -23,8 +23,10 @@ const SEEDS: [u64; 4] = [1, 2, 3, 4];
 /// equal-squad control at 0.190, above the 15 percent shift; sixteen brought the seed noise
 /// well under it. With the team stands off, a squad's sprints per match split in two groups
 /// (1 to 8 in most matches, 20 to 34 in about a quarter, the matches with a pressing or
-/// trailing lift), and sixteen left the control at 1.69; sixty-four bring it to 0.08.
-const BATCH: u64 = 64;
+/// trailing lift), and sixteen left the control at 1.69; sixty-four brought it to 0.08. Once
+/// the player record came in, sixty-four left it at 0.22, ninety-six at 0.04
+/// and 128 at 0.08; 128 keeps the margin when the noise lands the other way.
+const BATCH: u64 = 128;
 
 /// `file` with every outfield player's `name` rating set by `rating(k)`, `k` counting the
 /// outfield players in file order.

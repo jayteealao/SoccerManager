@@ -390,9 +390,10 @@ pub fn points_of(action: Action) -> &'static [Point] {
         | Action::DribbleScore
         | Action::HoldScore
         | Action::ClearScore
-        | Action::PassAim
         | Action::ClearWide
         | Action::ClearAim => &[Point::Carrier],
+        // Open-play passes, and corner and free-kick deliveries (`restart_pass`).
+        Action::PassAim => &[Point::Carrier, Point::RestartPass],
         // Open-play shots, and penalty and shoot-out kicks (`shot_kick`).
         Action::ShotSide | Action::ShotAim | Action::ShotSpread | Action::ShotLoft => {
             &[Point::Carrier, Point::RestartTaken]

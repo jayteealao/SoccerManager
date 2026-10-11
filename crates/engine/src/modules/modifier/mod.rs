@@ -12,6 +12,8 @@
 
 mod combine;
 pub mod condition;
+pub mod familiarity;
+pub mod mood;
 pub mod stand_ins;
 
 pub use combine::soft_combine;

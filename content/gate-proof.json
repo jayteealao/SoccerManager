@@ -8,7 +8,7 @@
       "flag": {
         "hypothesis": "a longer shooting range raises the shots per team by about 10 percent",
         "overrides": {
-          "engine.shot_range": 22.5
+          "engine.shot_range": 23.25
         },
         "owner": "engine team",
         "removal_condition": "a broken copy of the gate proof; never on in play"
