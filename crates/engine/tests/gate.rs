@@ -621,16 +621,26 @@ fn each_result_change_is_one_regenerate_entry_with_its_band_result() {
         .collect();
     assert_eq!(
         regenerations,
-        [2, 3, 4, 5, 6, 7],
-        "six regenerate entries, entries 2 to 7"
+        [2, 3, 4, 5, 6, 7, 8],
+        "seven regenerate entries, entries 2 to 8"
     );
-    let named: [(usize, &[&str]); 6] = [
+    let named: [(usize, &[&str]); 7] = [
         (2, &["libm", "keyed"]),
         (3, &["restart position check", "Law 8", "goal line"]),
         (4, &["tenths", "version 2", "every tick of play unchanged"]),
         (5, &["stage blend", "exponential curve", "1.0"]),
         (6, &["caps", "sharpness", "every sprint costs stamina"]),
         (7, &["Consistency", "injury proneness", "match rating"]),
+        (
+            8,
+            &[
+                "person",
+                "familiarity",
+                "mood",
+                "traits of play",
+                "weaker foot",
+            ],
+        ),
     ];
     for (index, words) in named {
         let entry = &file.ledger[index];
