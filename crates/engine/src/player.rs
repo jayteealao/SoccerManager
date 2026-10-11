@@ -99,10 +99,18 @@ pub struct Knobs {
     pub receive: f64,
     /// His reach to a loose ball and how far ahead he reads a run (intercept see).
     pub intercept: f64,
-    /// How far he presses from (press choose).
+    /// How far he presses from: his work rate alone, on the press strength and spread
+    /// ([`Blend::press_effort_share`]). How well he presses (his aim) is the press choose
+    /// stage, which positioning leads.
     pub press: f64,
-    /// How closely he keeps his place out of possession (shape execute).
+    /// How closely he keeps his place, in and out of possession (shape execute).
     pub shape: f64,
+    /// How far the cover defender leads a carrier's run, and how closely a back-line player
+    /// steps up or drops with his line (cover execute).
+    pub cover: f64,
+    /// Who takes a recovery run first when goal-side cover is missing (recovery run execute);
+    /// the stage's share sets how often the run is a sprint.
+    pub recovery_run: f64,
     /// His reach to block a shot (block execute).
     pub block: f64,
     /// How high he reaches in the air (aerial reach execute).
@@ -124,6 +132,8 @@ impl Knobs {
         intercept: 1.0,
         press: 1.0,
         shape: 1.0,
+        cover: 1.0,
+        recovery_run: 1.0,
         block: 1.0,
         aerial_reach: 1.0,
         claim_reach: 1.0,
@@ -210,8 +220,13 @@ impl Derived {
             knobs: Knobs {
                 receive: knob(A::Receive, Stage::RECEIVE_EXECUTE),
                 intercept: knob(A::Intercept, Stage::INTERCEPT_SEE),
-                press: knob(A::Press, Stage::PRESS_CHOOSE),
+                press: contract::factor(
+                    c.actions.of(A::Press).spread(),
+                    blend.press_effort_share(a, c),
+                ),
                 shape: knob(A::Shape, Stage::SHAPE_EXECUTE),
+                cover: knob(A::Cover, Stage::COVER_EXECUTE),
+                recovery_run: knob(A::RecoveryRun, Stage::RECOVERY_RUN_EXECUTE),
                 block: knob(A::Block, Stage::BLOCK_EXECUTE),
                 aerial_reach,
                 claim_reach: knob(A::Claim, Stage::CLAIM_EXECUTE),

@@ -14,11 +14,13 @@ use engine::{Change, EngineError, Manager, MatchConfig, Simulation, Stoppage};
 
 const HOME: usize = 0;
 
-/// The shipped teams at seed 5, the home side managed by hand.
+/// The shipped teams at seed 1, the home side managed by hand (seed 5 until the defending
+/// stages read their attributes, when only one of the two substitutes came on; seed 1 is the
+/// lowest seed where both do).
 fn config() -> MatchConfig {
     let content = common::content();
     let [a, b] = common::default_teams(&content);
-    MatchConfig::new(5, 90, &content, [&a, &b])
+    MatchConfig::new(1, 90, &content, [&a, &b])
         .unwrap()
         .with_manager(HOME, Manager::Human)
 }

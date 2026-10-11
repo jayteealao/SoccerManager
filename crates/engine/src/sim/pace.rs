@@ -43,9 +43,24 @@ impl Simulation {
             let starts =
                 grade == Grade::Urgent && (p.pace.since == tick || p.pace.grade != Grade::Urgent);
             let sprint = if starts {
-                let chance = pace::sprint_chance(p.derived.work_share, t);
+                // A recovery run's sprint reads the recovery-run stage (work rate leading,
+                // pace and acceleration supporting); every other urgent job reads work rate.
+                let share = if job == pace::Job::Recover {
+                    self.stages[i].share(crate::contract::Stage::RECOVERY_RUN_EXECUTE)
+                } else {
+                    p.derived.work_share
+                };
+                let chance = pace::sprint_chance(share, t);
                 let key = Key::player(Action::PaceSprint, PlayerKey::of(p));
-                self.streams.chance(key, chance)
+                let sprint = self.streams.chance(key, chance);
+                #[cfg(feature = "sensitivity")]
+                if sprint && job == pace::Job::Recover {
+                    let team = self.players[i].team;
+                    if let Some(probe) = self.probe.as_deref_mut() {
+                        probe.recovery_sprint(team);
+                    }
+                }
+                sprint
             } else {
                 grade == Grade::Urgent && p.pace.sprint
             };

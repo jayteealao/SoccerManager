@@ -86,10 +86,16 @@ pub enum ActionKind {
     FreeKick,
     /// A throw-in: how far the thrower looks for a team-mate.
     LongThrow,
+    /// Covering a team-mate and stepping up or dropping with the line: how far the cover
+    /// defender leads a carrier's run, and how late a back-line player moves with his line.
+    Cover,
+    /// A recovery run: who takes one first when goal-side cover is missing (how often), and
+    /// how likely it is a sprint (how hard).
+    RecoveryRun,
 }
 
 /// The number of action kinds.
-pub const ACTION_COUNT: usize = 35;
+pub const ACTION_COUNT: usize = 37;
 
 impl ActionKind {
     /// Every action, in declaration order.
@@ -129,6 +135,8 @@ impl ActionKind {
         ActionKind::Corner,
         ActionKind::FreeKick,
         ActionKind::LongThrow,
+        ActionKind::Cover,
+        ActionKind::RecoveryRun,
     ];
 
     /// The action's name in the content files.
@@ -169,6 +177,8 @@ impl ActionKind {
             ActionKind::Corner => "corner",
             ActionKind::FreeKick => "free_kick",
             ActionKind::LongThrow => "long_throw",
+            ActionKind::Cover => "cover",
+            ActionKind::RecoveryRun => "recovery_run",
         }
     }
 
@@ -303,11 +313,13 @@ pub const STAGES: [(ActionKind, StageKind); STAGE_COUNT] = {
         (A::Corner, S::Execute),
         (A::FreeKick, S::Execute),
         (A::LongThrow, S::Execute),
+        (A::Cover, S::Execute),
+        (A::RecoveryRun, S::Execute),
     ]
 };
 
 /// The number of stages play reads.
-pub const STAGE_COUNT: usize = 52;
+pub const STAGE_COUNT: usize = 54;
 
 /// One stage play reads: an index into [`STAGES`] and into [`StageValues`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -403,6 +415,8 @@ impl Stage {
     pub const CORNER_EXECUTE: Stage = Stage::of(ActionKind::Corner, StageKind::Execute);
     pub const FREE_KICK_EXECUTE: Stage = Stage::of(ActionKind::FreeKick, StageKind::Execute);
     pub const LONG_THROW_EXECUTE: Stage = Stage::of(ActionKind::LongThrow, StageKind::Execute);
+    pub const COVER_EXECUTE: Stage = Stage::of(ActionKind::Cover, StageKind::Execute);
+    pub const RECOVERY_RUN_EXECUTE: Stage = Stage::of(ActionKind::RecoveryRun, StageKind::Execute);
 }
 
 /// One player's stage values: each stage's value on the curve (`F` of the blended rating)
@@ -663,5 +677,7 @@ mod tests {
             assert!(a.stages().count() > 0, "{} has no stage", a.name());
         }
         assert_eq!(Stage::RUSH_CHOOSE.name(), "rush.choose");
+        assert_eq!(Stage::COVER_EXECUTE.name(), "cover.execute");
+        assert_eq!(Stage::RECOVERY_RUN_EXECUTE.name(), "recovery_run.execute");
     }
 }

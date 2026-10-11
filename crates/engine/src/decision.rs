@@ -19,6 +19,14 @@
 //! determination widens a presser's reach while his side trails, eccentricity widens a
 //! keeper's chase range, and the set-piece skills set a restart's delivery, a direct free
 //! kick's strike and a throw-in's range.
+//!
+//! The defensive jobs split how well a player does a job from how much he does it. Work rate
+//! alone sets how far he presses from; the press stage (positioning leading) leans his aim
+//! goal-side of the carrier by `hooks.press_goal_side_m`. The shape stage (teamwork leading)
+//! holds his place in both phases. The cover stage (positioning leading) sets the cover
+//! defender's lead on a carrier's run and how late a back-line player steps with his line.
+//! The recovery-run stage (work rate leading) sets who takes a recovery run first; the pace
+//! pass reads its share for how often the run is a sprint.
 
 use crate::contract::{self, Stage};
 use crate::data::rules::StoppageKind;
@@ -317,19 +325,18 @@ impl DecisionModule for DecisionV1 {
                     if !p.active() {
                         continue;
                     }
-                    let anchor = anchors[i];
-                    // Out of possession, a player who keeps his place less well than the
-                    // average (shape stage under 1) trails his anchor by the shortfall.
-                    let lag = 1.0 - p.derived.knobs.shape;
-                    targets[i] = if p.team != team && lag > 0.0 && i != keepers[def] {
-                        anchor + (p.pos - anchor) * lag
+                    // In both phases, a player who keeps his place less well than the
+                    // average (shape stage under 1) trails his anchor by the shortfall; the
+                    // carrier and the keepers take theirs.
+                    targets[i] = if i == c || i == keepers[p.team] {
+                        anchors[i]
                     } else {
-                        anchor
+                        lagged(p, anchors[i])
                     };
                     if p.team != team && i != keepers[def] && count > 0 {
                         let d = (p.pos - ball_xy).length();
-                        // Each presser's own reach: his press stage (work rate) scales the
-                        // team's pressing distance.
+                        // Each presser's own reach: his press effort (work rate alone) scales
+                        // the team's pressing distance.
                         let effort = if behind {
                             1.0 + behind_effort * p.derived.occasion.determination
                         } else {
@@ -350,12 +357,16 @@ impl DecisionModule for DecisionV1 {
                 // the line hold and cover then take their players from there.
                 let shaped = shape::apply(view, phase, &anchors, &mut targets);
                 hold_the_line(view, &mut targets, team, c);
-                back_to_place(view, &mut targets);
+                let sent_back = back_to_place(view, &mut targets);
                 time_runs(view, &mut targets, team, c);
                 // Pressers run at the point where they can meet the carrier's run, and go for
-                // the ball once they are close.
+                // the ball once they are close. Short of that, each leans his aim goal-side of
+                // the carrier by his press stage (positioning): a good presser closes the way
+                // to goal, a poor one comes from the open side.
                 let run = players[c].vel;
                 let engage = t.press_engage;
+                let lean_m = t.contract.hooks().press_goal_side_m;
+                let to_goal = toward(players[c].pos, teams[def].own_goal());
                 for &(_, i) in &pressers[..count] {
                     if i != usize::MAX {
                         let p = &players[i];
@@ -364,12 +375,23 @@ impl DecisionModule for DecisionV1 {
                             ball_xy
                         } else {
                             let horizon = INTERCEPT_HORIZON_S * p.derived.knobs.intercept;
-                            view.pitch()
-                                .clamp(intercept(p.pos, p.max_speed(), ball_xy, run, horizon), 0.5)
+                            let aim = intercept(p.pos, p.max_speed(), ball_xy, run, horizon);
+                            let lean = lean_m * view.skills(i).skill(Stage::PRESS_CHOOSE);
+                            view.pitch().clamp(aim + to_goal * lean, 0.5)
                         };
                     }
                 }
                 let cover = cover(view, &mut targets, def, c, &pressers[..count], keepers[def]);
+                let cover_defender = match cover {
+                    CoverTrace::Covered { defender, .. } => Some(defender),
+                    _ => None,
+                };
+                let skip = |i: usize| {
+                    sent_back & (1 << i) != 0
+                        || Some(i) == cover_defender
+                        || pressers[..count].iter().any(|&(_, k)| k == i)
+                };
+                step_with_line(view, &mut targets, def, skip);
                 hold_lapses(view, &mut targets);
                 let mut jobs = shape_jobs(view, phase, &targets, &shaped);
                 jobs[c] = Job::Carry;
@@ -417,7 +439,13 @@ impl DecisionModule for DecisionV1 {
                     if !p.active() {
                         continue;
                     }
-                    targets[i] = anchors[i];
+                    // Holding position acts while the ball is loose too; the chasers take
+                    // their own targets below.
+                    targets[i] = if i == keepers[p.team] {
+                        anchors[i]
+                    } else {
+                        lagged(p, anchors[i])
+                    };
                     let d = (p.pos - ball_xy).length();
                     if i != keepers[p.team] && d < nearest_dist[p.team] {
                         nearest_dist[p.team] = d;
@@ -425,7 +453,12 @@ impl DecisionModule for DecisionV1 {
                     }
                 }
                 let shaped = shape::apply(view, phase, &anchors, &mut targets);
-                back_to_place(view, &mut targets);
+                let sent_back = back_to_place(view, &mut targets);
+                for team in 0..2 {
+                    if phase != Some(team) {
+                        step_with_line(view, &mut targets, team, |i| sent_back & (1 << i) != 0);
+                    }
+                }
                 let mut chasing_keepers = [None; 2];
                 for (team, &i) in nearest.iter().enumerate() {
                     if i != usize::MAX {
@@ -1091,8 +1124,9 @@ fn shape_jobs(
 /// Recovery runs while goal-side cover is missing: while team `def` has fewer active
 /// outfield players goal-side of the ball than its mentality minimum (never more than its
 /// active outfield players less one), the players ahead of the ball nearest to getting
-/// goal-side recover, one per missing player. A presser keeps his press, and a chaser his
-/// chase.
+/// goal-side recover, one per missing player. Nearness is his distance ahead of the ball
+/// divided by his recovery-run stage (work rate leading), so a willing runner takes the run
+/// before a reluctant one as near. A presser keeps his press, and a chaser his chase.
 fn recovery_jobs(view: &MatchView<'_>, jobs: &mut [Job; ROSTER], def: usize, keeper: usize) {
     let players = view.players();
     let side = &view.teams()[def];
@@ -1109,14 +1143,24 @@ fn recovery_jobs(view: &MatchView<'_>, jobs: &mut [Job; ROSTER], def: usize, kee
     if missing == 0 {
         return;
     }
-    let mut candidates: Vec<(f64, usize)> = outfield()
+    let mut candidates: Vec<(f64, f64, usize)> = outfield()
         .filter(|&i| {
             ahead(i) >= 0.0 && !matches!(jobs[i], Job::Press | Job::LooseBall | Job::Chase)
         })
-        .map(|i| (ahead(i), i))
+        .map(|i| {
+            (
+                ahead(i) / players[i].derived.knobs.recovery_run,
+                ahead(i),
+                i,
+            )
+        })
         .collect();
-    candidates.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
-    for (_, i) in candidates {
+    candidates.sort_by(|a, b| {
+        a.0.total_cmp(&b.0)
+            .then(a.1.total_cmp(&b.1))
+            .then(a.2.cmp(&b.2))
+    });
+    for (_, _, i) in candidates {
         if missing == 0 {
             break;
         }
@@ -1140,8 +1184,10 @@ fn lapse_jobs(view: &MatchView<'_>, jobs: &mut [Job; ROSTER]) {
 /// the ball than `anchor_ball_distance` and farther than `anchor_tolerance` from both his
 /// places (his anchors in and out of possession, read with the ball itself), his target is
 /// the nearer place, whatever option or held spot the shape pass gave him. Pressers, chasers
-/// and the cover defender take their targets after this, and a lapse still holds him.
-fn back_to_place(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER]) {
+/// and the cover defender take their targets after this, and a lapse still holds him; the
+/// line step leaves him. Returns the roster bits of the players it sent back.
+fn back_to_place(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER]) -> u32 {
+    let mut sent = 0u32;
     let t = view.tuning();
     let ball = view.ball().xy();
     let teams = view.teams();
@@ -1160,8 +1206,10 @@ fn back_to_place(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER]) {
         };
         if (p.pos - nearer).length() > t.anchor_tolerance {
             targets[i] = nearer;
+            sent |= 1 << i;
         }
     }
+    sent
 }
 
 /// A player in a concentration lapse holds where he stands: his target is his position until
@@ -1350,7 +1398,8 @@ fn cover(
         // steering's slow-down near the spot leaves it running at the carrier's pace.
         let braking =
             (me.max_speed() * me.max_speed() / (2.0 * me.max_decel())).max(t.arrive_radius);
-        spot += players[c].vel * (braking / me.max_speed());
+        // His cover stage (positioning) scales the lead: a good coverer reads the run.
+        spot += players[c].vel * (braking / me.max_speed()) * me.derived.knobs.cover;
     }
     targets[i] = view.pitch().clamp(spot, 0.5);
     CoverTrace::Covered {
@@ -1360,9 +1409,47 @@ fn cover(
     }
 }
 
+/// Holding position (named mechanism), in both phases: a player whose shape stage
+/// (teamwork leading) is under 1 trails `anchor` by the shortfall, `anchor + (pos − anchor) ·
+/// (1 − knob)`; an average or better one takes the anchor.
+fn lagged(p: &crate::player::Player, anchor: DVec2) -> DVec2 {
+    let lag = 1.0 - p.derived.knobs.shape;
+    if lag > 0.0 {
+        anchor + (p.pos - anchor) * lag
+    } else {
+        anchor
+    }
+}
+
+/// The line step (named mechanism) of team `def` out of possession: each active back-line
+/// player other than the keeper and those `skip` names (the pressers, the cover defender and
+/// a player sent back to his place) whose cover stage (positioning leading) is under 1 steps
+/// up or drops with his line late: his target depth moves toward his own depth by the
+/// shortfall, `1 − knob`; his place across is unchanged. An average or better coverer moves
+/// with the line.
+fn step_with_line(
+    view: &MatchView<'_>,
+    targets: &mut [DVec2; ROSTER],
+    def: usize,
+    skip: impl Fn(usize) -> bool,
+) {
+    let side = &view.teams()[def];
+    let first = def * PLAYERS_PER_TEAM;
+    let keeper = view.keeper(def);
+    for slot in side.back_line() {
+        let i = first + slot;
+        let p = view.player(i);
+        let late = 1.0 - p.derived.knobs.cover;
+        if !p.active() || late <= 0.0 || i == keeper || skip(i) {
+            continue;
+        }
+        targets[i].x += (p.pos.x - targets[i].x) * late;
+    }
+}
+
 pub const DECISION_V1_CARD: ModuleCard = ModuleCard {
-    purpose: "Sets every player's target (anchors at each position's stand for the possession phase, stand options from the role menus, the rest-defence guard, the lone forward's line hold, timed runs against the offside line, pressing, goal-side cover, chasing) and the job each target is for (carry, press, recovery run, loose ball, chase, offer, return, follow, hold), and decides the carrier's option, pass, clearance, shot, and restart kick.",
-    inputs: "Every player's position, velocity, target, activity, slot, lapse, and effective values through the attribute contract (the carrier's see, choose, execute and pressure stages of passes, chips, crosses, shots, long shots, penalties, dribbles and keeper distribution, his skill gates and flair, the restart taker's corner, free-kick and long-throw stages, and every player's press, intercept, shape, rush, marking and off-ball run values, determination and eccentricity); the carrier's mood, pressure handling and professionalism; both teams' shapes and plans (the stand table, the role menus, the stand-option sizes, the mentality's rest-defence minimum and the guard); the possession phase; each player's familiarity (the familiarity family); the score; the ball; the carrier and how long he has held the ball; the tick; and the engine tuning.",
+    purpose: "Sets every player's target (anchors at each position's stand for the possession phase, held in both phases by each player's shape stage, stand options from the role menus, the rest-defence guard, the lone forward's line hold, timed runs against the offside line, pressing with a goal-side lean by the press stage, goal-side cover led by the cover stage, the back line's step with its line, chasing) and the job each target is for (carry, press, recovery run, loose ball, chase, offer, return, follow, hold; recovery runs taken first by the recovery-run stage), and decides the carrier's option, pass, clearance, shot, and restart kick.",
+    inputs: "Every player's position, velocity, target, activity, slot, lapse, and effective values through the attribute contract (the carrier's see, choose, execute and pressure stages of passes, chips, crosses, shots, long shots, penalties, dribbles and keeper distribution, his skill gates and flair, the restart taker's corner, free-kick and long-throw stages, and every player's press effort (work rate alone), press choose, intercept, shape, cover, recovery-run, rush, marking and off-ball run values, determination and eccentricity); the carrier's mood, pressure handling and professionalism; both teams' shapes and plans (the stand table, the role menus, the stand-option sizes, the mentality's rest-defence minimum and the guard); the possession phase; each player's familiarity (the familiarity family); the score; the ball; the carrier and how long he has held the ball; the tick; and the engine tuning.",
     outputs: "Every player's target and its job, the carrier's option scores and choice, and the kick of a pass, clearance, shot, or restart. The loop grades each job, draws an urgent job's sprint on its key, and picks the pace level steering arrives at.",
     tuning: &[
         "decision",

@@ -56,15 +56,16 @@ pub fn full_match() -> MatchConfig {
     MatchConfig::new(SEED, 90, &content, [&a, &b]).unwrap()
 }
 
-/// The seed-1, 90-minute match on the shipped content and default teams: it scores, and its
+/// The seed-3, 90-minute match on the shipped content and default teams: it scores, and its
 /// AI managers change tactics in the second half.
 /// (Seed 40 until the team stands went off or the converted team files took values from
-/// related attributes; seed 6 on those team files, where both sides scored. Seed 1 is the
-/// lowest that scores with both.)
+/// related attributes; seed 6 on those team files, where both sides scored; seed 1 until the
+/// defending stages read their attributes, when it stopped scoring. Seed 3 is the lowest
+/// that scores now.)
 pub fn scoring_match() -> MatchConfig {
     let content = content();
     let [a, b] = default_teams(&content);
-    MatchConfig::new(1, 90, &content, [&a, &b]).unwrap()
+    MatchConfig::new(3, 90, &content, [&a, &b]).unwrap()
 }
 
 /// A seed-42 match of `minutes` on the shipped content and default teams. Shorter than the

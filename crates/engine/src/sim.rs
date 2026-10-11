@@ -1794,14 +1794,15 @@ mod tests {
     #[test]
     fn the_last_kicker_is_clear_whenever_play_stops() {
         let mut stoppages = 0;
-        full_match(2, |sim| {
+        full_match(7, |sim| {
             if sim.stoppage().is_some() {
                 stoppages += 1;
                 assert_eq!(sim.last_kicker, None, "tick {}", sim.tick());
             }
         });
-        // The seed-2 match stops play more than 30 times (38); seed 1 stopped it 29 times once
-        // the restart waits shortened the live time; seed 42 stopped it 39 times until the
+        // The seed-7 match stops play more than 30 times (33); seed 2 stopped it 29 times once
+        // the defending stages read their attributes (38 before); seed 1 stopped it 29 times
+        // once the restart waits shortened the live time; seed 42 stopped it 39 times until the
         // team stands went off, then 27 (and 58 before the defending rework, which cut its
         // fouls, throw-ins and offsides); the floor only guards against an empty check.
         assert!(stoppages > 30, "only {stoppages} stoppages");

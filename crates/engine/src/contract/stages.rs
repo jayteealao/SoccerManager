@@ -151,6 +151,19 @@ impl Blend {
         )
     }
 
+    /// The press-effort share of a player with ratings `a`: the curve share of his work rate
+    /// alone on the press strength, 0.5 at rating 10. How much he presses (how far from) reads
+    /// it; how well he presses is the press stage, which positioning leads. A rating the schema
+    /// does not hold reads the floor.
+    pub fn press_effort_share(&self, a: &Attributes, c: &ContractTuning) -> f64 {
+        let work = self.pace[0].map_or(
+            crate::rating::Rating::from_tenths(crate::rating::MIN_TENTHS),
+            |i| a.get(i),
+        );
+        let k = c.actions.of(super::ActionKind::Press).k();
+        curve::share(k, curve::f(work.decimal(), &c.curve), &c.curve)
+    }
+
     /// The quick-restart share of a player with ratings `a`: the mean share of his decisions
     /// and flair. A rating the schema does not hold reads the floor.
     pub fn quick_share(&self, a: &Attributes) -> f64 {

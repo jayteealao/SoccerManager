@@ -228,13 +228,17 @@ fn each_position_settles_at_its_stand_from_its_slot_with_each_team_in_possession
                 continue;
             }
             let want = by_content(&sim, &content.tactics, i, p.team == team);
-            // Out of possession a player who keeps his place less well than average
-            // trails his place by the shortfall of his shape stage.
-            let lag = if p.team == team {
-                0.0
+            // In both phases a player who keeps his place less well than average trails his
+            // place by the shortfall of his shape stage; out of possession a back-line player
+            // who covers less well than average also steps with his line late, by the
+            // shortfall of his cover stage, on the lagged target's depth.
+            let shape_lag = (1.0 - p.derived.knobs.shape).max(0.0);
+            let step = if p.team != team && sim.teams[p.team].back_line().contains(&p.slot) {
+                (1.0 - p.derived.knobs.cover).max(0.0)
             } else {
-                (1.0 - p.derived.knobs.shape).max(0.0)
+                0.0
             };
+            let lag = shape_lag + step * (1.0 + shape_lag);
             // In possession a player with off-ball movement above the average takes space at
             // his stand: his timed run moves his target across by up to that share of
             // `hooks.anchor_space_m` ([`crate::decision`]).

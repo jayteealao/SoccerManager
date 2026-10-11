@@ -68,9 +68,10 @@ fn engine_events(config: engine::MatchConfig) -> (Vec<engine::EngineEvent>, Stre
 /// to 5 over 90 minutes, which bring injuries and a substitution the rule pack refuses; seeds
 /// 9, 11, 21 and 28, which bring more injuries and a second yellow; a 10-minute match, which
 /// adds no time; a knockout match (seed 8) played through extra time and a shoot-out; and
-/// seeds 6 and 1 between two generated top-flight clubs (league seed 1), which bring a second
+/// seeds 7 and 1 between two generated top-flight clubs (league seed 1), which bring a second
 /// yellow and a straight red (seed 7 until the restart waits shortened the live time, when its
-/// match stopped bringing a second yellow).
+/// match stopped bringing a second yellow; seed 6 until the defending stages read their
+/// attributes, when its match stopped bringing one and seed 7 brought one again).
 #[test]
 fn the_full_engines_event_streams_keep_the_event_rules() {
     use engine::EngineEventKind::{Card, ChangeRejected, HalfTime, Injury, Substitution};
@@ -95,7 +96,7 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
     );
     streams.push(("knockout seed 8".into(), (events, rules)));
     let league = engine::data::generate_league(1, 2, &content);
-    for seed in [6, 1] {
+    for seed in [7, 1] {
         let generated =
             engine::MatchConfig::new(seed, 90, &content, [&league[0], &league[1]]).unwrap();
         streams.push((format!("generated seed {seed}"), engine_events(generated)));

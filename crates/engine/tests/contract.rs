@@ -40,6 +40,8 @@ fn the_frozen_copies_have_a_table_for_each_stage_of_every_action() {
         serde_json::from_str(engine::data::convert::FROZEN_V1).expect("the frozen copy parses");
     let frozen_v4: serde_json::Value =
         serde_json::from_str(engine::data::convert::FROZEN_V4).expect("the fourth copy parses");
+    let frozen_v5: serde_json::Value =
+        serde_json::from_str(engine::data::convert::FROZEN_V5).expect("the fifth copy parses");
     let actions = frozen["attributes"]["actions"]
         .as_object()
         .expect("the frozen copy has action tables");
@@ -48,10 +50,15 @@ fn the_frozen_copies_have_a_table_for_each_stage_of_every_action() {
             let in_v1 = actions
                 .get(action.name())
                 .is_some_and(|t| t.get(stage.name()).is_some());
-            let in_v4 = frozen_v4["tables"]
-                .get(action.name())
-                .is_some_and(|t| t.get(stage.name()).is_some());
-            assert!(in_v1 || in_v4, "{action}: no frozen {stage:?} table");
+            let in_copy = |copy: &serde_json::Value| {
+                copy["tables"]
+                    .get(action.name())
+                    .is_some_and(|t| t.get(stage.name()).is_some())
+            };
+            assert!(
+                in_v1 || in_copy(&frozen_v4) || in_copy(&frozen_v5),
+                "{action}: no frozen {stage:?} table"
+            );
         }
     }
     let jobs = frozen["attributes"]["jobs"]
@@ -88,7 +95,13 @@ fn every_attribute_feeds_a_stage_and_has_a_job_with_a_statistic() {
                 assert_eq!(def.name, "consistency");
             }
             None if matches!(def.job.stage, JobStage::Occasion | JobStage::Inert) => {
-                assert!(def.is_personality(), "{}: only personality", def.name);
+                // Determination is the one visible attribute that acts on an occasion: it
+                // widens the press while his side trails.
+                assert!(
+                    def.is_personality() || def.name == "determination",
+                    "{}: only personality and determination",
+                    def.name
+                );
                 assert!(def.job.action.is_none(), "{}", def.name);
             }
             None => {
@@ -214,7 +227,10 @@ fn small_weights_are_lighter_than_every_shown_support_and_blend_into_the_stage()
             }
         }
     }
-    assert_eq!(with_minor, 5, "penalty, dribble, receive, tackle, block");
+    assert_eq!(
+        with_minor, 6,
+        "penalty, dribble, receive, tackle, block, press choose (vision)"
+    );
     // The blend reads a small weight: flair moves the receive stage, a little.
     let tuning = Tuning::default();
     let mut ratings = engine::player::Attributes {

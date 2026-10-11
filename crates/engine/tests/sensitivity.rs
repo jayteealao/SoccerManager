@@ -77,7 +77,8 @@ fn every_job_has_exactly_one_rule() {
         let n = file.rules.iter().filter(|r| r.job == *job).count();
         assert_eq!(n, 1, "{job} has {n} rules");
     }
-    assert_eq!(file.rules.len(), jobs.len());
+    // Beside the jobs, the press and cover stages have a stage rule each.
+    assert_eq!(file.rules.len(), jobs.len() + 2);
     for def in &content.attributes.attributes {
         let r = file.rules.iter().find(|r| r.job == def.name).unwrap();
         assert_eq!(r.statistic, def.job.statistic, "{}", def.name);
@@ -87,16 +88,53 @@ fn every_job_has_exactly_one_rule() {
 }
 
 /// Shape AC-11: every job the version 4 catalogue added has a rule with the report-only flag,
-/// and no other rule carries it, so the 40 older rules still fail the full run.
+/// and so do the defensive jobs' new and moved rules (work rate's recovery run, the press and
+/// cover stages); no other rule carries it, so the 39 older rules still fail the full run.
 #[test]
 fn the_new_rules_are_report_only() {
+    use engine::sensitivity::rules::DEFENSIVE_JOBS;
     let content = common::content();
     let file = sensitivity::load_rules(&content, &common::content_dir()).unwrap();
     for r in &file.rules {
-        let new = engine::data::convert::V4_ADDED.contains(&r.job.as_str());
+        let new = engine::data::convert::V4_ADDED.contains(&r.job.as_str())
+            || DEFENSIVE_JOBS.contains(&r.job.as_str());
         assert_eq!(r.report_only, new, "{}", r.job);
     }
-    assert_eq!(file.rules.iter().filter(|r| r.report_only).count(), 21);
+    assert_eq!(file.rules.iter().filter(|r| r.report_only).count(), 24);
+}
+
+/// The rules of the four defensive stages (the press and cover
+/// stage rules, teamwork's holding rule and work rate's recovery-run rule) run on a small
+/// batch and each returns its statistic's low and high values and a word; the three new or
+/// moved ones are report-only, so a failing word of theirs never blocks a full run.
+#[test]
+fn the_defensive_job_rules_run_and_report() {
+    let content = common::content();
+    let jobs = ["press.choose", "cover.execute", "teamwork", "work_rate"];
+    let results = run(&content, &jobs, 40, None);
+    assert_eq!(results.len(), jobs.len());
+    for job in jobs {
+        let r = rule(&results, job);
+        println!(
+            "{:<14} {:<52} low {:>8.3} high {:>8.3} {} {}",
+            r.job,
+            r.statistic,
+            r.low,
+            r.high,
+            r.word.name(),
+            if r.report_only { "report" } else { "" }
+        );
+        assert!(r.low.is_finite() && r.high.is_finite(), "{job}: {r:?}");
+        assert_eq!(r.report_only, job != "teamwork", "{job}");
+    }
+    let blocking: Vec<&str> = sensitivity::blocking(&results)
+        .iter()
+        .map(|r| r.job.as_str())
+        .collect();
+    assert!(
+        blocking.iter().all(|&j| j == "teamwork"),
+        "only an unflagged rule may block: {blocking:?}"
+    );
 }
 
 /// Shape AC-12: ambition, loyalty, money motivation and controversy, each at 1.0 and at 20.0

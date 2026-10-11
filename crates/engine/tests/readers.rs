@@ -784,7 +784,7 @@ fn every_new_attribute_moves_its_hook() {
 }
 
 /// Determination acts while his side trails: his reach moves more behind than level, where
-/// only his small support of the press stage acts.
+/// nothing of his determination acts (his job is an occasion, in no stage of the press).
 #[test]
 fn determination_widens_the_press_only_while_behind() {
     let behind = relative(press_reach(5.0, [1, 0]), press_reach(18.0, [1, 0]), Dir::Up);

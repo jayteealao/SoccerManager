@@ -264,6 +264,14 @@
         "long_throw": {
           "k": 0.054,
           "spread": 0.5
+        },
+        "cover": {
+          "k": 0.054,
+          "spread": 0.4
+        },
+        "recovery_run": {
+          "k": 0.054,
+          "spread": 0.2
         }
       },
       "speed": {
@@ -393,7 +401,8 @@
         "restart_noise": 0.06,
         "organise_back_line": 0.5,
         "anchor_space_m": 2.0,
-        "rash_chase": 0.3
+        "rash_chase": 0.3,
+        "press_goal_side_m": 2.0
       },
       "person": {
         "mood": {

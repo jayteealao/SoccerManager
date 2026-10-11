@@ -21,6 +21,12 @@
 //! communication moved to the mental group, the new and changed stage tables, and a
 //! consistency degree per action.
 //!
+//! A version 4 attribute file takes the version 5 changes from a fifth frozen copy
+//! (`contract/frozen-v5.json`): the press stage led by positioning, the shape stage led by
+//! teamwork with concentration and consistency, the new cover and recovery-run stages, work
+//! rate's job moved to the recovery run, determination's job made an occasion, and the two new
+//! consistency degrees.
+//!
 //! A version 1 or 2 team file converts to version 3 with values from related attributes
 //! ([`team_v2_to_v3`]): each new performance attribute is the mean of the attributes it grows
 //! from ([`V3_RELATED`]), an outfield player's communication is the mean of the old mental
@@ -58,6 +64,7 @@ pub const TACTICS_V1: u32 = 1;
 pub const ATTRIBUTES_V1: u32 = 1;
 pub const ATTRIBUTES_V2: u32 = 2;
 pub const ATTRIBUTES_V3: u32 = 3;
+pub const ATTRIBUTES_V4: u32 = 4;
 /// The tuning file versions the converters read.
 pub const TUNING_V2: u32 = 2;
 pub const TUNING_V3: u32 = 3;
@@ -266,12 +273,12 @@ struct FrozenV4 {
 
 /// A version 3 attribute file in the version 4 shape: each version 4 attribute it lacks is
 /// appended in [`V4_ADDED`] order, communication moves to the mental group, each frozen table
-/// replaces or adds its stage, and each missing consistency degree is added. The caller
-/// validates the result as a current file.
+/// replaces or adds its stage, and each missing consistency degree is added. The version 5
+/// step follows ([`attributes_v4_to_v5`]); the caller validates the result as a current file.
 pub fn attributes_v3_to_v4(mut file: AttributeSchema) -> AttributeSchema {
     let mut frozen: FrozenV4 =
         serde_json::from_str(FROZEN_V4).expect("the fourth frozen copy parses; a test checks it");
-    file.schema_version = ATTRIBUTES_VERSION;
+    file.schema_version = ATTRIBUTES_V4;
     for name in V4_ADDED {
         if file.index(name).is_none()
             && let Some(def) = frozen.attributes.remove(name)
@@ -287,6 +294,41 @@ pub fn attributes_v3_to_v4(mut file: AttributeSchema) -> AttributeSchema {
     for (action, stages) in frozen.tables {
         let tables = file.actions.entry(action).or_default();
         tables.extend(stages);
+    }
+    for (action, degree) in frozen.consistency_degrees {
+        file.consistency_degrees.entry(action).or_insert(degree);
+    }
+    file
+}
+
+/// The version 5 changes as they first shipped: the re-weighted press and shape stages, the
+/// cover and recovery-run stages, the jobs of work rate and determination, and the two new
+/// consistency degrees. Never edited: tuning the shipped file leaves it alone.
+pub const FROZEN_V5: &str = include_str!("../contract/frozen-v5.json");
+
+/// The fifth frozen copy's parts.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenV5 {
+    tables: ActionTables,
+    jobs: BTreeMap<String, Job>,
+    consistency_degrees: BTreeMap<ActionKind, f64>,
+}
+
+/// A version 4 attribute file in the version 5 shape: each frozen table replaces or adds its
+/// stage, each frozen job replaces the job of an attribute the file holds, and each missing
+/// consistency degree is added. The caller validates the result as a current file.
+pub fn attributes_v4_to_v5(mut file: AttributeSchema) -> AttributeSchema {
+    let frozen: FrozenV5 =
+        serde_json::from_str(FROZEN_V5).expect("the fifth frozen copy parses; a test checks it");
+    file.schema_version = ATTRIBUTES_VERSION;
+    for (action, stages) in frozen.tables {
+        file.actions.entry(action).or_default().extend(stages);
+    }
+    for def in &mut file.attributes {
+        if let Some(job) = frozen.jobs.get(&def.name) {
+            def.job = job.clone();
+        }
     }
     for (action, degree) in frozen.consistency_degrees {
         file.consistency_degrees.entry(action).or_insert(degree);

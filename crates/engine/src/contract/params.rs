@@ -282,12 +282,18 @@ pub struct HookTuning {
     /// How much a keeper's eccentricity widens the range from which he comes off his line.
     #[garde(range(min = 0.0, max = 1.0))]
     pub rash_chase: f64,
+    /// How far a top presser leans his aim goal-side of the carrier, metres; his press choose
+    /// skill (−1 to 1, 0 at rating 10) scales it, so a poor presser comes from the open side.
+    /// Absent in a file written before it, and then 0: no lean.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 6.0))]
+    pub press_goal_side_m: f64,
 }
 
 impl HookTuning {
     /// Every hook as play was before the hooks: braking with the acceleration, no effort when
     /// behind, no flair term, no direct free kick taken, no delivery noise, the keeper alone
-    /// organising the line, no anchor space and no rash chase.
+    /// organising the line, no anchor space, no rash chase and no press lean.
     pub const NEUTRAL: HookTuning = HookTuning {
         decel_anchor: 0.0,
         behind_effort: 0.0,
@@ -298,6 +304,7 @@ impl HookTuning {
         organise_back_line: 0.0,
         anchor_space_m: 0.0,
         rash_chase: 0.0,
+        press_goal_side_m: 0.0,
     };
 }
 
@@ -385,8 +392,11 @@ pub fn uses(action: ActionKind) -> [bool; 4] {
         | A::Organise
         | A::Rush => [true, false, false, true],
         A::Shield => [false, false, false, false],
-        // The five actions the record added; each may be absent ([`neutral_when_absent`]).
-        A::Mark | A::OffBallRun | A::LongThrow => [true, false, false, true],
+        // The five actions the record added and the two defensive jobs; each may be absent
+        // ([`neutral_when_absent`]).
+        A::Mark | A::OffBallRun | A::LongThrow | A::Cover | A::RecoveryRun => {
+            [true, false, false, true]
+        }
         A::Corner | A::FreeKick => [true, false, false, false],
         A::Pass
         | A::Chip
@@ -404,13 +414,20 @@ pub fn uses(action: ActionKind) -> [bool; 4] {
 }
 
 /// `true` for an action a tuning file may leave out, which then reads neutral (strength 0:
-/// share 0.5, factor 1): the five actions the record added, so a tuning file written before
-/// they had values (as an old replay embeds it) still loads and plays as it did.
+/// share 0.5, factor 1): the five actions the record added and the cover and recovery-run
+/// stages, so a tuning file written before they had values (as an old replay embeds it) still
+/// loads and plays them neutral.
 pub fn neutral_when_absent(action: ActionKind) -> bool {
     use ActionKind as A;
     matches!(
         action,
-        A::Mark | A::OffBallRun | A::Corner | A::FreeKick | A::LongThrow
+        A::Mark
+            | A::OffBallRun
+            | A::Corner
+            | A::FreeKick
+            | A::LongThrow
+            | A::Cover
+            | A::RecoveryRun
     )
 }
 
@@ -662,6 +679,8 @@ impl Default for ContractTuning {
                 A::Mark => Some(knob(0.054, 0.4)),
                 A::OffBallRun => Some(knob(0.054, 0.2)),
                 A::LongThrow => Some(knob(0.054, 0.5)),
+                A::Cover => Some(knob(0.054, 0.4)),
+                A::RecoveryRun => Some(knob(0.054, 0.2)),
                 A::Corner | A::FreeKick => Some(k_only(0.054)),
                 A::Shot => Some(k_only(0.07)),
                 A::LongShot => Some(k_only(0.02)),
@@ -705,6 +724,7 @@ impl Default for ContractTuning {
                 organise_back_line: 0.5,
                 anchor_space_m: 2.0,
                 rash_chase: 0.3,
+                press_goal_side_m: 2.0,
             }),
             person: Some(PersonTuning {
                 mood: MoodTuning {
@@ -789,7 +809,7 @@ mod tests {
     }
 
     #[test]
-    fn the_five_new_actions_may_be_absent_and_read_neutral_but_no_other() {
+    fn the_newer_actions_may_be_absent_and_read_neutral_but_no_other() {
         let mut c = ContractTuning::default();
         for a in [
             ActionKind::Mark,
@@ -797,6 +817,8 @@ mod tests {
             ActionKind::Corner,
             ActionKind::FreeKick,
             ActionKind::LongThrow,
+            ActionKind::Cover,
+            ActionKind::RecoveryRun,
         ] {
             c.actions.0[a as usize] = None;
             assert_eq!(c.actions.of(a).k(), 0.0);

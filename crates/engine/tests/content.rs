@@ -621,7 +621,7 @@ fn the_shipped_catalogue_holds_forty_five_visible_two_hidden_and_eleven_personal
     let content = common::content();
     let s = &content.attributes;
     assert_eq!(s.schema_version, ATTRIBUTES_VERSION);
-    assert_eq!(ATTRIBUTES_VERSION, 4);
+    assert_eq!(ATTRIBUTES_VERSION, 5);
     let visible = s.attributes.iter().filter(|d| !d.hidden).count();
     let hidden = s
         .attributes
@@ -715,6 +715,11 @@ fn every_new_attribute_names_a_stage_job_and_every_personality_value_an_occasion
                 JobStage::Inert => assert_eq!(def.job.statistic, "inert in a match", "{name}"),
                 other => panic!("{name}: {other:?}"),
             }
+        } else if def.job.stage == JobStage::Occasion {
+            // Determination widens the press while his side trails, an occasion no stage of
+            // its own reads (version 5).
+            assert_eq!(name, "determination");
+            assert!(def.job.action.is_none(), "{name}");
         } else {
             let stage = def
                 .job
@@ -775,13 +780,14 @@ fn a_personality_value_outside_its_rules_is_refused_by_name() {
     );
 }
 
-/// The version 3 file the build shipped before converts to version 4 with the same names,
-/// groups, jobs and gates as the shipped file; only the order of the attributes differs, as
-/// the new ones are appended. Its tables are the shipped ones but for the two small weights of
-/// bravery the shipped file tunes, and it keeps the uniform consistency degree 1.0, which is how
-/// a version 3 catalogue played.
+/// The version 3 file the build shipped before converts through version 4 to version 5 with
+/// the same names, groups, jobs and gates as the shipped file; only the order of the
+/// attributes differs, as the new ones are appended. Its tables are the shipped ones but for
+/// the two small weights of bravery the shipped file tunes, and it keeps the uniform
+/// consistency degree 1.0, which is how a version 3 catalogue played, but for the two degrees
+/// version 5 adds with its new stages.
 #[test]
-fn the_version_3_catalogue_converts_to_the_shipped_version_4() {
+fn the_version_3_catalogue_converts_to_the_shipped_catalogue() {
     let bytes = std::fs::read(common::fixture_path("attributes-v3.json")).unwrap();
     let v3: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(v3["schema_version"], 3);
@@ -813,8 +819,32 @@ fn the_version_3_catalogue_converts_to_the_shipped_version_4() {
         converted.consistency_degrees.len(),
         shipped.consistency_degrees.len()
     );
-    assert!(converted.consistency_degrees.values().all(|&d| d == 1.0));
+    for (action, &d) in &converted.consistency_degrees {
+        let added = matches!(action, ActionKind::Cover | ActionKind::RecoveryRun);
+        let want = if added {
+            shipped.consistency_degrees[action]
+        } else {
+            1.0
+        };
+        assert_eq!(d, want, "{action}");
+    }
     assert_eq!(converted.gates, shipped.gates);
+}
+
+/// The version 4 file the build shipped before (`attributes-v4.json`) converts to the shipped
+/// version 5 exactly: the re-weighted press and shape stages, the cover and recovery-run
+/// stages, the jobs of work rate and determination and the two new degrees come from the fifth
+/// frozen copy; nothing else changes.
+#[test]
+fn the_version_4_catalogue_converts_to_the_shipped_version_5() {
+    let bytes = std::fs::read(common::fixture_path("attributes-v4.json")).unwrap();
+    let v4: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(v4["schema_version"], 4);
+    let loaded = engine::data::load_attributes_bytes(&bytes, "attributes-v4.json").unwrap();
+    assert_eq!(loaded.converted_from, Some(4));
+    let content = common::content();
+    assert_eq!(&loaded.value, &content.attributes);
+    assert_eq!(ATTRIBUTES_VERSION, 5);
 }
 
 /// Every action with a table has its own consistency degree: finishing and saving swing most,

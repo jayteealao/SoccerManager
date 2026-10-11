@@ -20,12 +20,14 @@ use sha2::{Digest, Sha256};
 /// tick, early in the second half, before the AI manager's substitutions and tactics changes.
 const FROM_TICK: u32 = 50 * TICKS_PER_MINUTE;
 
-/// The seed-1, 90-minute match on the shipped content and default teams: after `FROM_TICK` it
-/// brings substitutions and an applied tactics change.
+/// The seed-3, 90-minute match on the shipped content and default teams: after `FROM_TICK` it
+/// brings substitutions and an applied tactics change (seed 1 until the defending stages
+/// read their attributes, when it brought no tactics change after the snapshot; seed 3 is
+/// the lowest that brings both).
 fn resume_match() -> engine::MatchConfig {
     let content = content();
     let [a, b] = default_teams(&content);
-    engine::MatchConfig::new(1, 90, &content, [&a, &b]).unwrap()
+    engine::MatchConfig::new(3, 90, &content, [&a, &b]).unwrap()
 }
 const OWNER: [u8; 16] = [7; 16];
 
