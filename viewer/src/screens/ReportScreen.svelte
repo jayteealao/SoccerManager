@@ -149,7 +149,8 @@
       hollow: notLive(m, skippedFrom),
       letter: m.kind === 'Goal' ? 'G' : m.kind === 'Yellow card' ? 'Y' : 'R',
       tone: m.kind === 'Goal' ? (m.side === 1 ? 'away' : 'home') : m.kind === 'Yellow card' ? 'yellow' : 'red',
-      key: `${m.tick}-${m.kind}-${m.side}`,
+      // Two cards to one side at one tick are two markers: the player is part of the key.
+      key: `${m.tick}-${m.kind}-${m.side}-${m.player}`,
     }))
   );
   let timelineLabel = $derived.by(() => {

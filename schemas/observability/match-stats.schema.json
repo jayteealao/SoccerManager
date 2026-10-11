@@ -362,6 +362,34 @@
             "type": "number",
             "minimum": 1.0,
             "maximum": 10.0
+          },
+          "started": {
+            "description": "On the pitch at kick-off. Absent from a record written before it: read as false.",
+            "type": "boolean"
+          },
+          "minutes": {
+            "description": "Whole minutes on the pitch.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 200
+          },
+          "goals": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "assists": {
+            "description": "Goals scored from his completed pass.",
+            "type": "integer",
+            "minimum": 0
+          },
+          "clean_sheet": {
+            "description": "None conceded while he was on the pitch, over at least the match rating's clean-sheet minutes.",
+            "type": "boolean"
+          },
+          "red": {
+            "description": "1 when he was sent off.",
+            "type": "integer",
+            "minimum": 0
           }
         },
         "additionalProperties": false

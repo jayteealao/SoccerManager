@@ -2,10 +2,11 @@
 // picks and the strip facts, each brought to the rendered tick from the match state and the
 // hello. `TouchlineScreen.svelte` and its components draw these rows.
 //
-// The parts the engine has no model for yet (sprint reserve, mind, taken up, the analysts'
-// reads, the gain and cost of a pick, shouts, game-state plans, what each change did) are
-// LATER stubs on the page and have no function here.
+// The parts the engine has no model for yet (sprint reserve, taken up, the analysts' reads,
+// the gain and cost of a pick, shouts, game-state plans, what each change did) are LATER stubs
+// on the page and have no function here.
 
+import { MOOD_TEXT } from './hidden-words.js';
 import { KIND } from './match-state.js';
 import { surname } from './prematch.js';
 import { wholeOf } from './scale.js';
@@ -44,6 +45,50 @@ export function levelCell(level, base) {
   return { text: '=', now, fresh, below: false, label: `Level ${fresh}: no change` };
 }
 
+/// The Mood cell of a player from his wire slot's mood word key: the word and its mark, only
+/// the mark coloured; "—" and "Mood not known" from an engine that sends none. Never a number.
+export function moodCell(key) {
+  const mood = MOOD_TEXT[key];
+  if (!mood) {
+    return { key: null, text: '—', mark: null, token: null, label: 'Mood not known' };
+  }
+  return { key, text: mood.text, mark: mood.mark, token: mood.token, label: `Mood: ${mood.text}` };
+}
+
+/// The note naming each starter who plays a slot away from his listed position and is rated
+/// lower there: "Kerr plays LB, away from his natural RB: familiarity lowers his level." One
+/// sentence each, in slot order; null when there is none. `rows` are the home rows of
+/// `lineupModel`, `slotPositions` the position code of each formation slot in force, and
+/// `squad` the hello's home squad (each entry's `player.positions`, tenths by code). A player
+/// whose ratings the hello does not carry is not named: there is nothing to say he is worse.
+export function outOfPositionNote(rows, slotPositions, squad) {
+  if (!Array.isArray(slotPositions)) {
+    return null;
+  }
+  const sentences = [];
+  rows.forEach((row, slot) => {
+    const plays = slotPositions[slot];
+    const natural = row.position;
+    if (!plays || !natural || plays === natural || row.sentOff) {
+      return;
+    }
+    const ratings = squad?.[row.squad]?.['player.positions'];
+    const there = ratings?.[plays];
+    const home = ratings?.[natural];
+    if (typeof there !== 'number' || typeof home !== 'number' || there >= home) {
+      return;
+    }
+    sentences.push({
+      id: row.id,
+      surname: surname(row.name),
+      plays,
+      natural,
+      text: `${surname(row.name)} plays ${plays}, away from his natural ${natural}: familiarity lowers his level.`,
+    });
+  });
+  return sentences.length ? sentences : null;
+}
+
 /// The player-state rows of the home eleven at the rendered tick. `rows` are the home rows of
 /// `lineupModel`; `entries` the released events. The slow reserve is the engine's one energy
 /// value, as a whole percentage with its band word; the card is the last card shown to the
@@ -59,6 +104,7 @@ export function playerStateRows(rows, entries) {
     const card = cards.get(row.id) ?? null;
     return {
       wire: row.wire,
+      id: row.id,
       shirt: row.shirt,
       name: row.name,
       surname: surname(row.name),
@@ -67,6 +113,7 @@ export function playerStateRows(rows, entries) {
       token: row.token,
       condition: row.condition,
       level: levelCell(row.level, row.base),
+      mood: moodCell(row.mood),
       card: card
         ? {
             kind: card.kind === 'yellow' ? 'yellow' : 'red',

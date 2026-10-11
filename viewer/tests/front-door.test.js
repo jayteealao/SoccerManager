@@ -601,7 +601,12 @@ test('at full time the quit button says Quit, since nothing is saved', async () 
 test('a converted team file shows its notice, and a current one shows none', () => {
   assert.equal(convertedNotice({ name: 'Current', converted: null }), null);
   assert.equal(convertedNotice(null), null);
-  const notice = convertedNotice({ name: 'Old Town', converted: 1 });
+  const notice = convertedNotice({ name: 'Old Town', converted: true, converted_from: 1 });
   assert.equal(notice.club, 'Old Town');
   assert.match(notice.text, /^uses an older team file\. .*converted to the 1 to 20 scale/);
+  assert.match(notice.text, /weaker foot at 50 percent/);
+  // A version 2 file is already on the 1 to 20 scale: its notice names only what was filled in.
+  const v2 = convertedNotice({ name: 'Old Town', converted: true, converted_from: 2 });
+  assert.match(v2.text, /^uses an older team file\. As it loaded, its missing values were filled in/);
+  assert.doesNotMatch(v2.text, /1 to 20 scale|below 1\.0/);
 });

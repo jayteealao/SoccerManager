@@ -185,6 +185,15 @@ pub struct SquadEntry {
         skip_serializing_if = "BTreeMap::is_empty"
     )]
     pub personality: BTreeMap<String, HiddenWord>,
+    /// His mood at kick-off as a word key (`confident`, `lifted`, `steady`, `low` or
+    /// `rattled`) whose display text the page owns; never a number. Protocol 7; an older
+    /// hello carries none.
+    #[serde(
+        rename = "player.mood",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub mood: Option<String>,
 }
 
 /// One trait of play a player carries: its name in the trait catalogue and its strength,
@@ -434,6 +443,10 @@ pub struct Condition {
     /// Each wire slot's overall level fresh, in tenths, beside `level`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub base: Vec<u8>,
+    /// Each wire slot's mood now as a word key (`confident`, `lifted`, `steady`, `low`,
+    /// `rattled`), never a number. Protocol 7; an older message carries none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mood: Vec<String>,
 }
 
 /// A queued change that the stoppage now opening takes. It is not a match event: it is sent
@@ -851,6 +864,7 @@ mod tests {
                                 confidence: Confidence::Tentative,
                             },
                         )]),
+                        mood: Some("lifted".into()),
                     }],
                     setup: Some(TeamSetup {
                         lineup: (0..11).collect(),
@@ -1021,6 +1035,7 @@ mod tests {
                 windows_used: [1, 0],
                 level: vec![130; 22],
                 base: vec![132; 22],
+                mood: vec!["steady".into(); 22],
             }),
             ServerMessage::Ack(Ack {
                 command: "queue-change".into(),
@@ -1141,6 +1156,7 @@ mod tests {
             windows_used: [1, 0],
             level: Vec::new(),
             base: Vec::new(),
+            mood: Vec::new(),
         }))
         .unwrap();
         assert_eq!(
@@ -1156,6 +1172,16 @@ mod tests {
             panic!("not a condition message");
         };
         assert_eq!((bare.subs_used, bare.windows_used), ([0, 0], [0, 0]));
+        assert!(bare.mood.is_empty(), "an earlier message carries no mood");
+        // A protocol 7 message carries a word key per wire slot.
+        let ServerMessage::Condition(worded) = serde_json::from_str::<ServerMessage>(
+            "{\"type\":\"condition\",\"tick\":50,\"energy\":[1.0,0.9],\
+             \"mood\":[\"lifted\",\"rattled\"]}",
+        )
+        .unwrap() else {
+            panic!("not a condition message");
+        };
+        assert_eq!(worded.mood, ["lifted", "rattled"]);
     }
 
     #[test]
@@ -1269,6 +1295,20 @@ mod tests {
             serde_json::to_string(&ratings).unwrap(),
             "{\"type\":\"ratings\",\"tick\":270000,\"ratings\":[{\"player.id\":\"a-1\",\"rating\":7.3}]}"
         );
+    }
+
+    /// The kick-off mood travels as a word key only, and an entry without it still reads.
+    #[test]
+    fn the_mood_travels_as_a_word_and_an_entry_without_it_reads() {
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(hello()))).unwrap();
+        assert!(json.contains("\"player.mood\":\"lifted\""), "{json}");
+        let older = json.replace(",\"player.mood\":\"lifted\"", "");
+        assert!(!older.contains("player.mood"), "{older}");
+        let ServerMessage::Hello(back) = serde_json::from_str::<ServerMessage>(&older).unwrap()
+        else {
+            panic!("not a hello");
+        };
+        assert_eq!(back.teams[0].squad[0].mood, None);
     }
 
     fn bare_team(id: &str, name: &str) -> TeamRef {

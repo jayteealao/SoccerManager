@@ -1,20 +1,22 @@
 <!-- The player-state table of the Touchline, ported from the sketch: our eleven at the rendered
      tick, each with the slow reserve (the engine's one energy figure) as a bar, a number and
-     its band word, his level now of his level when fresh ("13 of 15" when below, "=" when
-     not), and the last card with its minute. The sprint reserve, the mind and whether
-     the player has taken up the last shout need models the engine does not have: those columns
-     are LATER stubs. The word, never the colour, carries each state. -->
+     its band word, his mood as a word with a mark (only the mark coloured, never a number), his
+     level now of his level when fresh ("13 of 15" when below, "=" when not), and the last card
+     with its minute. The sprint reserve and whether the player has taken up the last shout need
+     models the engine does not have: those columns are LATER stubs. The word, never the colour,
+     carries each state. Under the table, a sentence names each starter playing away from his
+     natural position. -->
 <script>
   import SectionLabel from './SectionLabel.svelte';
   import StubSection from './StubSection.svelte';
 
-  let { rows = [], clock = '' } = $props();
+  let { rows = [], clock = '', outOfPosition = null } = $props();
 </script>
 
 <section aria-label="Player state">
   <SectionLabel label="Player state" note="true figures · {clock}" />
   <table>
-    <caption class="sr">Our eleven at {clock}: the slow reserve, level and cards of each player</caption>
+    <caption class="sr">Our eleven at {clock}: the slow reserve, mood, level and cards of each player</caption>
     <thead>
       <tr>
         <th scope="col" class="n">#</th>
@@ -24,9 +26,7 @@
           <StubSection note="sprint reserve" inline>Sprint reserve</StubSection>
         </th>
         <th scope="col" class="res">Slow reserve</th>
-        <th scope="col" class="stubcol mind" aria-hidden="true">
-          <StubSection note="mind" inline>Mind</StubSection>
-        </th>
+        <th scope="col" class="mood">Mood</th>
         <th scope="col" class="lv">Level</th>
         <th scope="col" class="card">Card</th>
         <th scope="col" class="stubcol taken" aria-hidden="true">
@@ -36,7 +36,7 @@
     </thead>
     <tbody>
       {#each rows as row, i (row.wire)}
-        <tr class:even={i % 2 === 1} class:off={row.sentOff}>
+        <tr class:even={i % 2 === 1} class:off={row.sentOff} data-player={row.id}>
           <td class="n num">{row.shirt}</td>
           <td class="nm">{row.surname}</td>
           <td class="stubcol" aria-hidden="true">
@@ -47,8 +47,9 @@
             <b class="num">{row.reserve}</b>
             <span class="band" style:color="var({row.token})">{row.band}</span>
           </td>
-          <td class="stubcol mind" aria-hidden="true">
-            <StubSection note="mind: {row.surname}" inline>—</StubSection>
+          <td class="mood" data-mood={row.mood.key ?? 'unknown'} aria-label={row.mood.label}>
+            {#if row.mood.mark}<span class="mk" aria-hidden="true" style:color={row.mood.token ? `var(${row.mood.token})` : null}>{row.mood.mark}</span>{/if}
+            <span class="mw" aria-hidden="true">{row.mood.text}</span>
           </td>
           <td class="lv" data-level={row.level.below ? 'below' : row.level.now === null ? 'unknown' : 'equal'} aria-label={row.level.label}>
             {#if row.level.below}
@@ -75,8 +76,14 @@
   <p class="foot">
     The slow reserve is each player's energy: it drains through the match. Level: the
     player's effective ability now, of his level when fresh; tiredness lowers it, and = means
-    no change. A tired player is the usual reason the assistant proposes a substitution.
+    no change. A tired player is the usual reason the assistant proposes a substitution. Mood
+    moves with goals, misses, cards and the score; never shown as a number.
   </p>
+  {#if outOfPosition}
+    <p class="foot oop" data-out-of-position={outOfPosition.map((o) => o.id).join(' ')}>
+      {#each outOfPosition as o (o.id)}<span>{o.text}</span>{/each}
+    </p>
+  {/if}
 </section>
 
 <style>
@@ -149,10 +156,31 @@
     font-size: 10px;
   }
 
-  .mind,
   .taken,
   .lv {
     text-align: center;
+  }
+
+  td.mood {
+    color: var(--ink-2);
+    font-size: 10px;
+  }
+
+  .mood .mk {
+    display: inline-block;
+    width: 10px;
+    margin-right: 3px;
+    text-align: center;
+    color: var(--ink-3);
+  }
+
+  .oop {
+    margin-top: 4px;
+    color: var(--ink-2);
+  }
+
+  .oop span + span::before {
+    content: ' ';
   }
 
   td.lv {
@@ -215,10 +243,15 @@
     container-type: inline-size;
   }
 
-  /* In a narrow column the three stub columns give way to the figures. */
+  /* In a narrow column the three stub columns give way to the figures, and the reserve bar
+     shortens so the mood word fits without a sideways scroll. */
   @container (max-width: 400px) {
     .stubcol {
       display: none;
+    }
+
+    .res .bar {
+      width: 26px;
     }
   }
 </style>

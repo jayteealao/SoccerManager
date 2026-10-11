@@ -735,6 +735,7 @@ fn check_squad_v1(players: &[PlayerEntryV1], schema: &AttributeSchema) -> garde:
 pub fn team_v1_to_v2(file: TeamFileV1) -> TeamFile {
     TeamFile {
         schema_version: TEAM_V2,
+        converted_from: None,
         club: file.club,
         players: file
             .players

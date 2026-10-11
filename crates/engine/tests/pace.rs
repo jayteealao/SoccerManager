@@ -25,8 +25,10 @@ const SEEDS: [u64; 4] = [1, 2, 3, 4];
 /// (1 to 8 in most matches, 20 to 34 in about a quarter, the matches with a pressing or
 /// trailing lift), and sixteen left the control at 1.69; sixty-four brought it to 0.08. Once
 /// the player record came in, sixty-four left it at 0.22, ninety-six at 0.04
-/// and 128 at 0.08; 128 keeps the margin when the noise lands the other way.
-const BATCH: u64 = 128;
+/// and 128 at 0.08; 128 keeps the margin when the noise lands the other way. Once the player
+/// as a person joined the team shape, 128 left it at 0.19, 160 at 0.12, 192 at 0.09 and 256
+/// at 0.17.
+const BATCH: u64 = 192;
 
 /// `file` with every outfield player's `name` rating set by `rating(k)`, `k` counting the
 /// outfield players in file order.

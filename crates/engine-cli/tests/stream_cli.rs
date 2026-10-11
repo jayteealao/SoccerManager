@@ -167,7 +167,7 @@ fn a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on() {
         .args([
             "serve",
             "--seed",
-            "5",
+            "6",
             "--minutes",
             "2",
             "--reconnect-wait",
@@ -236,12 +236,14 @@ fn a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on() {
         }
     }
     let first_tick = first_tick.expect("the match goes on after the reconnect");
-    // Seed 5 stops play before tick 3,000 (half-time of a two-minute match) and resumes after
-    // tick 2,000, so the match goes back to a stoppage the viewer held, never to kick-off and
-    // never past it. It is the lowest seed that does so once the defensive stages read the
-    // decided attributes (seed 32 until then, which now stops only at half-time; seed 29
-    // before the restart waits); seeds 1 to 4 stop only at half-time, and a drop flushed at
-    // exactly tick 3,000 went back to kick-off.
+    // Seed 6 stops play before tick 3,000 (half-time of a two-minute match), with a throw-in
+    // at tick 2,443, and resumes after tick 2,000, so the match goes back to a stoppage the
+    // viewer held, never to kick-off and never past it. It is the lowest seed that stops play
+    // between tick 2,000 and tick 3,000 once the player as a person joined the team shape
+    // (seed 5 until then, which now stops only at half-time; seed 32 until the defensive
+    // stages read the decided attributes; seed 29 before the restart waits). Seeds 1 and 2
+    // stop play before tick 2,000 and can resume there, seeds 3 to 5 stop only at half-time,
+    // and a drop flushed at exactly tick 3,000 went back to kick-off.
     assert!(
         first_tick > 2_000 && first_tick <= last_tick + 1,
         "resumed at {first_tick}; the viewer held up to {last_tick}"

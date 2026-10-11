@@ -7,7 +7,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'vitest';
 
-import { BUILD_TEXT, buildWord, HIDDEN_TEXT, hiddenWord, keyWords } from '../src/lib/hidden-words.js';
+import {
+  BUILD_TEXT,
+  buildWord,
+  HIDDEN_TEXT,
+  hiddenWord,
+  keyWords,
+  MOOD_TEXT,
+  moodWord,
+  PERSONALITY_NAMES,
+  PERSONALITY_TEXT,
+  standouts,
+  summaryWord,
+  sureness,
+} from '../src/lib/hidden-words.js';
 import { REPO_ROOT } from './helpers.js';
 
 const TUNING = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'content/tuning.json'), 'utf8'));
@@ -63,4 +76,87 @@ test('the best word orders highest and an unknown key reads in words, never as a
   }
   assert.equal(buildWord('powerful'), 'powerful');
   assert.equal(buildWord(null), null);
+});
+
+/// A personality of word keys, every value `middling` unless named, at `confidence`.
+function person(keys = {}, confidence = 'firm') {
+  return Object.fromEntries(
+    PERSONALITY_NAMES.map((name) => [name, { word: keys[name] ?? 'middling', confidence }])
+  );
+}
+
+test('the personality words cover the eleven values and their word keys', () => {
+  assert.deepEqual([...PERSONALITY_NAMES].sort(), [...PERSONALITY].sort());
+  for (const name of PERSONALITY_NAMES) {
+    assert.deepEqual(TUNING.hidden.words[name].map((b) => b.word), ['high', 'middling', 'low'], name);
+    assert.deepEqual(Object.keys(PERSONALITY_TEXT[name]).sort(), ['high', 'low'], name);
+  }
+});
+
+test('the summary word follows the rule table in order, and Balanced by default', () => {
+  const rows = [
+    [{ professionalism: 'high', ambition: 'high', temperament: 'high' }, 'Driven'],
+    [{ professionalism: 'high', temperament: 'high' }, 'Model professional'],
+    [{ leadership: 'high', temperament: 'high' }, 'Natural leader'],
+    [{ temperament: 'low', controversy: 'high' }, 'Volatile'],
+    [{ temperament: 'low' }, 'Fiery'],
+    [{ professionalism: 'low', pressure_handling: 'high' }, 'Casual'],
+    [{ pressure_handling: 'high', ambition: 'high' }, 'Big-game player'],
+    [{ ambition: 'high', loyalty: 'high' }, 'Ambitious'],
+    [{ loyalty: 'high' }, 'Loyal'],
+    [{ adaptability: 'high' }, 'Adaptable'],
+    [{ versatility: 'high' }, 'Adaptable'],
+    [{ sportsmanship: 'low', money_motivation: 'high' }, 'Balanced'],
+    [{}, 'Balanced'],
+  ];
+  for (const [keys, word] of rows) {
+    assert.equal(summaryWord(person(keys)), word, JSON.stringify(keys));
+  }
+  assert.equal(summaryWord(person({ professionalism: 'high', ambition: 'high' }, 'not_yet_known')), 'Not yet known');
+  assert.equal(summaryWord(null), 'Not yet known');
+  assert.equal(summaryWord({}), 'Not yet known');
+});
+
+test('standouts take the first three high or low values in the fixed order', () => {
+  const p = person({ controversy: 'high', professionalism: 'high', ambition: 'high', temperament: 'high', loyalty: 'low' });
+  assert.deepEqual(standouts(p), ['professional', 'ambitious', 'calm']);
+  assert.deepEqual(standouts(person({ loyalty: 'low', versatility: 'high' })), ['restless', 'versatile']);
+  assert.deepEqual(standouts(person()), []);
+  assert.deepEqual(standouts(person({ professionalism: 'high' }, 'not_yet_known')), []);
+});
+
+test('sureness reads sure or tentative with the matches here, and nothing known before a match', () => {
+  assert.equal(sureness(person({}, 'not_yet_known'), 0), 'no match for us yet');
+  assert.equal(sureness(person({}, 'tentative'), 9), 'tentative · 9 matches here');
+  assert.equal(sureness(person({}, 'firm'), 31), 'sure · 31 matches here');
+  assert.equal(sureness(person({}, 'tentative'), 1), 'tentative · 1 match here');
+});
+
+test('the five mood words carry their marks; a steady player new at the club is settling in', () => {
+  assert.deepEqual(Object.keys(MOOD_TEXT), ['confident', 'lifted', 'steady', 'low', 'rattled']);
+  const marks = Object.keys(MOOD_TEXT).map((k) => [moodWord(k, 9).text, moodWord(k, 9).mark, moodWord(k, 9).token]);
+  assert.deepEqual(marks, [
+    ['Confident', '▲', '--good'],
+    ['Lifted', '▲', '--good'],
+    ['Steady', '=', null],
+    ['Low', '▼', '--warn'],
+    ['Rattled', '▼', '--warn'],
+  ]);
+  assert.equal(moodWord('steady', 0).text, 'Settling in');
+  assert.equal(moodWord('lifted', 0).text, 'Lifted');
+  assert.equal(moodWord('steady', null).text, 'Steady');
+  const none = moodWord(undefined, 3);
+  assert.deepEqual([none.known, none.text, none.mark], [false, 'Not yet known', null]);
+});
+
+test('no personality or mood word carries a digit', () => {
+  const texts = [
+    ...Object.values(PERSONALITY_TEXT).flatMap((w) => Object.values(w)),
+    ...Object.values(MOOD_TEXT).map((m) => m.text),
+    summaryWord(person({ professionalism: 'high', ambition: 'high' })),
+    ...standouts(person({ professionalism: 'low', temperament: 'low', controversy: 'high' })),
+  ];
+  for (const text of texts) {
+    assert.ok(!/\d/.test(text), text);
+  }
 });

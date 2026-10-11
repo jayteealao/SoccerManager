@@ -42,7 +42,8 @@
   <p class="none">No goals or cards.</p>
 {:else}
   <ol class="moments" class:skipped>
-    {#each moments as moment (`${moment.tick}-${moment.kind}-${moment.side}`)}
+    <!-- Two cards to one side at one tick are two moments: the player is part of the key. -->
+    {#each moments as moment (`${moment.tick}-${moment.kind}-${moment.side}-${moment.player}`)}
       <li>
         <b class="min num">{moment.minute}</b>
         <b class={tone(moment)}>{moment.kind}</b>

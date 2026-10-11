@@ -2,8 +2,10 @@
 //! shipped content and default teams, give the event lists in `tests/data/rescale-events.json`.
 //! The lists were first written by the engine before ratings moved to tenths of 1 to 20, which
 //! kept every event, rewritten when every action began to read the attribute contract, again
-//! when states began to move ratings within caps, and again when consistency began to spread
-//! each player's form; this test compares and names the first event that differs.
+//! when states began to move ratings within caps, again when consistency began to spread
+//! each player's form, and again when the player as a person (mood, familiarity, traits of
+//! play, the weaker foot) began to act in play; this test compares and names the first event
+//! that differs.
 //!
 //! Set `SM_WRITE_RESCALE_EVENTS=1` to write the file instead of comparing. Rewrite it only in
 //! a change that regenerates the golden set.

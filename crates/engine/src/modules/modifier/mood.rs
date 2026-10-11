@@ -26,13 +26,13 @@ impl Modifier for OwnMoodV1 {
 
     fn effect(&self, view: &MatchView<'_>, i: usize) -> Effect {
         let w = view.tuning().contract.person().mood.own_weight;
-        mental(w * view.mood(i) / crate::sim::mood::FULL)
+        mental(w * view.mood(i) / crate::contract::mood::FULL)
     }
 }
 
 pub const OWN_MOOD_V1_CARD: ModuleCard = ModuleCard {
     purpose: "Moves a player's mental ratings with his own mood (mind family): his events and the score lift or lower him.",
-    inputs: "The player's mood (-100 to 100, moved by his goals, assists, big misses, errors, cards, fouls suffered, duels and his side's goals, and drifting with the score) and the person tuning.",
+    inputs: "The player's mood (-100 to 100, starting at his kick-off mood from his recent form and season-goal progress weighted by his ambition, moved by his goals, assists, big misses, errors, cards, fouls suffered, duels and his side's goals, and drifting with the score) and the person tuning.",
     outputs: "A delta on the mental group, own_weight points at a full mood either way, inside the mind cap.",
     tuning: &["contract.person.mood.own_weight"],
     calibration: "none: no mood band in realism-bands.json",
@@ -50,8 +50,11 @@ impl Modifier for TeamMoodV1 {
 
     fn effect(&self, view: &MatchView<'_>, i: usize) -> Effect {
         let w = view.tuning().contract.person().mood.team_weight;
+        if w == 0.0 {
+            return mental(0.0);
+        }
         let team = view.player(i).team;
-        mental(w * view.team_mood(team) / crate::sim::mood::FULL)
+        mental(w * view.team_mood(team) / crate::contract::mood::FULL)
     }
 }
 

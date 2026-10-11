@@ -28,9 +28,13 @@ use crate::trace::TraceRecord;
 
 /// The version of the gate's file layout and report. Version 2 follows state inventory
 /// version 2: a change to the inventory needs a higher gate schema.
-pub const GATE_SCHEMA: u16 = 4;
-/// The version of the state inventory the hashes are computed over.
-pub const INVENTORY_VERSION: u16 = 4;
+pub const GATE_SCHEMA: u16 = 5;
+/// The version of the state inventory the hashes are computed over. Version 5 adds the
+/// player as a person: each player's mood, each bench's mood, the trait acts, the override
+/// event, and the shot, pass, carry and chase state the new choices of play read. It also
+/// holds the team shape's state: the possession phase, the slide ball, each player's pace and
+/// a dead ball's restart wait.
+pub const INVENTORY_VERSION: u16 = 5;
 /// Ticks between two checkpoints.
 pub const CHECKPOINT_EVERY: u32 = 1_000;
 /// The version of the state digest file that `resimulate --state-digests` writes and `bisect`

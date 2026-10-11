@@ -13,6 +13,7 @@
 use crate::contract::{self, ActionKind, Skills, Stage, curve};
 use crate::modules::{FoulsModule, MatchView, ModuleCard, TackleChances};
 use crate::streams::Action;
+use crate::traits::TraitKind;
 use crate::tuning::Tuning;
 
 /// Metres per second above which a carrier runs with the ball rather than shields it, for
@@ -164,7 +165,7 @@ pub fn foul_chance_on(tackler: Skills<'_>, yellows: u8, occasion: f64, t: &Tunin
 pub fn foul_occasion(view: &MatchView<'_>, tackler: usize, carrier: usize, running: bool) -> f64 {
     let o = view.tuning().contract.person().occasions;
     let (me, them) = (view.personality(tackler), view.personality(carrier));
-    let low = (-view.mood(tackler) / crate::sim::mood::FULL).max(0.0);
+    let low = (-view.mood(tackler) / crate::contract::mood::FULL).max(0.0);
     let mut shift = o.temper_foul * low * (1.0 - me.temperament) - o.dive_foul * them.sportsmanship;
     if running {
         shift -= o.cynical_foul * me.sportsmanship;
@@ -196,7 +197,18 @@ pub fn commitment(p: Skills<'_>) -> f64 {
 /// The card, if any, for a foul by a player with commitment `aggression` (0 to 1) who has
 /// already been shown `yellows` yellow cards.
 pub fn card_outcome(aggression: f64, yellows: u8, t: &Tuning, draw: f64) -> Option<Card> {
-    let [red, red_or_yellow] = card_thresholds(aggression, t);
+    card_outcome_with(aggression, 0.0, yellows, t, draw)
+}
+
+/// [`card_outcome`] for an offender whose dissent adds `dissent` to his yellow-card chance.
+pub fn card_outcome_with(
+    aggression: f64,
+    dissent: f64,
+    yellows: u8,
+    t: &Tuning,
+    draw: f64,
+) -> Option<Card> {
+    let [red, red_or_yellow] = card_thresholds_with(aggression, dissent, t);
     if draw < red {
         Some(Card::Red)
     } else if draw < red_or_yellow {
@@ -216,6 +228,45 @@ pub fn card_thresholds(aggression: f64, t: &Tuning) -> [f64; 2] {
     let red = t.red_base;
     let yellow = t.yellow_base + t.yellow_aggression_weight * aggression;
     [red, red + yellow]
+}
+
+/// [`card_thresholds`] for an offender who argues with officials: his dissent adds `dissent`
+/// to the yellow band, so the referee's bar for a card is lower.
+pub fn card_thresholds_with(aggression: f64, dissent: f64, t: &Tuning) -> [f64; 2] {
+    let [red, yellow] = card_thresholds(aggression, t);
+    if dissent > 0.0 {
+        [red, (yellow + dissent).min(1.0)]
+    } else {
+        [red, yellow]
+    }
+}
+
+/// The trait log-odds on a tackle by `tackler` on `carrier`: diving in raises his win and
+/// his foul chance, staying on his feet lowers his foul chance, and a carrier who goes down
+/// easily raises it. `(win, foul)`; `(0, 0)` without traits.
+fn tackle_traits(view: &MatchView<'_>, tackler: usize, carrier: usize) -> (f64, f64) {
+    let (me, them) = (view.traits(tackler), view.traits(carrier));
+    if me.is_empty() && them.is_empty() {
+        return (0.0, 0.0);
+    }
+    let tw = view.tuning().contract.traits();
+    let dive = me.weight(TraitKind::DivesIntoTackles, tw);
+    let foul =
+        dive - me.weight(TraitKind::StaysOnFeet, tw) + them.weight(TraitKind::GoesDownEasily, tw);
+    (dive, foul)
+}
+
+/// The dissent player `offender`'s trait adds to his yellow-card chance.
+fn dissent(view: &MatchView<'_>, offender: usize) -> f64 {
+    let traits = view.traits(offender);
+    if traits.is_empty() {
+        0.0
+    } else {
+        traits.weight(
+            TraitKind::ArguesWithOfficials,
+            view.tuning().contract.traits(),
+        )
+    }
 }
 
 /// The fouls module, version 1: the functions above, called with the same operands in the
@@ -239,6 +290,7 @@ impl FoulsModule for FoulsV1 {
             carrier,
             view.player(carrier).vel.length() > RUNNING_SPEED,
         );
+        let (dive, trait_foul) = tackle_traits(view, tackler, carrier);
         let carrier = view.player(carrier);
         let p_win = if carrier.vel.length() > RUNNING_SPEED {
             let mut p_win = running_win_chance(me, them, t);
@@ -249,9 +301,17 @@ impl FoulsModule for FoulsV1 {
         } else {
             win_chance(me, them, t)
         };
+        // Diving into tackles wins more of them, inside the tackle limits.
+        let p_win = if dive > 0.0 && p_win > 0.0 && p_win < 1.0 {
+            let limits = t.contract.actions.of(ActionKind::Tackle);
+            contract::logistic(contract::logit(p_win) + dive)
+                .clamp(limits.floor(), limits.ceiling())
+        } else {
+            p_win
+        };
         TackleChances {
             p_win,
-            p_foul: foul_chance_on(me, p.yellow, occasion, t),
+            p_foul: foul_chance_on(me, p.yellow, occasion + trait_foul, t),
             ball_loss: ball_loss(them, t),
         }
     }
@@ -263,14 +323,19 @@ impl FoulsModule for FoulsV1 {
 
     #[inline]
     fn card_thresholds(&self, view: &MatchView<'_>, offender: usize) -> [f64; 2] {
-        card_thresholds(commitment(view.skills(offender)), view.tuning())
+        card_thresholds_with(
+            commitment(view.skills(offender)),
+            dissent(view, offender),
+            view.tuning(),
+        )
     }
 
     #[inline]
     fn card(&self, view: &MatchView<'_>, offender: usize, draw: f64) -> Option<Card> {
         let p = view.player(offender);
-        card_outcome(
+        card_outcome_with(
             commitment(view.skills(offender)),
+            dissent(view, offender),
             p.yellow,
             view.tuning(),
             draw,
@@ -280,7 +345,7 @@ impl FoulsModule for FoulsV1 {
 
 pub const FOULS_V1_CARD: ModuleCard = ModuleCard {
     purpose: "Decides each tackle attempt (clean win, foul, or miss) and the card for a foul.",
-    inputs: "Through the attribute contract: the tackler's tackle execute and choose stages (tackling, aggression), the carrier's dribble, shield and stay-up stages (dribbling, strength, balance) and take-on gate; the carrier's speed, the tackler's yellow cards, the tackler's mood, temperament and sportsmanship and the carrier's sportsmanship, and the engine tuning.",
+    inputs: "Through the attribute contract: the tackler's tackle execute and choose stages (tackling, aggression), the carrier's dribble, shield and stay-up stages (dribbling, strength, balance) and take-on gate; the carrier's speed, the tackler's yellow cards, the tackler's mood, temperament and sportsmanship and the carrier's sportsmanship, the tackler's and the carrier's tackle traits and the offender's dissent trait, and the engine tuning.",
     outputs: "The tackle chances and outcome, the card thresholds, and the card; the loop applies the foul and the card.",
     tuning: &[
         "tackle_win_base",
@@ -299,6 +364,7 @@ pub const FOULS_V1_CARD: ModuleCard = ModuleCard {
         "contract.person.occasions.temper_foul",
         "contract.person.occasions.cynical_foul",
         "contract.person.occasions.dive_foul",
+        "contract.traits",
     ],
     calibration: "yellow_cards_per_team",
     keys: &[Action::Tackle, Action::FoulCard],

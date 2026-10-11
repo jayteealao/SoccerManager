@@ -23,16 +23,18 @@
 pub mod body;
 pub mod consistency;
 pub mod curve;
+pub mod foot;
 pub mod hidden;
 pub mod level;
+pub mod mood;
 pub mod params;
 pub mod stages;
 pub mod states;
 
 pub use curve::{contest, factor, logistic, logit, share};
 pub use params::{
-    ActionMap, ActionParams, ContractTuning, CurveTuning, HookTuning, LapseTuning, PersonTuning,
-    SpeedTuning,
+    ActionMap, ActionParams, ContractTuning, CurveTuning, FootTuning, HookTuning, LapseTuning,
+    OverrideChances, PersonTuning, SeasonTuning, SpeedTuning, TraitTuning, TraitWeights,
 };
 pub use stages::{GateDef, GateDefs, StageTable, Weighted, stage_values};
 
@@ -517,6 +519,9 @@ pub struct Gates {
     pub take_on_try: bool,
     /// Log-odds his take-on loses in a tackle; 0 when he pulls it off.
     pub take_on_penalty: f64,
+    /// Rating points of technique he lacks to try a take-on; 0 when he tries one. A trait
+    /// of play that tries tricks reads it.
+    pub take_on_short: f64,
 }
 
 impl Gates {
@@ -526,6 +531,7 @@ impl Gates {
         chip_penalty: 0.0,
         take_on_try: true,
         take_on_penalty: 0.0,
+        take_on_short: 0.0,
     };
 }
 
@@ -584,8 +590,9 @@ pub fn occasion_skills(
 /// rating 10: temperament (the mood swing and foul aggression after a setback),
 /// sportsmanship (cynical fouls and going down), pressure handling (the mood swing, late
 /// close games and penalties), professionalism (concentration lapses), leadership (his
-/// weight in his side's mood), adaptability (the familiarity and adaptation drops) and
-/// versatility (the familiarity drop).
+/// weight in his side's mood), adaptability (the familiarity and adaptation drops),
+/// versatility (the familiarity drop) and ambition (the season goal's weight in his kick-off
+/// mood).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PersonalityScales {
     pub temperament: f64,
@@ -595,6 +602,7 @@ pub struct PersonalityScales {
     pub leadership: f64,
     pub adaptability: f64,
     pub versatility: f64,
+    pub ambition: f64,
 }
 
 impl PersonalityScales {
@@ -607,13 +615,15 @@ impl PersonalityScales {
         leadership: 0.0,
         adaptability: 0.0,
         versatility: 0.0,
+        ambition: 0.0,
     };
 }
 
 /// The personality scales of a player with ratings `a`: `2 · share(k, F(r)) − 1` of each
 /// value, with the strength `k` of the action whose occasion it shapes (tackle for
 /// temperament and sportsmanship, penalty for pressure handling, shape for professionalism,
-/// organise for leadership, receive for adaptability and versatility). A value the schema
+/// organise for leadership, receive for adaptability and versatility, shape for ambition). A
+/// value the schema
 /// lacks reads 0. No state moves a personality value, so a squad entry computes them once.
 pub fn personality_scales(
     a: &crate::player::Attributes,
@@ -634,6 +644,7 @@ pub fn personality_scales(
         leadership: skill("leadership", ActionKind::Organise),
         adaptability: skill("adaptability", ActionKind::Receive),
         versatility: skill("versatility", ActionKind::Receive),
+        ambition: skill("ambition", ActionKind::Shape),
     }
 }
 

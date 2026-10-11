@@ -10,7 +10,9 @@ import { MatchState } from '../src/lib/match-state.js';
 import {
   benchRows,
   levelCell,
+  moodCell,
   NO_PICK,
+  outOfPositionNote,
   pickDetail,
   pickKey,
   playerStateRows,
@@ -126,4 +128,46 @@ test('the level reads now of fresh when below, an equals sign when not, and a da
   assert.equal(levelCell(150, 150).text, '=');
   assert.equal(levelCell(146, 150).text, '=', 'the same whole number is no change');
   assert.equal(levelCell(undefined, 150).text, '—');
+});
+
+test('the mood column reads each word with its mark, only the mark coloured, and a dash when unknown', () => {
+  const expected = {
+    confident: ['Confident', '▲', '--good'],
+    lifted: ['Lifted', '▲', '--good'],
+    steady: ['Steady', '=', null],
+    low: ['Low', '▼', '--warn'],
+    rattled: ['Rattled', '▼', '--warn'],
+  };
+  for (const [key, [text, mark, token]] of Object.entries(expected)) {
+    const cell = moodCell(key);
+    assert.deepEqual([cell.key, cell.text, cell.mark, cell.token], [key, text, mark, token]);
+    assert.equal(cell.label, `Mood: ${text}`);
+    assert.ok(!/\d/.test(cell.text + cell.label));
+  }
+  const unknown = moodCell(undefined);
+  assert.deepEqual([unknown.text, unknown.mark, unknown.label], ['—', null, 'Mood not known']);
+  const rows = playerStateRows([row(0, 1, { mood: 'lifted' }), row(1, 1)], []);
+  assert.equal(rows[0].mood.text, 'Lifted');
+  assert.equal(rows[1].mood.text, '—');
+});
+
+test('the out-of-position note names a starter away from his listed position and rated lower there', () => {
+  const listed = ['GK', 'RB', 'CB', 'CB', 'LB', 'DM', 'CM', 'CM', 'RW', 'LW', 'CM'];
+  const slots = ['GK', 'RB', 'CB', 'CB', 'LB', 'DM', 'CM', 'CM', 'RW', 'LW', 'ST'];
+  const rows = listed.map((position, i) => row(i, 1, { position, squad: i }));
+  const squad = listed.map((position) => ({ 'player.positions': { [position]: 150, ST: 90 } }));
+  const note = outOfPositionNote(rows, slots, squad);
+  assert.equal(note.length, 1);
+  assert.equal(note[0].text, 'Player10 plays ST, away from his natural CM: familiarity lowers his level.');
+  assert.deepEqual([note[0].plays, note[0].natural, note[0].id], ['ST', 'CM', 'h-10']);
+  // Rated as well there: nothing to say.
+  const asGood = squad.map((p, i) => (i === 10 ? { 'player.positions': { CM: 150, ST: 160 } } : p));
+  assert.equal(outOfPositionNote(rows, slots, asGood), null);
+  // Every starter in his listed position, no ratings, or no lineup yet: no note.
+  assert.equal(outOfPositionNote(rows, listed, squad), null);
+  assert.equal(outOfPositionNote(rows, slots, []), null);
+  assert.equal(outOfPositionNote(rows, null, squad), null);
+  // A player sent off is not named.
+  const off = rows.map((r, i) => (i === 10 ? { ...r, sentOff: true } : r));
+  assert.equal(outOfPositionNote(off, slots, squad), null);
 });

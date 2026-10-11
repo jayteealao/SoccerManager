@@ -335,7 +335,7 @@ mod tests {
         assert!(max_x < 20.5, "overshot to {max_x}");
     }
 
-    /// Shape AC-21: two players differing only in agility, both stopping from a sprint at the
+    /// Two players differing only in agility, both stopping from a sprint at the
     /// same speed: the higher-agility player stops in a shorter distance.
     #[test]
     fn the_higher_agility_player_stops_in_a_shorter_distance() {

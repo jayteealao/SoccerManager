@@ -23,6 +23,7 @@ mod report;
 mod resimulate;
 mod restart_waits;
 mod resume;
+mod season;
 mod serve;
 mod simulate;
 mod state_files;

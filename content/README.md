@@ -1,6 +1,6 @@
 # Content files
 
-This folder holds the content files the engine reads: the attribute schema, the tuning constants, the rule pack, the tactics file, the commentary lines, the realism bands and their gate proof, ten sample clubs, and the fast model's fit.
+This folder holds the content files the engine reads: the attribute schema, the tuning constants, the rule pack, the tactics file, the trait catalogue, the commentary lines, the realism bands and their gate proof, ten sample clubs, and the fast model's fit.
 
 Every field of every file, with its unit, its default, and its bound, is in [the data-file reference](../docs/reference/data-files.md). To change a value, follow [the modding how-to](../docs/how-to/modding.md).
 
@@ -9,6 +9,12 @@ To change behaviour with code rather than values, write a script pack: see [scri
 ## Sample clubs
 
 `teams/` holds ten sample clubs. A served match plays the home and away files (`default-a.json` and `default-b.json` unless a flag names others); every other club file in the folder plays in the background round of that matchday, paired into fixtures from the match seed and played on the full engine beside the match. The eight `club-000007ea-*.json` files were written once by `engine-cli generate --seed 2026 --clubs 8`. A club file added to the folder joins the round; a file that does not load is left out with a warning. No file in `teams/` other than the two a match plays changes that match, its save or its replay.
+
+The sample clubs are older team files. Each converts as it loads: the new attributes take values from related ones, every personality value is the middle of the scale, the weaker foot is 50 percent, only the listed position is rated, and no player has a trait of play. Match setup names a club whose file converted. A file written by `engine-cli generate` is at the current version 3 and carries every field.
+
+## Traits of play
+
+`traits.json` is the trait catalogue: the 31 traits of play a player may carry, such as `cuts_inside` or `holds_up_ball`. Each trait names the choice of play it acts on (`hook`), and nine pairs name each other as opposites (`opposite`). A team file gives a player's traits by name with a strength, `moderate` or `strong`. The engine refuses a team file that names a trait the catalogue does not hold, or gives one player two opposite traits, and names the player and the traits. A trait's weight and, for the ten traits that can go against an instruction, its chance to override the instruction are in `tuning.json` under `engine.contract.traits`. Every field is in [the data-file reference](../docs/reference/data-files.md).
 
 ## Home grounds
 

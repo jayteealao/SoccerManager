@@ -118,6 +118,7 @@ pub fn generate_league_in_tier(
         }
         out.push(TeamFile {
             schema_version: TEAM_VERSION,
+            converted_from: None,
             club: Club {
                 id: club_id,
                 name,

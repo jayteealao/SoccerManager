@@ -122,7 +122,7 @@ fn every_attribute_feeds_a_stage_and_has_a_job_with_a_statistic() {
 
 // --- Personality and the small weights.
 
-/// Shape AC-4 of the record: no state family moves a personality value, and nothing panics,
+/// No state family moves a personality value, and nothing panics,
 /// with deltas on every state group and a form offset on the blend.
 #[test]
 fn no_state_moves_a_personality_value_and_nothing_panics() {
@@ -163,7 +163,7 @@ fn no_state_moves_a_personality_value_and_nothing_panics() {
     }
 }
 
-/// Shape AC-18: with a consistency degree per action, a form offset moves each action by its
+/// With a consistency degree per action, a form offset moves each action by its
 /// own degree. Degrees planted at 0.5 on the pass and 1.5 on the shot, a player at 10.0
 /// throughout and an offset of +0.5: `ln(F / 8) * width / 0.5` of every stage equals its
 /// action's degree, and a degree of 0 leaves a stage at 8.
@@ -199,7 +199,7 @@ fn each_action_moves_by_its_own_consistency_degree() {
     assert!(stages.f(shot) > stages.f(pass) && stages.f(pass) > 8.0);
 }
 
-/// Shape AC-5 of the record: in every stage with small weights, each small weight is lighter
+/// In every stage with small weights, each small weight is lighter
 /// than the lightest shown support, the main is the heaviest, and the blend reads them; a
 /// small weight as heavy as a shown support is refused.
 #[test]
@@ -548,11 +548,12 @@ fn familiarity_lowers_technical_and_mental_inside_its_cap() {
 
 /// The worst case for home player 5: every attribute but the personality
 /// values at 18, played at a position he is rated 1 in (natural 18), his whole side at a full
-/// low mood, no energy, no sharpness and his form at the shipped bound below. Returns the ratio
-/// of each of his stage values to a flat-11 player's, the difference of each share, and his
-/// lowest visible effective rating. `plant` edits the configuration first.
-fn worst_case(plant: impl Fn(&mut MatchConfig)) -> (Vec<f64>, Vec<f64>, f64) {
-    use engine::contract::STAGE_COUNT;
+/// low mood, no energy, no sharpness and his form at the shipped bound below. Returns the
+/// match, the player and a flat-11 player's stage values. `plant` edits the configuration
+/// first.
+fn worst_sim(
+    plant: impl Fn(&mut MatchConfig),
+) -> (engine::Simulation, usize, engine::contract::StageValues) {
     let me = index(0, 5);
     let mut config = calm_match(90);
     let squad = config.players[me].squad;
@@ -583,6 +584,15 @@ fn worst_case(plant: impl Fn(&mut MatchConfig)) -> (Vec<f64>, Vec<f64>, f64) {
         len: schema.len() as u8,
     };
     let (_, eleven) = Derived::from_attributes(&flat, &schema, &tuning);
+    (sim, me, eleven)
+}
+
+/// The worst case ([`worst_sim`]): the ratio of each of the player's stage values to a
+/// flat-11 player's, the difference of each share, and his lowest visible effective rating.
+fn worst_case(plant: impl Fn(&mut MatchConfig)) -> (Vec<f64>, Vec<f64>, f64) {
+    use engine::contract::STAGE_COUNT;
+    let (sim, me, eleven) = worst_sim(plant);
+    let schema = sim.config().attributes.clone();
     let skills = sim.skills(me);
     let f: Vec<f64> = (0..STAGE_COUNT)
         .map(|s| skills.stages.f[s] / eleven.f[s])
@@ -609,9 +619,9 @@ fn lowest_rating(ratios: &[f64], width: f64) -> f64 {
         .fold(f64::INFINITY, f64::min)
 }
 
-/// An 18 in the worst case (the weaker foot not yet in it): with the shipped caps,
-/// the worst case keeps every stage value, every share (so every pressed execution share) and
-/// every visible effective rating at least a flat 11's.
+/// An 18 in the worst case, before any kick: with the shipped caps, the worst case keeps
+/// every stage value, every share (so every pressed execution share) and every visible
+/// effective rating at least a flat 11's. The weaker foot on top of it is the next test.
 #[test]
 fn an_eighteen_in_the_worst_case_plays_no_action_below_eleven() {
     let width = calm_match(90).tuning.contract.curve.width;
@@ -623,6 +633,101 @@ fn an_eighteen_in_the_worst_case_plays_no_action_below_eleven() {
     assert!(f.iter().all(|r| *r >= 1.0 - 1e-9), "{f:?}");
     assert!(share.iter().all(|d| *d >= -1e-9), "{share:?}");
     assert!(lowest >= 11.0, "{lowest}");
+}
+
+/// The worst case on the weaker foot: the player's weaker foot at 1, every kick (pass, chip,
+/// cross, shot, long shot) to his weaker side, pressed by an opponent 0.5 m away, at 40 m.
+/// Returns, per kick, the ratio of each of its two stages after the shrunk cost to a flat
+/// 11's, and its pressed execution share less a flat 11's.
+fn weaker_foot_kicks(plant: impl Fn(&mut MatchConfig)) -> Vec<(&'static str, [f64; 2], f64)> {
+    use engine::contract::Stage;
+    use engine::contract::foot::{KickSide, cost_points, kick_share, shrunk};
+    use engine::data::team::{Foot, Side};
+    let (sim, me, eleven) = worst_sim(plant);
+    let c = &sim.config().tuning.contract;
+    let floor = c.person.map(|p| p.floor_drop);
+    let foot = Foot {
+        strong: Side::Right,
+        weaker: 1,
+    };
+    let cost = cost_points(foot, KickSide::Weaker, false, 0.5, 40.0, &c.foot());
+    assert!(cost > 4.5 && cost <= 5.0, "{cost}");
+    let (stages, base) = (sim.skills(me).stages, sim.base_skills(me).stages);
+    let width = c.curve.width;
+    [
+        ("pass", Stage::PASS_EXECUTE, Stage::PASS_PRESSURE),
+        ("chip", Stage::CHIP_EXECUTE, Stage::CHIP_PRESSURE),
+        ("cross", Stage::CROSS_EXECUTE, Stage::CROSS_PRESSURE),
+        ("shot", Stage::SHOT_EXECUTE, Stage::SHOT_PRESSURE),
+        (
+            "long shot",
+            Stage::LONG_SHOT_EXECUTE,
+            Stage::LONG_SHOT_PRESSURE,
+        ),
+    ]
+    .into_iter()
+    .map(|(name, e, p)| {
+        let after = |s: Stage| {
+            let f = stages.f(s);
+            let d = shrunk(cost, f, base.f(s), floor, width);
+            f * engine::math::exp(-d / width) / eleven.f(s)
+        };
+        let share = kick_share(stages, base, e, Some(p), cost, floor, c);
+        (
+            name,
+            [after(e), after(p)],
+            share - eleven.pressed_share(e, p),
+        )
+    })
+    .collect()
+}
+
+/// The full worst case: an 18 out of position, in low mood, tired, out of sharpness, at his
+/// worst form, pressed and on his weakest foot at range plays no kick below a flat 11: the
+/// weaker foot's cost shrinks to the points the states left above the floor.
+#[test]
+fn an_eighteen_on_his_weaker_foot_in_the_worst_case_plays_no_action_below_eleven() {
+    let width = calm_match(90).tuning.contract.curve.width;
+    let kicks = weaker_foot_kicks(|_| {});
+    let lowest = kicks
+        .iter()
+        .flat_map(|(_, r, _)| r.iter().copied())
+        .collect::<Vec<_>>();
+    println!(
+        "weaker foot in the worst case: lowest kick stage {:.2}",
+        lowest_rating(&lowest, width)
+    );
+    for (name, ratios, share) in &kicks {
+        assert!(
+            ratios.iter().all(|r| *r >= 1.0 - 1e-9),
+            "{name}: {ratios:?}"
+        );
+        assert!(*share >= -1e-9, "{name}: {share}");
+    }
+}
+
+/// The guarded failure for the weaker foot: with the floor out of reach (12.7 points) the
+/// same kicks fall below a flat 11, so the shrink, not the 5-point cap, holds the line.
+#[test]
+fn the_shrink_holds_the_weaker_foot_inside_the_floor() {
+    let width = calm_match(90).tuning.contract.curve.width;
+    let open = weaker_foot_kicks(|config| {
+        if let Some(person) = config.tuning.contract.person.as_mut() {
+            person.floor_drop = 12.7;
+        }
+    });
+    let lowest = open
+        .iter()
+        .flat_map(|(_, r, _)| r.iter().copied())
+        .collect::<Vec<_>>();
+    println!(
+        "weaker foot, floor out of reach: lowest kick stage {:.2}",
+        lowest_rating(&lowest, width)
+    );
+    assert!(
+        open.iter().any(|(_, _, share)| *share < -1e-6),
+        "without the shrink the weaker foot must take a kick below 11: {open:?}"
+    );
 }
 
 /// The floor, guarded failure: a planted stack past the shipped caps (the body and total

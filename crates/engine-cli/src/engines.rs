@@ -24,6 +24,16 @@ pub fn previous_version() -> String {
         .expect("packaging/previous-engine.json names a version")
 }
 
+/// The match stream protocol version the previous engine speaks. Its socket accepts only that
+/// version, so the page must ask for it while the previous engine plays a saved match.
+pub fn previous_protocol() -> u16 {
+    serde_json::from_str::<serde_json::Value>(PIN)
+        .ok()
+        .and_then(|pin| pin["protocol"].as_u64())
+        .and_then(|v| u16::try_from(v).ok())
+        .expect("packaging/previous-engine.json names a protocol version")
+}
+
 /// The previous engine program and the content folder it plays with.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreviousEngine {
@@ -373,5 +383,6 @@ mod tests {
         assert_eq!(pin["tag"], "v0.2.0-beta.4");
         assert_eq!(pin["version"], "0.2.0-beta.4");
         assert_eq!(pin["commit"], "9b711cec8d92de220fab3f80d6bc427ec80d7dbc");
+        assert_eq!(previous_protocol(), 6, "0.2.0-beta.4 speaks protocol 6");
     }
 }

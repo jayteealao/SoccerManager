@@ -196,9 +196,23 @@ pub struct JobProbe {
     chasing: [bool; 2],
     /// The roster bits of the pressers on the last decision.
     pressing: u32,
+    /// By roster index: the trait-override moments each player met (each a draw on his
+    /// `trait_override` key), and the overrides he took.
+    pub trait_moments: [u32; 22],
+    pub trait_overrides: [u32; 22],
 }
 
 impl JobProbe {
+    /// Player `i` met a trait-override moment; `won` when he overrode.
+    pub(crate) fn trait_moment(&mut self, i: usize, won: bool) {
+        if let Some(m) = self.trait_moments.get_mut(i) {
+            *m += 1;
+        }
+        if won && let Some(o) = self.trait_overrides.get_mut(i) {
+            *o += 1;
+        }
+    }
+
     /// The carrier `c` of `team` chose a dribble (`dribble`) with an opponent close
     /// (`pressed`): a new take-on unless his last decision was one.
     pub(crate) fn decided(&mut self, c: usize, team: usize, dribble: bool, pressed: bool) {

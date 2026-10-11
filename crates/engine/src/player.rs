@@ -239,6 +239,7 @@ impl Derived {
                 chip_penalty: penalty(&g.chip),
                 take_on_try: technique >= g.take_on.technique_try - gate_drop,
                 take_on_penalty: penalty(&g.take_on),
+                take_on_short: (g.take_on.technique_try - gate_drop - technique).max(0.0),
             },
             work_share,
             tired_mix,

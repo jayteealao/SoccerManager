@@ -329,6 +329,7 @@ impl Simulation {
         self.last_touch = Some(team);
         self.possession_phase = Some(team);
         self.slide_reset();
+        self.end_acts_on_restart(team);
         self.restart_taker = Some(kicker);
         #[cfg(feature = "measures")]
         if let Some(m) = self.measures.as_deref_mut() {
@@ -359,6 +360,7 @@ impl Simulation {
                 && receiver == k
                 && passer != k
             {
+                self.tally(passer, crate::sim::tally::Count::Assist);
                 self.mood_event(passer, crate::sim::mood::MoodEvent::Assist);
             }
         }
@@ -996,6 +998,7 @@ impl Simulation {
         self.control_since = self.tick;
         self.last_touch = Some(dead.team);
         self.possession_phase = Some(dead.team);
+        self.end_acts_on_restart(dead.team);
         self.restart_taker = Some(dead.taker);
         #[cfg(feature = "measures")]
         if let Some(m) = self.measures.as_deref_mut() {

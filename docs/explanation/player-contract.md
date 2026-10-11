@@ -1,6 +1,6 @@
 # The player contract
 
-This page explains the contract between a player's record and the match engine: the scale every rating uses, how the engine reads the ratings, why the top of the scale counts for more, how a player's condition moves his ratings, and how the engine proves that every rating has a job. It also sets the data rules for the four wider kinds of data that later parts of the game will add. It is for people who maintain the engine. For the file formats, see [the data-file reference](../reference/data-files.md). For how the engine plays a match, see [How the engine works](engine.md).
+This page explains the contract between a player's record and the match engine: the scale every rating uses, how the engine reads the ratings, why the top of the scale counts for more, how a player's condition moves his ratings, how the engine proves that every rating has a job, and how the player as a person (his personality, positions, feet, traits of play, mood and season) reaches play. It also sets the data rules for the four wider kinds of data that later parts of the game will add. It is for people who maintain the engine. For the file formats, see [the data-file reference](../reference/data-files.md). For how the engine plays a match, see [How the engine works](engine.md).
 
 ## One scale, stored in tenths
 
@@ -38,9 +38,9 @@ Top speed does not go through the curve. Pace maps to a real sprint speed in kil
 
 ## States, caps and effective ability
 
-A player's condition moves his ratings during a match. The engine groups state into four families: body, mind, familiarity and surroundings. Each family owns its attribute groups: body the physical group, mind the mental group, familiarity the timing of technical actions. Tiredness moves the body family, adaptation to a new country the mind family, and match sharpness the familiarity family. The result is his effective ability, which play reads; his base ratings never change during a match.
+A player's condition moves his ratings during a match. The engine groups state into four families: body, mind, familiarity and surroundings. Tiredness and match sharpness move the body family: tiredness lowers the physical group first, and a player short of sharpness loses the timing of his technical actions. Adaptation to a new country and the player's mood move the mind family, through the mental group. The familiarity family reads where he plays: the gap between his rating at his natural position and his rating at the position of his formation slot, scaled down by his versatility and adaptability, lowers his technical and mental ratings. The result is his effective ability, which play reads; his base ratings never change during a match.
 
-Morale and knocks are not built yet. Their families, groups and caps are in place: a knock will move the body family and morale the mind family. Neither has an input until the parts of the game that own morale and injuries add one, and pressure, momentum and weather are still stand-ins that move nothing.
+Knocks and the dressing room's morale are not built yet. Their families, groups and caps are in place: a knock will move the body family and the dressing room the mind family. Neither has an input until the parts of the game that own them add one. A player's own mood and his side's mood fill the pressure and momentum inputs of the mind family (see [Mood](#mood)); weather is still a stand-in that moves nothing.
 
 Each family has a cap, and all families together have a total cap:
 
@@ -126,3 +126,47 @@ Club identity is a fact about a club, not a player. It acts only off the pitch: 
 ### Not stored yet
 
 These names of the wider kinds have no field in any stored file of the engine until their owner adds them with a job: `relationship`, `understanding`, `liking`, `identity`, `referee`, `staff`, `agent`, `cohesion`, `partnership`, `familiarity_team`. A test keeps them out of the stored data.
+
+## The player as a person
+
+A management game must let a manager see a player as a person: where he can play, which foot he prefers, what kind of character he is, which habits he has, and how his season is going. Each of these is stored in the player record and each reaches play, so a manager who picks a player out of position, or a hot-headed player in a final, sees the cost on the pitch.
+
+### The record
+
+The attribute catalogue (version 4) holds 45 visible attributes, two hidden values (consistency and injury proneness) and eleven personality values. Visible and hidden attributes together stay at 50 or fewer by rule, so a new performance attribute never has to compete with personality for a place; personality is a fifth group in the same record, outside that limit. Communication, determination and bravery are in the mental group; eccentricity is a goalkeeping attribute.
+
+An attribute and a personality value split their work by scope. An attribute acts on each action in a match: composure on a shot under pressure, bravery on a header in traffic. A personality value acts on occasions and choices: how far a goal or a miss moves his mood, whether he loses his temper in a tackle, how he takes a penalty. Three personality values (loyalty, money motivation and controversy) act off the pitch and are inert in a match; a sensitivity rule proves that changing them moves no match statistic. Ambition acts only before a match: it decides how much his season goal moves his mood at kick-off.
+
+A team file at version 3 gives every player a rating at each of the ten positions, his weaker foot as a percent of his strong foot, his traits of play, and his personality values. The trait catalogue, `traits.json`, lists 31 traits of play, nine pairs of them opposites. The engine refuses a team file that gives a player two opposite traits, a position rating above his natural one, a weaker foot over 100, or a personality value off the scale, and names the player, the field and the rule. An older team file converts on load: new attributes from related ones, every personality value at the middle of the scale, a weaker foot of 50, and only his listed position rated. Old replays convert the same way.
+
+### Positions and familiarity
+
+A player is rated at every position, and his natural position is the highest. Away from it he loses some familiarity, by the gap between the two ratings; his versatility and adaptability decide how much of that gap he feels. A manager who plays a right back at left back trades some of the player's ability for the shape of the team. The Touchline names a starter who plays away from his natural position, and his level there reads below his level fresh.
+
+### Mood
+
+A player carries a mood that the match moves. His own events (a goal, a big chance missed, a card) and his side's goals move it at once, and the score moves it slowly through the match. Mood is not a third kind of personality: personality decides how strongly the match moves him. A calm player who handles pressure well swings less than a volatile one. A substitute comes on with his kick-off mood and what his side's bench has felt while he waited.
+
+Mood reaches play in two places: the mind family, inside its cap, and the risks a player takes when he chooses a shot, a forward pass or holding the ball. A low mood is also one of the two moments when a strong trait can override an instruction. Mood is shown only as a word with a mark (Confident, Lifted, Steady, Low, Rattled), never as a number, on the panel and on the Touchline.
+
+### Traits of play and the override
+
+A trait of play is a habit, such as cutting inside or holding up the ball. A player may carry several, each moderate or strong, and never two opposites. Each trait moves one choice of play by its weight.
+
+A strong trait can also beat an instruction it goes against: a player who holds up the ball when his team plays at a faster tempo, or a winger who cuts inside when the team plays wide. It happens only when the player is pressed or his mood is low, which are the moments when a habit takes over. The feed names each override, with the player, what he did, the instruction and the cause, and the player's panel counts them after the match.
+
+No limit, cooldown or phase of play throttles overrides. A throttle would make the instruction always win at the moment that matters, and the manager would never learn that a player's habit is stronger than his instruction. The rate is set instead so that a player with a strong conflicting trait overrides a few times a match.
+
+### The weaker foot
+
+Each foot has its own rating: the strong foot is always 100 and the weaker foot a percent of it. The weaker foot costs something only when the ball is on that side and the player has no time to shift it, and the cost grows with pressure and distance. Defenders show a one-footed carrier onto his weaker foot. These limits keep two-footedness useful but never the quality that decides a player's worth.
+
+### The shared floor
+
+Every effect on a player's ratings in a match (tiredness, mood, familiarity, the weaker foot, his form) pushes in the same direction at a bad moment. Each family has its own cap, but the families together could still turn a strong player into a poor one. A shared floor stops that: no stage value falls more than a fixed drop below the player's base value, and the weaker foot's cost shrinks when other effects have already used the room. A strong player has poor patches but never plays as a poor player.
+
+### The season record
+
+The launcher keeps a small season record per player: starts, minutes, goals, assists, clean sheets, match ratings and red cards, and one season goal of six kinds (score goals, make assists, keep clean sheets, start matches, average a rating, miss no match through his own fault), chosen by his role and level. His form is the mean of his last five ratings.
+
+The record sets his mood at kick-off: good form and progress toward his goal lift it, and his ambition decides how much the goal matters. So the match before carries into the next one, and a manager sees quality and form over a run of matches, not inside one. The panel shows the season in words, and the Squad screen can show the goal and the form as columns.

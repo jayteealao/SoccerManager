@@ -278,6 +278,7 @@ fn play_event(
         K::AiDecision => EventType::AiDecision,
         K::ChangeApplied | K::ChangeRejected => EventType::TacticsChange,
         K::Script => EventType::Script,
+        K::TraitOverride => EventType::TraitOverride,
     };
     MatchEvent::play(
         owner_id,

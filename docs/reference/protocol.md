@@ -68,13 +68,17 @@ each slot's overall level now and fresh. No field was removed and none changed m
 value is still never a number, and no number under a hidden attribute's name is ever sent.
 The tick frames are unchanged.
 
-Version 7 carries the player as a person. A `squad` entry gains five optional fields:
+Version 7 carries the player as a person. A `squad` entry gains six optional fields:
 `player.positions` (his rating at each of the ten positions, in tenths, by position code),
 `player.strong_foot`, `player.weaker_foot` (the weaker foot as a whole percent of the strong
 one), `player.traits` (his traits of play, each a `name` and a `strength`) and
-`player.personality` (each personality value as a word and a confidence, never a number). No
-field was removed and none changed meaning, and the tick frames are unchanged, so a protocol 6
-message still reads; a reader shows the fields it lacks as unknown.
+`player.personality` (each personality value as a word and a confidence, never a number) and
+`player.mood` (his mood at kick-off as a word, never a number). The event message gains one event type, `trait-override`, and three optional fields
+(`trait.name`, `trait.cause` and `trait.instruction`): a player's strong trait of play broke
+one of his team's instructions. The `condition` message gains `mood`, each wire slot's mood now
+as a word, never a number. No field was removed and none changed meaning, and the tick
+frames are unchanged, so a protocol 6 message still reads; a reader shows the fields it lacks
+as unknown.
 
 Version 8 adds the `walk-on` message: before the first tick of each half (the match start, the
 second half and each half of extra time) the engine sends the players' walk from the tunnel to
@@ -201,6 +205,7 @@ Each entry of `squad` carries `player.id`, `player.name`, `player.shirt`, and
 | `player.weaker_foot` | integer | the weaker foot as a whole percent of the strong one, 1 to 100 (50 for a converted player). Absent before version 7 |
 | `player.traits` | array of objects | his traits of play, each a `name` from the trait catalogue (`traits.json`) and a `strength`; absent when he has none and before version 7 |
 | `player.personality` | object | each personality value, by name, as a word and a confidence like the hidden values below; never a number. Absent before version 7 |
+| `player.mood` | string | his mood at kick-off as a word key: `confident`, `lifted`, `steady`, `low` or `rattled`, from his recent form and his progress toward his season goal; never a number. Absent before version 7 |
 
 Each trait is an object:
 
@@ -260,8 +265,8 @@ One `match-event` row. The same object is written to
 | `match.id` | string | the match |
 | `tick` | integer | the tick the event happened on |
 | `minute` | integer | the minute of play the match clock shows, counted from 0; it stays at the end of the half during added time |
-| `event.type` | enumeration | `kick-off`, `goal`, `half-time`, `full-time`, `tactics-change`, `offside`, `foul`, `card`, `throw-in`, `corner`, `goal-kick`, `free-kick`, `penalty`, `injury`, `substitution`, `ai-decision`, or `script` |
-| `team.id` | string | the club the event belongs to: the offender's club on `offside`, `foul`, and `card`, the club that restarts play on a restart, the injured player's club on `injury`, the club that changes on `substitution`, `ai-decision`, and `tactics-change`; absent at half-time and full time |
+| `event.type` | enumeration | `kick-off`, `goal`, `half-time`, `full-time`, `tactics-change`, `offside`, `foul`, `card`, `throw-in`, `corner`, `goal-kick`, `free-kick`, `penalty`, `injury`, `substitution`, `ai-decision`, `script`, or `trait-override` |
+| `team.id` | string | the club the event belongs to: the offender's club on `offside`, `foul`, and `card`, the club that restarts play on a restart, the injured player's club on `injury`, the club that changes on `substitution`, `ai-decision`, and `tactics-change`, the player's club on `trait-override`; absent at half-time and full time |
 | `home.score` | integer | the score after the event |
 | `away.score` | integer | the score after the event |
 | `change.kind` | enumeration | `tactics` or `substitution`; change events only |
@@ -271,7 +276,7 @@ One `match-event` row. The same object is written to
 | `change.state` | enumeration | `queued`, `applies-now`, `applied`, or `rejected` |
 | `change.applied_tick` | integer | on an applied change: the tick it took effect on, which is the tick of the stoppage that admitted it |
 | `ai.decision` | string | on `ai-decision`: `mentality-up-trailing`, `mentality-down-leading`, `sub-injury`, `sub-fatigue`, or `sub-keeper` (the bench keeper replaces an outfield player keeping goal) |
-| `player.id` | string | the player the event names: the offender on `offside` and `foul`, the booked player on `card`, the injured player on `injury`, the player leaving on `substitution`, the taker on `kick-off` and on every restart, and on `goal` the player who kicked the ball last (a player of the other club on an own goal) |
+| `player.id` | string | the player the event names: the offender on `offside` and `foul`, the booked player on `card`, the injured player on `injury`, the player leaving on `substitution`, the taker on `kick-off` and on every restart, the player whose trait overrode an instruction on `trait-override`, and on `goal` the player who kicked the ball last (a player of the other club on an own goal) |
 | `player.secondary_id` | string | the fouled player, on `foul`; the player coming on, on `substitution` |
 | `card.kind` | enumeration | `yellow`, `second-yellow`, or `red`, on `card`; a second yellow sends the player off |
 | `foul.advantage` | boolean | on `foul`: `true` when play continued because the fouled team kept the ball; a card for that foul follows at the next stoppage |
@@ -282,11 +287,20 @@ One `match-event` row. The same object is written to
 | `shootout.scored` | boolean | on the second `penalty` event of a shoot-out kick, its outcome: `true` when the kick scored |
 | `shootout.scores` | array of two | on the outcome event of a shoot-out kick and on `full-time` after a shoot-out: the shoot-out score, home first; `home.score` and `away.score` keep the score of play |
 | `result.decided_by` | enumeration | knockout matches only, on `full-time`: `regulation`, `extra-time`, or `shoot-out` |
-| `commentary` | string | one English commentary line, on every event except `tactics-change` and `script`; the lines come from `content/commentary/en.json` and name the player and the club, and a script pack's commentary hook can rewrite them |
+| `commentary` | string | one English commentary line, on every event except `tactics-change`, `script` and `trait-override`; the lines come from `content/commentary/en.json` and name the player and the club, and a script pack's commentary hook can rewrite them |
 | `script.pack` | string | on the first `kick-off` of a match that runs a script pack: the pack identity, `id@version+hash`, where the hash is the first 12 hex characters of the SHA-256 of `pack.json` followed by the script file |
 | `script.hook` | enumeration | on `script`: the hook that failed, `decision`, `rule`, or `commentary` |
 | `script.outcome` | enumeration | on `script`: `aborted` (the call ran out of its operation budget, or failed; a call past the 2 ms wall-clock limit is not aborted and only marks the match invalid in `match-stats`), `denied` (the call tried an import or a function the sandbox does not allow), or `disabled` (the hook failed three times in a row and is off for the rest of the match) |
 | `script.detail` | string | on `script`: why, such as `operation budget of 10000 exhausted` or `function http_get is not available` |
+| `trait.name` | string | on `trait-override`: the trait of play that overrode the instruction, its name in the trait catalogue, such as `holds_up_ball` |
+| `trait.cause` | enumeration | on `trait-override`: `pressure` (an opponent was within 2.5 m of the player) or `low-mood` (his mood was at or below the tuning's `traits.low_mood`) |
+| `trait.instruction` | string | on `trait-override`: the instruction the trait went against, as `<instruction>:<level>` (such as `tempo:faster`), `duty:<duty>` or `mentality:<mentality>` |
+
+A `trait-override` event names the player and his club and carries no `commentary`: a page
+builds its line from the three trait fields. For example,
+`{"event.type":"trait-override","player.id":"…","trait.name":"holds_up_ball","trait.cause":"pressure","trait.instruction":"tempo:faster",...}`.
+The page's match feed builds its line from these three fields, and the player panel counts
+the player's overrides after full time.
 
 A `script` event names no team or player and carries no `commentary`. Play goes on with the
 engine's own choice: zero option offsets, the referee's card, or the commentator's line. For
@@ -369,6 +383,7 @@ Sent right after each periodic `stats` message, not at full time.
 | `windows_used` | array of two integers | substitution windows each team has used, home first; `[0, 0]` when an earlier build sent none |
 | `level` | array of 22 integers | each wire slot's overall level now, in tenths of 1 to 20, with his tiredness and the other states taken in; absent before version 6 |
 | `base` | array of 22 integers | each wire slot's overall level fresh, in tenths, beside `level`; the Touchline's Level column reads `13 of 15` when the shown whole number of `level` is below that of `base` |
+| `mood` | array of 22 strings | each wire slot's mood now as a word key: `confident`, `lifted`, `steady`, `low` or `rattled`. It starts at the hello's `player.mood` and moves with goals, misses, cards and the score; never a number. Absent before version 7 |
 
 ### change-state
 
@@ -746,7 +761,7 @@ A body is at most 32 KiB; a longer one is `413`, and one that is not UTF-8 text 
 
 `GET /engine/round?home=<club id>&away=<club id>` answers the other fixtures of the round that match would meet, as `{"fixtures": [{"home": <team>, "away": <team>}]}` with each team as in `teams`; an unknown club or the same club twice is `400` with the reason. It is `404` when the launch did not open on the start screen.
 
-`GET /engine/views?club=<club id>` answers that club's squad views and stored match ratings, as `{"active": <name or null>, "views": [...], "ratings": {<player id>: [{"match", "rating"}]}}`, with each player's newest 10 ratings, oldest first. Before it answers, it adds the ratings of the last match the launcher ran, read from that match's `stats.json`, once per match. A club with nothing stored answers empty lists; no club is `400`. Served by `serve --web` or `replay --web` it is `405`, and the page keeps its views for the session only.
+`GET /engine/views?club=<club id>` answers that club's squad views and stored match ratings, as `{"active": <name or null>, "views": [...], "ratings": {<player id>: [{"match", "rating"}]}}`, with each player's newest 10 ratings, oldest first. Before it answers, it adds the ratings of the last match the launcher ran, read from that match's `stats.json`, once per match. It also carries `season`, the club's part of the season record (see [the season file](data-files.md#the-season-file)): `{"matches": [<match id>], "players": {<player id>: {"starts", "minutes", "goals", "assists", "clean_sheets", "red_cards", "ratings", "goal": {"kind", "target"}, "form", "progress"}}}`, where `form` is his recent form (the mean of his newest five ratings, 1.0 to 10.0) and `progress` his percent of the pace toward his goal, each null before he has one. With the start screen every squad player is listed, one with no match yet at nothing played and with the goal he will be given. A club with nothing stored answers empty lists; no club is `400`. Served by `serve --web` or `replay --web` it is `405`, and the page keeps its views for the session only.
 
 Each action requires an `Origin` header equal to the page's own origin,
 `http://127.0.0.1:<page port>`; any other origin, or none, is `403`, so a page on another

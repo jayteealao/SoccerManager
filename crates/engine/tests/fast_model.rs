@@ -210,10 +210,11 @@ fn the_kick_off_carries_both_line_ups_and_benches() {
 /// 2 000 seeded matches across strengths, half on the generated sides and half on the
 /// default teams' line-ups, keep every event-stream rule; the final score equals the goal
 /// events; and every kind the full engine emits in a regulation match shows, except a
-/// plugin's script note and a refused change.
+/// plugin's script note, a refused change, and a trait override (the fast model plays no
+/// player's traits).
 #[test]
 fn the_fast_models_event_stream_keeps_the_rules() {
-    use EngineEventKind::{ChangeRejected, Goal, Script};
+    use EngineEventKind::{ChangeRejected, Goal, Script, TraitOverride};
     let content = common::content();
     let [a, b] = common::default_teams(&content);
     let config = MatchConfig::new(1, 90, &content, [&a, &b]).unwrap();
@@ -248,7 +249,7 @@ fn the_fast_models_event_stream_keeps_the_rules() {
     }
     let regulation = EngineEventKind::ALL
         .iter()
-        .filter(|k| !matches!(k, Script | ChangeRejected))
+        .filter(|k| !matches!(k, Script | ChangeRejected | TraitOverride))
         .map(|k| k.code())
         .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(seen, regulation);

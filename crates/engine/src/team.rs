@@ -76,9 +76,31 @@ pub struct SquadPlayer {
     pub foot: crate::data::team::Foot,
     /// His traits of play, by name, each at its strength.
     pub traits: Vec<(String, crate::data::traits::TraitStrength)>,
+    /// The same traits as play reads them, built once from `traits`
+    /// ([`SquadPlayer::set_trait`] keeps the two in step).
+    pub trait_set: crate::traits::TraitSet,
     /// The personality values play reads on an occasion, computed once from his ratings
     /// ([`crate::contract::personality_scales`]); no state moves them.
     pub personality: crate::contract::PersonalityScales,
+    /// The mood he starts a match at, from the season inputs of his condition and his
+    /// ambition ([`crate::contract::mood::kick_off_mood`]); 0 without them.
+    pub kick_off_mood: f64,
+}
+
+impl SquadPlayer {
+    /// Gives him trait `kind` at `strength`, or takes it away, in his named traits and in the
+    /// set play reads.
+    pub fn set_trait(
+        &mut self,
+        kind: crate::traits::TraitKind,
+        strength: Option<crate::data::traits::TraitStrength>,
+    ) {
+        self.traits.retain(|(n, _)| n != kind.name());
+        if let Some(s) = strength {
+            self.traits.push((kind.name().to_string(), s));
+        }
+        self.trait_set.set(kind, strength);
+    }
 }
 
 /// A team: club identity, an attack direction, the squad, the lineup and bench, the
@@ -189,51 +211,61 @@ impl Team {
         team.player_names = file.players.iter().map(|p| p.name.clone()).collect();
         team.player_nationalities = file.players.iter().map(|p| p.nationality.clone()).collect();
         let blend = crate::contract::stages::Blend::of(schema);
-        team.squad =
-            file.players
-                .iter()
-                .map(|entry| {
-                    let attributes = Attributes::from_entry(&entry.attributes, schema);
-                    let body = crate::contract::body::Body {
-                        height_cm: entry.height,
-                        age: entry.age,
-                    };
-                    let (derived, stages) =
-                        Derived::from_blend(&attributes, &blend, schema, tuning, body, 0);
-                    // A file built in code without the person fields (a league generated without
-                    // their tuning) reads like a converted player.
-                    let rated = entry.positions.clone().unwrap_or_else(|| {
-                        crate::data::convert::listed_positions_only(entry, schema)
-                    });
-                    let positions = Position::ALL.map(|code| {
-                        rated
-                            .get(&code)
-                            .copied()
-                            .unwrap_or(crate::rating::Rating::from_tenths(
-                                crate::rating::MIN_TENTHS,
-                            ))
-                    });
-                    let foot = entry
-                        .foot
-                        .unwrap_or_else(|| crate::data::convert::converted_foot(&entry.id));
-                    let personality =
-                        crate::contract::personality_scales(&attributes, schema, &tuning.contract);
-                    SquadPlayer {
-                        personality,
-                        positions,
-                        foot,
-                        traits: entry.traits.iter().map(|(n, s)| (n.clone(), *s)).collect(),
-                        shirt: entry.shirt,
-                        position: entry.position,
-                        derived,
-                        stages,
-                        attributes,
-                        body,
-                        condition: entry.condition.unwrap_or_default(),
-                        start_energy: 1.0,
-                    }
-                })
-                .collect();
+        team.squad = file
+            .players
+            .iter()
+            .map(|entry| {
+                let attributes = Attributes::from_entry(&entry.attributes, schema);
+                let body = crate::contract::body::Body {
+                    height_cm: entry.height,
+                    age: entry.age,
+                };
+                let (derived, stages) =
+                    Derived::from_blend(&attributes, &blend, schema, tuning, body, 0);
+                // A file built in code without the person fields (a league generated without
+                // their tuning) reads like a converted player.
+                let rated = entry
+                    .positions
+                    .clone()
+                    .unwrap_or_else(|| crate::data::convert::listed_positions_only(entry, schema));
+                let positions = Position::ALL.map(|code| {
+                    rated
+                        .get(&code)
+                        .copied()
+                        .unwrap_or(crate::rating::Rating::from_tenths(
+                            crate::rating::MIN_TENTHS,
+                        ))
+                });
+                let foot = entry
+                    .foot
+                    .unwrap_or_else(|| crate::data::convert::converted_foot(&entry.id));
+                let personality =
+                    crate::contract::personality_scales(&attributes, schema, &tuning.contract);
+                let traits: Vec<_> = entry.traits.iter().map(|(n, s)| (n.clone(), *s)).collect();
+                let condition = entry.condition.unwrap_or_default();
+                let kick_off_mood = crate::contract::mood::kick_off_mood(
+                    &condition,
+                    &personality,
+                    &tuning.contract.season(),
+                );
+                SquadPlayer {
+                    personality,
+                    kick_off_mood,
+                    positions,
+                    foot,
+                    trait_set: crate::traits::TraitSet::of(&traits),
+                    traits,
+                    shirt: entry.shirt,
+                    position: entry.position,
+                    derived,
+                    stages,
+                    attributes,
+                    body,
+                    condition,
+                    start_energy: 1.0,
+                }
+            })
+            .collect();
         team.bench = (PLAYERS_PER_TEAM..file.players.len()).collect();
         let players = team.starters();
         Ok((team, players))
@@ -258,8 +290,8 @@ impl Team {
             .collect()
     }
 
-    /// Squad player `squad` in `slot`, at his base values, with his kick-off energy, and at
-    /// rest at `pos`.
+    /// Squad player `squad` in `slot`, at his base values, with his kick-off energy and
+    /// kick-off mood, and at rest at `pos`.
     pub fn player(&self, slot: usize, squad: usize, pos: DVec2) -> Player {
         let s = &self.squad[squad];
         Player {
@@ -273,7 +305,7 @@ impl Team {
             deltas: [0; crate::contract::states::GROUP_COUNT],
             form: 0,
             form_match: 0,
-            mood: 0.0,
+            mood: s.kick_off_mood,
             energy: s.start_energy,
             pos,
             vel: DVec2::ZERO,

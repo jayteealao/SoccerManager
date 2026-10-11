@@ -136,7 +136,9 @@ pub use message::{
 /// at each of the ten positions, in tenths, by code), `player.strong_foot` (`left` or
 /// `right`), `player.weaker_foot` (the weaker foot as a whole percent of the strong one),
 /// `player.traits` (each trait of play as a `name` and a `strength`) and `player.personality`
-/// (each personality value as a word key and a confidence, never a number). Every added field
+/// (each personality value as a word key and a confidence, never a number) and `player.mood`
+/// (his kick-off mood as a word key, never a number). The `condition` message gains `mood`,
+/// each wire slot's mood now as a word key, never a number. Every added field
 /// is optional, so a protocol 6 message still reads and a reader shows the fields it lacks as
 /// unknown; no field was removed and the tick frames are unchanged.
 ///
@@ -293,6 +295,7 @@ pub const MESSAGES: &[MessageSpec] = &[
             "player.weaker_foot",
             "player.traits",
             "player.personality",
+            "player.mood",
             "strength",
             "knockout",
             "ground.length",
@@ -377,6 +380,7 @@ pub const MESSAGES: &[MessageSpec] = &[
             "windows_used",
             "level",
             "base",
+            "mood",
         ],
     },
     MessageSpec {
@@ -640,6 +644,7 @@ mod tests {
                 windows_used: [0; 2],
                 level: Vec::new(),
                 base: Vec::new(),
+                mood: Vec::new(),
             }),
             ServerMessage::Ack(Ack {
                 command: String::new(),

@@ -10,6 +10,7 @@ mod hooks;
 mod manager;
 pub mod mood;
 mod movement;
+mod overrides;
 mod pace;
 #[cfg(test)]
 mod pace_tests;
@@ -313,6 +314,12 @@ pub enum EventDetail {
     },
     /// A plugin hook failed or was switched off.
     Script(ScriptNote),
+    /// A strong trait of play overrode `instruction` for `cause`.
+    Override {
+        trait_kind: crate::traits::TraitKind,
+        cause: crate::traits::OverrideCause,
+        instruction: crate::tactics::Instruction,
+    },
 }
 
 /// What happened during a tick that a consumer outside the engine must know about. The
@@ -352,11 +359,14 @@ pub enum EngineEventKind {
     /// A plugin hook failed or was switched off; the detail names the hook and the outcome.
     /// Play goes on with the engine's own choice.
     Script,
+    /// `player` of `team` overrode an instruction with a strong trait of play; the detail
+    /// names the trait, the cause and the instruction.
+    TraitOverride,
 }
 
 impl EngineEventKind {
     /// Every event kind, in declaration order.
-    pub const ALL: [EngineEventKind; 18] = [
+    pub const ALL: [EngineEventKind; 19] = [
         EngineEventKind::KickOff,
         EngineEventKind::Goal,
         EngineEventKind::HalfTime,
@@ -375,6 +385,7 @@ impl EngineEventKind {
         EngineEventKind::ChangeApplied,
         EngineEventKind::ChangeRejected,
         EngineEventKind::Script,
+        EngineEventKind::TraitOverride,
     ];
 
     /// The kind as the event contract spells it. Both change verdicts travel as
@@ -398,6 +409,7 @@ impl EngineEventKind {
             EngineEventKind::AiDecision => "ai-decision",
             EngineEventKind::ChangeApplied | EngineEventKind::ChangeRejected => "tactics-change",
             EngineEventKind::Script => "script",
+            EngineEventKind::TraitOverride => "trait-override",
         }
     }
 
@@ -632,6 +644,16 @@ pub struct Simulation {
     /// Each side's bench mood: the side's mood events and the drift with a swing of 1, which
     /// a substitute enters at ([`mood`]).
     pub(crate) bench_mood: [f64; 2],
+    /// Each side's mood as the last refresh of effective values read it, so the team-mood
+    /// modifier reads it once per side, not once per player ([`Simulation::team_mood`]).
+    pub(crate) team_moods: [f64; 2],
+    /// The trait override each player plays, by roster index, until its action ends
+    /// ([`crate::traits`]).
+    pub(crate) trait_acts: [Option<crate::traits::TraitAct>; 2 * PLAYERS_PER_TEAM],
+    /// Roster bits: carriers whose last decision was a dribble, so the next one is no new
+    /// carry; and keepers who already met this loose ball's moment.
+    pub(crate) carrying: u32,
+    pub(crate) chase_seen: u32,
     /// The restart taker until his first kick or until another player touches the ball;
     /// his first kick is a restart kick. Every dead ball clears it.
     pub(crate) restart_taker: Option<usize>,
@@ -824,6 +846,10 @@ impl Simulation {
             walk_on_due: false,
             #[cfg(feature = "scenario")]
             pinned_restart: None,
+            team_moods: [0.0; 2],
+            trait_acts: [None; 2 * PLAYERS_PER_TEAM],
+            carrying: 0,
+            chase_seen: 0,
             #[cfg(feature = "scenario")]
             census: ShotCensus::default(),
             #[cfg(feature = "scenario")]
@@ -853,6 +879,7 @@ impl Simulation {
         // ([`Self::kick_off_form`]), so a restored match takes no draw here.
         for i in 0..sim.players.len() {
             sim.tally_played(i);
+            sim.tally_started(i);
         }
         sim.refresh_effective();
         Ok(sim)
@@ -998,6 +1025,10 @@ impl Simulation {
     /// (sharpness on the technical group, adaptation on the mental group, capped as in play)
     /// and fresh, in tenths: `[today, fresh]`. Reads the squad entry only; it writes nothing.
     /// A hidden value never moves it.
+    ///
+    /// It rebuilds the shipped condition and familiarity drops by hand rather than through
+    /// the match's modifier slots, so a slot set off or replaced still shows the shipped
+    /// drop in this pre-match range.
     pub fn squad_level_range(&self, team: usize, squad: usize) -> [u8; 2] {
         use crate::contract::body::BodyJobs;
         use crate::contract::states::{self, GROUP_COUNT};
@@ -1054,6 +1085,13 @@ impl Simulation {
     pub fn position_ratings(&self, i: usize) -> &[crate::rating::Rating; 10] {
         let p = &self.players[i];
         &self.teams[p.team].squad[p.squad].positions
+    }
+
+    /// Player `i`'s feet, from his squad entry.
+    #[inline]
+    pub fn foot(&self, i: usize) -> crate::data::team::Foot {
+        let p = &self.players[i];
+        self.teams[p.team].squad[p.squad].foot
     }
 
     /// Player `i`'s match condition inputs, from his squad entry.
@@ -1452,6 +1490,7 @@ impl Simulation {
             }
         }
         if let Some(stoppage) = self.stoppage {
+            self.end_acts_on_stoppage();
             self.apply_changes(stoppage);
             self.script_cache = None;
         }
@@ -1536,7 +1575,14 @@ impl Simulation {
         let mut shooter = None;
         self.end_shot();
         self.clearers_tried = 0;
+        // A kick starts a new flight: each keeper meets its loose ball afresh.
+        self.chase_seen = 0;
         if let Some(c) = self.carrier {
+            // The kick ends his carry or hold.
+            if self.trait_acts[c].is_some_and(|a| matches!(a.ends, crate::traits::ActEnd::Tick(_)))
+            {
+                self.trait_acts[c] = None;
+            }
             let team = self.players[c].team;
             self.pass_in_flight = None;
             // A shot is always a shot; otherwise the restart taker's first kick is a restart
@@ -1794,13 +1840,15 @@ mod tests {
     #[test]
     fn the_last_kicker_is_clear_whenever_play_stops() {
         let mut stoppages = 0;
-        full_match(7, |sim| {
+        full_match(1, |sim| {
             if sim.stoppage().is_some() {
                 stoppages += 1;
                 assert_eq!(sim.last_kicker, None, "tick {}", sim.tick());
             }
         });
-        // The seed-7 match stops play more than 30 times (33); seed 2 stopped it 29 times once
+        // The seed-1 match stops play more than 30 times, the lowest seed that does once the
+        // player as a person joined the team shape; seed 7 stopped it 30 times then (33
+        // before); seed 2 stopped it 29 times once
         // the defending stages read their attributes (38 before); seed 1 stopped it 29 times
         // once the restart waits shortened the live time; seed 42 stopped it 39 times until the
         // team stands went off, then 27 (and 58 before the defending rework, which cut its
@@ -1817,7 +1865,8 @@ mod tests {
             .find(|events| events.iter().any(|e| e.kind == EngineEventKind::Goal))
             .expect("a match from seeds 9 to 39 scores");
         for e in &events {
-            // The manager's own events and the whistles at the end of a half name nobody.
+            // The manager's own events and the whistles at the end of a half name nobody; an
+            // override names the player who overrode.
             let named = !matches!(
                 e.kind,
                 EngineEventKind::HalfTime

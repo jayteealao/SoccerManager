@@ -1,6 +1,7 @@
 <!-- The commentary: one row per released event, newest first as the sketch lists it, each a
      minute and a line; goals, cards, substitutions and injuries lead with a word, so colour is
-     never the only signal. Only goals and cards are read out, through a polite live region.
+     never the only signal. A trait override leads with a warning mark and the word Trait, inside
+     a full warning hairline. Only goals and cards are read out, through a polite live region.
      `state` is `rows`, `skeleton` (the wait before the match), or `idle` (no match to play). -->
 <script>
   import SectionLabel from './SectionLabel.svelte';
@@ -36,8 +37,9 @@
   {:else}
     <ol class="rows">
       {#each newest as { row, key } (key)}
-        <li class:hl={row.word} data-kind={row.kind} data-tick={row.tick}>
+        <li class:hl={row.word} class:ovr={row.kind === 'trait-override'} data-kind={row.kind} data-tick={row.tick}>
           <b class="num">{row.minute}</b>
+          {#if row.kind === 'trait-override'}<i class="mk" aria-hidden="true">!</i>{/if}
           <span>{#if row.word}<em>{row.word}</em> {/if}{row.text}</span>
         </li>
       {/each}
@@ -122,6 +124,30 @@
 
   li.hl span {
     color: var(--ink);
+  }
+
+  /* A trait override: a full 1 px warning hairline on the raised ground and a leading mark,
+     as the touchline board draws the line. */
+  li.ovr {
+    margin: 2px 0;
+    padding: 3px 6px;
+    border-bottom: 0;
+    border-radius: var(--radius-sm);
+    background: var(--ground-2);
+    box-shadow: inset 0 0 0 1px var(--warn);
+  }
+
+  .mk {
+    flex: none;
+    width: 12px;
+    height: 12px;
+    margin-top: 1px;
+    font: 700 9px/12px var(--fd);
+    font-style: normal;
+    text-align: center;
+    color: var(--on-warn);
+    background: var(--warn);
+    border-radius: var(--radius-sm);
   }
 
   em {

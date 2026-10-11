@@ -90,7 +90,8 @@
         "half-time",
         "full-time",
         "error",
-        "script"
+        "script",
+        "trait-override"
       ]
     },
     "team.id": {
@@ -208,6 +209,23 @@
     "script.detail": {
       "type": "string",
       "minLength": 1
+    },
+    "trait.name": {
+      "description": "On a trait-override event: the trait's catalogue name, such as holds_up_ball.",
+      "type": "string",
+      "pattern": "^[a-z][a-z_]*$"
+    },
+    "trait.cause": {
+      "description": "On a trait-override event: why the trait won over the instruction.",
+      "enum": [
+        "pressure",
+        "low-mood"
+      ]
+    },
+    "trait.instruction": {
+      "description": "On a trait-override event: the instruction it went against, such as tempo:faster or duty:defend.",
+      "type": "string",
+      "pattern": "^[a-z_-]+:[a-z_-]+$"
     }
   },
   "additionalProperties": true

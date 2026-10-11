@@ -50,7 +50,29 @@ pub struct ContractTuning {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]
     pub person: Option<PersonTuning>,
+    /// The traits of play: each trait's weight on its choice and the chance a strong trait
+    /// overrides an instruction it goes against. Optional, so a tuning file written before
+    /// them still loads, and then no trait acts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub traits: Option<TraitTuning>,
+    /// The weaker foot in play: the cost of a kick on the weaker side without time to shift
+    /// the ball, and how far a closing defender shows a one-footed carrier onto it. Optional,
+    /// so a tuning file written before it still loads, and then no kick pays and no defender
+    /// shows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub foot: Option<FootTuning>,
+    /// The season at kick-off: how a player's recent form and his progress toward his season
+    /// goal, weighted by his ambition, set his mood when the match starts. Optional, so a
+    /// tuning file written before it still loads, and then every kick-off mood is 0.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub season: Option<SeasonTuning>,
 }
+
+/// The traits values a tuning file without a traits block reads: no weight, no chance.
+static NO_TRAITS: TraitTuning = TraitTuning::NONE;
 
 impl ContractTuning {
     /// The hook values: the file's, or [`HookTuning::NEUTRAL`] when it has none.
@@ -63,6 +85,139 @@ impl ContractTuning {
     #[inline]
     pub fn person(&self) -> PersonTuning {
         self.person.unwrap_or(PersonTuning::NEUTRAL)
+    }
+
+    /// The traits values: the file's, or [`TraitTuning::NONE`] when it has none.
+    #[inline]
+    pub fn traits(&self) -> &TraitTuning {
+        self.traits.as_ref().unwrap_or(&NO_TRAITS)
+    }
+
+    /// The foot values: the file's, or [`FootTuning::NONE`] when it has none.
+    #[inline]
+    pub fn foot(&self) -> FootTuning {
+        self.foot.unwrap_or(FootTuning::NONE)
+    }
+
+    /// The season values: the file's, or [`SeasonTuning::NEUTRAL`] when it has none.
+    #[inline]
+    pub fn season(&self) -> SeasonTuning {
+        self.season.unwrap_or(SeasonTuning::NEUTRAL)
+    }
+}
+
+/// The season block (`engine.contract.season`). A player's kick-off mood is his recent form
+/// above or below `form_neutral` times `form_weight`, plus his progress toward his season goal
+/// (from a full pace behind to a full pace ahead) times `goal_weight`, which his ambition
+/// raises or lowers by up to `ambition_weight` of itself; the sum stays within `cap` either
+/// side of neutral.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct SeasonTuning {
+    /// The match rating (1 to 10) that counts as neither good nor bad form.
+    #[garde(range(min = 1.0, max = 10.0))]
+    pub form_neutral: f64,
+    /// Mood points (of 100) per rating point of form above or below neutral.
+    #[garde(range(min = 0.0, max = 50.0))]
+    pub form_weight: f64,
+    /// Mood points at a full pace ahead of (or behind) the season goal, at neutral ambition.
+    #[garde(range(min = 0.0, max = 50.0))]
+    pub goal_weight: f64,
+    /// The share of the goal's weight the most ambitious player adds and the least ambitious
+    /// loses; below 1, so the goal always counts the same way round.
+    #[garde(range(min = 0.0, max = 0.9))]
+    pub ambition_weight: f64,
+    /// The most mood points the season gives or takes at kick-off.
+    #[garde(range(min = 0.0, max = 100.0))]
+    pub cap: f64,
+}
+
+impl SeasonTuning {
+    /// No season at kick-off: every weight 0, so every kick-off mood is 0.
+    pub const NEUTRAL: SeasonTuning = SeasonTuning {
+        form_neutral: 6.5,
+        form_weight: 0.0,
+        goal_weight: 0.0,
+        ambition_weight: 0.0,
+        cap: 0.0,
+    };
+
+    /// The shipped season block; a test pins `content/tuning.json` to it.
+    pub const fn shipped() -> SeasonTuning {
+        SeasonTuning {
+            form_neutral: 6.5,
+            form_weight: 20.0,
+            goal_weight: 15.0,
+            ambition_weight: 0.6,
+            cap: 40.0,
+        }
+    }
+}
+
+/// The foot block (`engine.contract.foot`). A kick to the side of a player's weaker foot,
+/// without time to move the ball onto his strong one, loses up to `cost_cap` rating points on
+/// its execute and pressure stages, in proportion to how much weaker the foot is and more
+/// under pressure and over distance.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct FootTuning {
+    /// The most rating points a kick by the weakest foot can lose; never above 5.
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub cost_cap: f64,
+    /// The share of the cost every weaker-side kick without time pays.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub base: f64,
+    /// The share the closest pressure adds.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub pressure_weight: f64,
+    /// The share the longest range adds.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub range_weight: f64,
+    /// The nearest opponent adds no pressure from this many metres away, all of it at 0.
+    #[garde(range(min = 0.5, max = 20.0))]
+    pub pressure_m: f64,
+    /// A kick this many metres long or longer adds all of the range share.
+    #[garde(range(min = 5.0, max = 80.0))]
+    pub range_m: f64,
+    /// Within this many degrees of straight ahead either foot kicks: the strong one.
+    #[garde(range(min = 0.0, max = 90.0))]
+    pub either_deg: f64,
+    /// Seconds an unpressed carrier needs on the ball to move it onto his strong foot.
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub shift_s: f64,
+    /// Metres a closing presser stands toward the strong side of the most one-footed
+    /// carrier.
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub show_m: f64,
+}
+
+impl FootTuning {
+    /// No foot in play: no kick pays and no presser shows.
+    pub const NONE: FootTuning = FootTuning {
+        cost_cap: 0.0,
+        base: 0.0,
+        pressure_weight: 0.0,
+        range_weight: 0.0,
+        pressure_m: 5.0,
+        range_m: 40.0,
+        either_deg: 20.0,
+        shift_s: 0.6,
+        show_m: 0.0,
+    };
+
+    /// The shipped foot block; a test pins `content/tuning.json` to it.
+    pub const fn shipped() -> FootTuning {
+        FootTuning {
+            cost_cap: 5.0,
+            base: 0.4,
+            pressure_weight: 0.3,
+            range_weight: 0.3,
+            pressure_m: 5.0,
+            range_m: 40.0,
+            either_deg: 20.0,
+            shift_s: 0.6,
+            show_m: 1.5,
+        }
     }
 }
 
@@ -306,6 +461,256 @@ impl HookTuning {
         rash_chase: 0.0,
         press_goal_side_m: 0.0,
     };
+}
+
+/// Declares a tuning table of one `f64` per row, each held to its range by the tuning check,
+/// with `ZERO` and its lookups by [`crate::traits::TraitKind`] from the same list, so a new
+/// trait is one line here. A row names its field (the trait's catalogue name), then `=>` and
+/// the trait it belongs to, or nothing for a value of the table that is no trait's.
+macro_rules! trait_table {
+    (
+        $(#[doc = $tdoc:literal])*
+        $table:ident {
+            $( $(#[doc = $doc:literal])* $field:ident $(=> $kind:ident)? in $min:literal..=$max:literal, )*
+        }
+    ) => {
+        $(#[doc = $tdoc])*
+        #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+        #[serde(deny_unknown_fields)]
+        pub struct $table {
+            $(
+                $(#[doc = $doc])*
+                #[garde(range(min = $min, max = $max))]
+                pub $field: f64,
+            )*
+        }
+
+        impl $table {
+            /// Every value 0.
+            pub const ZERO: $table = $table { $($field: 0.0,)* };
+
+            /// The value of trait `k`; 0 for a trait the table does not list.
+            pub fn of(&self, k: crate::traits::TraitKind) -> f64 {
+                #[allow(unreachable_patterns)]
+                match k {
+                    $($(crate::traits::TraitKind::$kind => self.$field,)?)*
+                    _ => 0.0,
+                }
+            }
+
+            /// Mutable access to the value of trait `k`, for a test that plants one; `None` for
+            /// a trait the table does not list.
+            pub fn of_mut(&mut self, k: crate::traits::TraitKind) -> Option<&mut f64> {
+                #[allow(unreachable_patterns)]
+                match k {
+                    $($(crate::traits::TraitKind::$kind => Some(&mut self.$field),)?)*
+                    _ => None,
+                }
+            }
+        }
+    };
+}
+
+/// The traits block (`engine.contract.traits`): how much each trait of play weighs on its
+/// choice, and the chance a strong trait overrides an instruction it goes against.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct TraitTuning {
+    /// The share of a trait's weight a moderate trait plays at; a strong one plays all of it.
+    #[garde(range(min = 0.0, max = 0.9))]
+    pub moderate_share: f64,
+    /// A mood at or below this, percent of a full mood, is a low mood for an override.
+    #[garde(range(min = -100.0, max = 0.0))]
+    pub low_mood: f64,
+    /// Seconds an override that holds or carries the ball lasts.
+    #[garde(range(min = 0.2, max = 5.0))]
+    pub carry_s: f64,
+    #[garde(dive)]
+    pub weights: TraitWeights,
+    #[garde(dive)]
+    pub override_chance: OverrideChances,
+}
+
+impl TraitTuning {
+    /// No trait acts: every weight and every chance 0.
+    pub const NONE: TraitTuning = TraitTuning {
+        moderate_share: 0.0,
+        low_mood: -25.0,
+        carry_s: 1.5,
+        weights: TraitWeights::ZERO,
+        override_chance: OverrideChances::ZERO,
+    };
+
+    /// The shipped traits block; a test pins `content/tuning.json` to it.
+    pub const fn shipped() -> TraitTuning {
+        TraitTuning {
+            moderate_share: 0.5,
+            low_mood: -25.0,
+            carry_s: 1.5,
+            weights: TraitWeights {
+                cuts_inside: 0.6,
+                hugs_touchline: 0.6,
+                shoots_from_distance: 0.6,
+                places_shots: 0.25,
+                powers_shots: 0.2,
+                tries_lobs_and_chips: 0.4,
+                tries_killer_balls: 0.8,
+                plays_short_simple_passes: 0.4,
+                switches_play: 0.4,
+                crosses_early: 0.4,
+                runs_with_ball_often: 0.3,
+                rarely_dribbles: 0.3,
+                tries_tricks: 0.4,
+                tries_tricks_gate: 2.0,
+                plays_one_twos: 0.4,
+                holds_up_ball: 0.4,
+                releases_ball_early: 0.3,
+                dwells_on_ball: 0.3,
+                gets_forward: 5.0,
+                stays_back: 5.0,
+                arrives_late_in_box: 6.0,
+                moves_into_channels: 4.0,
+                presses_relentlessly: 0.3,
+                dives_into_tackles: 0.4,
+                stays_on_feet: 0.4,
+                goes_down_easily: 0.4,
+                argues_with_officials: 0.05,
+                rushes_out: 0.3,
+                stays_on_line: 0.3,
+                punches_rather_than_catches: 0.25,
+                kicks_long: 0.4,
+                throws_short: 0.4,
+            },
+            override_chance: OverrideChances {
+                tries_killer_balls: 0.0,
+                tries_lobs_and_chips: 0.0,
+                crosses_early: 0.0,
+                kicks_long: 0.0,
+                plays_short_simple_passes: 0.0,
+                plays_one_twos: 0.0,
+                throws_short: 0.0,
+                dwells_on_ball: 0.12,
+                runs_with_ball_often: 0.0,
+                holds_up_ball: 0.028,
+                tries_tricks: 0.0,
+                releases_ball_early: 0.28,
+                cuts_inside: 1.0,
+                hugs_touchline: 1.0,
+                switches_play: 0.0,
+                presses_relentlessly: 0.19,
+                gets_forward: 1.0,
+                arrives_late_in_box: 0.027,
+                stays_back: 0.17,
+                shoots_from_distance: 0.0,
+                rushes_out: 0.065,
+                stays_on_line: 0.0,
+            },
+        }
+    }
+}
+
+trait_table! {
+    /// Each trait's weight on its choice. Score weights add to an option's score; metres move a
+    /// target; shares scale a range, a reach, a speed or a turn; log-odds move a foul chance;
+    /// a chance moves a card or a hold chance. The take-on gate's points for tricks are
+    /// `tries_tricks_gate`, a value of the table that is no trait's weight.
+    TraitWeights {
+        /// Share of a wide carry's sideways part turned toward the centre.
+        cuts_inside => CutsInside in 0.0..=1.0,
+        /// Share of a wide carry's sideways part turned toward the touchline.
+        hugs_touchline => HugsTouchline in 0.0..=1.0,
+        /// Score added to a shot from outside the penalty area, at the edge of the shooting range.
+        shoots_from_distance => ShootsFromDistance in 0.0..=3.0,
+        /// Share a placed shot aims nearer the post and loses in speed.
+        places_shots => PlacesShots in 0.0..=0.9,
+        /// Share a powered shot gains in speed and in spread.
+        powers_shots => PowersShots in 0.0..=0.9,
+        /// Score added to a chip.
+        tries_lobs_and_chips => TriesLobsAndChips in 0.0..=3.0,
+        /// Score added to a forward pass through a tight lane, at a full forward pass.
+        tries_killer_balls => TriesKillerBalls in 0.0..=3.0,
+        /// Score added to a short pass, and taken from a forward one.
+        plays_short_simple_passes => PlaysShortSimplePasses in 0.0..=3.0,
+        /// Score added to a switch: a pass over 25 m that crosses 25 m of the pitch's width.
+        switches_play => SwitchesPlay in 0.0..=3.0,
+        /// Score added to a cross from outside the final 18 m.
+        crosses_early => CrossesEarly in 0.0..=3.0,
+        /// Score added to the dribble.
+        runs_with_ball_often => RunsWithBallOften in 0.0..=3.0,
+        /// Score taken from the dribble.
+        rarely_dribbles => RarelyDribbles in 0.0..=3.0,
+        /// Score added to a dribble with an opponent close.
+        tries_tricks => TriesTricks in 0.0..=3.0,
+        /// Rating points of technique the take-on gate drops for a player who tries tricks.
+        tries_tricks_gate in 0.0..=5.0,
+        /// Score added to a pass back to the team-mate who passed to him.
+        plays_one_twos => PlaysOneTwos in 0.0..=3.0,
+        /// Score added to holding the ball with an opponent close.
+        holds_up_ball => HoldsUpBall in 0.0..=3.0,
+        /// Score taken from holding the ball, and from the carry window.
+        releases_ball_early => ReleasesBallEarly in 0.0..=3.0,
+        /// Score added to holding the ball; it also slows the hold's fall with time on the ball.
+        dwells_on_ball => DwellsOnBall in 0.0..=3.0,
+        /// Metres his anchor moves up the pitch while his side has the ball.
+        gets_forward => GetsForward in 0.0..=15.0,
+        /// Metres his anchor moves back while his side has the ball.
+        stays_back => StaysBack in 0.0..=15.0,
+        /// Metres his target moves toward goal while his side has the ball in the final third.
+        arrives_late_in_box => ArrivesLateInBox in 0.0..=15.0,
+        /// Metres his anchor moves toward the channel between full-back and centre-back while his
+        /// side has the ball.
+        moves_into_channels => MovesIntoChannels in 0.0..=15.0,
+        /// Share his press reach widens by.
+        presses_relentlessly => PressesRelentlessly in 0.0..=1.0,
+        /// Log-odds his tackle's win and foul chances rise by.
+        dives_into_tackles => DivesIntoTackles in 0.0..=3.0,
+        /// Log-odds his tackle's foul chance falls by.
+        stays_on_feet => StaysOnFeet in 0.0..=3.0,
+        /// Log-odds the foul chance of a tackle on him rises by.
+        goes_down_easily => GoesDownEasily in 0.0..=3.0,
+        /// Chance added to his yellow-card chance on a foul (dissent).
+        argues_with_officials => ArguesWithOfficials in 0.0..=0.5,
+        /// Share a keeper's chase range widens by.
+        rushes_out => RushesOut in 0.0..=0.9,
+        /// Share a keeper's chase range narrows by.
+        stays_on_line => StaysOnLine in 0.0..=0.9,
+        /// Chance taken from a keeper's hold of a save: he punches it away instead.
+        punches_rather_than_catches => PunchesRatherThanCatches in 0.0..=0.9,
+        /// Score added to a keeper's kick over 30 m.
+        kicks_long => KicksLong in 0.0..=3.0,
+        /// Score added to a keeper's throw.
+        throws_short => ThrowsShort in 0.0..=3.0,
+    }
+}
+
+trait_table! {
+    /// The chance per moment that a strong trait overrides the instruction it goes against. A
+    /// trait outside the conflict table ([`crate::traits::TraitKind::conflicts`]) never meets a
+    /// moment, so its chance is not read; the shipped file holds 0 for it.
+    OverrideChances {
+        tries_killer_balls => TriesKillerBalls in 0.0..=1.0,
+        tries_lobs_and_chips => TriesLobsAndChips in 0.0..=1.0,
+        crosses_early => CrossesEarly in 0.0..=1.0,
+        kicks_long => KicksLong in 0.0..=1.0,
+        plays_short_simple_passes => PlaysShortSimplePasses in 0.0..=1.0,
+        plays_one_twos => PlaysOneTwos in 0.0..=1.0,
+        throws_short => ThrowsShort in 0.0..=1.0,
+        dwells_on_ball => DwellsOnBall in 0.0..=1.0,
+        runs_with_ball_often => RunsWithBallOften in 0.0..=1.0,
+        holds_up_ball => HoldsUpBall in 0.0..=1.0,
+        tries_tricks => TriesTricks in 0.0..=1.0,
+        releases_ball_early => ReleasesBallEarly in 0.0..=1.0,
+        cuts_inside => CutsInside in 0.0..=1.0,
+        hugs_touchline => HugsTouchline in 0.0..=1.0,
+        switches_play => SwitchesPlay in 0.0..=1.0,
+        presses_relentlessly => PressesRelentlessly in 0.0..=1.0,
+        gets_forward => GetsForward in 0.0..=1.0,
+        arrives_late_in_box => ArrivesLateInBox in 0.0..=1.0,
+        stays_back => StaysBack in 0.0..=1.0,
+        shoots_from_distance => ShootsFromDistance in 0.0..=1.0,
+        rushes_out => RushesOut in 0.0..=1.0,
+        stays_on_line => StaysOnLine in 0.0..=1.0,
+    }
 }
 
 /// The curve `F(r) = scale · e^((r − center) / width)`.
@@ -766,6 +1171,9 @@ impl Default for ContractTuning {
                 },
                 floor_drop: 7.0,
             }),
+            traits: Some(TraitTuning::shipped()),
+            foot: Some(FootTuning::shipped()),
+            season: Some(SeasonTuning::shipped()),
         }
     }
 }
@@ -853,6 +1261,38 @@ mod tests {
         }
         let text = c.validate().unwrap_err().to_string();
         assert!(text.contains("person.floor_drop"), "{text}");
+    }
+
+    #[test]
+    fn a_file_without_the_foot_block_reads_no_cost_and_a_cap_above_five_is_refused() {
+        let c = ContractTuning {
+            foot: None,
+            ..Default::default()
+        };
+        assert_eq!(c.foot(), FootTuning::NONE);
+        assert!(c.validate().is_ok());
+        let mut c = ContractTuning::default();
+        if let Some(f) = c.foot.as_mut() {
+            f.cost_cap = 5.5;
+        }
+        let text = c.validate().unwrap_err().to_string();
+        assert!(text.contains("foot.cost_cap"), "{text}");
+    }
+
+    #[test]
+    fn a_file_without_the_season_block_reads_it_neutral_and_a_wide_cap_is_refused() {
+        let c = ContractTuning {
+            season: None,
+            ..Default::default()
+        };
+        assert_eq!(c.season(), SeasonTuning::NEUTRAL);
+        assert!(c.validate().is_ok());
+        let mut c = ContractTuning::default();
+        if let Some(s) = c.season.as_mut() {
+            s.cap = 120.0;
+        }
+        let text = c.validate().unwrap_err().to_string();
+        assert!(text.contains("season.cap"), "{text}");
     }
 
     #[test]

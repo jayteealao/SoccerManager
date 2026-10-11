@@ -73,6 +73,126 @@ impl Tactics {
     }
 }
 
+/// One instruction level, duty or mentality a trait of play can go against. Each names its
+/// level in the tactics file; a tactics file without that name holds nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Instruction {
+    PressingLow,
+    WidthNarrow,
+    WidthWide,
+    TempoSlower,
+    TempoFaster,
+    LineDeep,
+    LineHigh,
+    DirectnessShort,
+    DirectnessDirect,
+    DutyDefend,
+    DutyAttack,
+    MentalityDefensive,
+    MentalityCautious,
+}
+
+impl Instruction {
+    /// Every instruction, in declaration order.
+    pub const ALL: [Instruction; 13] = [
+        Instruction::PressingLow,
+        Instruction::WidthNarrow,
+        Instruction::WidthWide,
+        Instruction::TempoSlower,
+        Instruction::TempoFaster,
+        Instruction::LineDeep,
+        Instruction::LineHigh,
+        Instruction::DirectnessShort,
+        Instruction::DirectnessDirect,
+        Instruction::DutyDefend,
+        Instruction::DutyAttack,
+        Instruction::MentalityDefensive,
+        Instruction::MentalityCautious,
+    ];
+
+    /// The instruction as the event contract spells it: `<instruction>:<level>`,
+    /// `duty:<duty>` or `mentality:<mentality>`.
+    pub fn code(self) -> &'static str {
+        match self {
+            Instruction::PressingLow => "pressing:low",
+            Instruction::WidthNarrow => "width:narrow",
+            Instruction::WidthWide => "width:wide",
+            Instruction::TempoSlower => "tempo:slower",
+            Instruction::TempoFaster => "tempo:faster",
+            Instruction::LineDeep => "line_height:deep",
+            Instruction::LineHigh => "line_height:high",
+            Instruction::DirectnessShort => "passing_directness:short",
+            Instruction::DirectnessDirect => "passing_directness:direct",
+            Instruction::DutyDefend => "duty:defend",
+            Instruction::DutyAttack => "duty:attack",
+            Instruction::MentalityDefensive => "mentality:defensive",
+            Instruction::MentalityCautious => "mentality:cautious",
+        }
+    }
+
+    /// The instruction with code `code`.
+    pub fn from_code(code: &str) -> Option<Self> {
+        Self::ALL.iter().copied().find(|i| i.code() == code)
+    }
+
+    /// The instruction's bit in [`TeamPlan::held`].
+    #[inline]
+    pub fn bit(self) -> u16 {
+        1 << (self as u16)
+    }
+
+    /// `true` when `tactics` holds this instruction for the player in `slot`: the team's
+    /// level, mentality, or the slot's duty, by name in `schema`.
+    pub fn held(self, tactics: &Tactics, slot: usize, schema: &TacticsSchema) -> bool {
+        let level = |index: usize, name: &str| {
+            schema
+                .instructions
+                .level_names(index)
+                .iter()
+                .position(|n| *n == name)
+                .is_some_and(|l| l == usize::from(tactics.instructions[index]))
+        };
+        match self {
+            Instruction::PressingLow => level(PRESSING, "low"),
+            Instruction::WidthNarrow => level(WIDTH, "narrow"),
+            Instruction::WidthWide => level(WIDTH, "wide"),
+            Instruction::TempoSlower => level(TEMPO, "slower"),
+            Instruction::TempoFaster => level(TEMPO, "faster"),
+            Instruction::LineDeep => level(LINE_HEIGHT, "deep"),
+            Instruction::LineHigh => level(LINE_HEIGHT, "high"),
+            Instruction::DirectnessShort => level(DIRECTNESS, "short"),
+            Instruction::DirectnessDirect => level(DIRECTNESS, "direct"),
+            Instruction::DutyDefend => schema
+                .duty_index("defend")
+                .is_some_and(|d| d == usize::from(tactics.roles[slot].duty)),
+            Instruction::DutyAttack => schema
+                .duty_index("attack")
+                .is_some_and(|d| d == usize::from(tactics.roles[slot].duty)),
+            Instruction::MentalityDefensive => schema
+                .mentality_index("defensive")
+                .is_some_and(|m| m == usize::from(tactics.mentality)),
+            Instruction::MentalityCautious => schema
+                .mentality_index("cautious")
+                .is_some_and(|m| m == usize::from(tactics.mentality)),
+        }
+    }
+}
+
+impl Tactics {
+    /// `true` when these tactics hold `instruction` for the player in `slot`.
+    pub fn holds(&self, instruction: Instruction, slot: usize, schema: &TacticsSchema) -> bool {
+        instruction.held(self, slot, schema)
+    }
+
+    /// The bits of every [`Instruction`] these tactics hold for the player in `slot`.
+    pub fn held(&self, slot: usize, schema: &TacticsSchema) -> u16 {
+        Instruction::ALL
+            .iter()
+            .filter(|i| self.holds(**i, slot, schema))
+            .fold(0, |bits, i| bits | i.bit())
+    }
+}
+
 /// A change to a team's tactics. Every field is optional; a role change names the player by
 /// squad index (the player's place in the team file).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -213,6 +333,13 @@ pub struct TeamPlan {
     /// The rest-defence guard; `None` holds nobody back.
     pub rest: Option<RestDefence>,
     pub slots: [SlotPlan; PLAYERS_PER_TEAM],
+    /// The bits of every [`Instruction`] the tactics hold for each slot's player: the team's
+    /// levels and mentality, and the slot's duty. A trait of play reads them.
+    pub held: [u16; PLAYERS_PER_TEAM],
+    /// The anchor depth, in metres, of the attack duty and of the defend duty, for an
+    /// override that plays a player at another duty's depth; 0 when the file has no such duty.
+    pub attack_depth: f64,
+    pub defend_depth: f64,
 }
 
 impl TeamPlan {
@@ -227,6 +354,11 @@ impl TeamPlan {
         let add = |a: StandOffset, b: Offset| Offset {
             x: a.x + b.x,
             y: a.y + b.y,
+        };
+        let duty_depth = |name: &str| {
+            schema
+                .duty_index(name)
+                .map_or(0.0, |d| schema.duties[d].depth)
         };
         let mut slots = [SlotPlan::default(); PLAYERS_PER_TEAM];
         for ((plan, rd), slot) in slots.iter_mut().zip(&tactics.roles).zip(&formation.slots) {
@@ -266,6 +398,9 @@ impl TeamPlan {
             sizes: schema.stand_options,
             rest: schema.rest_defence,
             slots,
+            held: std::array::from_fn(|slot| tactics.held(slot, schema)),
+            attack_depth: duty_depth("attack"),
+            defend_depth: duty_depth("defend"),
         }
     }
 
@@ -289,6 +424,9 @@ impl TeamPlan {
             sizes: None,
             rest: None,
             slots: [SlotPlan::default(); PLAYERS_PER_TEAM],
+            held: [0; PLAYERS_PER_TEAM],
+            attack_depth: 0.0,
+            defend_depth: 0.0,
         }
     }
 }
@@ -333,6 +471,34 @@ mod tests {
             plan.pace_lift,
             "high pressing lifts the pace of pressing jobs"
         );
+    }
+
+    #[test]
+    fn a_plan_holds_each_named_level_duty_and_mentality_for_its_slot() {
+        let content = shipped_content();
+        let schema = &content.tactics;
+        let t = &content.tuning.engine;
+        let mut tactics = Tactics::defaults(schema);
+        let plan = TeamPlan::from(&tactics, schema, t);
+        assert!(
+            plan.held.iter().all(|&bits| bits == 0),
+            "the AI default holds none"
+        );
+        tactics.instructions[DIRECTNESS] = 0;
+        tactics.mentality = schema.mentality_index("cautious").unwrap() as u8;
+        tactics.roles[6].duty = schema.duty_index("defend").unwrap() as u8;
+        let plan = TeamPlan::from(&tactics, schema, t);
+        for slot in 0..PLAYERS_PER_TEAM {
+            let bits = plan.held[slot];
+            assert!(bits & Instruction::DirectnessShort.bit() != 0);
+            assert!(bits & Instruction::MentalityCautious.bit() != 0);
+            assert!(bits & Instruction::MentalityDefensive.bit() == 0);
+            assert_eq!(bits & Instruction::DutyDefend.bit() != 0, slot == 6);
+        }
+        assert!(plan.attack_depth > plan.defend_depth);
+        for i in Instruction::ALL {
+            assert_eq!(Instruction::from_code(i.code()), Some(i));
+        }
     }
 
     #[test]

@@ -7,6 +7,7 @@
 // with no body) shows as "—" and sorts last.
 
 import { BUILD_TEXT, HIDDEN_NAMES, hiddenWord } from './hidden-words.js';
+import { footWord, formWord, goalText, progressWord } from './person-words.js';
 import { BAND_WORDS, bandOf, ratingBand, ratingText, wholeOf } from './scale.js';
 
 /// The visible attributes by group, as `content/attributes.json` groups them, in file order.
@@ -69,6 +70,166 @@ function scaleCell(tenths) {
   const whole = wholeOf(tenths);
   const band = bandOf(whole);
   return { text: String(whole), band, label: `${whole}, ${BAND_WORDS[band]}` };
+}
+
+/// The ten positions a player is rated at, in the order the Rated-at chip lists them.
+export const RATED_POSITIONS = Object.freeze(['GK', 'CB', 'LB', 'RB', 'DM', 'CM', 'AM', 'LW', 'RW', 'ST']);
+
+/// The Rated-at chip's position before the manager picks one (board 3).
+export const RATED_DEFAULT = 'ST';
+
+/// The Rated-at chip's minimums: any keeps every row.
+export const RATED_MINIMUMS = Object.freeze([
+  { id: 'any', label: 'any', min: 0 },
+  { id: '10', label: '10+', min: 10 },
+  { id: '13', label: '13+', min: 13 },
+  { id: '16', label: '16+', min: 16 },
+]);
+
+/// A player's whole rating at position `code` from the hello's `player.positions` (tenths by
+/// code), or null when he is not rated there. A whole 1 is the converter's floor for a
+/// position an old team file never rated, not a rating.
+export function ratingAt(player, code) {
+  const tenths = player?.['player.positions']?.[code];
+  if (typeof tenths !== 'number') {
+    return null;
+  }
+  const whole = wholeOf(tenths);
+  return whole > 1 ? whole : null;
+}
+
+/// A position rating cell: the whole number in its band, "—" when he is not rated there.
+function positionCell(player, code) {
+  const whole = ratingAt(player, code);
+  if (whole === null) {
+    return { ...blank(), label: code ? `Not rated at ${code}` : 'Not rated' };
+  }
+  const band = bandOf(whole);
+  return { text: String(whole), band, label: `${code} ${whole}, ${BAND_WORDS[band]}` };
+}
+
+/// The rows the Rated-at chip keeps: with minimum `min` (a whole rating), the players rated at
+/// least that at `code`; with no minimum, every row.
+export function ratedFilter(rows, code, min) {
+  if (!min) {
+    return rows;
+  }
+  return rows.filter((r) => (ratingAt(r.player, code) ?? 0) >= min);
+}
+
+/// The shown columns with the rated column's header naming the Rated-at chip's position.
+export function withRatedAt(columns, code) {
+  return columns.map((c) => (c.id === 'rated' ? { ...c, label: code, name: `Rating at ${code}` } : c));
+}
+
+/// A player's part of the season record in `ctx.season` (the views answer's `season`), or
+/// null when the answer carries none or does not list him.
+function seasonOf(player, ctx) {
+  return ctx?.season?.players?.[player?.['player.id']] ?? null;
+}
+
+/// The columns of the player as a person (board 3): his natural position's rating, his rating
+/// at the Rated-at position, his weaker foot, his form in words and his season goal.
+function personColumns() {
+  return [
+    {
+      id: 'natural',
+      label: 'Natural',
+      name: 'Rating at his natural position',
+      group: 'player',
+      built: true,
+      align: 'c',
+      kind: 'scale',
+      sortFirst: 'down',
+      value: (p) => ratingAt(p, p['player.position']),
+      cell: (p) => positionCell(p, p['player.position']),
+    },
+    {
+      id: 'rated',
+      label: RATED_DEFAULT,
+      name: 'Rating at the Rated-at position',
+      group: 'player',
+      built: true,
+      align: 'c',
+      kind: 'scale',
+      sortFirst: 'down',
+      value: (p, ctx) => ratingAt(p, ctx?.ratedAt ?? RATED_DEFAULT),
+      cell: (p, ctx) => positionCell(p, ctx?.ratedAt ?? RATED_DEFAULT),
+    },
+    {
+      id: 'foot',
+      label: 'Weaker foot',
+      name: 'Weaker foot',
+      group: 'player',
+      built: true,
+      align: 'l',
+      kind: 'percent',
+      sortFirst: 'down',
+      value: (p) => (typeof p['player.weaker_foot'] === 'number' ? p['player.weaker_foot'] : null),
+      cell: (p) => {
+        const strong = p['player.strong_foot'];
+        const weaker = p['player.weaker_foot'];
+        if ((strong !== 'left' && strong !== 'right') || typeof weaker !== 'number') {
+          return { ...blank(), label: 'Feet not known' };
+        }
+        const percent = Math.max(1, Math.min(100, Math.round(weaker)));
+        const word = footWord(percent);
+        const side = strong === 'left' ? 'Left' : 'Right';
+        return {
+          lead: `${side} ·`,
+          text: `${percent}%`,
+          ring: word === 'two-footed' ? 'ok' : word === 'decent' ? 'lo' : 'vl',
+          label: `${side} footed; weaker foot ${percent}%, ${word}`,
+        };
+      },
+    },
+    {
+      id: 'form',
+      label: 'Form',
+      name: 'Form, in words',
+      group: 'form',
+      built: true,
+      align: 'l',
+      kind: 'word',
+      sortFirst: 'down',
+      value: (p, ctx) => {
+        const form = seasonOf(p, ctx)?.form;
+        return typeof form === 'number' && Number.isFinite(form) ? form : null;
+      },
+      cell: (p, ctx) => {
+        const form = formWord(seasonOf(p, ctx)?.form);
+        if (!form.known) {
+          return { text: form.text, muted: true, label: `Form: ${form.text}` };
+        }
+        return { text: form.text, mark: form.mark, token: form.token, label: `Form: ${form.text}` };
+      },
+    },
+    {
+      id: 'season',
+      label: 'Season goal · so far',
+      name: 'Season goal and progress',
+      group: 'form',
+      built: true,
+      align: 'l',
+      kind: 'word',
+      wide: true,
+      sortFirst: 'down',
+      value: (p, ctx) => {
+        const progress = seasonOf(p, ctx)?.progress;
+        return typeof progress === 'number' && Number.isFinite(progress) ? progress : null;
+      },
+      cell: (p, ctx) => {
+        const s = seasonOf(p, ctx);
+        const goal = s ? goalText(s.goal, s) : null;
+        if (!goal) {
+          return { ...blank(), label: 'No season goal yet' };
+        }
+        const progress = progressWord(s.progress);
+        const tail = goal.count ?? progress ?? 'no match yet';
+        return { text: `${goal.brief} · ${tail}`, label: `${goal.aim}: ${goal.so}${progress ? `, ${progress}` : ''}` };
+      },
+    },
+  ];
 }
 
 /// The attribute columns: one per visible attribute, in group order.
@@ -264,6 +425,7 @@ export function allColumns() {
       value: (p) => (typeof p['player.level'] === 'number' ? wholeOf(p['player.level']) : null),
       cell: (p) => scaleCell(p['player.level']),
     },
+    ...personColumns(),
     ...attributeColumns(),
     hiddenColumn('consistency', 'Consistency'),
     hiddenColumn('injury_proneness', 'Injury proneness'),
@@ -301,10 +463,8 @@ function percentCell(value) {
 }
 
 /// The columns the engine has no model for yet: drawn in the menu's greyed Later group, never
-/// added.
+/// added. Morale is the dressing room's, not a player's mood.
 export const LATER_COLUMNS = Object.freeze([
-  { id: 'competence', label: 'Competence', name: 'Competence by position' },
-  { id: 'feet', label: 'Feet', name: 'Feet' },
   { id: 'load', label: 'Load', name: 'Load' },
   { id: 'morale', label: 'Morale', name: 'Morale' },
   { id: 'status', label: 'Status', name: 'Squad status' },
@@ -314,7 +474,7 @@ export const LATER_COLUMNS = Object.freeze([
 ]);
 
 /// The LATER columns the table draws at its right edge, as the board does.
-export const TRAILING_LATER = Object.freeze(['morale', 'contract']);
+export const TRAILING_LATER = Object.freeze(['contract']);
 
 /// The default view's columns, after No and Player (board 1).
 export const DEFAULT_COLUMNS = Object.freeze([

@@ -59,6 +59,40 @@ test('a stored view drops ids this page does not know and keeps the rest in orde
   const empty = readPart(null);
   assert.deepEqual(empty.views, [defaultView()]);
   assert.equal(empty.active, 'Default');
+  assert.equal(empty.season, null, 'no season without one in the answer');
+});
+
+test('the season part is kept, cleaned, and a damaged player dropped', () => {
+  const season = {
+    matches: ['m-1', 7, 'm-2'],
+    players: {
+      'p-1': {
+        starts: 2,
+        minutes: 170,
+        goals: 1,
+        assists: -3,
+        clean_sheets: 0,
+        red_cards: 0,
+        ratings: [{ match: 'm-1', rating: 7.2 }, { match: 'm-2', rating: 'x' }, null],
+        goal: { kind: 'goals', target: 8 },
+        form: 7.2,
+        progress: 260,
+      },
+      'p-2': { starts: 0, minutes: 0, ratings: [], goal: { kind: 'goals', target: 3 }, form: null, progress: null },
+      'p-3': { starts: 1, goal: { kind: 'golden_boot', target: 3 } },
+      'p-4': { starts: 1 },
+    },
+  };
+  const part = readPart({ views: [], ratings: {}, season });
+  assert.deepEqual(part.season.matches, ['m-1', 'm-2']);
+  assert.deepEqual(Object.keys(part.season.players), ['p-1', 'p-2']);
+  const p1 = part.season.players['p-1'];
+  assert.deepEqual([p1.starts, p1.minutes, p1.goals, p1.assists], [2, 170, 1, 0]);
+  assert.deepEqual(p1.ratings, [{ match: 'm-1', rating: 7.2 }]);
+  assert.deepEqual([p1.goal, p1.form, p1.progress], [{ kind: 'goals', target: 8 }, 7.2, 200]);
+  const p2 = part.season.players['p-2'];
+  assert.deepEqual([p2.goals, p2.form, p2.progress, p2.ratings], [0, null, null, []]);
+  assert.equal(readPart({ season: [] }).season, null);
 });
 
 test('the memory adapter keeps views for the session and reads them back', async () => {

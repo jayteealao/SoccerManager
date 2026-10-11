@@ -613,7 +613,7 @@ fn add_copies(v: &mut serde_json::Value, count: usize) {
     }
 }
 
-/// Shape AC-1: 45 visible and 2 hidden attributes, 11 personality values; communication,
+/// The record: 45 visible and 2 hidden attributes, 11 personality values; communication,
 /// determination and bravery in the mental group, eccentricity in goalkeeping.
 #[test]
 fn the_shipped_catalogue_holds_forty_five_visible_two_hidden_and_eleven_personality_values() {
@@ -667,7 +667,7 @@ fn the_shipped_catalogue_holds_forty_five_visible_two_hidden_and_eleven_personal
     assert!(hidden_names.contains(&"temperament"));
 }
 
-/// Shape AC-2: 51 visible and hidden attributes are refused with the count; 50 load.
+/// The limit: 51 visible and hidden attributes are refused with the count; 50 load.
 #[test]
 fn a_catalogue_with_fifty_one_visible_and_hidden_attributes_is_refused_with_the_count() {
     let err = edited_catalogue(|v| add_copies(v, 4))
@@ -698,7 +698,7 @@ fn a_fifteenth_personality_value_is_refused() {
     assert!(err.contains("15 personality values; at most 14"), "{err}");
 }
 
-/// Shape AC-9: every attribute added in version 4 names a stage job, and every personality
+/// Every attribute added in version 4 names a stage job, and every personality
 /// value an occasion job or "inert in a match".
 #[test]
 fn every_new_attribute_names_a_stage_job_and_every_personality_value_an_occasion() {
@@ -998,7 +998,7 @@ fn a_content_file_that_sets_a_line_gap_or_a_slide_share_is_refused() {
 
 /// The keys allowed to name a gap or a share, each with why it sets no gap between lines
 /// and no share of the slide.
-const ALLOWED: [(&str, &str); 5] = [
+const ALLOWED: [(&str, &str); 6] = [
     (
         "back_line_gap",
         "the widest gap between neighbours inside the deepest line, a ceiling for the respread when a player leaves",
@@ -1018,6 +1018,10 @@ const ALLOWED: [(&str, &str); 5] = [
     (
         "strong_share",
         "the share of drawn traits the person generator makes strong, not a match value",
+    ),
+    (
+        "moderate_share",
+        "the share of a trait's weight a moderate trait of play plays at, a player's choice weight",
     ),
 ];
 
@@ -1224,4 +1228,156 @@ fn the_person_block_ships_reads_neutral_when_absent_and_refuses_a_wide_floor() {
     wide.tuning = serde_json::to_vec(&tuning).unwrap();
     let err = engine::Content::from_files(&wide).unwrap_err().to_string();
     assert!(err.contains("engine.contract.person.floor_drop"), "{err}");
+}
+
+/// The shipped tuning carries the traits block; a tuning file without it loads and plays a
+/// ten-minute match, with players carrying strong traits, exactly as one whose trait values
+/// are all 0; and a chance above 1 is refused, naming the field.
+#[test]
+fn the_traits_block_ships_reads_as_no_trait_when_absent_and_refuses_a_chance_above_one() {
+    use engine::contract::TraitTuning;
+    use engine::data::ContentFiles;
+    use engine::data::traits::TraitStrength;
+    use engine::traits::TraitKind;
+    let shipped = ContentFiles::read(&common::content_dir()).unwrap();
+    let content = engine::Content::from_files(&shipped).unwrap();
+    assert_eq!(
+        content.tuning.engine.contract.traits,
+        Some(TraitTuning::shipped())
+    );
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    let contract = tuning["engine"]["contract"].as_object_mut().unwrap();
+    assert!(contract.remove("traits").is_some());
+    let mut old = shipped.clone();
+    old.tuning = serde_json::to_vec(&tuning).unwrap();
+    let old = engine::Content::from_files(&old).unwrap();
+    assert_eq!(*old.tuning.engine.contract.traits(), TraitTuning::NONE);
+    let [a, b] = common::default_teams(&old);
+    let play = |config: engine::MatchConfig| {
+        let mut sim = engine::Simulation::new(config).unwrap();
+        while !sim.is_over() {
+            sim.step();
+        }
+        sim.finish();
+        sim.take_events()
+    };
+    let mut absent = engine::MatchConfig::new(7, 10, &old, [&a, &b]).unwrap();
+    for (slot, kind) in [
+        (5, TraitKind::RunsWithBallOften),
+        (6, TraitKind::TriesKillerBalls),
+        (0, TraitKind::KicksLong),
+    ] {
+        let squad = absent.players[slot].squad;
+        absent.teams[0].squad[squad].set_trait(kind, Some(TraitStrength::Strong));
+    }
+    let mut zero = absent.clone();
+    zero.tuning.contract.traits = Some(TraitTuning::NONE);
+    let (absent, zero) = (play(absent), play(zero));
+    assert_eq!(absent, zero, "the events differ");
+    assert!(
+        absent
+            .iter()
+            .all(|e| e.kind != engine::EngineEventKind::TraitOverride)
+    );
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    tuning["engine"]["contract"]["traits"]["override_chance"]["tries_killer_balls"] = 1.5.into();
+    let mut high = shipped.clone();
+    high.tuning = serde_json::to_vec(&tuning).unwrap();
+    let err = engine::Content::from_files(&high).unwrap_err().to_string();
+    assert!(
+        err.contains("engine.contract.traits.override_chance.tries_killer_balls"),
+        "{err}"
+    );
+}
+
+/// The shipped tuning carries the season block; a tuning file without it loads and plays a
+/// ten-minute match exactly as one whose season block is neutral; and a cap above 100 is
+/// refused, naming the field.
+#[test]
+fn the_season_block_ships_reads_as_neutral_when_absent_and_refuses_a_wide_cap() {
+    use engine::contract::params::SeasonTuning;
+    use engine::data::ContentFiles;
+    let shipped = ContentFiles::read(&common::content_dir()).unwrap();
+    let content = engine::Content::from_files(&shipped).unwrap();
+    assert_eq!(
+        content.tuning.engine.contract.season,
+        Some(SeasonTuning::shipped())
+    );
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    let contract = tuning["engine"]["contract"].as_object_mut().unwrap();
+    assert!(contract.remove("season").is_some());
+    let mut old = shipped.clone();
+    old.tuning = serde_json::to_vec(&tuning).unwrap();
+    let old = engine::Content::from_files(&old).unwrap();
+    assert_eq!(old.tuning.engine.contract.season(), SeasonTuning::NEUTRAL);
+    let [a, b] = common::default_teams(&old);
+    let play = |config: engine::MatchConfig| {
+        let mut sim = engine::Simulation::new(config).unwrap();
+        while !sim.is_over() {
+            sim.step();
+        }
+        sim.finish();
+        sim.take_events()
+    };
+    let absent = engine::MatchConfig::new(7, 10, &old, [&a, &b]).unwrap();
+    let mut neutral = absent.clone();
+    neutral.tuning.contract.season = Some(SeasonTuning::NEUTRAL);
+    assert_eq!(play(absent), play(neutral), "the events differ");
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    tuning["engine"]["contract"]["season"]["cap"] = 120.0.into();
+    let mut wide = shipped.clone();
+    wide.tuning = serde_json::to_vec(&tuning).unwrap();
+    let err = engine::Content::from_files(&wide).unwrap_err().to_string();
+    assert!(err.contains("engine.contract.season.cap"), "{err}");
+}
+
+/// The shipped tuning carries the foot block; a tuning file without it loads and plays a
+/// ten-minute match exactly as one whose foot cost cap and showing distance are 0; and a cost
+/// cap above 5 points is refused, naming the field.
+#[test]
+fn the_foot_block_ships_reads_as_no_cost_when_absent_and_refuses_a_cap_above_five() {
+    use engine::contract::FootTuning;
+    use engine::data::ContentFiles;
+    let shipped = ContentFiles::read(&common::content_dir()).unwrap();
+    let content = engine::Content::from_files(&shipped).unwrap();
+    assert_eq!(
+        content.tuning.engine.contract.foot,
+        Some(FootTuning::shipped())
+    );
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    let contract = tuning["engine"]["contract"].as_object_mut().unwrap();
+    assert!(contract.remove("foot").is_some());
+    let mut old = shipped.clone();
+    old.tuning = serde_json::to_vec(&tuning).unwrap();
+    let old = engine::Content::from_files(&old).unwrap();
+    assert_eq!(old.tuning.engine.contract.foot(), FootTuning::NONE);
+    let [a, b] = common::default_teams(&old);
+    let play = |config: engine::MatchConfig| {
+        let mut sim = engine::Simulation::new(config).unwrap();
+        while !sim.is_over() {
+            sim.step();
+        }
+        sim.finish();
+        sim.take_events()
+    };
+    let absent = engine::MatchConfig::new(7, 10, &old, [&a, &b]).unwrap();
+    let mut zero = absent.clone();
+    zero.tuning.contract.foot = Some(FootTuning {
+        cost_cap: 0.0,
+        show_m: 0.0,
+        ..FootTuning::shipped()
+    });
+    assert_eq!(play(absent), play(zero), "the events differ");
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    tuning["engine"]["contract"]["foot"]["cost_cap"] = 5.5.into();
+    let mut high = shipped.clone();
+    high.tuning = serde_json::to_vec(&tuning).unwrap();
+    let err = engine::Content::from_files(&high).unwrap_err().to_string();
+    assert!(err.contains("engine.contract.foot.cost_cap"), "{err}");
 }

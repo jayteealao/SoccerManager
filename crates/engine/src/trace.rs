@@ -178,7 +178,7 @@ impl Trace {
     }
 }
 
-/// `true` for the 22 actions whose draw is tested against a probability. The other 21 are
+/// `true` for the 23 actions whose draw is tested against a probability. The other 21 are
 /// value draws: score noise, aims, angles, lofts, the keeper's dive, form, added time and the
 /// restart wait. The list is outside the stream table, so the scheme digest does not change.
 pub fn is_chance(action: Action) -> bool {
@@ -204,7 +204,8 @@ pub fn is_chance(action: Action) -> bool {
         | Action::Lapse
         | Action::Header
         | Action::PaceSprint
-        | Action::QuickRestart => true,
+        | Action::QuickRestart
+        | Action::TraitOverride => true,
         Action::FormMatch | Action::FormPeriod => false,
         Action::ShotScore
         | Action::PassScore
@@ -276,11 +277,14 @@ pub enum Point {
     /// A part of the players' form offsets is drawn: a new period, or a substitute's match
     /// part as he comes on.
     Form,
+    /// A strong trait of play met a moment that may override an instruction, and its draw
+    /// decided whether it did.
+    TraitOverride,
 }
 
 impl Point {
-    /// Every point: 10 decision points, then 28 rule outcomes.
-    pub const ALL: [Point; 38] = [
+    /// Every point: 10 decision points, then 29 rule outcomes.
+    pub const ALL: [Point; 39] = [
         Point::Carrier,
         Point::RestartPass,
         Point::Press,
@@ -319,6 +323,7 @@ impl Point {
         Point::SendOff,
         Point::Abandoned,
         Point::Form,
+        Point::TraitOverride,
     ];
 
     /// The point's name in the trace file.
@@ -362,6 +367,7 @@ impl Point {
             Point::SendOff => "send_off",
             Point::Abandoned => "abandoned",
             Point::Form => "form",
+            Point::TraitOverride => "trait_override",
         }
     }
 
@@ -427,6 +433,7 @@ pub fn points_of(action: Action) -> &'static [Point] {
         Action::PaceSprint => &[Point::Press, Point::Chase],
         // Both are drawn as the ball goes dead.
         Action::RestartWait | Action::QuickRestart => &[Point::DeadBall],
+        Action::TraitOverride => &[Point::TraitOverride],
     }
 }
 
@@ -457,6 +464,7 @@ pub fn points_of_event(kind: EngineEventKind) -> &'static [Point] {
         // The hooks that can fail inside a step: the decision hook and the rule hook (a
         // foul's card). The commentary hook runs outside the step.
         EngineEventKind::Script => &[Point::ScriptDecision, Point::Foul],
+        EngineEventKind::TraitOverride => &[Point::TraitOverride],
     }
 }
 
@@ -667,9 +675,11 @@ pub fn note_points(seen: &mut std::collections::BTreeSet<Point>, records: &[Trac
 }
 
 /// The points the 22 gate matches never reach. Each has a scene test in
-/// `crates/engine/tests/trace.rs` that forces it and checks its record.
+/// `crates/engine/tests/trace.rs` that forces it and checks its record. The shipped teams
+/// carry no traits, so no gate match meets an override's moment. Since the player as a
+/// person changed play, the gate matches reach an offside.
 #[cfg(feature = "scenario")]
-pub const SCENE_ONLY: &[Point] = &[Point::CrossClear, Point::Abandoned, Point::Offside];
+pub const SCENE_ONLY: &[Point] = &[Point::CrossClear, Point::Abandoned, Point::TraitOverride];
 
 /// Checks the partition: the points the gate matches reached plus [`SCENE_ONLY`] are
 /// exactly [`Point::ALL`]. Returns the missing points by name, or the scene-only points the

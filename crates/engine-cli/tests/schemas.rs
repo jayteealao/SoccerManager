@@ -58,6 +58,50 @@ fn a_simulated_match_writes_records_that_validate_against_the_schemas() {
 }
 
 #[test]
+fn a_trait_override_row_validates_and_a_wrong_cause_is_refused() {
+    let data = temp("engine-cli-schemas", "override");
+    let out = bin(&data)
+        .args(["simulate", "--seed", "7", "--minutes", "1", "--no-snapshot"])
+        .arg("--ticks-out")
+        .arg(data.join("m.ticks"))
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let printed = record(&String::from_utf8_lossy(&out.stdout));
+    let id = printed["match.id"].as_str().unwrap().to_string();
+    let events =
+        std::fs::read_to_string(data.join("matches").join(&id).join("events.jsonl")).unwrap();
+    let kick_off = record(events.lines().next().unwrap());
+    let schemas = RecordSchemas::load();
+
+    // The row a trait override writes: the kick-off row's keys with the override's type and
+    // its three trait fields.
+    let mut row = kick_off;
+    row["event.type"] = "trait-override".into();
+    row["trait.name"] = "holds_up_ball".into();
+    row["trait.cause"] = "pressure".into();
+    row["trait.instruction"] = "line_height:deep".into();
+    schemas.event(&row).unwrap_or_else(|e| panic!("{e}\n{row}"));
+    row["trait.cause"] = "low-mood".into();
+    row["trait.instruction"] = "duty:defend".into();
+    schemas.event(&row).unwrap_or_else(|e| panic!("{e}\n{row}"));
+
+    let mut wrong_cause = row.clone();
+    wrong_cause["trait.cause"] = "boredom".into();
+    assert!(
+        schemas.event(&wrong_cause).is_err(),
+        "unknown cause accepted"
+    );
+    let mut bare_instruction = row;
+    bare_instruction["trait.instruction"] = "faster".into();
+    assert!(
+        schemas.event(&bare_instruction).is_err(),
+        "instruction without its kind accepted"
+    );
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[test]
 fn the_schemas_refuse_a_record_without_its_match_or_with_another_version() {
     let schemas = RecordSchemas::load();
     let data = temp("engine-cli-schemas", "refuse");

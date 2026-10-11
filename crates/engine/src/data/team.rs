@@ -248,6 +248,16 @@ pub struct Condition {
     /// Matches he has played for the club, 0 to 1000.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub matches_at_club: Option<u16>,
+    /// His recent form: the mean of his last five match ratings, in tenths, 10 to 100 (1.0 to
+    /// 10.0). The launcher's season record writes it; absent, form adds nothing to his
+    /// kick-off mood.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recent_rating: Option<u8>,
+    /// His progress toward his season goal, 0 to 200 percent of the pace (100 is on track).
+    /// The launcher's season record writes it; absent, the goal adds nothing to his kick-off
+    /// mood.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub goal_progress: Option<u8>,
 }
 
 /// Sharpness and adaptation a file may give, in percent.
@@ -256,6 +266,10 @@ pub const CONDITION_PERCENT: std::ops::RangeInclusive<u8> = 0..=100;
 pub const REST_DAYS: std::ops::RangeInclusive<u8> = 0..=14;
 /// Matches at the club a file may give.
 pub const MATCHES_AT_CLUB: std::ops::RangeInclusive<u16> = 0..=1000;
+/// Recent form a file may give, in tenths of a match rating (1.0 to 10.0).
+pub const RECENT_RATING: RangeInclusive<u8> = 10..=100;
+/// Season-goal progress a file may give, in percent of the pace.
+pub const GOAL_PROGRESS: RangeInclusive<u8> = 0..=200;
 
 /// The team data file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
@@ -264,10 +278,41 @@ pub const MATCHES_AT_CLUB: std::ops::RangeInclusive<u16> = 0..=1000;
 pub struct TeamFile {
     #[garde(skip)]
     pub schema_version: u32,
+    /// Set to 1 only in a copy the launcher writes of a file converted from version 1: its
+    /// players carry no body fields, as a converted version 1 player has none, and play as the
+    /// reference. Absent in a file written by hand, where every body field is required.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(custom(check_converted_from))]
+    pub converted_from: Option<u32>,
     #[garde(dive(()))]
     pub club: Club,
-    #[garde(length(min = 11, max = MAX_SQUAD), dive(()), custom(check_squad))]
+    #[garde(
+        length(min = 11, max = MAX_SQUAD),
+        dive(()),
+        custom(check_squad_of(self.converted_from == Some(CONVERTED_FROM)))
+    )]
     pub players: Vec<PlayerEntry>,
+}
+
+/// The one version a file may say it was converted from: version 1, the version with no body
+/// fields.
+pub const CONVERTED_FROM: u32 = 1;
+
+/// Refuses a `converted_from` other than 1, naming the value.
+fn check_converted_from(value: &Option<u32>, _: &AttributeSchema) -> garde::Result {
+    match value {
+        Some(v) if *v != CONVERTED_FROM => Err(garde::Error::new(format!(
+            "converted_from is {v}; allowed {CONVERTED_FROM}"
+        ))),
+        _ => Ok(()),
+    }
+}
+
+/// [`check_squad`], with the body fields optional in a copy of a converted version 1 file.
+fn check_squad_of(
+    converted: bool,
+) -> impl FnOnce(&Vec<PlayerEntry>, &AttributeSchema) -> garde::Result {
+    move |players, schema| check_squad(players, schema, converted)
 }
 
 fn hex_colour(value: &str, _ctx: &()) -> garde::Result {
@@ -292,7 +337,11 @@ fn check_ground(club: &str) -> impl FnOnce(&Ground, &()) -> garde::Result + '_ {
     }
 }
 
-fn check_squad(players: &[PlayerEntry], schema: &AttributeSchema) -> garde::Result {
+fn check_squad(
+    players: &[PlayerEntry],
+    schema: &AttributeSchema,
+    converted: bool,
+) -> garde::Result {
     for (i, p) in players.iter().enumerate() {
         if players[..i].iter().any(|q| q.id == p.id) {
             return Err(garde::Error::new(format!("player {} appears twice", p.id)));
@@ -320,7 +369,7 @@ fn check_squad(players: &[PlayerEntry], schema: &AttributeSchema) -> garde::Resu
                 Some(_) => {}
             }
         }
-        check_body(p)?;
+        check_body(p, converted)?;
         check_condition(p)?;
         check_person(p)?;
         for name in p.attributes.keys() {
@@ -426,11 +475,22 @@ fn check_condition(p: &PlayerEntry) -> garde::Result {
     {
         return refuse("matches_at_club", v, "0 to 1000");
     }
+    if let Some(v) = c.recent_rating
+        && !RECENT_RATING.contains(&v)
+    {
+        return refuse("recent_rating", v.into(), "10 to 100");
+    }
+    if let Some(v) = c.goal_progress
+        && !GOAL_PROGRESS.contains(&v)
+    {
+        return refuse("goal_progress", v.into(), "0 to 200");
+    }
     Ok(())
 }
 
-/// Refuses a missing or out-of-range body field, naming the player and the field.
-fn check_body(p: &PlayerEntry) -> garde::Result {
+/// Refuses a missing or out-of-range body field, naming the player and the field. With
+/// `converted` (a copy of a converted version 1 file) a missing field is allowed.
+fn check_body(p: &PlayerEntry, converted: bool) -> garde::Result {
     let missing = |field: &str| {
         Err(garde::Error::new(format!(
             "player {}: body field {field} is missing",
@@ -438,6 +498,7 @@ fn check_body(p: &PlayerEntry) -> garde::Result {
         )))
     };
     match p.height {
+        None if converted => {}
         None => return missing("height"),
         Some(h) if !HEIGHT_CM.contains(&h) => {
             return Err(garde::Error::new(format!(
@@ -448,6 +509,7 @@ fn check_body(p: &PlayerEntry) -> garde::Result {
         Some(_) => {}
     }
     match p.age {
+        None if converted => {}
         None => return missing("age"),
         Some(a) if !AGE_YEARS.contains(&a) => {
             return Err(garde::Error::new(format!(
@@ -458,6 +520,7 @@ fn check_body(p: &PlayerEntry) -> garde::Result {
         Some(_) => {}
     }
     match &p.nationality {
+        None if converted => {}
         None => return missing("nationality"),
         Some(n) if !(n.len() == 3 && n.bytes().all(|b| b.is_ascii_uppercase())) => {
             return Err(garde::Error::new(format!(

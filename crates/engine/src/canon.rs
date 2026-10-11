@@ -221,6 +221,8 @@ impl Writer {
                     self.u32(c);
                 }
                 self.f64_at(|| format!("tallies[{team}][{s}].xg"), t.xg);
+                self.u32(t.assists);
+                self.u8(u8::from(t.started));
             }
         }
     }

@@ -188,14 +188,15 @@ fn every_action_and_event_kind_maps_to_a_point() {
     for kind in EngineEventKind::ALL {
         assert!(!trace::points_of_event(kind).is_empty(), "{kind:?}");
     }
-    assert_eq!(Point::ALL.len(), 38);
+    assert_eq!(Point::ALL.len(), 39);
     assert_eq!(Point::ALL.iter().filter(|p| p.is_decision()).count(), 10);
     let names: std::collections::BTreeSet<_> = Point::ALL.iter().map(|p| p.name()).collect();
-    assert_eq!(names.len(), 38, "every point has its own name");
+    assert_eq!(names.len(), 39, "every point has its own name");
     assert_eq!(
         Action::ALL.iter().filter(|a| trace::is_chance(**a)).count(),
-        // The quick restart is a chance; the restart wait is a drawn length, not one.
-        22
+        // The quick restart and the trait override are chances; the restart wait is a drawn
+        // length, not one.
+        23
     );
 }
 
@@ -408,4 +409,60 @@ fn an_attacker_beyond_the_defenders_records_the_offside() {
         .expect("an offside record");
     assert_eq!(offside.detail["player"], ATTACKER);
     assert_eq!(offside.detail["team"], 0);
+}
+
+/// Scene-only point `trait_override` (the shipped teams carry no traits, so no gate match
+/// meets an override's moment): a midfielder who releases the ball early, at mood -50 and with
+/// his side playing at a slower tempo, has just gained the ball with no opponent near, and the
+/// chance planted at 1 records the draw and the override with its trait, instruction and
+/// cause.
+#[test]
+fn a_strong_trait_against_its_instruction_records_the_override() {
+    use engine::data::tactics::TEMPO;
+    use engine::data::traits::TraitStrength;
+    use engine::math::{DVec2, DVec3};
+    use engine::traits::TraitKind;
+    const ME: usize = 6;
+    let mut config = common::steady(common::short_match(10));
+    config.managers = [engine::Manager::Human; 2];
+    *config
+        .tuning
+        .contract
+        .traits
+        .as_mut()
+        .unwrap()
+        .override_chance
+        .of_mut(TraitKind::ReleasesBallEarly)
+        .unwrap() = 1.0;
+    let mut sim = common::spread(Scene::new(config), -30.0, 30.0)
+        .traced()
+        .tick(1_001)
+        .place(ME, DVec2::new(-15.0, 0.0))
+        .ball(DVec3::new(-15.0, 0.0, 0.0))
+        .carrier(Some(ME))
+        .control_since(1_000)
+        .with_trait(ME, "releases_ball_early", Some(TraitStrength::Strong))
+        .instruction(0, TEMPO, "slower")
+        .mood(ME, -50.0)
+        .build();
+    let mut found = None;
+    for _ in 0..100 {
+        sim.step();
+        let records = sim.take_trace();
+        let events = sim.take_events();
+        trace::check_tick(&records, &events).unwrap();
+        if let Some(p) = points(&records)
+            .into_iter()
+            .find(|p| p.point == Point::TraitOverride)
+        {
+            found = Some(p.detail.clone());
+            break;
+        }
+    }
+    let detail = found.expect("a trait_override record");
+    assert_eq!(detail["player"], ME);
+    assert_eq!(detail["trait"], "releases_ball_early");
+    assert_eq!(detail["instruction"], "tempo:slower");
+    assert_eq!(detail["cause"], "low-mood");
+    assert_eq!(detail["won"], true);
 }
