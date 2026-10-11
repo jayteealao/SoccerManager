@@ -8,6 +8,11 @@
 // stoppage, a queued tactical change, a substitution, and the AI manager's choice are not
 // (they happen at a stoppage another event already marks). An injury stops play for a
 // dropped ball.
+//
+// The restart tag marks the tick the ball appears at its restart spot, which comes seconds
+// after the event while the ball is fetched (protocol 8). So an event that stops play opens a
+// stoppage, and the next restart tag closes it and adds no mark of its own; a restart tag with
+// no stoppage open (a kick-off with no event before it) marks as before.
 
 /// Two marks closer than this are the same stoppage. 25 ticks is half a second.
 export const COLLAPSE_TICKS = 25;
@@ -44,6 +49,23 @@ export function stopsPlay(message) {
 export class Stoppages {
   constructor() {
     this.ticks = [];
+    /// The tick of the event that stopped play, until the restart tag that ends the stoppage.
+    this.open = null;
+  }
+
+  /// An event that stops play: one mark, and the stoppage stays open until its restart.
+  stop(tick) {
+    this.add(tick);
+    this.open = tick;
+  }
+
+  /// A restart tag: it closes the open stoppage, or marks one of its own when none is open.
+  restart(tick) {
+    if (this.open !== null) {
+      this.open = null;
+      return;
+    }
+    this.add(tick);
   }
 
   /// Adds one mark. Marks arrive in tick order, so the collapse only looks back one entry.
@@ -58,6 +80,7 @@ export class Stoppages {
   /// Drops every mark after `tick`, where a resumed match continues.
   truncate(tick) {
     this.ticks = this.ticks.filter((t) => t <= tick);
+    this.open = null;
   }
 
   /// The first stoppage after `fromTick`, or null when there is none.

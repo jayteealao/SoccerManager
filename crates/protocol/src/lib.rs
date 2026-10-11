@@ -21,7 +21,8 @@ pub use message::{
     Confidence, DEFAULT_GROUND_LENGTH, DEFAULT_GROUND_WIDTH, GroundEvent, GroundKind,
     GroundProgress, Hello, HiddenWord, Jump, Matchday, MatchdayFixture, PatchWire, QueueChange,
     RatingWire, Ratings, RoleWire, RosterEntry, Seen, ServerMessage, SetLineup, SetSpeed, Side,
-    SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup, TraitWire,
+    SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup, TraitWire, WalkOn,
+    WalkPathWire,
 };
 
 /// The protocol version a client must ask for. A client that asks for another version is
@@ -138,7 +139,13 @@ pub use message::{
 /// (each personality value as a word key and a confidence, never a number). Every added field
 /// is optional, so a protocol 6 message still reads and a reader shows the fields it lacks as
 /// unknown; no field was removed and the tick frames are unchanged.
-pub const PROTOCOL_VERSION: u16 = 7;
+///
+/// Version 8 adds the `walk-on` message: before the first tick of each half the server sends
+/// the players' walk from the tunnel to their places, which is not match time. The restart tag
+/// on a tick frame now marks the tick the ball appears at its restart spot, which can come
+/// seconds after the event that stopped play, while the ball is fetched. No field was removed
+/// and the tick frames are unchanged, so a protocol 7 replay still reads; it has no walk-on.
+pub const PROTOCOL_VERSION: u16 = 8;
 
 /// The protocol version before ratings moved to tenths. Replay readers still read its
 /// frames; a hello of this version carries ratings on the 1 to 100 scale.
@@ -157,6 +164,10 @@ pub const PROTOCOL_V5: u16 = 5;
 /// The protocol version before the person: a squad entry carries no position ratings, feet,
 /// traits or personality. Replay readers still read its frames.
 pub const PROTOCOL_V6: u16 = 6;
+
+/// The protocol version before the walk-on: no `walk-on` message, and the restart tag on the
+/// tick the event stopped play. Replay readers still read its frames.
+pub const PROTOCOL_V7: u16 = 7;
 
 /// Errors this crate returns.
 #[derive(Debug, Error)]
@@ -419,6 +430,21 @@ pub const MESSAGES: &[MessageSpec] = &[
         fields: &["tick", "ratings"],
     },
     MessageSpec {
+        name: "walk-on",
+        direction: Direction::ServerToClient,
+        encoding: Encoding::JsonText,
+        fields: &[
+            "period",
+            "first_tick",
+            "speed",
+            "ticks",
+            "paths",
+            "player",
+            "from",
+            "to",
+        ],
+    },
+    MessageSpec {
         name: "ack",
         direction: Direction::ServerToClient,
         encoding: Encoding::JsonText,
@@ -531,6 +557,7 @@ mod tests {
             ServerMessage::GroundEvent(_) => "ground-event",
             ServerMessage::GroundProgress(_) => "ground-progress",
             ServerMessage::Ratings(_) => "ratings",
+            ServerMessage::WalkOn(_) => "walk-on",
         }
     }
 
@@ -657,6 +684,13 @@ mod tests {
             ServerMessage::Ratings(Ratings {
                 tick: 0,
                 ratings: Vec::new(),
+            }),
+            ServerMessage::WalkOn(WalkOn {
+                period: 0,
+                first_tick: 0,
+                speed: 0.0,
+                ticks: 0,
+                paths: Vec::new(),
             }),
         ]
     }

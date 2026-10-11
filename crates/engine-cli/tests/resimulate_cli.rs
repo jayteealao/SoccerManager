@@ -158,7 +158,7 @@ fn a_replay_file_alone_reproduces_its_tick_frames_with_every_source_file_deleted
             .all(|c| c.team == 0 && c.source == ChangeSource::Manager)
     );
     assert_eq!(rejected_rows(&fixture), 1);
-    assert_eq!(fixture.inputs.len(), 11);
+    assert_eq!(fixture.inputs.len(), 12);
 
     // Every source file goes: the content folder with its teams and the script pack, and
     // the change file.
@@ -273,6 +273,7 @@ fn a_new_replay_file_holds_the_engine_identity_every_input_and_every_applied_cha
         ("team_b", "teams/default-b.json"),
         ("slots", "slots.json"),
         ("traits", "traits.json"),
+        ("restart_waits", "restart-waits.json"),
         ("pack_manifest", "scripts/sample/pack.json"),
         ("pack_script", "scripts/sample/main.rhai"),
     ];

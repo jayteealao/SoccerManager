@@ -562,6 +562,37 @@ pub struct GroundProgress {
     pub reached: Vec<u32>,
 }
 
+/// The walk-on before one half: the players walk from the tunnel on the near touchline to the
+/// places of the half's first tick. It is sent before that tick's frame and is not match time:
+/// no tick plays it. A viewer draws it before the tick, or skips it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WalkOn {
+    /// The half it opens: 0 the first, 1 the second, 2 and 3 the extra-time halves.
+    pub period: u32,
+    /// The tick of the half's first frame, which the walk-on ends on.
+    pub first_tick: u32,
+    /// The walking speed, in metres per second.
+    pub speed: f64,
+    /// How long the walk-on lasts, in ticks of the match's tick length: the longest walk at
+    /// `speed`.
+    pub ticks: u32,
+    /// Every player on the pitch, in roster order.
+    pub paths: Vec<WalkPathWire>,
+}
+
+/// One player's walk, in metres on the tick frame's axes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WalkPathWire {
+    /// The player's slot in the tick frame, 0 to 21.
+    pub player: u32,
+    /// Where he comes out of the tunnel, `[x, y]`.
+    pub from: [f64; 2],
+    /// His place on the half's first tick, `[x, y]`.
+    pub to: [f64; 2],
+}
+
 /// Everything the server sends as a JSON text frame.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
@@ -579,6 +610,7 @@ pub enum ServerMessage {
     GroundEvent(GroundEvent),
     GroundProgress(GroundProgress),
     Ratings(Ratings),
+    WalkOn(WalkOn),
 }
 
 /// The playback speed a client asks for.
@@ -1328,6 +1360,30 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.to_string().contains("fast"), "{err}");
+    }
+
+    #[test]
+    fn a_walk_on_reads_back_and_refuses_an_unknown_field() {
+        let walk = ServerMessage::WalkOn(WalkOn {
+            period: 1,
+            first_tick: 135_001,
+            speed: 2.0,
+            ticks: 900,
+            paths: vec![WalkPathWire {
+                player: 3,
+                from: [-1.0, -34.0],
+                to: [-20.5, 10.0],
+            }],
+        });
+        let json = serde_json::to_string(&walk).unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"walk-on","period":1,"first_tick":135001,"speed":2.0,"ticks":900,"paths":[{"player":3,"from":[-1.0,-34.0],"to":[-20.5,10.0]}]}"#
+        );
+        assert_eq!(serde_json::from_str::<ServerMessage>(&json).unwrap(), walk);
+        let late = json.replace(r#""ticks""#, r#""late":true,"ticks""#);
+        let err = serde_json::from_str::<ServerMessage>(&late).unwrap_err();
+        assert!(err.to_string().contains("late"), "{err}");
     }
 
     fn advice() -> Advice {

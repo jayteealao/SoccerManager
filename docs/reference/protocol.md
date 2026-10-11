@@ -1,8 +1,8 @@
-# Match stream protocol, version 7
+# Match stream protocol, version 8
 
 The engine serves one viewer over a WebSocket on `127.0.0.1`. The port is chosen by the
 operating system at every run and written to `engine.port` inside the runtime data folder.
-A page connects to `ws://127.0.0.1:<port>/?v=6`.
+A page connects to `ws://127.0.0.1:<port>/?v=8`.
 
 Version 2 changed the meaning of `ticks_expected` from the exact tick count to the most ticks
 the match can last, because the time added at the end of each half is known only when the
@@ -76,6 +76,14 @@ one), `player.traits` (his traits of play, each a `name` and a `strength`) and
 field was removed and none changed meaning, and the tick frames are unchanged, so a protocol 6
 message still reads; a reader shows the fields it lacks as unknown.
 
+Version 8 adds the `walk-on` message: before the first tick of each half (the match start, the
+second half and each half of extra time) the engine sends the players' walk from the tunnel to
+the places that tick starts from. The walk is not match time: no tick carries it, and the clock
+and the ball-in-play figure leave it out. The restart keyframe (`0x03`) now marks the tick the
+ball appears at its restart spot, which can come seconds after the restart event while the ball
+is fetched. No field was removed and the tick frames are unchanged, so a protocol 7 replay still
+reads; it has no walk-on.
+
 A test in `crates/protocol/tests/document.rs` holds this document to the code: every message
 the implementation names must appear below with every one of its fields.
 
@@ -101,7 +109,7 @@ Control messages are JSON text frames tagged by `type`. Tick positions are binar
 |---|---|---|
 | `0x01` keyframe | 99 | the kind tag, then 98 payload bytes: tick (4), ball (6), 22 players (88) |
 | `0x02` delta | 48 | the kind tag, then 47 payload bytes: ball (3), 22 players (44) |
-| `0x03` restart keyframe | 99 | the same payload as `0x01`, on the tick the ball is placed for a kick-off, a throw-in, a corner, a goal kick, a free kick, or a penalty |
+| `0x03` restart keyframe | 99 | the same payload as `0x01`, on the tick the ball is placed at the spot of a kick-off, a throw-in, a corner, a goal kick, a free kick, a penalty, or a dropped ball |
 
 Every position is a signed 16-bit count of centimetres, little-endian. A delta carries one
 signed byte per component, which covers 1.27 m of movement in one tick against a ball cap of
@@ -297,8 +305,13 @@ stays at the last minute of play (120 after extra time) for the whole shoot-out,
 `full-time` carries `result.decided_by`.
 
 A restart event (`kick-off`, `throw-in`, `corner`, `goal-kick`, `free-kick`, `penalty`)
-arrives on the same tick as the restart keyframe that places the ball. Play resumes when the
-taker plays the ball, a few seconds later. An `injury` in open play stops play for a dropped
+arrives on the tick play stops and names the restart spot. While the content's restart wait
+table is loaded, the ball first waits where it left play for the drawn part of the wait (the
+unseen part, such as fetching it), and the restart keyframe marks the later tick it appears at
+the spot; a quick restart, and content without the table, place it on the event's tick. Play
+resumes when the taker plays the ball: once he is at the ball and every player the law moves
+has moved, and the drawn part has passed again. A kick-off at the start of a half is placed on
+the half's first tick, after its `walk-on`. An `injury` in open play stops play for a dropped
 ball at the ball; an injury on a tick that already stopped play rides that stoppage.
 
 The engine applies queued changes (the page's and the AI manager's) on the tick that opens a
@@ -472,6 +485,31 @@ Each entry of `ratings`:
 |---|---|---|
 | `player.id` | string | the player |
 | `rating` | float | his match rating, 1.0 to 10.0 with one decimal: 6.0 plus what he did, weighted by the `match_rating` tuning |
+
+### walk-on
+
+Sent once before the first tick of each half: before tick 1, and before the first tick after
+each `half-time` event. It is not match time. A page may draw it before that tick at its
+playback speed, or skip it; a seek or a skip that passes the tick passes the walk too. A match
+resumed from a snapshot and a protocol 7 replay have none.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `period` | integer | the half it opens: 0 the first, 1 the second, 2 and 3 the halves of extra time |
+| `first_tick` | integer | the tick of the half's first frame, which the walk ends on |
+| `speed` | float | the walking speed, in metres per second: the pace tuning's walk limit |
+| `ticks` | integer | how long the walk lasts, in ticks: the longest walk at `speed` |
+| `paths` | array | one entry for every player on the pitch, in roster order |
+
+Each entry of `paths`, in metres on the tick frame's axes:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `player` | integer | the player's slot in the tick frame, 0 to 21 |
+| `from` | two floats | where he comes out of the tunnel: on the near touchline at the halfway line, each team in a file on its own side |
+| `to` | two floats | his place on `first_tick` |
+
+A player walks in a straight line from `from` to `to` at `speed` and stands once he arrives.
 
 ### ack
 
@@ -776,12 +814,12 @@ All numbers are little-endian. The frame count counts tick and text frames only.
 offset 4 was the protocol version, which is also 3, so every older file reads as format 3; a
 format-3 file still says 3 there, and its `hello` names the protocol of its frames.
 
-A reader reads frames of protocol 3, 4, 5 and 6: the tick frames are the same. Protocol 3 and 4
+A reader reads frames of protocol 3, 4, 5, 6, 7 and 8: the tick frames are the same. Protocol 3 and 4
 differ only in the scale of the `hello`'s ratings. A page doubles a protocol 3 `hello`'s
 ratings into tenths before any screen shows them, and keeps the stored frame as it is, so the
 file writes back byte for byte. A protocol 3 or 4 `hello` carries `player.injury_resistance`
 and no hidden value. A page drops that figure and shows both hidden values as not yet known:
-no old figure is ever turned into a word. A protocol 5 `hello` carries the hidden values as words but none of the squad entry's attributes, body fields or condition, so a page shows its hidden values and leaves the Squad screen's other columns empty. A protocol 6 `hello` carries no position ratings, feet, traits or personality; a page shows those as unknown.
+no old figure is ever turned into a word. A protocol 5 `hello` carries the hidden values as words but none of the squad entry's attributes, body fields or condition, so a page shows its hidden values and leaves the Squad screen's other columns empty. A protocol 6 `hello` carries no position ratings, feet, traits or personality; a page shows those as unknown. A protocol 7 file has no `walk-on`, and its restart keyframe falls on the restart event's tick.
 
 ### Inputs
 
@@ -801,6 +839,7 @@ the match ran a script pack.
 | `team_b` | the away team file |
 | `slots` | `slots.json` |
 | `traits` | `traits.json`: the trait catalogue the team files' traits are checked against |
+| `restart_waits` | `restart-waits.json`: the restart wait table, when the content has one; a file without it plays the fixed restart delays |
 | `pack_manifest` | `pack.json` of the script pack |
 | `pack_script` | the pack's entry script |
 

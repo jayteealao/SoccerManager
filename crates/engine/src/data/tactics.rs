@@ -288,7 +288,8 @@ pub struct Instructions {
     /// Added to a pass score in proportion to its length.
     #[garde(dive)]
     pub passing_directness: Instruction<Level>,
-    /// A factor on the team's restart delay while it leads.
+    /// A factor on the team's drawn restart extra while it leads (on its fixed restart delay
+    /// when the content has no restart wait table).
     #[garde(dive)]
     pub time_wasting: Instruction<Level>,
 }

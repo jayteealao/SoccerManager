@@ -19,7 +19,7 @@ use engine::{
 use protocol::{
     CardKind, ChangeKind, ChangeOutcome, ChangeState, ChangeStateNote, Condition, Confidence,
     EventType, HiddenWord, MatchEvent, RatingWire, Ratings, RosterEntry, ServerMessage, SlotRole,
-    SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup, TraitWire,
+    SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup, TraitWire, WalkOn, WalkPathWire,
 };
 use std::cell::RefCell;
 
@@ -254,6 +254,13 @@ pub fn drive<S: TickSink>(
             && let Err(err) = sink.on_trace(&trace)
         {
             return gone(err, written);
+        }
+        // A half's walk-on goes before its first tick, so a page draws it before the tick.
+        if let Some(walk_on) = sim.take_walk_on() {
+            route(ServerMessage::WalkOn(walk_on_message(&walk_on)))?;
+            if let Err(err) = sink.on_walk_on(&walk_on) {
+                return gone(err, written);
+            }
         }
         let record = sim.record();
         opts.state.set_tick(record.tick);
@@ -618,6 +625,28 @@ fn hidden_word(
 
 /// Every player's match rating as the `ratings` message carries it, home first and in squad
 /// order.
+/// The walk-on as the page reads it: positions in metres to the centimetre, as the tick
+/// frames carry them.
+pub(crate) fn walk_on_message(walk_on: &engine::WalkOn) -> WalkOn {
+    let cm = |v: f64| (v * 100.0).round() / 100.0;
+    WalkOn {
+        period: walk_on.period,
+        first_tick: walk_on.first_tick,
+        speed: walk_on.speed,
+        ticks: walk_on.ticks,
+        paths: walk_on
+            .paths
+            .iter()
+            .map(|w| WalkPathWire {
+                // A roster index is below 22, so the cast fits.
+                player: w.player as u32,
+                from: [cm(w.from.x), cm(w.from.y)],
+                to: [cm(w.to.x), cm(w.to.y)],
+            })
+            .collect(),
+    }
+}
+
 pub(crate) fn ratings_message(sim: &Simulation) -> Ratings {
     let teams = sim.teams();
     Ratings {
@@ -1173,7 +1202,7 @@ mod tests {
                 assert_eq!(word.word, None, "{entry:?}");
             }
         }
-        assert_eq!(protocol::PROTOCOL_VERSION, 7);
+        assert_eq!(protocol::PROTOCOL_VERSION, 8);
         let setup = teams[HOME]
             .setup
             .as_ref()

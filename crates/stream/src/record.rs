@@ -22,7 +22,8 @@ use std::path::{Path, PathBuf};
 use engine::data::hex12;
 use engine::{AppliedChange, Change, Manager, RoleDuty, Simulation, TacticsPatch};
 use protocol::{
-    Frame, PROTOCOL_V3, PROTOCOL_V4, PROTOCOL_V5, PROTOCOL_V6, PROTOCOL_VERSION, TickFrame,
+    Frame, PROTOCOL_V3, PROTOCOL_V4, PROTOCOL_V5, PROTOCOL_V6, PROTOCOL_V7, PROTOCOL_VERSION,
+    TickFrame,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -50,17 +51,20 @@ pub const FORMAT_VERSION: u16 = 4;
 /// not yet known. Protocol 6 only added optional fields, so a file of protocol 5 frames still
 /// decodes; a reader shows the fields it lacks as unknown. Protocol 7 also only added optional
 /// fields (the player as a person), so a file of protocol 6 frames still decodes the same way.
-pub const READS_PROTOCOLS: [u16; 5] = [
+/// Protocol 8 only added the `walk-on` message, so a file of protocol 7 frames still decodes;
+/// it plays with no walk-on.
+pub const READS_PROTOCOLS: [u16; 6] = [
     PROTOCOL_V3,
     PROTOCOL_V4,
     PROTOCOL_V5,
     PROTOCOL_V6,
+    PROTOCOL_V7,
     PROTOCOL_VERSION,
 ];
 /// Header offset of the frame count.
 const FRAMES_AT: u64 = 16;
 
-/// The protocols this build reads, as words: "3, 4, 5, 6 and 7".
+/// The protocols this build reads, as words: "3, 4, 5, 6, 7 and 8".
 fn reads_words() -> String {
     let (last, rest) = READS_PROTOCOLS
         .split_last()

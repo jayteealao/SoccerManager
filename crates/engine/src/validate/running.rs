@@ -879,6 +879,80 @@ mod tests {
         assert!(check.pending_shapes.is_empty());
     }
 
+    /// AC-18: the ball appears at its spot seconds after the event that named it, and the
+    /// restart record is judged against that spot: on it, it passes; 2 m off, `restart_spot`
+    /// reports it. The control: a lookup of a spot named on the record's own tick, as before
+    /// the fetch, finds none and would judge nothing.
+    #[test]
+    fn a_restart_record_seconds_after_its_event_is_judged_against_that_spot() {
+        let config = crate::data::test_support::shipped_config(1, 90).unwrap();
+        let sim = Simulation::new(config).unwrap();
+        let spot = DVec2::new(10.0, 34.0);
+        let mut throw_in = sim.event(EngineEventKind::ThrowIn, Some(0));
+        throw_in.tick = 2;
+        throw_in.spot = Some(spot);
+        let fetched = 2 + 600;
+        let mut on_spot = record(fetched);
+        on_spot.restart = true;
+        on_spot.ball = [10.0, 34.0, 0.0];
+        let mut off_spot = on_spot;
+        off_spot.ball = [12.0, 34.0, 0.0];
+        let spot_rule = |out: Violations| -> Vec<(u32, f64)> {
+            out.kept()
+                .iter()
+                .filter(|v| v.rule == "restart_spot")
+                .map(|v| (v.tick, v.value))
+                .collect()
+        };
+        let records = |last: TickRecord| [record(1), record(2), last];
+        assert!(spot_rule(running(&teams(), &[throw_in], &records(on_spot))).is_empty());
+        let found = spot_rule(running(&teams(), &[throw_in], &records(off_spot)));
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].0, fetched);
+        assert!((found[0].1 - 2.0).abs() < 1e-6);
+        same(&teams(), &[throw_in], &records(off_spot));
+        // The control: the spot of an event on the record's own tick.
+        let spots = [(2u32, spot)];
+        let exact = spots.iter().find(|(t, _)| *t == fetched).map(|(_, s)| *s);
+        assert_eq!(exact, None, "an exact-tick lookup would judge nothing");
+        assert_eq!(latest_spot(&spots, fetched), Some(spot));
+    }
+
+    /// AC-23: a player who moves 5 m in one tick breaks `player_speed`; the first record of a
+    /// half and a substitute's slot on the tick he comes on are not judged.
+    #[test]
+    fn a_one_tick_jump_breaks_the_player_speed_rule_except_where_play_places_players() {
+        let config = crate::data::test_support::shipped_config(1, 90).unwrap();
+        let sim = Simulation::new(config).unwrap();
+        let mut jump = record(2);
+        jump.players[4][0] += 5.0;
+        let speed = |out: Violations| -> Vec<(u32, Option<usize>)> {
+            out.kept()
+                .iter()
+                .filter(|v| v.rule == "player_speed")
+                .map(|v| (v.tick, v.player))
+                .collect()
+        };
+        assert_eq!(
+            speed(running(&teams(), &[], &[record(1), jump])),
+            [(2, Some(4))]
+        );
+        same(&teams(), &[], &[record(1), jump]);
+        let mut half_time = sim.event(EngineEventKind::HalfTime, None);
+        half_time.tick = 2;
+        assert!(speed(running(&teams(), &[half_time], &[record(1), jump])).is_empty());
+        let mut sub = sim.event(EngineEventKind::Substitution, Some(0));
+        sub.tick = 2;
+        sub.player = Some(4);
+        assert!(speed(running(&teams(), &[sub], &[record(1), jump])).is_empty());
+        sub.player = Some(5);
+        assert_eq!(
+            speed(running(&teams(), &[sub], &[record(1), jump])),
+            [(2, Some(4))],
+            "another slot's substitution does not cover the jump"
+        );
+    }
+
     #[test]
     fn a_spot_event_after_its_restart_record_still_judges_the_restart() {
         let config = crate::data::test_support::shipped_config(1, 90).unwrap();

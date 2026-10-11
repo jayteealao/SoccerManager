@@ -958,6 +958,130 @@ mod tests {
         );
     }
 
+    /// AC-20 and charter step 6: for one draw, a team leading in the late window waits the
+    /// late-lead factor longer than in a level game, time wasting multiplies the same part, and
+    /// neither touches the visible steps; a trailing side and a side leading early wait as in a
+    /// level game.
+    #[test]
+    fn a_team_leading_late_waits_longer_and_time_wasting_lengthens_the_same_part() {
+        use crate::scenario::Scene;
+        let mut sim = Scene::new(shipped_config(1, 90).unwrap())
+            .at_minute(80)
+            .build();
+        let factor = sim.config.restart_waits.as_ref().unwrap().late_lead_factor;
+        assert_eq!(factor, 1.7);
+        let kind = StoppageKind::GoalKick;
+        let level = extra_ticks(&sim.view(), kind, 0, 0.5);
+        assert!(level > 100, "{level}");
+        sim.summary.goals = [1, 0];
+        let late = extra_ticks(&sim.view(), kind, 0, 0.5);
+        assert!(
+            (f64::from(late) - f64::from(level) * factor).abs() <= 1.0,
+            "{late} against {level}"
+        );
+        assert_eq!(
+            extra_ticks(&sim.view(), kind, 1, 0.5),
+            level,
+            "the trailing side"
+        );
+        let spot = Pitch::DEFAULT.goal_kick_spot(-sim.teams[0].attack_x, 3.0);
+        let dead = DeadBall::fixed(kind, 0, spot, false, sim.tick, 0, 0);
+        let steps = steps_done(&dead, &sim.players, &sim.teams, &sim.config.tuning);
+        sim.teams[0].plan.time_wasting = 1.5;
+        let wasting = extra_ticks(&sim.view(), kind, 0, 0.5);
+        assert!(
+            (f64::from(wasting) - f64::from(level) * factor * 1.5).abs() <= 1.0,
+            "{wasting} against {level}"
+        );
+        assert_eq!(
+            steps_done(&dead, &sim.players, &sim.teams, &sim.config.tuning),
+            steps,
+            "time wasting leaves the visible steps alone"
+        );
+        let early = Scene::new(shipped_config(1, 90).unwrap())
+            .at_minute(30)
+            .score([1, 0])
+            .build();
+        assert_eq!(
+            extra_ticks(&early.view(), kind, 0, 0.5),
+            level,
+            "leading early"
+        );
+    }
+
+    /// The match with the restarting side's taker on a throw-in spot, one team-mate free 10 m
+    /// away, and every opposing outfield player 30 m the wrong side of the ball: out of shape.
+    fn quick_scene(goals: [u32; 2]) -> (crate::sim::Simulation, DeadBall) {
+        let mut sim = crate::sim::Simulation::new(shipped_config(1, 90).unwrap()).unwrap();
+        sim.summary.goals = goals;
+        let attack = sim.teams[0].attack_x;
+        let spot = DVec2::new(0.0, 34.0);
+        let keeper = sim.keeper(1);
+        for i in 11..22 {
+            if i != keeper {
+                sim.players[i].pos = DVec2::new(-30.0 * attack, (i as f64 - 16.0) * 4.0);
+            }
+        }
+        let taker = 7;
+        let own_keeper = sim.keeper(0);
+        for i in 0..11 {
+            if i != own_keeper && i != taker && i != 8 {
+                sim.players[i].pos = DVec2::new(-20.0 * attack + i as f64, -30.0);
+            }
+        }
+        sim.players[taker].pos = spot;
+        sim.players[8].pos = spot + DVec2::new(5.0 * attack, -9.0);
+        (
+            sim,
+            DeadBall::fixed(StoppageKind::ThrowIn, 0, spot, false, 0, 0, taker),
+        )
+    }
+
+    /// The number of `n` evenly spread draws below `chance`.
+    fn quick_restarts(chance: f64, n: u32) -> u32 {
+        (0..n)
+            .filter(|k| (f64::from(*k) + 0.5) / f64::from(n) < chance)
+            .count() as u32
+    }
+
+    /// AC-21: with a free team-mate and the opponents out of shape, a trailing side restarts
+    /// quickly more often than a level one; with time wasting on, never; and with no free
+    /// team-mate, never (the control).
+    #[test]
+    fn a_trailing_side_restarts_quickly_more_often_and_a_time_waster_never_does() {
+        let (level_sim, dead) = quick_scene([0, 0]);
+        let level = quick_chance(&level_sim.view(), &dead);
+        let (trailing_sim, _) = quick_scene([0, 1]);
+        let trailing = quick_chance(&trailing_sim.view(), &dead);
+        assert!(level > 0.0, "{level}");
+        assert!(
+            quick_restarts(trailing, 2000) > quick_restarts(level, 2000),
+            "{trailing} against {level}"
+        );
+        for goals in [[0, 0], [0, 1], [1, 0]] {
+            let (mut sim, dead) = quick_scene(goals);
+            sim.teams[0].plan.time_wasting = 1.5;
+            assert_eq!(quick_chance(&sim.view(), &dead), 0.0, "{goals:?}");
+        }
+        let (mut marked, dead) = quick_scene([0, 1]);
+        marked.players[16].pos = marked.players[8].pos + DVec2::new(1.0, 0.0);
+        assert_eq!(
+            quick_chance(&marked.view(), &dead),
+            0.0,
+            "no team-mate is free"
+        );
+        let (mut shaped, dead) = quick_scene([0, 1]);
+        let attack = shaped.teams[0].attack_x;
+        for i in 12..22 {
+            shaped.players[i].pos.x = 20.0 * attack;
+        }
+        assert_eq!(
+            quick_chance(&shaped.view(), &dead),
+            0.0,
+            "the opponents are in shape"
+        );
+    }
+
     #[test]
     fn the_delay_comes_from_the_tuning() {
         let t = Tuning::default();
