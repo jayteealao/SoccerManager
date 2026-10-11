@@ -319,8 +319,13 @@ pub fn speed(level: Level, top: f64, t: &PaceTuning) -> f64 {
 mod tests {
     use super::*;
 
+    /// The shipped values with a jog band: a NORMAL job jogs within 15 m of its target and
+    /// runs beyond (the shipped file runs every NORMAL job), so the level tests see both.
     fn tuning() -> PaceTuning {
-        PaceTuning::shipped()
+        PaceTuning {
+            run_from_m: 15.0,
+            ..PaceTuning::shipped()
+        }
     }
 
     const LATE_WASTING: TeamPace = TeamPace {

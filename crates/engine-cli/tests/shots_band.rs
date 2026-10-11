@@ -1,0 +1,68 @@
+//! Shots per team on full matches: a short equal-strength calibration run of whole 90-minute
+//! matches on a fixed seed must keep the equal suite's shots per team inside its pinned
+//! range, so a change that floods the match with shots fails here and not only in a long
+//! band run.
+
+mod common;
+
+use common::{bin, record, temp};
+
+/// The real band of shots per team (`calib.bands`, `shots_per_team`).
+const REAL_BAND: (f64, f64) = (8.0, 16.0);
+
+/// The highest value this test accepts. The real band ends at 16, but the engine misses it on
+/// some seeds: with the team stands off, 40 equal matches give 13.7 shots per team on seed 9
+/// (inside) and 18.1 on seed 42 (above), and this test's 12 matches on seed 42 give 18.1. The
+/// ceiling pins that miss with a margin of 2 shots, so the miss cannot grow unseen; it comes
+/// down to the band's 16 when a shot choice that weighs the chance and front-on defending
+/// bring seed 42 inside.
+const CEILING: f64 = 20.0;
+
+#[test]
+fn twelve_full_equal_matches_keep_shots_per_team_inside_the_pinned_range() {
+    let data = temp("engine-cli-shots-band", "equal");
+    let run = data.join("run");
+    let out = bin(&data)
+        .args([
+            "calibrate",
+            "--seed",
+            "42",
+            "--suite",
+            "equal",
+            "--matches",
+            "12",
+            "--minutes",
+            "90",
+            "--jobs",
+            "4",
+        ])
+        .arg("--out")
+        .arg(&run)
+        .output()
+        .unwrap();
+    let code = out.status.code();
+    // A run with a failing band exits 2; the shots value is judged here instead.
+    assert!(
+        matches!(code, Some(0 | 2)),
+        "exit {code:?}; stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let report = record(&std::fs::read_to_string(run.join("report.json")).unwrap());
+    let _ = std::fs::remove_dir_all(&data);
+    let band = report["calib.bands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["suite"] == "equal" && b["band"] == "shots_per_team")
+        .unwrap_or_else(|| panic!("no equal shots_per_team band in {report}"));
+    assert_eq!(band["lo"].as_f64(), Some(REAL_BAND.0), "{band}");
+    assert_eq!(band["hi"].as_f64(), Some(REAL_BAND.1), "{band}");
+    let shots = band["value"].as_f64().unwrap();
+    assert!(
+        (REAL_BAND.0..=CEILING).contains(&shots),
+        "shots per team {shots} outside {} to {CEILING} (real band {} to {})",
+        REAL_BAND.0,
+        REAL_BAND.0,
+        REAL_BAND.1
+    );
+}

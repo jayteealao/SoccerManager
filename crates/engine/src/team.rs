@@ -796,7 +796,7 @@ mod tests {
 
     #[test]
     fn a_central_slot_takes_no_sideways_stand() {
-        let content = shipped_content();
+        let content = crate::data::test_support::shipped_content_with_stands();
         let schema = &content.tactics;
         let t = &content.tuning.engine;
         let mut team = bare(0);

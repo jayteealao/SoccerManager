@@ -178,7 +178,9 @@ fn a_replay_file_alone_reproduces_its_tick_frames_with_every_source_file_deleted
 }
 
 /// Copies the shipped content into `dir/content`, sets the slot file to `slots`, records
-/// `minutes` of seed 42 from that copy only, and returns the replay file.
+/// `minutes` of seed 1 from that copy only, and returns the replay file. (Seed 42 until the
+/// team stands went off, when its first 30 minutes stopped bringing a foul, so fouls off no
+/// longer changed them; seed 1 is the lowest that does.)
 fn record_with_slots(dir: &Path, name: &str, slots: &str, minutes: u32) -> PathBuf {
     let content = dir.join(format!("content-{name}"));
     copy_dir(&repo().join("content"), &content);
@@ -187,7 +189,7 @@ fn record_with_slots(dir: &Path, name: &str, slots: &str, minutes: u32) -> PathB
     let out = bin(&dir.join("data"))
         .arg("--content-dir")
         .arg(&content)
-        .args(["record", "--seed", "42", "--minutes", &minutes.to_string()])
+        .args(["record", "--seed", "1", "--minutes", &minutes.to_string()])
         .arg("--out")
         .arg(&file)
         .output()

@@ -322,7 +322,13 @@ impl PaceTuning {
             limits_ms: [0.2, 2.0, 4.0, 5.5, 7.0],
             stand_m: 1.0,
             return_far_m: 5.0,
-            run_from_m: 15.0,
+            // Started at 15 m. With the team stands off, NORMAL jobs that jogged within 15 m
+            // of their target put 5.8 percent of open play at run pace against the real 10.5
+            // (band 8 to 13) and left the default teams' matches almost without a duel (about
+            // one foul a side). At 0 a NORMAL job runs, and jogs only when tiredness steps it
+            // down: run 8.4 percent, walk 54, jog 33 (real 49.5 and 36), the closest fit of the
+            // values tried (15, 10, 7.5, 5, 2.5, 2, 1.5, 0).
+            run_from_m: 0.0,
             calm_ball_m: 30.0,
             sprint_mid: 0.5,
             sprint_slope: 1.0,

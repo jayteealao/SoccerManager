@@ -372,7 +372,7 @@
       "limits_ms": [0.2, 2.0, 4.0, 5.5, 7.0],
       "stand_m": 1.0,
       "return_far_m": 5.0,
-      "run_from_m": 15.0,
+      "run_from_m": 0.0,
       "calm_ball_m": 30.0,
       "sprint_mid": 0.5,
       "sprint_slope": 1.0,
@@ -697,5 +697,12 @@
       "RB"
     ]
   },
-  "flags": {}
+  "flags": {
+    "team_stands": {
+      "owner": "team-shape owner (the person)",
+      "hypothesis": "the per-position stands of tactics.json move the back line toward the real phase shapes without raising shots per team above the real band of 8 to 16; with the table seeded as if the ball sat on the halfway line it lifts the back line 6 to 11 m out of possession and shots per team rise to about 90, so it ships off",
+      "removal_condition": "removed, with the table kept or dropped, once the stands are seeded again from the engine's own measured positions with a block depth that reads the ball, and a paired run of 40 equal matches on seeds 9 and 42 keeps every core band with the flag on",
+      "state": "off"
+    }
+  }
 }

@@ -378,7 +378,7 @@ fn a_missing_content_file_names_its_path() {
 
 /// Every flag engine code reads is declared in the shipped tuning file, and the shipped file
 /// declares no flag of its own: a candidate model lands with its flag, and the flag leaves
-/// with the losing model.
+/// with the losing model. The shipped file turns every flag off.
 #[test]
 fn the_shipped_flags_block_matches_the_code_flags() {
     let content = common::content();
@@ -386,11 +386,62 @@ fn the_shipped_flags_block_matches_the_code_flags() {
     for name in engine::CODE_FLAGS {
         assert!(declared.contains_key(*name), "{name} is not declared");
     }
-    assert!(
-        declared.is_empty(),
-        "the shipped file declares {declared:?}"
-    );
+    let own: Vec<_> = declared
+        .keys()
+        .filter(|n| !engine::CODE_FLAGS.contains(&n.as_str()))
+        .collect();
+    assert!(own.is_empty(), "the shipped file declares {own:?}");
     assert!(content.flags.is_empty());
+}
+
+/// The team stands ship off: every stand of the loaded tactics reads 0 although the file
+/// holds the table, and turning the flag on brings the file's table back and marks the
+/// digest.
+#[test]
+fn the_team_stands_read_zero_until_their_flag_is_on() {
+    use engine::data::Position;
+    let content = common::content();
+    let positions = [
+        Position::GK,
+        Position::CB,
+        Position::LB,
+        Position::RB,
+        Position::DM,
+        Position::CM,
+        Position::AM,
+        Position::LW,
+        Position::RW,
+        Position::ST,
+    ];
+    let zero = engine::data::tactics::PhaseStand::default();
+    for position in positions {
+        assert_eq!(content.tactics.stands.of(position), zero, "{position:?}");
+    }
+    let file: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(common::content_dir().path(engine::data::TACTICS_FILE)).unwrap(),
+    )
+    .unwrap();
+    let cb_out = file["stands"]["cb"]["out_of_possession"]["x"]
+        .as_f64()
+        .unwrap();
+    assert!(cb_out != 0.0, "the shipped table holds the stands");
+    let on = content
+        .with_flags(&engine::FlagStates(
+            [(
+                engine::flags::TEAM_STANDS.to_string(),
+                engine::FlagState::On,
+            )]
+            .into(),
+        ))
+        .unwrap();
+    assert_eq!(on.flags.names(), [engine::flags::TEAM_STANDS]);
+    assert_eq!(
+        on.tactics.stands.of(Position::CB).out_of_possession.x,
+        cb_out
+    );
+    assert_ne!(on.digest, content.digest);
+    let off = on.with_flags(&engine::FlagStates::default()).unwrap();
+    assert_eq!(off.tactics, content.tactics);
 }
 
 /// The shipped tuning file as JSON.

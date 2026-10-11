@@ -21,8 +21,17 @@ fn seeded(
     minutes: u32,
     edit: impl FnOnce(&mut Tactics, &engine::data::tactics::TacticsSchema),
 ) -> MatchConfig {
-    let content = common::content();
-    let mut config = common::short_match(minutes);
+    seeded_on(common::content(), minutes, edit)
+}
+
+/// [`seeded`] on `content`.
+fn seeded_on(
+    content: engine::Content,
+    minutes: u32,
+    edit: impl FnOnce(&mut Tactics, &engine::data::tactics::TacticsSchema),
+) -> MatchConfig {
+    let [a, b] = common::default_teams(&content);
+    let mut config = MatchConfig::new(common::SEED, minutes, &content, [&a, &b]).unwrap();
     config.tuning.injury_per_minute = 0.0;
     config.tuning.injury_per_tackle = 0.0;
     let mut tactics = Tactics::defaults(&content.tactics);
@@ -98,10 +107,11 @@ fn a_duty_and_a_mentality_move_the_shape_the_way_they_say() {
 /// midfielder's target lies at least 4 m deeper than his stand on at least 30 percent of
 /// those ticks, and the full-backs stand at least 5 m further up than the centre-backs. The
 /// split reads the targets, the spots the stand options set: a build-up spell lasts under a
-/// second on most ticks, too short for the centre-backs to reach them.
+/// second on most ticks, too short for the centre-backs to reach them. The full-backs push on
+/// by their stands, so the match plays with the team stands on.
 #[test]
 fn in_build_up_the_centre_backs_split_a_midfielder_drops_and_the_full_backs_push_on() {
-    let config = seeded(45, |_, _| {});
+    let config = seeded_on(common::content_with_stands(), 45, |_, _| {});
     let tuning = config.tuning.clone();
     let mut build_up = 0.0;
     let mut out_of_possession = 0.0;

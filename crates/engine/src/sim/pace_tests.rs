@@ -188,7 +188,8 @@ fn players_in_shape_follow_near_the_ball_hold_far_from_it_and_return_when_far_fr
     decide_and_pace(&mut sim);
     if sim.players[i].pace.job == Job::Return {
         assert_eq!(sim.players[i].pace.grade, Grade::Normal);
-        assert_eq!(sim.players[i].pace.level, Level::Jog);
+        // The shipped file runs every NORMAL job (`run_from_m` 0).
+        assert_eq!(sim.players[i].pace.level, Level::Run);
         seen[2] = true;
     }
     assert_eq!(seen, [true; 3], "follow, hold and return each seen");

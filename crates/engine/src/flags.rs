@@ -21,7 +21,14 @@ use crate::error::EngineError;
 /// Flags that engine code reads through [`ActiveFlags::is_on`]. A candidate model adds its
 /// flag here and declares it in the shipped `tuning.json` in the same change; removing the
 /// model removes the name.
-pub const CODE_FLAGS: &[&str] = &[];
+pub const CODE_FLAGS: &[&str] = &[TEAM_STANDS];
+
+/// The per-position stands of the tactics file (`stands`). Off, every stand reads 0 and each
+/// player stands on his formation slot plus his role's offset; on, the table applies. The
+/// table was seeded as if the ball sat on the halfway line, so out of possession it lifts
+/// the back line 6 to 11 m and opens the space behind it; it stays off until it is seeded
+/// again from the engine's own positions with a block depth that reads the ball.
+pub const TEAM_STANDS: &str = "team_stands";
 
 /// The longest flag name, in characters.
 pub const MAX_FLAG_NAME: usize = 40;

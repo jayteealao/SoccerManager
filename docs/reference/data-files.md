@@ -178,7 +178,7 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 | pace.limits_ms | m/s, five values | 0.2, 2.0, 4.0, 5.5, 7.0 | positive, strictly rising |
 | pace.stand_m | m | 1.0 | 0 to 10 |
 | pace.return_far_m | m | 5.0 | 0 to 60 |
-| pace.run_from_m | m | 15.0 | 0 to 120 |
+| pace.run_from_m | m | 0.0 | 0 to 120 |
 | pace.calm_ball_m | m | 30.0 | 0 to 120 |
 | pace.sprint_mid | probability | 0.5 | 0 to 1 |
 | pace.sprint_slope | probability per share | 1.0 | 0 to 2; the chance stays inside 0 to 1 |
@@ -193,7 +193,7 @@ Units are metres, seconds, metres per second, and ticks. A value outside its bou
 
 Every target a player moves to has a job, and each job an urgency grade. URGENT: the carrier's move, a press, a recovery run while his team has fewer outfield players goal-side of the ball than its mentality minimum (or the rest-defence guard holds him back farther than `pace.return_far_m` from his spot), a loose ball he reaches first, and a timed run. NORMAL: the other team's chase of a loose ball, a stand option that offers a pass while his team has the ball, a return to a place farther than `pace.return_far_m`, and following the ball in shape within `pace.calm_ball_m` of it. CALM: holding his place farther from the ball, a concentration lapse, and a dead ball with no job. Raised tempo or pressing above the default level, or trailing in the last `pace.late_minutes` minutes, lifts pressing jobs (press, chase) and the offer one grade; leading in those minutes with time wasting on drops each NORMAL job one grade while the ball is dead; in open play both teams keep their grades. An URGENT job never drops.
 
-The grade picks one of six levels, each run at its upper limit from `pace.limits_ms`: within `pace.stand_m` of the target a player stands; CALM walks; NORMAL jogs, or runs farther than `pace.run_from_m`; URGENT runs at high speed, or sprints at the player's own top speed when the job's sprint draw succeeded. No level is above his top speed. The draw is taken once when an URGENT job starts, with the chance `pace.sprint_mid + pace.sprint_slope × (work-rate share − 0.5)`: work rate sets how often an urgent job gets a sprint, not the speed of any level. Below `pace.tired_from` energy a player saves `(tired_from − energy) / tired_from`; with his tired mix, the mean share of his determination and professionalism, a saving times the mix at or above `pace.step_down_at` drops every level below a sprint one step, never below a walk while he is farther than `pace.stand_m` from his target, and a saving times one less the mix at or above the job's `pace.skip_at` value turns that job's sprint into high speed, the least urgent job's first. At a dead ball every player runs at his top speed until the restart. A tuning file without the `pace` block loads with `pace.enabled` false: every player runs at his top speed, as before the selector.
+The grade picks one of six levels, each run at its upper limit from `pace.limits_ms`: within `pace.stand_m` of the target a player stands; CALM walks; NORMAL jogs, or runs farther than `pace.run_from_m` (0 in the shipped file: a NORMAL job runs, and jogs only when tiredness steps it down); URGENT runs at high speed, or sprints at the player's own top speed when the job's sprint draw succeeded. No level is above his top speed. The draw is taken once when an URGENT job starts, with the chance `pace.sprint_mid + pace.sprint_slope × (work-rate share − 0.5)`: work rate sets how often an urgent job gets a sprint, not the speed of any level. Below `pace.tired_from` energy a player saves `(tired_from − energy) / tired_from`; with his tired mix, the mean share of his determination and professionalism, a saving times the mix at or above `pace.step_down_at` drops every level below a sprint one step, never below a walk while he is farther than `pace.stand_m` from his target, and a saving times one less the mix at or above the job's `pace.skip_at` value turns that job's sprint into high speed, the least urgent job's first. At a dead ball every player runs at his top speed until the restart. A tuning file without the `pace` block loads with `pace.enabled` false: every player runs at his top speed, as before the selector.
 
 Every outfield anchor moves with the ball by `compactness_x` and `compactness_y` of its position, in both phases. The ball point each player's anchor follows is his own: in open play it eases toward the ball with a time constant of `far_delay_s_per_m` seconds per metre of his distance from the ball, so a player near the ball follows it at once and a far one late; every dead ball and kick-off sets it to the ball. 0 turns the delay off, and a tuning file without the field loads with 0. The delay is the only value tuned against the team slide band, and no field sets a gap between the lines or a share of the slide: the gaps and the block's length come from where each role stands and the slide. A player farther than `anchor_ball_distance` from the ball and farther than `anchor_tolerance` from both his places (his anchors in and out of possession) heads for the nearer place, whatever stand option or held spot he had.
 
@@ -393,7 +393,7 @@ carries a 47-byte delta.
 
 ### flags
 
-Feature flags switch between the current model and a candidate, so that a paired calibration run can compare the two. The block is optional; the shipped file declares no flag.
+Feature flags switch between the current model and a candidate, so that a paired calibration run can compare the two. The block is optional; the shipped file declares one flag, `team_stands`, which engine code reads (see below).
 
 ```json
 "flags": {
@@ -424,6 +424,8 @@ Rules:
 - An override value must stay inside the bound of the field it sets. Each flag is checked when the file loads, whether it is on or off.
 - Two flags that are on cannot set the same path.
 - When a flag state differs from the file's, the list of flags that are on enters the content hash. A snapshot of a flagged match does not resume on content without the flag.
+
+`team_stands` (off in the shipped file) switches the tactics file's `stands` table. Off, every stand reads 0: each player stands on his formation slot plus his role's offset in both phases, and the table is still loaded and checked. On, the table applies. The table was seeded as if the ball sat on the halfway line, so out of possession it lifts the back line 6 to 11 m and opens the space behind it; it stays off until it is seeded again from the engine's own positions with a block depth that reads the ball. Turn it on for one calibration run with `calibrate --flag team_stands=on`, or set its `state` to `on` in the file.
 
 Every statistics record carries `tuning.flags_on`, the flags that were on. To compare a candidate and remove the loser, follow [the modding how-to](../how-to/modding.md#compare-two-models-with-a-flag).
 
@@ -589,10 +591,10 @@ The shipped copies:
 
 | Copy | Band it moves | Overrides | Expected move |
 |---|---|---|---|
-| `shots_up` | `shots_per_team` | `engine.shot_range` 28.5 | up about 10 percent |
+| `shots_up` | `shots_per_team` | `engine.shot_range` 22.5 | up about 10 percent |
 | `fouls_halved` | `fouls_per_team` | `engine.foul_base` 0.04, `engine.foul_aggression_weight` 0.02, `engine.foul_tackling_weight` 0.01 | about half |
 | `card_storm` | `yellow_cards_per_team` | `engine.foul_base` 1.0, `engine.yellow_base` 1.0 | far up: every tackle a foul, every foul booked |
-| `pass_completion_down` | `pass_accuracy_pct` | `engine.aim_noise` 0.5 | down about 5 points |
+| `pass_completion_down` | `pass_accuracy_pct` | `engine.aim_noise` 0.6 | down about 5 points |
 
 `proof` holds:
 
@@ -723,7 +725,7 @@ Every other club file in `teams/` plays in the background round of a served matc
 | roles | `{ "name", "positions", "attributes", "in_possession", "out_of_possession", "preferred_actions", "teammates", "options" }`: the positions it suits, attribute weights (0 to 10, each a name in `attributes.json`) the AI manager uses to pick players, the role's behaviours, and its stand options (see below) | 1 to 64; a role for every position a formation uses |
 | duties | `{ "name", "depth", "risk", "scale" }`: metres the anchor moves up (-15 to 15), an offset on forward passes and dribbles (-2 to 2), and a scale on the role's preferred actions (0.5 to 1.5) | 1 to 5 |
 | ai | the AI manager's formation, mentality, and duty by name, and its thresholds | see below |
-| stands | optional; one entry per position code in lower case (`gk`, `cb`, `lb`, `rb`, `dm`, `cm`, `am`, `lw`, `rw`, `st`), each `{ "in_possession", "out_of_possession" }` of `{ "x", "y" }`: metres the position stands from its formation slot while the team has the ball and while it does not, `x` up the pitch and `y` away from the centre line on the slot's side; a slot on the centre line takes no `y`. Never an offset from the ball: the ball shift moves the whole block after it | each -40 to 40; absent stands are 0 |
+| stands | optional; one entry per position code in lower case (`gk`, `cb`, `lb`, `rb`, `dm`, `cm`, `am`, `lw`, `rw`, `st`), each `{ "in_possession", "out_of_possession" }` of `{ "x", "y" }`: metres the position stands from its formation slot while the team has the ball and while it does not, `x` up the pitch and `y` away from the centre line on the slot's side; a slot on the centre line takes no `y`. Never an offset from the ball: the ball shift moves the whole block after it. Play reads the table only while the `team_stands` flag of the tuning file is on; off, every stand is 0 | each -40 to 40; absent stands are 0 |
 | stand_options | optional; the sizes the stand options read, in metres (see below) | see below |
 | rest_defence | optional; `{ "hold_margin_m", "lane_m", "cover_familiarity_min" }`: how far goal-side of the ball a held player stands at the least (0 to 20), the width of a player's lane for the cover behind him (0 to 100), and the familiarity in rating points a team-mate needs to stay and cover a full-back who went forward (-12.7 to 12.7). Absent, nobody is held back | see below |
 

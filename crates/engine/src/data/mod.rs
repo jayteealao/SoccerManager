@@ -20,8 +20,9 @@ use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
 
 use crate::error::EngineError;
-use crate::flags::{ActiveFlags, FlagState, FlagStates};
+use crate::flags::{ActiveFlags, FlagState, FlagStates, TEAM_STANDS};
 use crate::modules::{Picked, REGISTRY, ResolvedModules, SLOTS_VERSION, SlotFile};
+use tactics::Stands;
 
 pub use attributes::{ATTRIBUTES_VERSION, AttributeSchema, Group, MAX_ATTRIBUTES};
 pub use generator::{generate_league, generate_league_in_tier};
@@ -539,6 +540,9 @@ pub struct Content {
     written_digest: [u8; 32],
     /// The rule file as written. The rules slot's module turns it into `rules`.
     written_rules: Vec<u8>,
+    /// The tactics file's stands as written. `tactics` holds them only while the
+    /// `team_stands` flag is on; off, every stand in `tactics` reads 0.
+    written_stands: Stands,
 }
 
 impl Content {
@@ -649,6 +653,7 @@ impl Content {
         hasher.update(rules.digest);
         hasher.update(tactics.digest);
         let digest: [u8; 32] = hasher.finalize().into();
+        let written_stands = tactics.value.stands;
         let written = Self {
             attributes: attributes.value,
             tuning: tuning.value.clone(),
@@ -660,13 +665,15 @@ impl Content {
             written_tuning: tuning.value,
             written_digest: digest,
             written_rules: files.rules.clone(),
+            written_stands,
         };
         written.with_flags(&FlagStates::default())
     }
 
     /// This content with the flag states in `states` applied over the file's own states.
     /// A flag that is on has its overrides written into `tuning`, and each one is logged as
-    /// `flag.active`. When a state differs from the file's, the list of flags that are on
+    /// `flag.active`. The tactics file's stands enter `tactics` only while the `team_stands`
+    /// flag is on; off, every stand reads 0. When a state differs from the file's, the list of flags that are on
     /// enters the digest, so a match played with it is never taken for one played without.
     pub fn with_flags(&self, states: &FlagStates) -> Result<Self, EngineError> {
         let file = &self.written_tuning;
@@ -694,8 +701,15 @@ impl Content {
         } else {
             self.written_digest
         };
+        let mut tactics = self.tactics.clone();
+        tactics.stands = if flags.is_on(TEAM_STANDS) {
+            self.written_stands
+        } else {
+            Stands::default()
+        };
         Ok(Self {
             tuning,
+            tactics,
             digest,
             flags,
             ..self.clone()
@@ -761,6 +775,24 @@ pub(crate) mod test_support {
 
     pub(crate) fn shipped_config(seed: u64, minutes: u32) -> Result<MatchConfig, EngineError> {
         let content = shipped_content();
+        let [a, b] = default_teams(&content);
+        MatchConfig::new(seed, minutes, &content, [&a, &b])
+    }
+
+    /// The shipped content with the `team_stands` flag on: the tactics file's stands apply.
+    pub(crate) fn shipped_content_with_stands() -> Content {
+        let on = FlagStates([(TEAM_STANDS.to_string(), FlagState::On)].into());
+        shipped_content()
+            .with_flags(&on)
+            .expect("the stands flag turns on")
+    }
+
+    /// [`shipped_config`] with the team stands on.
+    pub(crate) fn shipped_config_with_stands(
+        seed: u64,
+        minutes: u32,
+    ) -> Result<MatchConfig, EngineError> {
+        let content = shipped_content_with_stands();
         let [a, b] = default_teams(&content);
         MatchConfig::new(seed, minutes, &content, [&a, &b])
     }

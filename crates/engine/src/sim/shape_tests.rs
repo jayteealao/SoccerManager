@@ -6,14 +6,16 @@ use crate::data::attributes::Group;
 use crate::data::tactics::StandOption;
 use crate::data::tactics::TacticsSchema;
 use crate::data::team::Position;
-use crate::data::test_support::{shipped_config, shipped_content};
+use crate::data::test_support::{
+    shipped_config, shipped_config_with_stands, shipped_content, shipped_content_with_stands,
+};
 use crate::decision::Kick;
 use crate::math::DVec2;
 use crate::modules::modifier::{Effect, Family, Modifier};
 use crate::modules::{CoverTrace, TargetsTrace};
 use crate::modules::{MatchView, ROSTER};
 use crate::shape::{ShapeOutcome, anchors, apply};
-use crate::sim::Simulation;
+use crate::sim::{MatchConfig, Simulation};
 use crate::tactics::Tactics;
 use crate::team::PLAYERS_PER_TEAM;
 
@@ -50,7 +52,23 @@ fn match_with(
     schema: impl FnOnce(&mut TacticsSchema),
     edit: impl FnOnce(&mut Tactics, &TacticsSchema),
 ) -> Simulation {
-    let mut config = shipped_config(7, 90).unwrap();
+    match_on(shipped_config(7, 90).unwrap(), schema, edit)
+}
+
+/// [`match_with`] with the team stands on: the guard and cover scenes are built on the
+/// players the stands move up the pitch.
+fn match_with_stands(
+    schema: impl FnOnce(&mut TacticsSchema),
+    edit: impl FnOnce(&mut Tactics, &TacticsSchema),
+) -> Simulation {
+    match_on(shipped_config_with_stands(7, 90).unwrap(), schema, edit)
+}
+
+fn match_on(
+    mut config: MatchConfig,
+    schema: impl FnOnce(&mut TacticsSchema),
+    edit: impl FnOnce(&mut Tactics, &TacticsSchema),
+) -> Simulation {
     schema(&mut config.tactics);
     let mut tactics = Tactics::defaults(&config.tactics);
     edit(&mut tactics, &config.tactics);
@@ -320,12 +338,12 @@ fn a_team_keeps_its_phase_until_the_other_team_controls_the_ball() {
 /// fixture falls below it, so the check can fail.
 #[test]
 fn rest_defence_keeps_the_minimum_goal_side_under_every_mentality() {
-    let content = shipped_content();
+    let content = shipped_content_with_stands();
     let mut control_fell = false;
     for m in 0..content.tactics.mentalities.len() {
         let minimum = usize::from(content.tactics.mentalities[m].rest_defence);
         for guard in [true, false] {
-            let mut sim = match_with(
+            let mut sim = match_with_stands(
                 |schema| {
                     if !guard {
                         for mentality in &mut schema.mentalities {
@@ -383,10 +401,13 @@ fn rest_defence_keeps_the_minimum_goal_side_under_every_mentality() {
 #[test]
 fn an_attacking_duty_goes_and_a_familiar_team_mate_covers_the_full_back() {
     let scene = |familiar: Option<&'static Familiar>| {
-        let mut sim = home(|tactics, schema| {
-            tactics.mentality = schema.mentality_index("positive").unwrap() as u8;
-            tactics.roles[1].duty = schema.duty_index("attack").unwrap() as u8;
-        });
+        let mut sim = match_with_stands(
+            |_| {},
+            |tactics, schema| {
+                tactics.mentality = schema.mentality_index("positive").unwrap() as u8;
+                tactics.roles[1].duty = schema.duty_index("attack").unwrap() as u8;
+            },
+        );
         if let Some(m) = familiar {
             sim.config.modules.modifiers = sim.config.modules.modifiers.with(WEATHER_SLOT, m);
         }

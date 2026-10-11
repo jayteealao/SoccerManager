@@ -19,6 +19,18 @@ pub fn content() -> Content {
     Content::load(&content_dir()).expect("the shipped content loads")
 }
 
+/// The shipped content with the `team_stands` flag on: the tactics file's stands apply.
+pub fn content_with_stands() -> Content {
+    let on = engine::FlagStates(
+        [(
+            engine::flags::TEAM_STANDS.to_string(),
+            engine::FlagState::On,
+        )]
+        .into(),
+    );
+    content().with_flags(&on).expect("the stands flag turns on")
+}
+
 pub fn default_teams(content: &Content) -> [TeamFile; 2] {
     let dir = content_dir();
     let a = content
@@ -44,12 +56,13 @@ pub fn full_match() -> MatchConfig {
     MatchConfig::new(SEED, 90, &content, [&a, &b]).unwrap()
 }
 
-/// The seed-40, 90-minute match on the shipped content and default teams. Unlike the seed-42
+/// The seed-1, 90-minute match on the shipped content and default teams. Unlike the seed-42
 /// match, which ends 0-0, it scores, and its AI managers change tactics in the second half.
+/// (Seed 40 until the team stands went off; seed 1 is the lowest that scores again.)
 pub fn scoring_match() -> MatchConfig {
     let content = content();
     let [a, b] = default_teams(&content);
-    MatchConfig::new(40, 90, &content, [&a, &b]).unwrap()
+    MatchConfig::new(1, 90, &content, [&a, &b]).unwrap()
 }
 
 /// A seed-42 match of `minutes` on the shipped content and default teams. Shorter than the

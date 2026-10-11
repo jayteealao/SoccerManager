@@ -2,7 +2,7 @@
 //! goes wide and up, the block slides toward it, and the far players follow late.
 
 use crate::ball::Ball;
-use crate::data::test_support::shipped_config;
+use crate::data::test_support::{shipped_config, shipped_config_with_stands};
 use crate::math::DVec2;
 use crate::modules::ROSTER;
 use crate::shape::anchors;
@@ -15,6 +15,13 @@ const CARRIER: usize = PLAYERS_PER_TEAM + 6;
 /// A seeded match on the shipped content with the far-player delay set to `k`.
 fn scene(k: f64) -> Simulation {
     let mut config = shipped_config(7, 90).unwrap();
+    config.tuning.far_delay_s_per_m = k;
+    Simulation::new(config).unwrap()
+}
+
+/// [`scene`] with the team stands on, so a player's places in and out of possession differ.
+fn scene_with_stands(k: f64) -> Simulation {
+    let mut config = shipped_config_with_stands(7, 90).unwrap();
     config.tuning.far_delay_s_per_m = k;
     Simulation::new(config).unwrap()
 }
@@ -195,7 +202,7 @@ fn with_the_delay_off_near_and_far_players_shift_alike() {
 fn a_player_stranded_far_from_play_heads_for_his_nearer_place() {
     const LEFT_BACK: usize = 1;
     let target_from = |offset: DVec2| {
-        let mut sim = scene(0.04);
+        let mut sim = scene_with_stands(0.04);
         hold(&mut sim, DVec2::new(35.0, 25.0));
         let ball = sim.ball.xy();
         let t = sim.tuning.clone();

@@ -20,9 +20,11 @@ const MINUTE: f64 = 3000.0;
 const SEEDS: [u64; 4] = [1, 2, 3, 4];
 
 /// Matches in each seed set of the work-rate comparison. Four matches per set left the
-/// equal-squad control at 0.190, above the 15 percent shift; sixteen bring the seed noise
-/// well under it.
-const BATCH: u64 = 16;
+/// equal-squad control at 0.190, above the 15 percent shift; sixteen brought the seed noise
+/// well under it. With the team stands off, a squad's sprints per match split in two groups
+/// (1 to 8 in most matches, 20 to 34 in about a quarter, the matches with a pressing or
+/// trailing lift), and sixteen left the control at 1.69; sixty-four bring it to 0.08.
+const BATCH: u64 = 64;
 
 /// `file` with every outfield player's `name` rating set by `rating(k)`, `k` counting the
 /// outfield players in file order.
