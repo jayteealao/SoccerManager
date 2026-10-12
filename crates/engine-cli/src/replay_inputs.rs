@@ -134,15 +134,18 @@ impl InputFiles {
     pub fn from_record(fixture: &Fixture) -> anyhow::Result<Self> {
         let roles: Vec<&str> = fixture.inputs.iter().map(|f| f.role.as_str()).collect();
         // The trait catalogue is stored only after the slot file, which every replay that has
-        // the catalogue also has, and the restart wait table only after the catalogue.
+        // the catalogue also has; the restart wait table and then the styles, each optional,
+        // only after the catalogue.
         let accepted = [
-            (false, false, false),
-            (true, false, false),
-            (true, true, false),
-            (true, true, true),
+            (false, false, false, false),
+            (true, false, false, false),
+            (true, true, false, false),
+            (true, true, true, false),
+            (true, true, false, true),
+            (true, true, true, true),
         ]
         .into_iter()
-        .any(|(slots, traits, waits)| {
+        .any(|(slots, traits, waits, styles)| {
             [false, true].into_iter().any(|pack| {
                 let mut wanted = CORE_ROLES.to_vec();
                 if slots {
@@ -154,6 +157,9 @@ impl InputFiles {
                 if waits {
                     wanted.push(RESTART_WAITS_ROLE);
                 }
+                if styles {
+                    wanted.push(STYLES_ROLE);
+                }
                 if pack {
                     wanted.extend(PACK_ROLES);
                 }
@@ -163,7 +169,7 @@ impl InputFiles {
         if !accepted {
             bail!(
                 "the replay file's inputs are {} ; a match needs {}, then optionally {SLOTS_ROLE}, \
-                 {TRAITS_ROLE} and {RESTART_WAITS_ROLE}, then optionally {}",
+                 {TRAITS_ROLE}, {RESTART_WAITS_ROLE} and {STYLES_ROLE}, then optionally {}",
                 roles.join(", "),
                 CORE_ROLES.join(", "),
                 PACK_ROLES.join(" and ")
@@ -316,7 +322,7 @@ mod tests {
             inputs
                 .0
                 .iter()
-                .filter(|f| f.role != RESTART_WAITS_ROLE)
+                .filter(|f| f.role != RESTART_WAITS_ROLE && f.role != STYLES_ROLE)
                 .cloned()
                 .collect(),
         );

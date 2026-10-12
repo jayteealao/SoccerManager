@@ -551,6 +551,8 @@ fn a_version_1_tactics_file_converts_to_the_shipped_version_2_file() {
     for mentality in &mut shipped.mentalities {
         mentality.rest_defence = 0;
     }
+    // The out-of-position margin of the AI lineup is optional too: 0 when absent.
+    shipped.ai.out_of_position_margin = 0.0;
     assert_eq!(converted.value, shipped);
 }
 

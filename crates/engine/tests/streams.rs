@@ -312,8 +312,10 @@ fn no_draw_bypasses_the_registry() {
     // Offline generation, a maths test's input sampler, the fast model and its events, which
     // play no match stream, and the sensitivity rules' design and bootstrap, which choose
     // matches and resample results outside any match, keep their own generator.
-    const ALLOWED: [&str; 8] = [
+    const ALLOWED: [&str; 9] = [
         "streams/",
+        // The staff advice before a match: its own seeded generator, no match stream.
+        "advice.rs",
         "sensitivity/",
         "rng.rs",
         "data/generator.rs",

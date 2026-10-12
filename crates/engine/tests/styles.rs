@@ -13,7 +13,7 @@ mod common;
 
 use std::hash::{DefaultHasher, Hasher};
 
-use engine::ai::{advise, style_estimates};
+use engine::advice::{advise, style_estimates};
 use engine::data::Position;
 use engine::data::styles::Styles;
 use engine::gate::StateWriter;

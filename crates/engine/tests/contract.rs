@@ -277,9 +277,9 @@ fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 /// Play reads ratings only through the contract: outside the contract, the data layer, the
-/// rating type, and the named allow-list (lineup role fit, the fitted fast model, the plugin
-/// hook's share, and the sensitivity rules, which set levels on player copies before a match),
-/// no source reads a rating. A file's own unit tests are not play.
+/// rating type, and the named allow-list (lineup role fit, the pre-match style advice, the
+/// fitted fast model, the plugin hook's share, and the sensitivity rules, which set levels on
+/// player copies before a match), no source reads a rating. A file's own unit tests are not play.
 #[test]
 fn only_the_contract_and_the_allow_list_read_ratings() {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
@@ -290,6 +290,7 @@ fn only_the_contract_and_the_allow_list_read_ratings() {
             || rel.starts_with("data/")
             || rel == "rating.rs"
             || rel == "ai.rs"
+            || rel == "advice.rs"
             || rel == "modules/fast_model.rs"
             || rel == "hook_slots.rs"
             || rel.starts_with("sensitivity/")

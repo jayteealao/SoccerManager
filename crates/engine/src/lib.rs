@@ -4,6 +4,7 @@
 //! emits one [`TickRecord`] per tick to a [`TickSink`], and reproduces a match byte for byte
 //! for the same seed, the same build, and the same machine.
 
+pub mod advice;
 pub mod ai;
 pub mod ball;
 mod canon;
