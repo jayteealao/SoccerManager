@@ -193,24 +193,47 @@ pub fn kick_off_position(team: &Team, slot: usize) -> DVec2 {
     DVec2::new(if depth > -1.0 { -team.attack_x } else { base.x }, base.y)
 }
 
+/// The least distance between two players of the other team on the edge of the centre
+/// circle at a kick-off, in metres: more than twice the separation that pushes players apart,
+/// so two of them never share a place and one push the other inside the circle.
+const KICK_OFF_GAP: f64 = 3.0;
+
 /// Where a player of `team` stands for a kick-off by his own team or by the other team
 /// (`opponent`): the formation slot in his own half, and for the other team outside the
-/// centre circle, 9.15 m from the ball and the target margin more (IFAB Law 8). The same
-/// rule places the other team at a kick-off after a goal, so both kick-offs agree.
+/// centre circle, 9.15 m from the ball and the target margin more (IFAB Law 8). Players of the
+/// other team whose places meet on the edge of the circle, such as forwards brought back from
+/// the other half, spread along it, the gap apart, in slot order, alternately to either side
+/// of the first. The same rule places the other team at a kick-off after a goal, so both
+/// kick-offs agree.
 pub fn kick_off_spot(team: &Team, slot: usize, opponent: bool) -> DVec2 {
     let base = kick_off_position(team, slot);
     if !opponent {
         return base;
     }
-    let away = DVec2::new(-team.attack_x, 0.0);
-    outside_on_pitch(
-        team.pitch(),
-        base,
-        DVec2::ZERO,
-        KICK_DISTANCE + TARGET_MARGIN,
-        away,
-        0.5,
-    )
+    let on_edge = |s: usize| {
+        outside_on_pitch(
+            team.pitch(),
+            kick_off_position(team, s),
+            DVec2::ZERO,
+            KICK_DISTANCE + TARGET_MARGIN,
+            DVec2::new(-team.attack_x, 0.0),
+            0.5,
+        )
+    };
+    let at = on_edge(slot);
+    let shared = (0..slot)
+        .filter(|&s| (on_edge(s) - at).length() < KICK_OFF_GAP)
+        .count();
+    if shared == 0 {
+        return at;
+    }
+    // Alternately one more gap to one side and the other: +1, -1, +2, -2, ...
+    let steps = shared.div_ceil(2) as f64;
+    let sign = if shared % 2 == 1 { 1.0 } else { -1.0 };
+    let radius = at.length();
+    let angle = at.y.atan2(at.x) + sign * steps * KICK_OFF_GAP / radius;
+    team.pitch()
+        .clamp(DVec2::new(angle.cos(), angle.sin()) * radius, 0.5)
 }
 
 /// Where the taker stands: at the ball, or just behind it at a kick-off.
@@ -347,7 +370,9 @@ pub fn target(
     };
     let keep = KICK_DISTANCE + TARGET_MARGIN;
     let at = match dead.kind {
-        StoppageKind::KickOff | StoppageKind::FreeKick | StoppageKind::Corner if opponent => {
+        // The kick-off is taken from the centre mark: the kick-off places, spread.
+        StoppageKind::KickOff if opponent => kick_off_spot(team, p.slot, true),
+        StoppageKind::FreeKick | StoppageKind::Corner if opponent => {
             outside_on_pitch(pitch, base, dead.spot, keep, away, 0.5)
         }
         StoppageKind::ThrowIn if opponent => outside_on_pitch(
@@ -895,6 +920,47 @@ mod tests {
                         "{length} by {width}: slot {slot} at {other}"
                     );
                     assert!(pitch.contains(other));
+                }
+            }
+        }
+    }
+
+    /// Law 8 with every shipped formation: the other team's kick-off places stay outside the
+    /// centre circle and in its own half, and no two of them are within the separation radius,
+    /// so no push keeps a player inside the circle. Forwards brought back from the other half
+    /// once met on one place on the edge, where the push held one of them 8.9 m from the ball.
+    #[test]
+    fn the_other_teams_kick_off_places_never_share_the_edge_of_the_circle() {
+        let content = crate::data::test_support::shipped_content();
+        let schema = &content.tactics;
+        let apart = crate::tuning::Tuning::default().separation_radius;
+        for formation in &schema.formations {
+            for index in [0, 1] {
+                let mut team = crate::team::test_support::bare(index);
+                let mut tactics = crate::tactics::Tactics::defaults(schema);
+                tactics.set_formation(
+                    schema.formation_index(&formation.name).unwrap() as u8,
+                    schema,
+                );
+                team.set_tactics(tactics, schema, &content.tuning.engine);
+                team.relayout();
+                let places: Vec<DVec2> = (0..PLAYERS_PER_TEAM)
+                    .map(|slot| kick_off_spot(&team, slot, true))
+                    .collect();
+                for (i, a) in places.iter().enumerate() {
+                    assert!(a.length() >= KICK_DISTANCE + TARGET_MARGIN - 1e-9);
+                    assert!(
+                        a.x * team.attack_x < 0.0,
+                        "{} slot {i} at {a}",
+                        formation.name
+                    );
+                    for (j, b) in places.iter().enumerate().skip(i + 1) {
+                        assert!(
+                            (*a - *b).length() >= apart,
+                            "{} team {index}: slots {i} and {j} at {a} and {b}",
+                            formation.name
+                        );
+                    }
                 }
             }
         }
