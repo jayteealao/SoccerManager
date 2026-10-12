@@ -314,7 +314,9 @@ mod tests {
             inputs
                 .0
                 .iter()
-                .filter(|f| f.role != TRAITS_ROLE && f.role != RESTART_WAITS_ROLE)
+                .filter(|f| {
+                    f.role != TRAITS_ROLE && f.role != RESTART_WAITS_ROLE && f.role != STYLES_ROLE
+                })
                 .cloned()
                 .collect(),
         );
@@ -344,7 +346,7 @@ mod tests {
             shipped
                 .0
                 .iter()
-                .filter(|f| f.role != RESTART_WAITS_ROLE)
+                .filter(|f| f.role != RESTART_WAITS_ROLE && f.role != STYLES_ROLE)
                 .cloned()
                 .collect(),
         );
