@@ -411,6 +411,58 @@ fn an_attacker_beyond_the_defenders_records_the_offside() {
     assert_eq!(offside.detail["team"], 0);
 }
 
+/// Scene-only point `change_rejected` (since the AI sides start in the style their staff
+/// picks, no gate match has a change the rule pack refuses): with five substitutions used, a
+/// sixth queued for the home side is refused at the next stoppage, and the record names the
+/// team, the stoppage and the limit.
+#[test]
+fn a_sixth_substitution_records_the_refused_change() {
+    use engine::math::DVec3;
+    use engine::{Change, Manager};
+    let config = common::calm_match(90);
+    let (off, on) = {
+        let sim = Simulation::new(config.clone()).unwrap();
+        let team = &sim.teams()[0];
+        (team.lineup[5], team.bench[0])
+    };
+    let mut sim = common::spread(Scene::new(config), -30.0, 30.0)
+        .manager(0, Manager::Human)
+        .manager(1, Manager::Human)
+        .carrier(None)
+        .ball(DVec3::new(-10.0, 32.0, 0.0))
+        .ball_velocity(DVec3::new(0.0, 5.0, 0.0))
+        .last_touch(1)
+        .tick(1_001)
+        .subs_used(0, 5, 3)
+        .queue(0, Change::Substitution { off, on })
+        .traced()
+        .build();
+    let mut all = Vec::new();
+    for _ in 0..200 {
+        sim.step();
+        let records = sim.take_trace();
+        let events = sim.take_events();
+        trace::check_tick(&records, &events).unwrap();
+        all.extend(records);
+        if events
+            .iter()
+            .any(|e| e.kind == EngineEventKind::ChangeRejected)
+        {
+            break;
+        }
+    }
+    let rejected = points(&all)
+        .into_iter()
+        .find(|p| p.point == Point::ChangeRejected)
+        .expect("a change_rejected record");
+    assert_eq!(rejected.detail["team"], 0);
+    assert_eq!(rejected.detail["stoppage"], "throw_in");
+    assert_eq!(
+        rejected.detail["reason"],
+        "substitution limit reached (5 of 5)"
+    );
+}
+
 /// Scene-only point `trait_override` (the shipped teams carry no traits, so no gate match
 /// meets an override's moment): a midfielder who releases the ball early, at mood -50 and with
 /// his side playing at a slower tempo, has just gained the ball with no opponent near, and the

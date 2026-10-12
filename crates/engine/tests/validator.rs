@@ -100,11 +100,8 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
     );
     streams.push(("knockout seed 2".into(), (events, rules)));
     let league = engine::data::generate_league(1, 2, &content);
-    for seed in [4] {
-        let generated =
-            engine::MatchConfig::new(seed, 90, &content, [&league[0], &league[1]]).unwrap();
-        streams.push((format!("generated seed {seed}"), engine_events(generated)));
-    }
+    let generated = engine::MatchConfig::new(4, 90, &content, [&league[0], &league[1]]).unwrap();
+    streams.push(("generated seed 4".into(), engine_events(generated)));
     let all: Vec<&engine::EngineEvent> = streams.iter().flat_map(|(_, (e, _))| e).collect();
     let has = |f: &dyn Fn(&engine::EngineEvent) -> bool| all.iter().any(|e| f(e));
     assert!(has(&|e| e.kind == Injury), "an injury is judged");
