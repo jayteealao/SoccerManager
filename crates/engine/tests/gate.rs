@@ -607,7 +607,8 @@ fn committed() -> GoldenFile {
 /// The recorded result changes: entry 2, whose reason names the maths change and the keyed
 /// split, entry 3, whose reason names the restart position check and the fixes it forced, and
 /// entry 4, whose reason names the ratings in tenths and the unchanged play, and entry 5,
-/// whose reason names the stage blend and the curve. Each candidate is a clean commit, and
+/// whose reason names the stage blend and the curve, and entry 9, whose reason names the team
+/// shape and the AI's style pick. Each candidate is a clean commit, and
 /// each band result holds a verdict for each band of `content/realism-bands.json`.
 #[test]
 fn each_result_change_is_one_regenerate_entry_with_its_band_result() {
@@ -621,10 +622,10 @@ fn each_result_change_is_one_regenerate_entry_with_its_band_result() {
         .collect();
     assert_eq!(
         regenerations,
-        [2, 3, 4, 5, 6, 7, 8],
-        "seven regenerate entries, entries 2 to 8"
+        [2, 3, 4, 5, 6, 7, 8, 9],
+        "eight regenerate entries, entries 2 to 9"
     );
-    let named: [(usize, &[&str]); 7] = [
+    let named: [(usize, &[&str]); 8] = [
         (2, &["libm", "keyed"]),
         (3, &["restart position check", "Law 8", "goal line"]),
         (4, &["tenths", "version 2", "every tick of play unchanged"]),
@@ -639,6 +640,19 @@ fn each_result_change_is_one_regenerate_entry_with_its_band_result() {
                 "mood",
                 "traits of play",
                 "weaker foot",
+            ],
+        ),
+        (
+            9,
+            &[
+                "team shape",
+                "slides",
+                "pace",
+                "restart waits",
+                "walk-on",
+                "defensive jobs",
+                "named style",
+                "lineup and bench",
             ],
         ),
     ];

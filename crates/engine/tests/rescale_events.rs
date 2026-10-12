@@ -3,9 +3,10 @@
 //! The lists were first written by the engine before ratings moved to tenths of 1 to 20, which
 //! kept every event, rewritten when every action began to read the attribute contract, again
 //! when states began to move ratings within caps, again when consistency began to spread
-//! each player's form, and again when the player as a person (mood, familiarity, traits of
-//! play, the weaker foot) began to act in play; this test compares and names the first event
-//! that differs.
+//! each player's form, again when the player as a person (mood, familiarity, traits of
+//! play, the weaker foot) began to act in play, and again when the team shape (phases, the
+//! slide, pace, real restart waits, defensive jobs, and the AI's style, lineup and bench)
+//! began to act; this test compares and names the first event that differs.
 //!
 //! Set `SM_WRITE_RESCALE_EVENTS=1` to write the file instead of comparing. Rewrite it only in
 //! a change that regenerates the golden set.
