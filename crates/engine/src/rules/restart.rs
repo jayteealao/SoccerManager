@@ -231,9 +231,9 @@ pub fn kick_off_spot(team: &Team, slot: usize, opponent: bool) -> DVec2 {
     let steps = shared.div_ceil(2) as f64;
     let sign = if shared % 2 == 1 { 1.0 } else { -1.0 };
     let radius = at.length();
-    let angle = at.y.atan2(at.x) + sign * steps * KICK_OFF_GAP / radius;
-    team.pitch()
-        .clamp(DVec2::new(angle.cos(), angle.sin()) * radius, 0.5)
+    let angle = math::atan2(at.y, at.x) + sign * steps * KICK_OFF_GAP / radius;
+    let (sin, cos) = math::sin_cos(angle);
+    team.pitch().clamp(DVec2::new(cos, sin) * radius, 0.5)
 }
 
 /// Where the taker stands: at the ball, or just behind it at a kick-off.
