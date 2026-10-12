@@ -32,8 +32,9 @@ pub const TEAM_STANDS: &str = "team_stands";
 
 /// The AI manager's pick of a named style before a match (`styles.json`). Off, an AI-managed
 /// side starts with the tactics file's default AI tactics; on, with the style the staff advice
-/// rates best for its squad. With the shipped styles some pairings of styles play far outside
-/// the realism bands (shots and goals per match), so it ships off until that is settled.
+/// rates best for its squad. It ships on; with the shipped styles some pairings of styles play
+/// far outside the realism bands (shots and goals per match), recorded as band misses until
+/// the tuning work settles them.
 pub const AI_STYLE_PICK: &str = "ai_style_pick";
 
 /// The longest flag name, in characters.

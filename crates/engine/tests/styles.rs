@@ -218,10 +218,20 @@ fn the_ai_side_starts_in_its_style_and_a_person_keeps_the_defaults() {
     assert_eq!(teams[1].tactics, picked);
     let keeper = &teams[1].squad[teams[1].lineup[teams[1].keeper_slot()]];
     assert_eq!(keeper.position, Position::GK);
-    // Without styles, or with the flag off (the shipped state), both sides play the defaults.
+    // Without styles, or with the flag off, both sides play the defaults.
     let mut plain = content.clone();
     plain.styles = None;
-    for c in [plain, common::content()] {
+    let off = engine::FlagStates(
+        [(
+            engine::flags::AI_STYLE_PICK.to_string(),
+            engine::FlagState::Off,
+        )]
+        .into(),
+    );
+    let off = common::content()
+        .with_flags(&off)
+        .expect("the style pick flag turns off");
+    for c in [plain, off] {
         let config = MatchConfig::new(11, 90, &c, [&a, &b]).unwrap();
         assert!(!config.takes_advice(0) && !config.takes_advice(1));
         for team in Simulation::new(config).unwrap().teams() {

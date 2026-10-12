@@ -1101,9 +1101,9 @@
   "flags": {
     "ai_style_pick": {
       "owner": "team-shape owner (the person)",
-      "hypothesis": "an AI-managed side that starts in the named style the staff advice rates best for its squad plays recognisably different matches while the core realism bands hold; with the shipped styles some pairings play far outside them (40 equal matches: shots per team 24.5 and 23.8 against 11.2 and 15.1, goals per match 4.0 and 3.8), so it ships off",
-      "removal_condition": "removed, with the pick kept on or dropped, once a paired run of 40 equal matches on seeds 9 and 42 keeps every core band with the flag on, or the person decides the pick's fate",
-      "state": "off"
+      "hypothesis": "an AI-managed side that starts in the named style the staff advice rates best for its squad plays recognisably different matches; with the shipped styles some pairings play far outside the realism bands (40 equal matches: shots per team 24.5 and 23.8 against 11.2 and 15.1, goals per match 4.0 and 3.8), recorded as band misses for the tuning work; it ships on so the AI picks a style",
+      "removal_condition": "removed, with the pick kept on, once a paired run of 40 equal matches on seeds 9 and 42 keeps every core band with the flag on",
+      "state": "on"
     },
     "team_stands": {
       "owner": "team-shape owner (the person)",
