@@ -28,9 +28,10 @@ const MINUTE_60 = 180_000;
 /// Minute 3: far enough into play for a change to wait for a stoppage.
 const MINUTE_3 = 9_000;
 /// The seed whose home team gets a tired-player pick after minute 55 (the engine's advice
-/// test finds it: minute 58, tick 178500).
+/// test finds it: minute 55, tick 168000, since the AI side starts in a named style; minute 58,
+/// tick 178500 before).
 const ADVICE_SEED = 1;
-const ADVICE_TICK = 178_500;
+const ADVICE_TICK = 168_000;
 
 const evidence = (info, name) => {
   const out = process.env.MATCH_EVIDENCE_DIR

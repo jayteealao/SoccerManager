@@ -31,9 +31,11 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STATES = JSON.parse(fs.readFileSync(path.join(HERE, 'fixtures', 'matchday-states.json'), 'utf8')).states;
 const SKINS = ['broadcast-blue', 'interim-light'];
 const SEED = 7;
-/// The north star's seed: the lowest whose matchday has a goal at another ground before the
-/// fast-forward ends.
-const NORTH_STAR_SEED = 7;
+/// The north star's seed: the lowest whose matchday has a goal at another ground after the
+/// pause at tick 1,000 and before the fast-forward ends. Seed 1 since the AI sides start in a
+/// named style (first goal elsewhere at tick 16,863); seed 7 until then, whose first goal
+/// elsewhere now comes at tick 945, before the pause.
+const NORTH_STAR_SEED = 1;
 
 const content = {};
 
