@@ -173,7 +173,7 @@ fn a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on() {
             "--reconnect-wait",
             "30",
             "--drop-client-at",
-            "3000",
+            "4500",
         ])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -207,8 +207,8 @@ fn a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on() {
         }
     }
     assert!(
-        last_tick >= 3_000,
-        "the drop comes at tick 3,000; read {last_tick}"
+        last_tick >= 4_500,
+        "the drop comes at tick 4,500; read {last_tick}"
     );
 
     // The same port, the same hello, and play from a stoppage the viewer already holds.
@@ -236,16 +236,14 @@ fn a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on() {
         }
     }
     let first_tick = first_tick.expect("the match goes on after the reconnect");
-    // Seed 6 stops play before tick 3,000 (half-time of a two-minute match), with a throw-in
-    // at tick 2,443, and resumes after tick 2,000, so the match goes back to a stoppage the
-    // viewer held, never to kick-off and never past it. It is the lowest seed that stops play
-    // between tick 2,000 and tick 3,000 once the player as a person joined the team shape
-    // (seed 5 until then, which now stops only at half-time; seed 32 until the defensive
-    // stages read the decided attributes; seed 29 before the restart waits). Seeds 1 and 2
-    // stop play before tick 2,000 and can resume there, seeds 3 to 5 stop only at half-time,
-    // and a drop flushed at exactly tick 3,000 went back to kick-off.
+    // Seed 6 stops play after half-time (tick 3,000 of a two-minute match) with a corner at
+    // tick 3,985, before the drop at tick 4,500, so the match goes back to a stoppage the
+    // viewer held, never to kick-off or half-time and never past it. Since the AI side starts
+    // in a named style, no seed of 1 to 40 stops play in the first half before half-time, and
+    // a drop flushed at exactly tick 3,000 could go back to kick-off; so the drop moved into
+    // the second half (it was at tick 3,000 with a throw-in at tick 2,443 before).
     assert!(
-        first_tick > 2_000 && first_tick <= last_tick + 1,
+        first_tick > 3_000 && first_tick <= last_tick + 1,
         "resumed at {first_tick}; the viewer held up to {last_tick}"
     );
     assert!(ticks > 0);
