@@ -23,8 +23,11 @@ use crate::tuning::Tuning;
 /// (`engine.contract.consistency`), the words of the hidden values (`hidden`), the match
 /// rating (`match_rating`), and the spread of the hidden values in the generator
 /// (`generator.world.hidden`); a version 4 file converts
-/// ([`crate::data::convert::tuning_v4_to_v5`]).
-pub const TUNING_VERSION: u32 = 5;
+/// ([`crate::data::convert::tuning_v4_to_v5`]). Version 6 splits the choice model's pressure
+/// weight (`engine.decision.pressure`) into the shot's and the take-on's own weights
+/// (`shot_under_pressure`, `takeon_under_pressure`); a version 5 file converts with both at
+/// its old value ([`crate::data::convert::tuning_v5_to_v6`]).
+pub const TUNING_VERSION: u32 = 6;
 
 /// The tuning file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]

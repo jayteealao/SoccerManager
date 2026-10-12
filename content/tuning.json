@@ -1,5 +1,5 @@
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "engine": {
     "dt": 0.02,
     "decision_interval_ticks": 1,
@@ -73,7 +73,8 @@
       "shot_distance": 1.0,
       "dribble_base": -0.4,
       "dribble_space": 0.55,
-      "pressure": -0.8,
+      "shot_under_pressure": -0.8,
+      "takeon_under_pressure": -0.8,
       "first_touch": 0.6,
       "clear": -1.0,
       "clear_pressure": 1.2,

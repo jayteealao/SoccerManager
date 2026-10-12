@@ -69,6 +69,7 @@ pub const ATTRIBUTES_V4: u32 = 4;
 pub const TUNING_V2: u32 = 2;
 pub const TUNING_V3: u32 = 3;
 pub const TUNING_V4: u32 = 4;
+pub const TUNING_V5: u32 = 5;
 
 /// The attribute version 2 name that version 3 renames: injury resistance (high is good)
 /// becomes injury proneness (high is bad), mirrored on the scale.
@@ -428,10 +429,7 @@ pub fn tuning_v4_to_v5(mut file: serde_json::Value) -> Result<serde_json::Value,
     let obj = file
         .as_object_mut()
         .ok_or_else(|| "the file is not an object".to_string())?;
-    obj.insert(
-        "schema_version".into(),
-        serde_json::Value::from(crate::data::TUNING_VERSION),
-    );
+    obj.insert("schema_version".into(), serde_json::Value::from(TUNING_V5));
     obj.insert("hidden".into(), frozen.hidden);
     obj.insert("match_rating".into(), frozen.match_rating);
     let contract = obj
@@ -450,6 +448,31 @@ pub fn tuning_v4_to_v5(mut file: serde_json::Value) -> Result<serde_json::Value,
     for (k, v) in frozen.world {
         world.insert(k, v);
     }
+    Ok(file)
+}
+
+/// A version 5 tuning file, as JSON, in the version 6 shape: the one pressure weight of the
+/// choice model (`engine.decision.pressure`) becomes the shot's and the take-on's own weights,
+/// each with the old value, so play does not change. The caller parses and validates the
+/// result as a current file.
+pub fn tuning_v5_to_v6(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert(
+        "schema_version".into(),
+        serde_json::Value::from(crate::data::TUNING_VERSION),
+    );
+    let decision = obj
+        .get_mut("engine")
+        .and_then(|e| e.get_mut("decision"))
+        .and_then(|d| d.as_object_mut())
+        .ok_or_else(|| "engine.decision is missing".to_string())?;
+    let pressure = decision
+        .remove("pressure")
+        .ok_or_else(|| "engine.decision.pressure is missing".to_string())?;
+    decision.insert("shot_under_pressure".into(), pressure.clone());
+    decision.insert("takeon_under_pressure".into(), pressure);
     Ok(file)
 }
 

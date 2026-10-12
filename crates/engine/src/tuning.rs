@@ -541,16 +541,19 @@ pub struct DecisionWeights {
     pub shot_lane: f64,
     #[garde(range(min = -5.0, max = 5.0))]
     pub shot_distance: f64,
-    /// A dribble: the base, the free space ahead (up to 10 m), the cost of an opponent
-    /// within 2.5 m (a negative cost makes the carrier take the defender on), and the bonus
-    /// in the first 10 ticks after gaining the ball. The pressure weight is also added to a
-    /// shot with an open lane taken with an opponent within 2 m.
+    /// A dribble: the base, the free space ahead (up to 10 m), and the bonus in the first
+    /// 10 ticks after gaining the ball.
     #[garde(range(min = -5.0, max = 5.0))]
     pub dribble_base: f64,
     #[garde(range(min = -5.0, max = 5.0))]
     pub dribble_space: f64,
+    /// Added to a shot with an open lane (wider than 1 m) taken with an opponent within 2 m.
     #[garde(range(min = -5.0, max = 5.0))]
-    pub pressure: f64,
+    pub shot_under_pressure: f64,
+    /// Subtracted from the dribble score when an opponent is within 2.5 m: a negative value
+    /// raises a pressed dribble, so the carrier takes the defender on.
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub takeon_under_pressure: f64,
     #[garde(range(min = -5.0, max = 5.0))]
     pub first_touch: f64,
     /// A clearance: the base, the bonus under pressure in the own third, and the base for
@@ -694,7 +697,8 @@ impl Default for Tuning {
                 shot_distance: 1.0,
                 dribble_base: -0.4,
                 dribble_space: 0.55,
-                pressure: -0.8,
+                shot_under_pressure: -0.8,
+                takeon_under_pressure: -0.8,
                 first_touch: 0.6,
                 clear: -1.0,
                 clear_pressure: 1.2,

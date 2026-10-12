@@ -691,7 +691,7 @@ impl DecisionModule for DecisionV1 {
                 .map(|p| segment_distance(p.pos, carrier.pos, goal))
                 .fold(f64::INFINITY, f64::min);
             let under_pressure = if nearest_opp < 2.0 && lane > 1.0 {
-                w.pressure
+                w.shot_under_pressure
             } else {
                 0.0
             };
@@ -841,7 +841,11 @@ impl DecisionModule for DecisionV1 {
                 (0.0, 0.0)
             };
             let dribble = w.dribble_base + w.dribble_space * (space_ahead / 10.0)
-                - if pressed { w.pressure } else { 0.0 }
+                - if pressed {
+                    w.takeon_under_pressure
+                } else {
+                    0.0
+                }
                 + if held < 10 { w.first_touch } else { 0.0 }
                 + skill(Stage::DRIBBLE_CHOOSE)
                 + role.dribble

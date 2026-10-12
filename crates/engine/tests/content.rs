@@ -479,12 +479,63 @@ fn shipped_tuning_json() -> serde_json::Value {
     serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
 }
 
+/// Puts the shipped choice-model block back in its version 5 form: one pressure weight in
+/// place of the shot's and the take-on's own weights.
+fn with_one_pressure_weight(v: &mut serde_json::Value) {
+    let decision = v["engine"]["decision"].as_object_mut().unwrap();
+    let shot = decision.remove("shot_under_pressure").unwrap();
+    decision.remove("takeon_under_pressure").unwrap();
+    decision.insert("pressure".into(), shot);
+}
+
+/// The shipped file holds the shot's and the take-on's pressure weights at the old single
+/// value, and no single pressure weight; a current file that still names it is refused.
+#[test]
+fn the_pressure_weight_is_split_into_the_shot_and_the_take_on_weights() {
+    let t = common::content().tuning.engine.decision;
+    assert_eq!(t.shot_under_pressure, -0.8);
+    assert_eq!(t.takeon_under_pressure, -0.8);
+    let shipped = shipped_tuning_json();
+    assert!(shipped["engine"]["decision"].get("pressure").is_none());
+    let mut old_key = shipped.clone();
+    old_key["engine"]["decision"]["pressure"] = (-0.8).into();
+    let err = engine::data::load_tuning_bytes(&serde_json::to_vec(&old_key).unwrap(), "t.json")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("pressure"), "{err}");
+}
+
+/// A version 5 tuning file (one pressure weight) converts to version 6 with both new weights
+/// at its old value.
+#[test]
+fn a_version_5_tuning_file_converts_with_both_pressure_weights_at_its_value() {
+    let mut v5 = shipped_tuning_json();
+    v5["schema_version"] = 5.into();
+    with_one_pressure_weight(&mut v5);
+    let bytes = serde_json::to_vec(&v5).unwrap();
+    let loaded = engine::data::load_tuning_bytes(&bytes, "tuning-v5.json").unwrap();
+    assert_eq!(loaded.converted_from, Some(5));
+    let shipped = engine::data::load_tuning_bytes(
+        &serde_json::to_vec(&shipped_tuning_json()).unwrap(),
+        "tuning.json",
+    )
+    .unwrap();
+    assert_eq!(loaded.value, shipped.value);
+
+    v5["engine"]["decision"]["pressure"] = (-1.25).into();
+    let loaded =
+        engine::data::load_tuning_bytes(&serde_json::to_vec(&v5).unwrap(), "t.json").unwrap();
+    assert_eq!(loaded.value.engine.decision.shot_under_pressure, -1.25);
+    assert_eq!(loaded.value.engine.decision.takeon_under_pressure, -1.25);
+}
+
 /// A version 3 tuning file (no state caps, body jobs, fatigue group weights or sprint cap)
 /// converts to version 4 with the values of the frozen copy, which are the shipped ones.
 #[test]
 fn a_version_3_tuning_file_converts_to_the_shipped_version_4() {
     let mut v3 = shipped_tuning_json();
     v3["schema_version"] = 3.into();
+    with_one_pressure_weight(&mut v3);
     let contract = v3["engine"]["contract"].as_object_mut().unwrap();
     contract.remove("states").unwrap();
     contract.remove("body").unwrap();
@@ -897,6 +948,7 @@ fn the_trait_catalogue_loads_with_thirty_one_traits() {
 fn a_version_4_tuning_file_converts_to_the_shipped_version_5() {
     let mut v4 = shipped_tuning_json();
     v4["schema_version"] = 4.into();
+    with_one_pressure_weight(&mut v4);
     v4["engine"]["contract"]
         .as_object_mut()
         .unwrap()
