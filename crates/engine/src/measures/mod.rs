@@ -15,6 +15,8 @@
 //! A goal takes the phase of the restart that began the scoring side's open chain, else
 //! open play.
 
+pub mod shape;
+
 use crate::TICKS_PER_SECOND;
 use crate::data::StoppageKind;
 use crate::decision::PassKind;

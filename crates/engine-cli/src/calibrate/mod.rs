@@ -68,6 +68,7 @@ use sha2::{Digest, Sha256};
 
 use crate::bench::BenchFigures;
 use crate::cli::{CalibrateOpts, InjectFailure, SuiteArg};
+use crate::measure_rows::SHAPE_FIELDS;
 use crate::report::bands::{BandDef, Measure};
 use crate::report::bands::{REGISTRY_VERSION, Registry};
 use crate::report::baseline::{self, Identity};
@@ -519,6 +520,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     });
     if !quiet {
         eprint!("{}", verdict::render_reported(&reported, joint.is_some()));
+        eprint!("{}", crate::report::render_figures(&first.figure_rows));
         match &nash_rating {
             Some(Ok(r)) => eprint!("{}", nash::render(r)),
             Some(Err((played, total))) => eprint!("{}", nash::incomplete_line(*played, *total)),
@@ -621,6 +623,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         joint,
         power,
         reported,
+        figures: first.figure_rows.clone(),
         accepted: acceptances,
         counts,
         registry: RegistryInfo {
@@ -1037,6 +1040,8 @@ struct Arm {
     checks: Vec<BandCheck>,
     /// The checks of the bands that only report.
     reported: Vec<BandCheck>,
+    /// The registry's figures beside an earlier build's values.
+    figure_rows: Vec<crate::report::FigureRow>,
     wall_ms: BTreeMap<String, u64>,
     pass: bool,
     change_never_applied: u32,
@@ -1361,6 +1366,7 @@ impl RunCtx<'_> {
                             _ => rows::Measures::default(),
                         },
                         physical: measured.map(|m| m.physical).unwrap_or_default(),
+                        shape: measured.map_or([[0.0; SHAPE_FIELDS]; 2], |m| m.shape),
                         clubs: k.fixture.clubs.map(club),
                     },
                 );
@@ -1424,6 +1430,7 @@ impl RunCtx<'_> {
         let formations = builder.pairing_figures();
         let mut checks = builder.checks(wall);
         let mut reported = builder.reported_checks();
+        let figure_rows = builder.figure_rows();
         // `--band` judges only the named bands; each suite's time budget stays.
         if !opts.bands.is_empty() {
             checks.retain(|c| c.band == "wall_ms" || opts.bands.contains(&c.band));
@@ -1476,6 +1483,7 @@ impl RunCtx<'_> {
             red_card: builder.red_card_figures(),
             checks,
             reported,
+            figure_rows,
             wall_ms,
             pass,
             change_never_applied,

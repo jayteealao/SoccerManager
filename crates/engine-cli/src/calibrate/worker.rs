@@ -134,14 +134,21 @@ pub fn play_match(
     if let Some(Some(player)) = m.red_card {
         sim.send_off_before_kickoff(player);
     }
-    // A measures build counts the realism measures and each player's running as it plays;
-    // the running sink's time falls in the play stage, after the checker's.
+    // A measures build counts the realism measures, each player's running and the team
+    // shape as it plays; the running and shape sinks' time falls in the play stage, after
+    // the checker's.
     #[cfg(feature = "measures")]
     sim.with_measures();
     // Each tick and event is judged as the match plays; no record is kept.
     let check = Timed::new(RunningCheck::for_match(&sim, rules));
     #[cfg(feature = "measures")]
-    let mut sink = engine::FanoutSink::new(check, super::physical::Physical::default());
+    let mut sink = engine::FanoutSink::new(
+        check,
+        engine::FanoutSink::new(
+            super::physical::Physical::default(),
+            engine::measures::shape::ShapeSink::default(),
+        ),
+    );
     #[cfg(not(feature = "measures"))]
     let mut sink = check;
     let started = Instant::now();
@@ -150,7 +157,10 @@ pub fn play_match(
         sim.run(&mut sink)?;
     }
     #[cfg(feature = "measures")]
-    let (check, physical) = sink.into_parts();
+    let (check, (physical, shape)) = {
+        let (check, running) = sink.into_parts();
+        (check, running.into_parts())
+    };
     #[cfg(not(feature = "measures"))]
     let check = sink;
     let elapsed = started.elapsed();
@@ -174,7 +184,7 @@ pub fn play_match(
     );
     #[cfg(feature = "measures")]
     let row = match sim.measures() {
-        Some(measures) => row.with_measures(measures, &physical),
+        Some(measures) => row.with_measures(measures, &physical, &shape.finish()),
         None => row,
     };
     if let Some(path) = events_to(&row) {

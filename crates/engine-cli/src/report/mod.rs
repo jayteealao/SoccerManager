@@ -30,8 +30,10 @@ pub const SLOW_MATCH_MS: u64 = 2000;
 /// measure raises it, so a run folder made under the old definitions is not resumed.
 /// Version 2 adds the realism measures of a `measures` build to the rows: shot distance,
 /// pass kind and length, goal phase, possession by third, possession chains, and each
-/// player's running.
-pub const MEASURES_VERSION: u32 = 2;
+/// player's running. Version 3 adds the team-shape sums: each outfield group's depth, width,
+/// pace and sprints, and each team's slide, far-player response, dead-ball calm, stoppages by
+/// kind and completed links.
+pub const MEASURES_VERSION: u32 = 3;
 
 /// One suite of a calibration run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -830,6 +832,35 @@ impl RunBuilder {
         c
     }
 
+    /// The figures of the registry, each over every planned suite that reports it: its value
+    /// beside the value an earlier build gave. A figure that reads measures the suite's
+    /// matches do not carry has no value.
+    pub fn figure_rows(&self) -> Vec<FigureRow> {
+        let mut out = Vec::new();
+        for f in &self.bands.figures {
+            let def = f.as_band();
+            for &suite in self.suites.keys().filter(|s| def.judged_in(**s)) {
+                let measured = !def.needs_measures() || self.has_measures(suite);
+                let terms =
+                    measured.then(|| measures::terms(&def, &self.observations(suite), Scope::All));
+                let value = terms
+                    .as_ref()
+                    .and_then(measures::Terms::value)
+                    .map(|v| round_to(v, 4));
+                out.push(FigureRow {
+                    figure: f.figure.clone(),
+                    suite: suite.code().to_string(),
+                    value,
+                    se: terms.as_ref().map_or(0.0, |t| round_to(t.se(), 5)),
+                    today: f.today.value,
+                    build: f.today.build.clone(),
+                    change: value.map(|v| round_to(v - f.today.value, 4)),
+                });
+            }
+        }
+        out
+    }
+
     /// The checks of the bands that only report: every row of a band with a reason in
     /// `report_only`, in report order. A band that reads measures the suite's matches do not
     /// carry is left out: a build without the measures judges the bands of the file only.
@@ -1112,6 +1143,14 @@ pub struct CalibrationReport {
     /// in the joint word, `calib.pass` or `calib.bands`. Absent when no band only reports.
     #[serde(rename = "calib.reported", skip_serializing_if = "Vec::is_empty")]
     pub reported: Vec<verdict::VerdictRow>,
+    /// The registry's figures, each beside the value an earlier build gave; never judged.
+    /// Absent when the registry has none.
+    #[serde(
+        rename = "calib.figures",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub figures: Vec<FigureRow>,
     /// The developer's acceptances of not-sure bands in the run folder; absent without an
     /// `accepted.json`.
     #[serde(rename = "calib.accepted", skip_serializing_if = "Option::is_none")]
@@ -1135,6 +1174,50 @@ pub struct CalibrationReport {
     /// A change run's rules stage.
     #[serde(rename = "calib.rules", skip_serializing_if = "Option::is_none")]
     pub rules: Option<RulesReport>,
+}
+
+/// One figure's row: its value over a suite beside the value an earlier build gave.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FigureRow {
+    pub figure: String,
+    pub suite: String,
+    /// `None` when the suite's matches do not carry the measures the figure reads.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<f64>,
+    pub se: f64,
+    /// The earlier build's value, and the build.
+    pub today: f64,
+    pub build: String,
+    /// The value minus the earlier build's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub change: Option<f64>,
+}
+
+/// The figures as a table: each one's value beside the earlier build's; empty when there
+/// are none.
+pub fn render_figures(rows: &[FigureRow]) -> String {
+    if rows.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from("figures (beside an earlier build; never judged):\n");
+    out.push_str(&format!(
+        "{:<28} {:<10} {:>10} {:>9} {:>10} {:>10}  {}\n",
+        "figure", "suite", "value", "se", "today", "change", "build"
+    ));
+    for r in rows {
+        let num = |v: Option<f64>| v.map_or_else(|| "no measures".to_string(), |v| format!("{v}"));
+        out.push_str(&format!(
+            "{:<28} {:<10} {:>10} {:>9} {:>10} {:>10}  {}\n",
+            r.figure,
+            r.suite,
+            num(r.value),
+            r.se,
+            r.today,
+            num(r.change),
+            r.build
+        ));
+    }
+    out
 }
 
 /// One stage's cost in a report.
@@ -1213,9 +1296,9 @@ pub struct RuleInterval {
 /// that only report (`calib.reported`), the developer's acceptances (`calib.accepted`), the
 /// match counts (`calib.counts`), and how each verdict row was judged (`judged`, `note`,
 /// `accepted`); 6 since the whole-distribution bands (`upper` and `noise_floor` on a
-/// verdict row); 7 since the formation field rating (`calib.nash`). Every key of an older
-/// version stays.
-pub const REPORT_SCHEMA_VERSION: &str = "7";
+/// verdict row); 7 since the formation field rating (`calib.nash`); 8 since the registry's
+/// figures (`calib.figures`). Every key of an older version stays.
+pub const REPORT_SCHEMA_VERSION: &str = "8";
 
 /// The matches a run judged: every engine's rows, the fixtures both engines of a change run
 /// played, and the matches of each engine.

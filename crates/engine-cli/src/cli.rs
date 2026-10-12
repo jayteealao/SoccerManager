@@ -644,6 +644,11 @@ pub struct RecordOpts {
                      is managed by hand. See docs/reference/cli.md."
     )]
     pub changes: Option<PathBuf>,
+    /// A measures build: write the match's team-shape sums to this JSON file, for the
+    /// cross-check against the movement scripts.
+    #[cfg(feature = "measures")]
+    #[arg(long, hide = true, value_name = "FILE")]
+    pub shape_out: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]

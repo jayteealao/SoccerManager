@@ -14,8 +14,9 @@
 //!
 //! Format 2 appends the realism measures to the columns of format 1: shot distance bins,
 //! passes by kind and length, goals by phase, possession by third, possession chains and
-//! each player's running. A build without the `measures` feature writes them as zeros with
-//! `measures.present` 0. Files of format 1 (an old engine's) are read too, without measures.
+//! each player's running, and (measures version 3) the team-shape sums. A build without the
+//! `measures` feature writes them as zeros with `measures.present` 0. Files of format 1 (an
+//! old engine's) are read too, without measures.
 //!
 //! The rows keep no rounded value. [`Row::band_record`] rebuilds the per-match figures the
 //! bands read with the same rounding functions the statistics files use, so the bands of a
@@ -36,7 +37,7 @@ use sha2::{Digest, Sha256};
 use super::fixtures::FixtureKey;
 use super::run_folder::Done;
 pub use crate::measure_rows::{MeasureBlock, Measures, PASS_CELL_NAMES, PHASES, ZONES};
-use crate::measure_rows::{SIDES, THIRDS};
+use crate::measure_rows::{SIDES, THIRDS, shape_name};
 use crate::report::MEASURES_VERSION;
 
 /// The row file format this program writes.
@@ -258,6 +259,11 @@ fn walk(block: &mut MeasureBlock, f: &mut dyn FnMut(&dyn Fn() -> String, Slot<'_
             &|| format!("physical_overflow.{side}"),
             Slot::U32(&mut block.physical_overflow[s]),
         );
+    }
+    for (s, side) in SIDES.iter().enumerate() {
+        for (i, v) in block.shape[s].iter_mut().enumerate() {
+            f(&|| format!("shape.{side}.{}", shape_name(i)), Slot::F64(v));
+        }
     }
 }
 
@@ -658,18 +664,21 @@ impl Row {
         }
     }
 
-    /// The row with the measures of a measures build: the engine's match measures and each
+    /// The row with the measures of a measures build: the engine's match measures, the
+    /// team-shape sums and each
     /// player's running.
     #[cfg(feature = "measures")]
     pub fn with_measures(
         mut self,
         measures: &engine::measures::MatchMeasures,
         physical: &super::physical::Physical,
+        shape: &engine::measures::shape::ShapeValues,
     ) -> Self {
         self.measured = Some(Box::new(MeasureBlock {
             measures: Measures::from(measures),
             physical: physical.players,
             physical_overflow: physical.overflow,
+            shape: *shape,
         }));
         self
     }
@@ -1222,8 +1231,8 @@ mod tests {
     #[test]
     fn a_row_with_measures_round_trips_field_by_field() {
         let cols = measure_columns();
-        // 1 + 82 + 2 + 24 + 24 + 14 + 6 + 2 + 32 + 62 + 2 + 2 + 2 x 16 x 9 + 2.
-        assert_eq!(cols.len(), 543);
+        // 1 + 82 + 2 + 24 + 24 + 14 + 6 + 2 + 32 + 62 + 2 + 2 + 2 x 16 x 9 + 2 + 2 x 157.
+        assert_eq!(cols.len(), 857);
         let names: std::collections::BTreeSet<&str> =
             cols.iter().map(|(n, _)| n.as_str()).collect();
         assert_eq!(names.len(), cols.len(), "every name once");
@@ -1241,6 +1250,9 @@ mod tests {
             "player.away.15.peak_mps",
             "player.home.00.sprint",
             "physical_overflow.away",
+            "shape.home.cb.depth_in_sum",
+            "shape.away.st.live_ticks",
+            "shape.away.links_total",
         ] {
             assert!(names.contains(name), "{name}");
         }

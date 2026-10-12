@@ -130,7 +130,7 @@ fn report(out: &Output, run: &Path) -> Value {
     RecordSchemas::load()
         .report(&report)
         .unwrap_or_else(|e| panic!("{e}\n{report}"));
-    assert_eq!(report["schema.version"], "7");
+    assert_eq!(report["schema.version"], "8");
     report
 }
 
@@ -159,8 +159,9 @@ fn line<'a>(text: &'a str, band: &str) -> &'a str {
         .unwrap_or_else(|| panic!("no table line for {band}: {text}"))
 }
 
-/// The shipped file's bands: the 18 that gate and the 35 that only report.
-const BANDS: u64 = 18 + 35;
+/// The shipped file's bands: the 18 that gate, the 35 that only report and the 101 team-shape
+/// bands, which only report too.
+const BANDS: u64 = 18 + 35 + 101;
 
 /// Bands with a pointer: the shipped file's, less the three engine experiments and the
 /// test's own band with no counterpart.

@@ -153,6 +153,34 @@ Each row has a word by the same rules as a gating band. A change run judges a re
 
 The reported bands never move the joint word, its threshold, `calib.pass` or the exit code. Read a `fail` there as a gap between the engine and real football to look into, not as a broken change.
 
+## Read the team-shape bands and the figures
+
+A build with the measures also reports how the teams move. These bands only report and never block a change:
+
+- Shape, per position group (`cb`, `fb`, `cm`, `w`, `st`): how far behind the ball each group stands with and without the ball (`cb_depth_in`, `cb_depth_out`), and how wide it stands with the ball on its own side and on the other (`cb_width_near_in`, `cb_width_far_out`).
+- Pace, per group: the share of open play spent standing, walking, jogging, running, at high speed and sprinting (`cb_pace_walk_share`), and the mean speed with the ball on the player's side and on the other (`cb_speed_near`).
+- Sprints, per group: runs over 7 m/s for at least 1 s, forward, back and lateral, per minute of ball in play (`st_sprints_fwd_per_min`).
+- The team: how its block slides with the ball up the pitch and across it, with and without the ball (`slide_up_in`, `slide_across_out`); how far a player 30 to 45 m, or more than 45 m, from the ball follows it over 1 s and 10 s (`far_gain_1s_30_45`); and the share of dead-ball time players spend under 2 m/s (`dead_ball_calm_share`).
+- Stoppages per match by kind (`stoppages_throw_in_per_match`) and the minutes of ball in play (`ball_in_play_minutes`).
+
+The reported table groups them by `group` (`shape_cb`, `shape_slide`, `shape_stoppages`, and so on). Each real value comes from `shape3_real.json` in the real-data folder: one value per real match from 7 tracked Bundesliga and 2. Bundesliga matches. With 7 matches the real sample is under the bands' floor of 30, so the bands would only report even with `gates: true`. A checkout without that file reads `no real data here` for them.
+
+The slide up the pitch reads low while the off-ball stands are off, because players then hold their formation places. To see the band with them on, pair the run with the stands flag:
+
+```bash
+target/release/engine-cli calibrate --suite equal --seed 42 --matches 200 --pair team_stands
+```
+
+The figures follow the reported table:
+
+```text
+figures (beside an earlier build; never judged):
+figure                       suite           value        se      today     change  build
+top_two_receiver_share       equal          0.4711   0.01795      0.414     0.0571  6aa7e09
+```
+
+A figure is a number with no real range to judge it by: the share of completed links between each side's two most-linked players, the share with a full-back or centre-back in them, and the engine's passes per team. `today` is the value an earlier build gave, and `change` is this run's value minus it. A figure has no word and never moves a verdict; `calib.figures` in `report.json` holds the same rows. A build without the measures shows the two link figures with no value.
+
 ## Read a distribution band
 
 Six reported bands judge a whole distribution: goals per match, the scoreline table, passes per team, and in a measures build shot distance and possession chains in passes and in seconds. Their rows read differently:
@@ -354,7 +382,8 @@ Each match's row then holds, per side:
 - the goals by phase: open play, or the corner, free kick, penalty, throw-in, kick-off or goal kick that began the scoring side's possession;
 - the open-play ticks with the ball in each third, counted from the side's own goal line;
 - the possession chains, by length in passes and in 2-second bins of time;
-- each player's ticks on the pitch, metres covered, ball-in-play time in each speed zone (walk under 2 m/s, jog 2 to 4, run 4 to 5.5, high intensity 5.5 to 7, sprint 7 and over) and peak speed.
+- each player's ticks on the pitch, metres covered, ball-in-play time in each speed zone (walk under 2 m/s, jog 2 to 4, run 4 to 5.5, high intensity 5.5 to 7, sprint 7 and over) and peak speed;
+- the team-shape sums behind "Read the team-shape bands and the figures": depth, width, pace and sprints per position group, the slide, the far players' response, dead-ball calm, the stoppages by kind and the completed links (`docs/reference/data-files.md` lists them).
 
 The measures read the match and change nothing: a seed plays the same match with or without them, and `calib.results_digest` is the same. A build without the feature prints that it has no measures as the run starts, writes zeros in the measure columns, and judges the bands of the band file only. `calib.rows.measures` in `report.json` says which build ran.
 

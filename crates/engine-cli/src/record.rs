@@ -65,6 +65,33 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
     )?);
     let mut sink = FrameSink::new(recorder.clone(), keyframe_interval);
     let mut messages = recorder.clone();
+    // A measures build asked for the team shape follows it after each step through the
+    // drive's observer, as the match's own run calls a sink's step and stoppage hooks; it
+    // reads the match only.
+    #[cfg(feature = "measures")]
+    let shape = std::cell::RefCell::new(engine::measures::shape::ShapeSink::default());
+    #[cfg(feature = "measures")]
+    let follow = std::cell::RefCell::new(
+        |sim: &engine::Simulation, _: &[engine::EngineEvent], end: bool| {
+            use engine::TickSink;
+            if end {
+                return;
+            }
+            let mut s = shape.borrow_mut();
+            // The sink reads the match and keeps sums; it returns no error.
+            let _ = s.on_step(sim);
+            if let Some(stoppage) = sim.stoppage() {
+                let _ = s.on_stoppage(&stoppage, sim);
+            }
+        },
+    );
+    #[cfg(feature = "measures")]
+    let observe: Option<&crate::stream_run::Observe<'_>> = opts
+        .shape_out
+        .as_ref()
+        .map(|_| &follow as &crate::stream_run::Observe<'_>);
+    #[cfg(not(feature = "measures"))]
+    let observe = None;
 
     // The hello is the fixture's first frame, so a replay forwards the recorded match rather
     // than describing itself. Without it a fixture carries no team name, no kit colour, and
@@ -109,7 +136,7 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
             inbox: None,
             page_changes: None,
             planned: &planned,
-            observe: None,
+            observe,
             matchday: None,
         },
         &mut |message: ServerMessage| {
@@ -119,6 +146,10 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
         },
     )?;
 
+    #[cfg(feature = "measures")]
+    if let Some(path) = &opts.shape_out {
+        write_shape(path, opts.seed, &shape.into_inner().finish())?;
+    }
     drop(sink);
     drop(messages);
     let outcome = outcome_of(&sim);
@@ -138,6 +169,30 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
         })
     );
     Ok(if driven.full_time { 0 } else { 2 })
+}
+
+/// Writes a match's team-shape sums as JSON: the seed, then each side's sums by name.
+#[cfg(feature = "measures")]
+fn write_shape(
+    path: &Path,
+    seed: u64,
+    shape: &engine::measures::shape::ShapeValues,
+) -> anyhow::Result<()> {
+    let side = |s: usize| -> serde_json::Map<String, serde_json::Value> {
+        shape[s]
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                (
+                    crate::measure_rows::shape_name(i),
+                    serde_json::Value::from(*v),
+                )
+            })
+            .collect()
+    };
+    let doc = serde_json::json!({"seed": seed, "home": side(0), "away": side(1)});
+    std::fs::write(path, serde_json::to_vec_pretty(&doc)?)
+        .with_context(|| format!("cannot write {}", path.display()))
 }
 
 /// One change of a change file, queued before the step that starts on its tick.

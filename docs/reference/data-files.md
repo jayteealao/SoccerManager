@@ -24,12 +24,12 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `restart-waits.json` | 1 | The restart wait table: for each kind of restart, the drawn extra wait beyond the visible steps, as 21 quantiles from real restart waits, the limit on the visible steps, the late-lead factor and the quick-restart rule. Optional: content without it plays the fixed `restart_delay_s` delays. Part of the content hash when present; written by `engine-cli restart-waits`, never by hand |
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
 | `commentary/en.json` | 1 | The English commentary lines, grouped by event kind and match situation |
-| `realism-bands.json` | 4 | The band registry: every realism band the calibration run judges, with its measure, design range, smallest shift, and its record (where its real value is measured, the evidence label, the confidence counts, the condition, and whether it gates). Versions 3 and 2 still load. They are acceptance criteria, never tuning values |
+| `realism-bands.json` | 5 | The band registry: every realism band the calibration run judges, with its measure, design range, smallest shift, and its record (where its real value is measured, the evidence label, the confidence counts, the condition, and whether it gates), and the figures it reports beside an earlier build's value. Versions 4, 3 and 2 still load. They are acceptance criteria, never tuning values |
 | `fast-model.json` | 3 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
 | `sensitivity.json` | 1 | The sensitivity rules: one rule per attribute job and per body job, the thresholds they are judged by, the size of a run, and the five-match rule. Only the sensitivity run and the rules stage of a change run read it; the content hash does not |
 | `gate-proof.json` | 1 | The gate proof: the broken copies of the engine that `engine-cli calibrate proof` plays, and the pass and fail rates of the last proof with the gate it measured. No match reads it; neither the content hash nor the old engine's cache key includes it |
 
-Every file starts with `"schema_version"`. A file with another version is refused, except `realism-bands.json`, which also reads versions 3 and 2: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files are read in version 3 and in versions 2 and 1, and `tactics.json` in version 2 and in version 1; an older version converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 5 and in versions 4, 3, 2 and 1, and `tuning.json` in versions 5, 4, 3 and 2; an older version converts on load with the contract tables of the build that introduced it, copies compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. A version 2 tuning file converts through version 3; a version 3 file gains the state caps, the body jobs, `fatigue.group_weights` and `fatigue.sprint_cap` from the second copy; a version 4 file gains `engine.contract.consistency`, `hidden`, `match_rating` and `generator.world.hidden` from the third copy. A version 1 to 4 attribute file converts to version 5 the same way (see [Version 4 files](#version-4-files) and [Version 2 files](#version-2-files)). Any other version is refused the same way.
+Every file starts with `"schema_version"`. A file with another version is refused, except `realism-bands.json`, which also reads versions 4, 3 and 2: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files are read in version 3 and in versions 2 and 1, and `tactics.json` in version 2 and in version 1; an older version converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 5 and in versions 4, 3, 2 and 1, and `tuning.json` in versions 5, 4, 3 and 2; an older version converts on load with the contract tables of the build that introduced it, copies compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. A version 2 tuning file converts through version 3; a version 3 file gains the state caps, the body jobs, `fatigue.group_weights` and `fatigue.sprint_cap` from the second copy; a version 4 file gains `engine.contract.consistency`, `hidden`, `match_rating` and `generator.world.hidden` from the third copy. A version 1 to 4 attribute file converts to version 5 the same way (see [Version 4 files](#version-4-files) and [Version 2 files](#version-2-files)). Any other version is refused the same way.
 
 ## attributes.json
 
@@ -514,12 +514,13 @@ The band registry: every realism band the calibration run judges. The bands are 
 
 | Field | Holds |
 |---|---|
-| `schema_version` | 4 |
+| `schema_version` | 5 |
 | `sample_size` | the match count the time budget is set for: 1000 |
 | `wall_minutes_per_sample` | the time budget of a suite of `sample_size` matches, in minutes; each suite's `wall_ms` check scales it to the run's match count |
 | `stronger_team.attribute_boost` | the factor the strength suite raises every attribute of the stronger club by |
 | `generalisation_floor` | the least competitions times seasons a band with a real counterpart needs to gate: 2. A band under it only reports |
 | `bands` | the bands, in the order the run shows them |
+| `figures` | optional: the figures, each reported beside the value an earlier build gave and never judged; see below |
 
 Each band:
 
@@ -578,6 +579,25 @@ A measure is one of ten kinds. Its fields come from a closed list. Each side has
 
 A build with the `measures` feature also gives each side the realism measures of the compact rows: `shot_distance_m` (summed over the side's shots), `pass_attempts.<cell>` and `pass_completed.<cell>` (by kind and length, such as `ground_lt10`, `ground_10_25`, `chip_gt25` and `cross_10_25`), `goals_phase.<phase>` (such as `open_play`, `corner`, `free_kick`, `penalty` and `throw_in`), `third_ticks.<third>` (`own`, `middle`, `final`), `chains`, `chain_passes`, `chain_seconds`, `players_used`, `minutes_on`, `distance_m`, `peak_mps` (summed over the players who played), and `zone_ticks.<zone>` (`walk`, `jog`, `run`, `hi`, `sprint`). A band that reads them takes only the matches whose rows carry them; a build without them gives such a band no value.
 
+The same build gives each side the team-shape sums, named `shape.<sum>.{side}`. A sample is an open-play tick with a team in possession. Positions are read five times a second and speeds every tick; a player's speed is the distance he covered over the last 0.32 s. The outfield players fall in five groups by the position of their slot: `cb`, `fb` (left and right backs), `cm` (holding, central and attacking midfielders), `w` (wingers) and `st`. Each group has:
+
+- `<group>.depth_in_sum` and `<group>.depth_in_n`, and the same with `out`: the summed metres each player stands behind the ball in his attacking direction, with his side on the ball (`in`) and without it (`out`), and the samples;
+- `<group>.width_<flank>_<phase>_sum` and `_n`, for flank `near` and `far` and phase `in` and `out`: the metres from the long axis while the ball is more than 5 m to the player's own side of it (`near`) or to the other side (`far`), his side read from where he stood over the half;
+- `<group>.pace_<level>`, for `stand` (under 0.2 m/s), `walk` (to 2), `jog` (to 4), `run` (to 5.5), `hs` (to 7) and `sprint`: the open-play ticks at each speed, and `<group>.live_ticks`, all of them;
+- `<group>.speed_near_sum`, `_n`, and the same with `far`: the summed speed while the ball is on his side or the other;
+- `<group>.sprints_fwd`, `_back` and `_lat`: the runs over 7 m/s for at least 1 s, forward or back by more than 3 m, or neither;
+- `<group>.live_min`: `live_ticks` in minutes of one player.
+
+Each side also has:
+
+- `slide_x_in_sxy` and `slide_x_in_sxx`, and the same for `y` and `out`: per match, the summed products of the outfield centre's and the ball's offsets from their match means, along the pitch (`x`) or across it (`y`). Their ratio is the slope of the team's slide with the ball.
+- `far_1s_30_45_pq` and `_qq`, and the same for `10s` and `gt45`: the summed products of a player's and the ball's moves over 1 s or 10 s, for players 30 to 45 m or over 45 m from the ball. Their ratio is how far a far player follows the ball.
+- `dead_ticks` and `calm_ticks`: the outfield ticks with the ball dead, and those of them under 2 m/s.
+- `stops_<kind>` for `throw_in`, `free_kick`, `goal_kick`, `corner`, `kick_off` (after a goal) and `penalty`.
+- `links_total`, `links_top2` and `links_back`. A completed link is control passing to a team-mate in play within 5 s, with no dead ball between. The fields count all links, the links between the side's two players who received most, and the links a full-back or centre-back gave or received.
+
+Each match also has `ball_in_play_min`.
+
 - `{"kind": "mean", "per": "match", "of": [...]}`: the mean over matches of the sum of the fields, such as goals per match. With `"per": "team"` and `{side}` fields, the mean over each team of each match.
 - `{"kind": "share", "of": [...], "op": ">=", "value": 10}`: the share of matches whose sum of the fields holds against the value; `op` is `>=`, `==`, or `<=`.
 - `{"kind": "ratio", "num": [...], "den": [...]}`: the sum of the numerator fields over the sum of the denominator fields, pooled over the matches.
@@ -592,6 +612,10 @@ A build with the `measures` feature also gives each side the realism measures of
 A whole-distribution band's design range runs from 0 to its margin. It is an equivalence test: both samples are resampled by whole match, 1,999 times; it passes when the 97th percentile of the resampled distance (`upper`) is within the margin, fails when the 3rd percentile is beyond it, and is not sure otherwise. Its noise floor (`noise_floor`) is the 97th percentile of the centred resampled distance; a margin at or under it reads not sure with "margin below noise floor". A distribution with an unknown source, a `width` not above 0, fewer than 2 bins, or a measures source with other bins than the rows', and cells with `max` outside 1 to 20, are refused by name.
 
 A field outside the list, a measure without fields, a range with `hi` below `lo`, a `smallest_shift` that is not above 0, an unknown suite, and a band name used twice are refused, and the message names the band and the field, for example `content refused: realism bands realism-bands.json: bands[0] (goals_per_match).design.hi: hi 2 is below lo 2.4`. A band without one of `design.lo`, `design.hi`, `design.smallest_shift`, `real.source`, `real.sample`, `real.date`, `evidence`, `confidence.measurement`, `confidence.generalisation`, `condition` and `gates` is refused by name, for example `bands[11] (corners_per_team).gates: is required`; so are a source that holds both `none` and a pointer, a pointer without `dataset`, `file` and `key`, a blank reason, a pointer with `real.sample` 0, a band with no counterpart and a sample above 0 or a `real.floor`, an `evidence` other than the two words, and `max_from_dry` on a `dry` band.
+
+The figures report what no real value sets a range for. Each has `figure` (its name, unique among the figures), `suites`, a `measure` of the kinds above, and `today`: the `value` an earlier build gave, the `build` (a commit) and the `source` (how it was measured, in words). The report shows each figure's value, its standard error, the earlier value and the change, in a table of its own and in `calib.figures`; a figure has no range and no word, and never moves a verdict. A build without the measures shows a figure that reads them with no value.
+
+A file of version 4 is a version 5 file without figures, and loads as it is; a version 4 file with figures is refused by name.
 
 A file of version 3, with the range flat on each band and no record, still loads: in memory each band gates, its condition is `dry`, and it has no real record, so the report counts it as without a real value (`no real record`). Its bands judge as the version 4 file's: the digests hash only what decides a verdict. A file of version 2, with one fixed field per band, migrates through version 3, with each band's smallest shift a quarter of its range. The report's `calib.registry.migrated_from` says `3` or `2`. The file is not rewritten. A file of version 1 is refused.
 

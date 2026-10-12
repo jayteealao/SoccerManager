@@ -149,3 +149,95 @@ fn the_measures_change_no_tick_and_add_up_to_the_summary() {
         "seeds 1 to 4 score, so goal phases are exercised"
     );
 }
+
+/// The team-shape figures read the match and write nothing: driven beside a match, every
+/// tick's state digest and every event equal those of the same seed without them; and their
+/// counts add up.
+#[test]
+fn the_shape_figures_change_no_tick_and_add_up() {
+    use engine::TickSink;
+    use engine::measures::shape::{GROUPS, ShapeSink, field_names};
+    let names = field_names();
+    let at = |name: &str| names.iter().position(|n| n == name).unwrap();
+    for seed in [1, 2] {
+        let off = play(seed, false);
+        let content = common::content();
+        let [a, b] = common::default_teams(&content);
+        let config = engine::MatchConfig::new(seed, 90, &content, [&a, &b]).unwrap();
+        let mut sim = Simulation::new(config).unwrap();
+        let mut shape = ShapeSink::default();
+        let mut writer = StateWriter::new(false);
+        let (mut digests, mut events) = (Vec::<[u8; 32]>::new(), Vec::new());
+        let mut stoppages = 0.0;
+        while !sim.is_over() {
+            sim.step();
+            shape.on_step(&sim).unwrap();
+            if let Some(stoppage) = sim.stoppage() {
+                stoppages += 1.0;
+                shape.on_stoppage(&stoppage, &sim).unwrap();
+            }
+            if sim.is_over() {
+                sim.finish();
+            }
+            let tick_events = sim.take_events();
+            digests.push(Sha256::digest(writer.tick(&sim, &tick_events)).into());
+            events.extend(tick_events);
+        }
+        assert!(
+            off.digests == digests,
+            "seed {seed}: a tick differs with the shape figures on"
+        );
+        assert_eq!(off.events, events, "seed {seed}: events");
+        let summary = sim.summary();
+        let v = shape.finish();
+        let mut stops = 0.0;
+        for (t, v) in v.iter().enumerate() {
+            let ctx = format!("seed {seed} side {t}");
+            let mut live = 0.0;
+            for g in GROUPS {
+                let ticks = v[at(&format!("{g}.live_ticks"))];
+                let paced: f64 = ["stand", "walk", "jog", "run", "hs", "sprint"]
+                    .iter()
+                    .map(|p| v[at(&format!("{g}.pace_{p}"))])
+                    .sum();
+                assert_eq!(paced, ticks, "{ctx} {g}: every live sample has one pace");
+                live += ticks;
+            }
+            // Ten outfield players at most, on the live ticks.
+            assert!(live > 0.0, "{ctx}: no live sample");
+            assert!(
+                live <= 10.0 * f64::from(summary.live_ticks),
+                "{ctx}: {live} samples"
+            );
+            assert!(v[at("calm_ticks")] <= v[at("dead_ticks")], "{ctx}: calm");
+            assert!(v[at("dead_ticks")] > 0.0, "{ctx}: no dead sample");
+            let total = v[at("links_total")];
+            assert!(total > 0.0, "{ctx}: no link");
+            assert!(v[at("links_top2")] <= total, "{ctx}: top two");
+            assert!(v[at("links_back")] <= total, "{ctx}: back line");
+            for k in [
+                "throw_in",
+                "free_kick",
+                "goal_kick",
+                "corner",
+                "kick_off",
+                "penalty",
+            ] {
+                stops += v[at(&format!("stops_{k}"))];
+            }
+            // The restarts the summary counts, by kind.
+            for (k, n) in [
+                ("throw_in", summary.throw_ins[t]),
+                ("goal_kick", summary.goal_kicks[t]),
+                ("corner", summary.corners[t]),
+                ("free_kick", summary.free_kicks[t]),
+            ] {
+                assert_eq!(v[at(&format!("stops_{k}"))], f64::from(n), "{ctx}: {k}");
+            }
+        }
+        assert!(
+            stops > 0.0 && stops <= stoppages,
+            "seed {seed}: {stops} of {stoppages} stops"
+        );
+    }
+}
