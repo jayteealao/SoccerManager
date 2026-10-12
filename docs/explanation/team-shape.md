@@ -1,0 +1,115 @@
+# How a team keeps its shape
+
+This page explains how the engine decides where each player stands and how fast he moves there, how restarts take their time, and how the AI manager chooses its style, lineup and bench. It is for people who maintain the engine. The values these mechanisms read live in the content files: see [the data-file reference](../reference/data-files.md) for each field. To measure the result against real matches, see [Measure a tuning change](../how-to/calibration.md#read-the-team-shape-bands-and-the-figures).
+
+## Two phases and the loose ball
+
+Each team is in one of two phases: in possession or out of possession. A team changes phase only when a player of the other team controls the ball. A loose ball, a deflection and a pass in flight keep each team in its last phase.
+
+Before this rule, a loose ball and every pass in flight counted as out of possession for both teams. So during every pass both teams took their defensive shape, and the passing team's players ran back for a moment before running forward again. With the phase held until a real change of control, a team that passes keeps its attacking shape until it loses the ball.
+
+## Where a player stands
+
+A player's place comes from his formation slot, scaled to the ground. Three things move him from the slot:
+
+1. **His role and duty.** Each role holds an offset per phase, and each duty moves the player up or back.
+2. **The stand table.** Each position has a stand per phase: an offset from its formation slot, never from the ball. The table was seeded from real per-position figures. It is switched off by default (see [The stands are off](#the-stands-are-off)).
+3. **The block law.** The whole block then moves with the ball: up and down the pitch, and across it. Players far from the ball follow late, by a delay that grows with their distance from the ball.
+
+Nothing in the content sets a gap between the lines or the share of the slide a player follows. The gaps and the team's width come from where each role stands and how the block moves. The content loader refuses a field that would set such a target, because a target gap would make the shape figures pass by construction instead of by play.
+
+### Stand options
+
+Each role carries a short menu of stand options for each phase: drop short, widen, move into the half-space, overlap, or underlap. A player takes the first option on his menu whose condition holds, read from the ball, the carrier and where his team-mates stand. For example, a centre-back widens while his keeper has the ball, and a midfielder drops when the carrier is well behind him and nobody stands in the space.
+
+No option names a partner. Whether a winger goes wide while his full-back underlaps comes from both players' menus and the situation, not from a fixed pair.
+
+### Rest defence
+
+While a team has the ball, a minimum number of outfield players stays goal-side of the ball. The minimum comes from the mentality: a defensive mentality keeps more players back than an attacking one. The rule works in four layers:
+
+1. The duties decide who goes forward and who stays by default.
+2. If fewer than the minimum stay, the players with the most defensive duty and the least far forward are held back.
+3. Above the minimum, a player with a support or defend duty goes forward only when a team-mate covers his lane behind him.
+4. When a full-back goes forward, a team-mate who would also go stays to cover him, if the two know each other well enough (their familiarity).
+
+The keeper never counts toward the minimum, and the minimum never exceeds the outfield players less one, so a team with a player sent off still has players to attack with.
+
+## How fast a player moves
+
+Every movement target carries an urgency grade:
+
+- **Urgent**: a press, a recovery run when the cover goal-side is missing, a timed run, and a loose ball the player reaches first.
+- **Normal**: a return to shape from far away, offering a pass, and following the slide.
+- **Calm**: a player in shape far from the ball, and a player with no job at a dead ball.
+
+A pace selector turns the grade into one of six pace levels, as real tracking data reports them: stand, walk, jog, run, high speed and sprint. A sprint is capped by the player's own top speed. Steering then moves the player at the chosen speed, not at his top speed.
+
+The player's attributes and state change the choice:
+
+- **Work rate** sets how often an urgent job gets a sprint, not how fast he walks or jogs. Two players with the same job therefore move differently.
+- **Determination and professionalism** set how a tired player saves energy: a player high in both keeps his urgent sprints and slows a step on normal jobs, while a player low in both skips the less urgent sprints first.
+- **Instructions and the game state** move a grade by one step: a high press or a faster tempo raises pressing and support jobs, and a team trailing late raises them too. A team that leads late and wastes time lowers its normal jobs one step, but only while the ball is dead. In open play both teams keep their normal grades, and an urgent job never drops below urgent.
+
+Before the selector, every player ran to every target at full speed. Matches looked frantic, every player moved alike, and players ran out of energy far too early. The selector brings the sprint and high-speed counts per minute of ball in play toward the real figures, and lets a tired side show it.
+
+## Restarts and the walk-on
+
+When the ball leaves play, it waits where it went out for a drawn time, the time it takes to fetch it, and then appears at the restart spot. The tick the ball appears is marked as the restart, so the rule checker still finds the ball at the right spot.
+
+A stoppage lasts as long as its visible steps take on the pitch, plus a drawn extra:
+
+- **The visible steps.** The taker walks to the ball, the players the law moves walk away from it, and a wall forms. Players with no job at the restart stand or walk.
+- **The drawn extra.** The unseen part, such as fetching the ball or a referee's word. It is drawn from the restart wait table (`restart-waits.json`). A script writes the table from real dead-ball spells less the engine's own measured visible steps. Ball-in-play time is never an input: the minutes of ball in play follow from play.
+
+A team that leads late takes longer over its restarts, and time wasting lengthens the same drawn part. A taker may still restart quickly, with no drawn extra, when a team-mate is free and the opponents are out of shape. This happens more often when his team trails, and never for a team that wastes time. A restart that never gets ready is taken at a hard limit and logged.
+
+Before each half, the players walk from the touchline to their kick-off places. The replay shows the walk-on, but it is not match time: the clock and the ball-in-play figure start at the first kick. Players no longer jump to their places at kick-off.
+
+## The defensive jobs
+
+Pressing, holding position and defensive movement read the attributes the design decided:
+
+- **Pressing.** Positioning leads how well a player presses, with anticipation and decisions as the shown supports and vision as a small weight. Work rate still sets how much he presses: how many players press and how far they go.
+- **Holding position.** Teamwork leads, with concentration, the player's familiarity with the tactic, and consistency as supports. It acts for every player in both phases.
+- **Covering and recovering.** Covering a team-mate and stepping up or dropping with the line read positioning first, with anticipation and concentration. Recovery runs, how often and how hard, read work rate first, with pace and acceleration.
+
+[The player contract](player-contract.md) lists the stages and their weights.
+
+## Counts are never set
+
+No mechanism here sets a count or a gap that a realism band then measures. Stoppage counts come from how often the ball leaves play. The line gaps and the width come from where each role stands. The slide comes from the block law, and only the far-player delay is tuned against the slide band. The bands check the result against real matches; they never feed back into play. A band that misses its real value therefore points at a mechanism to fix, not at a number to set.
+
+## The stands are off
+
+The stand table moved the back line toward the real phase shapes. But it was seeded as if the ball always sat on the halfway line. Out of possession it lifted the back line far up the pitch and opened the space behind it, and shots per team rose far above the real range.
+
+The table therefore sits behind the tuning flag `team_stands`, off by default. Off, every stand reads 0: each player stands on his formation slot plus his role's offset. The table is still loaded and checked, and the tests that need it turn the flag on. The per-phase depth and width bands, and the slide band, only report while the stands are off, because they measure the block the stands set.
+
+The stands come back with the later work on off-ball decisions: the table is seeded again from the engine's own measured positions, with a block depth that depends on where the ball is, and the flag goes on once the core realism bands hold with it.
+
+## Styles and the AI manager's pick
+
+`content/styles.json` holds eight named styles: possession, low block, high press, counter-attack, direct, wing play, gegenpress and park the bus. A style sets a mentality, the team instruction levels, duty hints by position, and a list of formations that suit it. It also names two or three statistics that should show it, each with a direction: a possession side should have more of the ball, a low block should concede less expected goals.
+
+### The staff advice
+
+Before each match, an AI manager asks for a fit estimate of each style for its squad. For each style, the advice picks the lineup the AI would field in each of the style's formations, keeps the formation with the best summed rating, and weighs those players' attributes by the style's key jobs: pressing for a high press, holding position for a low block, passing and touch for possession. The estimate is taken relative to the same players' general level, so a strong squad does not simply pick the most demanding style. The advice adds a noisy error to each estimate, drawn from a random generator of its own, seeded from the match seed, the side and the club. It reads no match random stream, so the advice changes no other draw.
+
+The AI starts the match in the style with the best estimate. The estimate itself lives only inside that choice: no player, team or match state keeps it, and play never reads it. A test plays two matches whose estimates differ but whose tactics are set by hand, and they are identical tick for tick. This keeps the rule that a squad's fit has no number of its own: a slow, tired squad presses badly because its players are slow and tired, not because a fit number says so.
+
+A side that a person manages keeps the default tactics as its starting point; a person does not see the advice. The pick sits behind the tuning flag `ai_style_pick`, on by default.
+
+### The lineup and the bench
+
+The AI picks its starters for the chosen formation by each player's rating at each slot's position, not by the position listed in the squad. A listed player keeps his slot unless another player is clearly better there: the listed player gets a margin (`ai.out_of_position_margin` in `tactics.json`). The pick fills slots from the best player-and-slot pairs first, then swaps pairs of players when a swap raises the summed rating.
+
+The bench is picked as cover: a spare goalkeeper, then at least one player for each line (defence, midfield and attack), then a full-back and a winger when the squad has a spare, then the positions the formation uses most. A substitute is the bench player with the best rating at the slot. The number and the timing of substitutions do not change: only who comes on.
+
+With the shipped squads, which hold one spare per central position, some substitutions still put a player out of position: no bench of seven can cover every slot twice.
+
+### The styles suite
+
+`engine-cli calibrate --suite styles` plays every ordered pairing of two different styles, with the same squad on both sides, and a formation drawn from each style's list. It reports each style's points per match, the styles it loses to clearly, and a dominance flag: a style with no clear loss, or with more than a fifth of all points, would be a style with no weakness. It also flags an identity statistic that a style does not move in its direction. Every change run plays a small sample, one match per ordered pairing, and reports it beside the verdict; the suite judges no band. See [Run the styles suite](../how-to/calibration.md#run-the-styles-suite).
+
+The suite tests presets only. The AI does not yet adapt during a match or remember which styles worked; that comes with later work on the AI manager.

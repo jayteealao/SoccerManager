@@ -862,10 +862,15 @@ pub struct CalibrateOpts {
         default_value = "all",
         hide_possible_values = true,
         long_help = "Suites to run: equal strength, a stronger club, every formation\n\
-                     pairing, all three, or the sending-off experiment.\n\n\
-                     Values: all, equal, strength, formations, red-card.\n\
+                     pairing, all three, the sending-off experiment, or the named\n\
+                     styles.\n\n\
+                     Values: all, equal, strength, formations, red-card, styles.\n\
                      red-card is not part of all: it plays the default clubs\n\
-                     with cards off and an away player sent off at kick-off."
+                     with cards off and an away player sent off at kick-off.\n\
+                     styles is not part of all: it plays --matches matches for\n\
+                     each of the 56 ordered pairings of the eight styles, with\n\
+                     identical squads, and reports points, the dominance check\n\
+                     and the identity flags; it judges no band."
     )]
     pub suite: SuiteArg,
     /// Play only this formation pairing; repeatable.
@@ -1083,6 +1088,7 @@ pub enum SuiteArg {
     Strength,
     Formations,
     RedCard,
+    Styles,
 }
 
 /// Which event files a calibration run keeps.

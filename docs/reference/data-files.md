@@ -22,6 +22,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `tactics.json` | 1 | Ten formations, mentalities, team instructions, roles, duties, and the AI manager's settings |
 | `traits.json` | 1 | The trait catalogue: the 31 traits of play a player may carry, each with the engine choice it acts on and, for nine pairs, its opposite. Part of the content hash; a team file naming a trait it does not hold, or two opposites on one player, is refused |
 | `restart-waits.json` | 1 | The restart wait table: for each kind of restart, the drawn extra wait beyond the visible steps, as 21 quantiles from real restart waits, the limit on the visible steps, the late-lead factor and the quick-restart rule. Optional: content without it plays the fixed `restart_delay_s` delays. Part of the content hash when present; written by `engine-cli restart-waits`, never by hand |
+| `styles.json` | 1 | The eight named styles: each with a mentality, instruction levels, duty hints, the formations that suit it, the statistics that show it, and the attributes its key jobs read. Optional: content without it keeps the AI manager on the tactics file's default setup and cannot play the styles suite. Part of the content hash when present |
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
 | `commentary/en.json` | 1 | The English commentary lines, grouped by event kind and match situation |
 | `realism-bands.json` | 5 | The band registry: every realism band the calibration run judges, with its measure, design range, smallest shift, and its record (where its real value is measured, the evidence label, the confidence counts, the condition, and whether it gates), and the figures it reports beside an earlier build's value. Versions 4, 3 and 2 still load. They are acceptance criteria, never tuning values |
@@ -472,7 +473,7 @@ carries a 47-byte delta.
 
 ### flags
 
-Feature flags switch between the current model and a candidate, so that a paired calibration run can compare the two. The block is optional; the shipped file declares one flag, `team_stands`, which engine code reads (see below).
+Feature flags switch between the current model and a candidate, so that a paired calibration run can compare the two. The block is optional; the shipped file declares two flags, `team_stands` and `ai_style_pick`, which engine code reads (see below).
 
 ```json
 "flags": {
@@ -505,6 +506,8 @@ Rules:
 - When a flag state differs from the file's, the list of flags that are on enters the content hash. A snapshot of a flagged match does not resume on content without the flag.
 
 `team_stands` (off in the shipped file) switches the tactics file's `stands` table. Off, every stand reads 0: each player stands on his formation slot plus his role's offset in both phases, and the table is still loaded and checked. On, the table applies. The table was seeded as if the ball sat on the halfway line, so out of possession it lifts the back line 6 to 11 m and opens the space behind it; it stays off until it is seeded again from the engine's own positions with a block depth that reads the ball. Turn it on for one calibration run with `calibrate --flag team_stands=on`, or set its `state` to `on` in the file.
+
+`ai_style_pick` (on in the shipped file) switches the AI manager's pick of a named style. On, and with a `styles.json` in the content, each AI-managed side starts a match in the style the staff advice rates best for its squad, with the lineup and bench picked for that style's formation ([styles.json](#stylesjson)). Off, an AI-managed side starts with the `ai` block's formation, mentality and duty. A side a person manages starts with the `ai` block's setup either way. Some style pairings play far outside the realism bands; the misses are recorded for the tuning work. Compare the two with `calibrate --pair ai_style_pick`.
 
 Every statistics record carries `tuning.flags_on`, the flags that were on. To compare a candidate and remove the loser, follow [the modding how-to](../how-to/modding.md#compare-two-models-with-a-flag).
 
@@ -900,6 +903,9 @@ The instructions are `pressing` (levels `{ "name", "press_count", "press_distanc
 | fatigue_energy, fatigue_from_minute | from this minute a player below this energy is replaced | 0.55, 55 |
 | keep_for_injury_until_minute | until this minute one substitution is kept back for an injury | 80 |
 | bench_size | substitutes named before kick-off, one a goalkeeper when the squad has one | 7 |
+| out_of_position_margin | rating points (0 to 10) added to a player's rating at a slot of the position he is listed at, when the AI picks its lineup: another player starts there only when his rating at the slot is higher by more than this. Optional; a version 1 file converts with 0 | 1.5 in the shipped file |
+
+The AI picks its starters by each player's rating at each slot's position (the team file's `positions`), plus the margin at his listed position: the best player-and-slot pairs first, a goalkeeper slot to a goalkeeper while one is free, then swaps of two players that raise the summed rating. The bench covers the goal, then each line (defence: CB, LB, RB; midfield: DM, CM, AM; attack: ST, LW, RW) with at least one player, then a full-back and a winger when the squad has a spare, then the positions the formation uses most. A substitute is the bench player with the best rating at the slot.
 
 A bad value is refused by field, and a role attribute the attribute schema does not hold is refused by name.
 
@@ -1000,6 +1006,49 @@ changes; never by hand.
 The draws come from two random streams of their own (`restart_wait` and `quick_restart`), so
 the table changes no other draw. A replay stores the file among its inputs (role
 `restart_waits`) and plays with it; a replay without it plays the fixed delays.
+
+## styles.json
+
+The named styles. An AI manager picks one before each match from the staff advice (see the `ai_style_pick` flag in [flags](#flags)), and the styles suite of `engine-cli calibrate` plays every ordered pairing of them ([the CLI reference](cli.md#calibrate)). The file is optional.
+
+```json
+{
+  "schema_version": 1,
+  "advice_noise": 0.5,
+  "styles": [
+    {
+      "name": "low_block",
+      "mentality": "cautious",
+      "instructions": { "pressing": "low", "line_height": "deep", "width": "narrow" },
+      "duties": { "CB": "defend", "DM": "defend" },
+      "formations": ["4-4-2", "4-1-4-1", "4-4-1-1"],
+      "identity": [
+        { "stat": "possession_pct", "direction": "down" },
+        { "stat": "xg", "direction": "down", "against": true }
+      ],
+      "fit": { "positioning": 0.40, "concentration": 0.25, "anticipation": 0.20, "teamwork": 0.15 }
+    }
+  ]
+}
+```
+
+| Field | Holds | Bound |
+|---|---|---|
+| schema_version | 1 | |
+| advice_noise | the spread of the advice's error on each style's estimate, on the 1 to 20 rating scale | 0 to 5 |
+| styles | the styles, in the order the report lists them | 1 to 16 |
+| styles.*.name | the style's name | 1 to 32 characters, unique |
+| styles.*.mentality | a mentality of `tactics.json` | |
+| styles.*.instructions | instruction name to level name, from `tactics.json`; an instruction left out keeps its default level | |
+| styles.*.duties | position code to duty name: the duty of each slot of that position; a position left out takes the `ai` block's duty | 1 to 10 entries |
+| styles.*.formations | formations of `tactics.json` that suit the style, in preference order | 1 to 16 |
+| styles.*.identity | the statistics that show the style: `stat` (one of `possession_pct`, `passes`, `pass_accuracy_pct`, `shots`, `shots_on_target_share`, `fouls`, `corners`, `goals`, `xg`), `direction` (`up` or `down`), and `against` (`true` reads the other side's figure) | 2 or 3 |
+| styles.*.fit | attribute name to weight: the attributes the style's key jobs read; each must be a visible technical, mental or physical attribute | 1 to 12 entries; each weight 0 to 1, sum above 0 |
+| styles.*.fit_positions | the outfield positions whose players the fit reads; every outfield position when absent | optional; not empty, no `GK` |
+
+The staff advice, for each style: the lineup the AI would field in each of its formations, the formation whose lineup has the best summed rating, and the weighted mean of the fit attributes over that lineup's players (of `fit_positions`) less the same players' mean over every visible outfield attribute, plus an error drawn with spread `advice_noise`. The draw comes from a generator of its own, seeded by SHA-256 over the match seed, the side, the club id and a label, so the advice reads no match random stream. The best estimate wins; nothing keeps the estimates.
+
+A file with an unknown formation, mentality, instruction, level, duty, position or attribute, an empty formation list, an identity list outside 2 to 3, an unknown identity statistic, a weight outside 0 to 1 or weights that sum to 0 is refused by field, for example `content refused: styles styles.json: styles[0].formations: 4-2-4 is not a formation`. A replay stores the file among its inputs (role `styles`) and plays with it.
 
 ## Generating clubs
 

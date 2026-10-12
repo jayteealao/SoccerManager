@@ -85,6 +85,9 @@ pub struct MatchInput<'a> {
     pub teams: &'a [TeamFile; 2],
     /// Each side's starting formation, in the formations suite.
     pub formations: Option<[u8; 2]>,
+    /// Each side's starting tactics, in the styles suite: its style in a formation of the
+    /// style's list.
+    pub tactics: Option<[Tactics; 2]>,
     /// The red-card suite: cards otherwise off, and the player sent off at kick-off.
     pub red_card: Option<Option<usize>>,
     pub key: FixtureKey,
@@ -117,6 +120,11 @@ pub fn play_match(
         for (team, formation) in sides.into_iter().enumerate() {
             let mut tactics = Tactics::defaults(&content.tactics);
             tactics.set_formation(formation, &content.tactics);
+            config = config.with_ai_tactics(team, tactics);
+        }
+    }
+    if let Some(sides) = m.tactics {
+        for (team, tactics) in sides.into_iter().enumerate() {
             config = config.with_ai_tactics(team, tactics);
         }
     }
@@ -396,6 +404,7 @@ mod tests {
                 commentary: &s.commentary,
                 teams,
                 formations,
+                tactics: None,
                 red_card,
                 key: FixtureKey::from_u64(seed),
                 seed,

@@ -216,6 +216,39 @@ field rating: 0 of 10 formations flagged (field rating above win rate by more th
 
 The rating never changes a band, the verdict, `calib.pass` or the exit code. Read a flag as a question about the formations, not as a failure. With few matches per pairing each share is 0, 0.5 or 1, and the equilibrium can jump from run to run: read a flag only from a run with many matches per pairing. A run that played only some pairings (`--pairing`), or in which a pairing finished no match, prints `formation field rating: needs every pairing (<k> of <n> played)` instead and writes no `calib.nash`.
 
+## Run the styles suite
+
+The styles suite plays the eight named styles of `content/styles.json` against each other: every ordered pairing of two different styles, with the same squad on both sides and a formation drawn from each style's list. It judges no band; it tells you whether a style dominates and whether each style shows its identity. Run it on demand, for example before a release or after a change to how instructions play:
+
+```bash
+target/release/engine-cli calibrate --suite styles --seed 42 --matches 50 --out runs/styles-42
+```
+
+`--matches` is per ordered pairing, so 50 plays 2,800 matches (56 pairings). It runs alone: it refuses `--base`, `--pair`, `--baseline`, `--band` and `--pairing`. The report goes to `runs/styles-42/report.json` under `calib.styles`, and standard error ends with the table:
+
+```text
+styles suite: 2800 of 2800 matches played, 50 per ordered pairing, 73 rule violations
+style            pts/match     se   share  clear losses
+possession           2.706  0.030   0.239  none  DOMINANT
+low_block            0.923  0.049   0.082  possession, high_press, gegenpress
+...
+dominant: possession
+identity flags: possession: possession_pct; possession: passes; ...
+```
+
+Read it this way:
+
+- `pts/match` is the style's points per match (3 for a win, 1 for a draw), with its standard error; `share` is its share of all the points of the suite. With eight styles an even share is 0.125.
+- `clear losses` names the styles it loses to clearly: over their matches in both home orders, the 95 percent interval of its points less the other's lies wholly below 0.
+- `DOMINANT` marks a style with no clear loss, or with more than 20 percent of all the points. Every style should have at least one clear weakness; a dominant style is a style the AI and the player could always pick.
+- `identity flags` lists each statistic a style names in `styles.json` that its sides do not move in its direction by more than 1.96 standard errors from the mean over every side, for example a possession style that does not have more of the ball. In `calib.styles.styles[].identity`, each row gives `style_mean`, `all_mean` and `se`, so you can see which way the statistic moved.
+- `calib.styles.pairings` gives each ordered pairing's points, goals and shots per match: look there for a pairing that plays far from a real match.
+- The rule violations count every rule the running checker found broken over the suite. A match the equal suite never plays, such as two pressing styles against each other, can show a fault there.
+
+A flag on a small run can be noise: read the flags from a run with at least 50 matches per ordered pairing, where every pair of styles has played 100 matches with each side at home 50 times.
+
+Every change run (`--base` or `--base-binary`) also plays a small sample: one match per ordered pairing, 56 matches, on the changed engine only, after its verdict. The same table prints on standard error, the report holds it under `calib.styles`, and `calib.stages.styles` gives its time. With one match per ordered pairing, a style shows a clear loss only when it loses both matches against another, so the sample flags styles as dominant by chance: read it for the pairings' goals and shots and the rule violations, not for the flags. The sample never changes the verdict.
+
 ## Accept a not-sure band
 
 A reported or gating band can stay `not sure` however many matches you play, for example a band whose real value is too uncertain to separate pass from fail. Once you have looked at it, accept it for this run:

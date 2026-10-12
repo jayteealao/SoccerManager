@@ -52,6 +52,7 @@ pub mod rules;
 pub mod run_folder;
 pub mod runner;
 pub mod stages;
+pub mod styles;
 pub mod worker;
 
 use std::collections::BTreeMap;
@@ -84,6 +85,9 @@ use fixtures::{FIXTURE_SCHEME, FixtureKey, Keyed};
 use rows::{Outcome, ROWS_FORMAT, Row, reason};
 use run_folder::{Opened, RunIdentity, TARGET_VERSION, Target};
 use stages::Stage;
+
+/// Matches per ordered pairing of styles in a change run's styles sample.
+pub const STYLES_SAMPLE: u32 = 1;
 
 /// Matches the single-thread benchmark times after its warm-up.
 const BENCH_MATCHES: u32 = 5;
@@ -135,6 +139,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         SuiteArg::Strength => vec![Suite::Strength],
         SuiteArg::Formations => vec![Suite::Formations],
         SuiteArg::RedCard => vec![Suite::RedCard],
+        SuiteArg::Styles => return styles_alone(&dir, opts, &loaded, &arms[0].1),
     };
     let formation_names: Vec<String> = loaded
         .content
@@ -560,6 +565,28 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         eprintln!("{}", rules::line(r));
     }
     ctx.write_target(&run_dir, change, pilot_used)?;
+    // A change run's styles sample: one match per ordered pairing on the changed engine, and
+    // never on the old one; report only.
+    let styles_sample = if change {
+        let content = loaded.content.with_flags(&arms[0].1)?;
+        let sample = styles::play(&styles::SuiteInput {
+            content: &content,
+            commentary: &loaded.commentary,
+            seed: opts.seed(),
+            matches: STYLES_SAMPLE,
+            minutes: opts.minutes,
+            jobs,
+            owner_id: &owner_id,
+        })?;
+        if let Some(s) = &sample {
+            if !quiet {
+                eprint!("{}", crate::report::styles::render(s));
+            }
+        }
+        sample
+    } else {
+        None
+    };
 
     let mut report = CalibrationReport {
         owner_id,
@@ -635,7 +662,18 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         realism,
         stages: stages::snapshot(run_started.elapsed()),
         rules,
+        styles: None,
     };
+    if let Some(sample) = styles_sample {
+        report.stages.insert(
+            "styles".to_string(),
+            crate::report::StageCost {
+                ms: sample.wall_ms,
+                peak_mb: None,
+            },
+        );
+        report.styles = Some(sample);
+    }
     if let Some(base) = &base {
         let diff = baseline::diff(base, &report.content_hash, &report.bands);
         eprint!("{}", baseline::render_table(&base.info, &diff));
@@ -672,6 +710,84 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         code,
     );
     Ok(code)
+}
+
+/// `--suite styles`: the styles suite alone, `--matches` matches per ordered pairing. It
+/// judges no band and keeps no rows: it writes its report to `report.json` in the run
+/// folder, prints the table, and exits 0.
+fn styles_alone(
+    dir: &ContentDir,
+    opts: &CalibrateOpts,
+    loaded: &crate::content::Loaded,
+    states: &FlagStates,
+) -> anyhow::Result<i32> {
+    if opts.base.is_some() || opts.base_binary.is_some() || opts.pair.is_some() {
+        anyhow::bail!(
+            "--suite styles runs alone: a change run (--base) already plays a styles sample, \
+             and a paired run compares bands, which the styles suite does not judge"
+        );
+    }
+    if opts.baseline.is_some() || !opts.bands.is_empty() || !opts.pairings.is_empty() {
+        anyhow::bail!("--suite styles takes no --baseline, --band or --pairing");
+    }
+    let content = loaded.content.with_flags(states)?;
+    if content.styles.is_none() {
+        anyhow::bail!(
+            "--suite styles: the content folder {} has no styles.json",
+            dir.root().display()
+        );
+    }
+    let data = data_dir();
+    let owner_id = load_or_create_owner_id(&data)?;
+    let millis = u64::try_from(unix_millis()).unwrap_or(u64::MAX);
+    let run_id = format!("styles-{:016x}-{millis}", opts.seed());
+    let run_dir = opts
+        .out
+        .clone()
+        .unwrap_or_else(|| data.join("runs").join(&run_id));
+    let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
+    let jobs = opts
+        .jobs
+        .unwrap_or(u32::try_from(cores).unwrap_or(u32::MAX))
+        .max(1);
+    let report = styles::play(&styles::SuiteInput {
+        content: &content,
+        commentary: &loaded.commentary,
+        seed: opts.seed(),
+        matches: opts.matches,
+        minutes: opts.minutes,
+        jobs,
+        owner_id: &owner_id,
+    })?
+    .context("the content has no styles")?;
+    eprint!("{}", crate::report::styles::render(&report));
+    let record = serde_json::json!({
+        "record.kind": "styles-report",
+        "operation": "calibrate",
+        "run.id": run_id,
+        "seed": opts.seed(),
+        "content.hash": hex12(&content.digest),
+        "calib.matches": opts.matches,
+        "calib.minutes": opts.minutes,
+        "calib.jobs": jobs,
+        "calib.styles": report,
+    });
+    std::fs::create_dir_all(&run_dir)
+        .with_context(|| format!("cannot create the run folder {}", run_dir.display()))?;
+    let line = serde_json::to_string(&record)?;
+    std::fs::write(run_dir.join("report.json"), format!("{line}\n"))
+        .with_context(|| format!("cannot write {}", run_dir.join("report.json").display()))?;
+    println!("{line}");
+    tracing::info!(
+        signal = "calibrate.styles",
+        run.id = %run_id,
+        matches = report.matches,
+        played = report.played,
+        dominant = report.dominant.len(),
+        identity_flags = report.identity_flags.len(),
+        violations = report.violations
+    );
+    Ok(0)
 }
 
 /// The identity of a run: what decides its results, so a run folder of the same identity

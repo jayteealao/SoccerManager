@@ -13,6 +13,7 @@ pub mod measures;
 pub mod nash;
 pub mod proof;
 pub mod real;
+pub mod styles;
 pub mod verdict;
 
 use std::collections::BTreeMap;
@@ -1174,6 +1175,10 @@ pub struct CalibrationReport {
     /// A change run's rules stage.
     #[serde(rename = "calib.rules", skip_serializing_if = "Option::is_none")]
     pub rules: Option<RulesReport>,
+    /// A change run's sample of the styles suite, one match per ordered pairing of styles on
+    /// the changed engine; report only. Absent in other runs and without a styles file.
+    #[serde(rename = "calib.styles", skip_serializing_if = "Option::is_none")]
+    pub styles: Option<styles::StylesReport>,
 }
 
 /// One figure's row: its value over a suite beside the value an earlier build gave.
@@ -1297,8 +1302,9 @@ pub struct RuleInterval {
 /// match counts (`calib.counts`), and how each verdict row was judged (`judged`, `note`,
 /// `accepted`); 6 since the whole-distribution bands (`upper` and `noise_floor` on a
 /// verdict row); 7 since the formation field rating (`calib.nash`); 8 since the registry's
-/// figures (`calib.figures`). Every key of an older version stays.
-pub const REPORT_SCHEMA_VERSION: &str = "8";
+/// figures (`calib.figures`); 9 since a change run's styles sample (`calib.styles`). Every
+/// key of an older version stays.
+pub const REPORT_SCHEMA_VERSION: &str = "9";
 
 /// The matches a run judged: every engine's rows, the fixtures both engines of a change run
 /// played, and the matches of each engine.
