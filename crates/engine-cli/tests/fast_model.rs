@@ -24,9 +24,11 @@ fn run(data: &Path, args: &[&str]) -> Output {
         .unwrap()
 }
 
-/// The small fit, played once per test binary: its folder and its report. Twenty minutes a
-/// match, so every side and pairing group has a corner to fit; in ten minutes some group can
-/// have none, and its count cannot be fitted.
+/// The small fit, played once per test binary: its folder and its report. Eight matches a
+/// pairing of twenty minutes, so every side and pairing group has a corner and the offsides
+/// spread enough to fit; in ten minutes some group can have no corner, and with four matches
+/// since the AI sides started in the style their staff picks the offsides counts can show no
+/// spread, and such a count cannot be fitted.
 fn small_fit() -> &'static (PathBuf, Value) {
     static FIT: OnceLock<(PathBuf, Value)> = OnceLock::new();
     FIT.get_or_init(|| {
@@ -39,7 +41,7 @@ fn small_fit() -> &'static (PathBuf, Value) {
                 "fast-model",
                 "fit",
                 "--matches",
-                "4",
+                "8",
                 "--draws",
                 "2",
                 "--minutes",
@@ -55,7 +57,7 @@ fn small_fit() -> &'static (PathBuf, Value) {
             ],
         );
         let stderr = String::from_utf8_lossy(&done.stderr);
-        // Four matches a pairing is too few for the check to mean anything: it may pass or
+        // Eight matches a pairing is too few for the check to mean anything: it may pass or
         // fail (exit 0 or 2), and the mechanics are what this test holds.
         assert!(
             matches!(done.status.code(), Some(0 | 2)),
@@ -99,7 +101,7 @@ fn a_small_fit_runs_and_records_the_golden_results_id() {
     );
     assert_eq!(report["fit"]["engine_id"], id);
     assert_eq!(report["fit"]["model"], "fitted-scores@1");
-    assert_eq!(report["fit"]["batch"]["matches_per_pairing"], 4);
+    assert_eq!(report["fit"]["batch"]["matches_per_pairing"], 8);
     assert_eq!(report["fit"]["check"]["figures"], 261);
     assert_eq!(report["fit"]["schema_version"], 3);
     assert!(report["fit"]["fit"]["params"]["tilt"].is_f64());

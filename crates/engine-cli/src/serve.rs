@@ -818,7 +818,7 @@ mod skip_equality {
 
     /// The knockout seed whose served match with the sample pack is level after extra time
     /// and goes to a shoot-out. `scan_for_the_shootout_seed` finds it again.
-    const SHOOTOUT_SEED: u64 = 1;
+    const SHOOTOUT_SEED: u64 = 0;
 
     /// The tick the knockout match marks a watchdog hit on, in every run.
     const WATCHDOG_AT: u32 = 60_000;

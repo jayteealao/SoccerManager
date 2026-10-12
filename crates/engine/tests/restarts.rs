@@ -178,7 +178,9 @@ fn every_stoppage_lasts_its_visible_steps_plus_its_drawn_extra() {
                 (Some(d), None) => {
                     open = None;
                     let taken = sim.tick();
-                    if taken >= d.hard_limit() || breaks {
+                    // A stoppage the half or the match ends was never taken: the full-time
+                    // event of a match that ends at a dead ball comes when it finishes.
+                    if taken >= d.hard_limit() || breaks || sim.is_over() {
                         continue;
                     }
                     let steps = if d.ready_at == DeadBall::UNSET {
