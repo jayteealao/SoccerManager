@@ -1,9 +1,11 @@
 //! The tick-stream validator: pitch bounds, player separation, ball speed, player speed,
 //! formation anchor tolerance in open play, and the ball's place at a restart. The anchor rule
 //! flags a player that is far from the ball, far from its anchor, and closing on neither for
-//! the grace period (idle drift); while the ball waits where it left play before it appears at
-//! a restart spot, the spot stands for the ball. A sent-off or injured player at its parking
-//! spot beside the pitch is exempt from every player rule. The player-speed rule limits each
+//! the grace period (idle drift); a player who moves toward where the ball was on the previous
+//! record is closing on it, however fast the ball runs away from him; while the ball waits
+//! where it left play before it appears at a restart spot, the spot stands for the ball. A
+//! sent-off or injured player at its parking spot beside the pitch is exempt from every player
+//! rule. The player-speed rule limits each
 //! player's move between two records to the top of the speed map for one tick plus one
 //! separation push; the first record of a half (the kick-off placed after the walk-on) and the
 //! slot a substitution names on its tick (the substitute enters at the halfway line on the
@@ -164,6 +166,7 @@ impl Validator {
         let mut out = Vec::new();
         let mut far_ticks = [0u32; PLAYER_COUNT];
         let mut prev_dist = [[f64::INFINITY; 2]; PLAYER_COUNT];
+        let mut prev_chase: Option<(DVec2, [DVec2; PLAYER_COUNT])> = None;
         let mut prev_ball: Option<DVec2> = None;
         let mut prev_players: Option<([DVec2; PLAYER_COUNT], [bool; PLAYER_COUNT])> = None;
         let max_step = running::max_step(&self.tuning);
@@ -292,7 +295,11 @@ impl Validator {
                         reference,
                     ));
                 let d_ball = (*p - reference).length();
-                let closing = d_ball < prev_dist[i][0] - 1e-3 || d_anchor < prev_dist[i][1] - 1e-3;
+                let toward_ball = prev_chase
+                    .is_some_and(|(was, at)| (*p - was).length() < (at[i] - was).length() - 1e-3);
+                let closing = d_ball < prev_dist[i][0] - 1e-3
+                    || d_anchor < prev_dist[i][1] - 1e-3
+                    || toward_ball;
                 prev_dist[i] = [d_ball, d_anchor];
                 let drifting = d_ball > self.tuning.anchor_ball_distance
                     && d_anchor > self.tuning.anchor_tolerance
@@ -307,6 +314,7 @@ impl Validator {
                     });
                 }
             }
+            prev_chase = Some((reference, pos));
         }
         for v in &out {
             tracing::warn!(signal = "validate.violation", tick = v.tick, rule = v.rule, player = ?v.player, value = v.value);

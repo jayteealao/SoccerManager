@@ -172,6 +172,10 @@ pub struct RunningCheck {
     fetch_spot: Option<DVec2>,
     far_ticks: [u32; PLAYER_COUNT],
     prev_dist: [[f64; 2]; PLAYER_COUNT],
+    /// The ball the anchor rule read on the previous record and every player's position
+    /// then: a player who moves toward where the ball was is closing on it, however fast the
+    /// ball runs away from him.
+    prev_chase: Option<(DVec2, [DVec2; PLAYER_COUNT])>,
     shootout_from: Option<u32>,
     /// Each restart record: its index, tick and ball.
     restarts: Vec<(usize, u32, DVec2)>,
@@ -241,6 +245,7 @@ impl RunningCheck {
             fetch_spot: None,
             far_ticks: [0; PLAYER_COUNT],
             prev_dist: [[f64::INFINITY; 2]; PLAYER_COUNT],
+            prev_chase: None,
             shootout_from: None,
             restarts: Vec::new(),
             spots: Vec::new(),
@@ -539,7 +544,11 @@ impl RunningCheck {
             ));
             let d_ball = (*p - reference).length();
             let prev_dist = self.prev_dist[i];
-            let closing = d_ball < prev_dist[0] - 1e-3 || d_anchor < prev_dist[1] - 1e-3;
+            let toward_ball = self
+                .prev_chase
+                .is_some_and(|(was, at)| (*p - was).length() < (at[i] - was).length() - 1e-3);
+            let closing =
+                d_ball < prev_dist[0] - 1e-3 || d_anchor < prev_dist[1] - 1e-3 || toward_ball;
             self.prev_dist[i] = [d_ball, d_anchor];
             let drifting = d_ball > self.tuning.anchor_ball_distance
                 && d_anchor > self.tuning.anchor_tolerance
@@ -549,6 +558,7 @@ impl RunningCheck {
                 bad(ANCHOR_TOLERANCE, "anchor_tolerance", Some(i), d_anchor);
             }
         }
+        self.prev_chase = Some((reference, pos));
     }
 
     /// Judges the rules that need the whole match and returns the violations: the kept
@@ -974,6 +984,37 @@ mod tests {
                 .any(|v| v.rule == "restart_spot" && v.tick == 2 && (v.value - 1.0).abs() < 1e-6),
             "{out:?}"
         );
+    }
+
+    /// A player far from his anchor runs after a ball that rolls away from him faster than he
+    /// runs: he is closing on it (he moves toward where it was) and breaks no anchor rule. The
+    /// control: the same player standing still breaks it once the grace has passed.
+    #[test]
+    fn a_player_running_after_a_faster_ball_is_closing_on_it() {
+        let tuning = Tuning::default();
+        let grace = tuning.anchor_grace_ticks;
+        let chase = |run: f64| {
+            move |tick: u32| {
+                let mut r = record(tick);
+                let t = f64::from(tick);
+                r.players[5] = [(-50.0 + run * t) as f32, -30.0];
+                r.ball = [(0.0 + 0.2 * t) as f32, 30.0, 0.0];
+                r
+            }
+        };
+        let anchors = |records: &[TickRecord]| {
+            running(&teams(), &[], records)
+                .totals()
+                .find(|(rule, _)| *rule == "anchor_tolerance")
+                .unwrap()
+                .1
+        };
+        let running_after: Vec<TickRecord> = (1..=grace + 20).map(chase(0.1)).collect();
+        assert_eq!(anchors(&running_after), 0, "a chaser is closing");
+        same(&teams(), &[], &running_after);
+        let standing: Vec<TickRecord> = (1..=grace + 20).map(chase(0.0)).collect();
+        assert!(anchors(&standing) > 0, "a still player drifts");
+        same(&teams(), &[], &standing);
     }
 
     #[test]
