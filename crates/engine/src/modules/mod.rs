@@ -173,6 +173,20 @@ pub trait PreMatchModule: Send + Sync + 'static {
         tactics: &TacticsSchema,
         attrs: &AttributeSchema,
     ) -> Setup;
+    /// The tactics an AI-managed `team` (`side` 0 home of the match with `seed`) starts with
+    /// from the staff advice on the named `styles`, or `None` to keep its setup. The advice
+    /// draws from its own seeded generator, never a match stream, and nothing keeps it.
+    fn advise(
+        &self,
+        _team: &Team,
+        _styles: &crate::data::styles::Styles,
+        _tactics: &TacticsSchema,
+        _attrs: &AttributeSchema,
+        _seed: u64,
+        _side: usize,
+    ) -> Option<Tactics> {
+        None
+    }
 }
 
 /// What happens when a period's time, added time included, has run out.

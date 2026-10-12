@@ -90,6 +90,13 @@ pub struct MatchConfig {
     /// The restart wait table, from the content; `None` plays the tuning file's fixed restart
     /// delays. Never changes in a match.
     pub restart_waits: Option<crate::data::restart_waits::RestartWaits>,
+    /// The named styles, from the content; `None` keeps the AI default tactics. Never
+    /// changes in a match.
+    pub styles: Option<crate::data::styles::Styles>,
+    /// Per side, home first: the side starts in the style its pre-match module picked from
+    /// the staff advice ([`MatchConfig::new`]). A side whose tactics or lineup a caller set
+    /// afterwards no longer does; a side handed to a person goes back to the default setup.
+    advice: [bool; 2],
     /// The home team's ground. Never changes in a match. Private: `set_pitch` writes it and
     /// the teams' copies together.
     pitch: Pitch,
@@ -112,7 +119,10 @@ impl MatchConfig {
 
     /// Builds a match from loaded content and two validated team files. `minutes` must be
     /// 1 to 200; the home team is `files[0]`. The AI manager's pre-match setup picks each
-    /// team's lineup, bench, and tactics.
+    /// team's lineup, bench, and tactics: with named styles in the content and the
+    /// `ai_style_pick` flag on, the style the staff advice rates best for the squad, else the
+    /// tactics file's default tactics. The advice lives only inside this call; nothing keeps an
+    /// estimate.
     pub fn new(
         seed: u64,
         minutes: u32,
@@ -153,7 +163,7 @@ impl MatchConfig {
             *digest = Sha256::digest(&json).into();
             hasher.update(json);
         }
-        Ok(Self {
+        let config = Self {
             seed,
             minutes,
             tuning,
@@ -172,8 +182,36 @@ impl MatchConfig {
             hidden: content.tuning.hidden.clone(),
             match_rating: content.tuning.match_rating.clone(),
             restart_waits: content.restart_waits.clone(),
+            styles: content.styles.clone(),
+            advice: [false; 2],
             pitch,
-        })
+        };
+        if !content.flags.is_on(crate::flags::AI_STYLE_PICK) {
+            return Ok(config);
+        }
+        Ok(config.advised(0).advised(1))
+    }
+
+    /// `team` starts in the style its pre-match module picks from the staff advice, with the
+    /// lineup and bench picked for it; unchanged when the content has no styles or the module
+    /// gives no answer.
+    fn advised(mut self, team: usize) -> Self {
+        let Some(styles) = &self.styles else {
+            return self;
+        };
+        let tactics = self.modules.pre_match.advise(
+            &self.teams[team],
+            styles,
+            &self.tactics,
+            &self.attributes,
+            self.seed,
+            team,
+        );
+        if let Some(tactics) = tactics {
+            self = self.with_ai_tactics(team, tactics);
+            self.advice[team] = true;
+        }
+        self
     }
 
     /// Folds a script pack's SHA-256 into the content hash, so a snapshot written with one
@@ -211,9 +249,24 @@ impl MatchConfig {
         self
     }
 
-    /// `team` is managed by `manager`.
+    /// `team` is managed by `manager`. A side handed to a person that started in a style from
+    /// the staff advice goes back to the pre-match module's default setup: the advice is the
+    /// AI manager's, and a person sees none of it.
     pub fn with_manager(mut self, team: usize, manager: Manager) -> Self {
         self.managers[team] = manager;
+        if manager == Manager::Human && self.advice[team] {
+            let schema = self.tactics.clone();
+            let setup = self
+                .modules
+                .pre_match
+                .setup(&self.teams[team], &schema, &self.attributes);
+            self = self.with_setup(team, setup.lineup, setup.bench);
+            let tuning = self.tuning.clone();
+            self.teams[team].set_tactics(setup.tactics, &schema, &tuning);
+            let starters = self.teams[team].starters();
+            let first = team * PLAYERS_PER_TEAM;
+            self.players[first..first + PLAYERS_PER_TEAM].clone_from_slice(&starters);
+        }
         self
     }
 
@@ -225,6 +278,7 @@ impl MatchConfig {
         let starters = self.teams[team].starters();
         let first = team * PLAYERS_PER_TEAM;
         self.players[first..first + PLAYERS_PER_TEAM].clone_from_slice(&starters);
+        self.advice[team] = false;
         self
     }
 
@@ -244,6 +298,7 @@ impl MatchConfig {
         let starters = self.teams[team].starters();
         let first = team * PLAYERS_PER_TEAM;
         self.players[first..first + PLAYERS_PER_TEAM].clone_from_slice(&starters);
+        self.advice[team] = false;
         self
     }
 
@@ -261,7 +316,14 @@ impl MatchConfig {
         let starters = self.teams[team].starters();
         let first = team * PLAYERS_PER_TEAM;
         self.players[first..first + PLAYERS_PER_TEAM].clone_from_slice(&starters);
+        self.advice[team] = false;
         self
+    }
+
+    /// `true` while `team` starts in the style its pre-match module picked from the staff
+    /// advice.
+    pub fn takes_advice(&self, team: usize) -> bool {
+        self.advice[team]
     }
 }
 

@@ -499,6 +499,12 @@ pub struct AiTuning {
     /// Substitutes named before kick-off; one is a goalkeeper when the squad has one.
     #[garde(range(min = 0, max = 12))]
     pub bench_size: u8,
+    /// The rating points a player listed at a slot's position gets over another player when
+    /// the lineup is picked: another player starts there only when his rating at the position
+    /// is higher by more than this. 0 when the file gives none.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub out_of_position_margin: f64,
 }
 
 fn weights_in_range(weights: &BTreeMap<String, f64>, _ctx: &()) -> garde::Result {

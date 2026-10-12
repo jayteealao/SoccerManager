@@ -31,6 +31,21 @@ pub fn content_with_stands() -> Content {
     content().with_flags(&on).expect("the stands flag turns on")
 }
 
+/// The shipped content with the `ai_style_pick` flag on: an AI-managed side starts in the named
+/// style the staff advice picks.
+pub fn content_with_style_pick() -> Content {
+    let on = engine::FlagStates(
+        [(
+            engine::flags::AI_STYLE_PICK.to_string(),
+            engine::FlagState::On,
+        )]
+        .into(),
+    );
+    content()
+        .with_flags(&on)
+        .expect("the style pick flag turns on")
+}
+
 pub fn default_teams(content: &Content) -> [TeamFile; 2] {
     let dir = content_dir();
     let a = content

@@ -8,6 +8,7 @@ pub mod generator;
 pub mod names;
 pub mod restart_waits;
 pub mod rules;
+pub mod styles;
 pub mod tactics;
 pub mod team;
 pub mod traits;
@@ -45,6 +46,9 @@ pub const TRAITS_FILE: &str = "traits.json";
 /// The restart wait table: how long each kind of stoppage waits beyond its visible steps. It is
 /// optional; content without it plays the tuning file's fixed restart delays.
 pub const RESTART_WAITS_FILE: &str = "restart-waits.json";
+/// The named styles the AI manager picks from before a match. It is optional; content without
+/// it keeps the tactics file's default AI tactics.
+pub const STYLES_FILE: &str = "styles.json";
 pub const TEAM_A_FILE: &str = "teams/default-a.json";
 pub const TEAM_B_FILE: &str = "teams/default-b.json";
 /// The English commentary lines. The file stays out of `Content` and its digest: editing a
@@ -542,6 +546,8 @@ pub struct ContentFiles {
     pub traits: Vec<u8>,
     /// The restart wait table, `None` when the content has none.
     pub restart_waits: Option<Vec<u8>>,
+    /// The named styles, `None` when the content has none.
+    pub styles: Option<Vec<u8>>,
 }
 
 impl ContentFiles {
@@ -550,6 +556,7 @@ impl ContentFiles {
     pub fn read(dir: &ContentDir) -> Result<Self, EngineError> {
         let read = |rel: &str| read_bytes(&dir.path(rel), rel);
         let waits = dir.path(RESTART_WAITS_FILE);
+        let styles = dir.path(STYLES_FILE);
         Ok(Self {
             attributes: read(ATTRIBUTES_FILE)?,
             tuning: read(TUNING_FILE)?,
@@ -558,6 +565,11 @@ impl ContentFiles {
             traits: read(TRAITS_FILE)?,
             restart_waits: if waits.is_file() {
                 Some(read(RESTART_WAITS_FILE)?)
+            } else {
+                None
+            },
+            styles: if styles.is_file() {
+                Some(read(STYLES_FILE)?)
             } else {
                 None
             },
@@ -576,8 +588,11 @@ pub struct Content {
     pub traits: traits::TraitCatalogue,
     /// The restart wait table, `None` when the content has none: the fixed delays play then.
     pub restart_waits: Option<restart_waits::RestartWaits>,
+    /// The named styles, `None` when the content has none: the AI keeps its default tactics.
+    pub styles: Option<styles::Styles>,
     /// SHA-256 over the five file digests in order: attributes, tuning, rules, tactics, traits,
-    /// then, when the content has a restart wait table, a tag and its digest.
+    /// then, when the content has a restart wait table, a tag and its digest, and the same for a
+    /// styles file.
     /// When a flag state differs from the file's, the list of flags that are on is hashed
     /// in as well.
     pub digest: [u8; 32],
@@ -704,6 +719,13 @@ impl Content {
             .as_deref()
             .map(|bytes| restart_waits::load_restart_waits_bytes(bytes, RESTART_WAITS_FILE))
             .transpose()?;
+        let styles = files
+            .styles
+            .as_deref()
+            .map(|bytes| {
+                styles::load_styles_bytes(bytes, STYLES_FILE, &tactics.value, &attributes.value)
+            })
+            .transpose()?;
         // The generator gives a keeper only the keeper traits, so each must be a trait.
         if let Some(name) = tuning.value.generator.person.as_ref().and_then(|p| {
             p.traits
@@ -734,6 +756,11 @@ impl Content {
             hasher.update(b"restart_waits:");
             hasher.update(waits.digest);
         }
+        // Content without a styles file keeps the digest it had before the file existed.
+        if let Some(styles) = &styles {
+            hasher.update(b"styles:");
+            hasher.update(styles.digest);
+        }
         let digest: [u8; 32] = hasher.finalize().into();
         let written_stands = tactics.value.stands;
         let written = Self {
@@ -743,6 +770,7 @@ impl Content {
             tactics: tactics.value,
             traits: traits.value,
             restart_waits: waits.map(|w| w.value),
+            styles: styles.map(|s| s.value),
             digest,
             flags: ActiveFlags::default(),
             modules,

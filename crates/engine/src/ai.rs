@@ -1,8 +1,11 @@
-//! The AI manager (named mechanism). Before kick-off it picks a lineup, a bench, and the
-//! tactics file's default tactics. During the match it checks every `check_interval_s`
-//! simulated seconds and at once after an injury:
+//! The AI manager (named mechanism). Before kick-off it picks a lineup by each player's
+//! rating at the slots' positions, a bench that covers every line, and its tactics: the named
+//! style the staff advice rates best for its squad when the content has styles, else the
+//! tactics file's default tactics. The advice is an estimate with an error drawn from its own
+//! seeded generator; nothing keeps it, and play never reads it. During the match it checks
+//! every `check_interval_s` simulated seconds and at once after an injury:
 //!
-//! - an injured player is replaced by the best-fitting substitute;
+//! - an injured player is replaced by the substitute with the best rating at his slot;
 //! - from `fatigue_from_minute`, a tired outfield player (energy below `fatigue_energy`) is
 //!   replaced, keeping one substitution back for an injury until
 //!   `keep_for_injury_until_minute`;
@@ -17,12 +20,16 @@
 //! the rules alone would. Every choice goes through the same change queue a human manager
 //! uses, and emits an `AiDecision` event with a short code.
 
-use crate::data::attributes::AttributeSchema;
+use sha2::{Digest, Sha256};
+
+use crate::data::attributes::{AttributeSchema, Group};
 use crate::data::rules::StoppageKind;
+use crate::data::styles::Styles;
 use crate::data::tactics::{PRESSING, TIME_WASTING, TacticsSchema};
 use crate::data::team::Position;
 use crate::modules::{AiPlan, ManagerModule, MatchView, ModuleCard, PreMatchModule};
 use crate::player::Status;
+use crate::rng::EngineRng;
 use crate::tactics::change::{Change, ChangeId, ChangeQueue, QueuedChange};
 use crate::tactics::{Tactics, TacticsPatch};
 use crate::team::{PLAYERS_PER_TEAM, SquadPlayer, Team};
@@ -97,11 +104,68 @@ pub fn role_fit(
     if weight > 0.0 { sum / weight } else { 0.0 }
 }
 
-/// The best player in `candidates` for `role` in a slot at `position`: players whose listed
-/// position is the slot's own come first, then players whose position the role suits, then
-/// any outfield player (or any player for a goalkeeper's role), then anyone. Within a tier the
-/// best role fit wins, and ties go to the lower squad index. So a left-back takes the left-back
-/// slot and a right-back the right, whichever fits the full-back's role better.
+/// What a slot at `position` values player `p` at: his rating at the position, plus `margin`
+/// when he is listed there. So another player takes a listed player's place only when he is
+/// clearly better at it.
+pub fn slot_value(p: &SquadPlayer, position: Position, margin: f64) -> f64 {
+    let listed = if p.position == position { margin } else { 0.0 };
+    p.positions[position as usize].decimal() + listed
+}
+
+/// A player's rating at his listed (natural) position.
+fn natural(p: &SquadPlayer) -> f64 {
+    p.positions[p.position as usize].decimal()
+}
+
+/// What a lineup choice weighs for player `squad` at a slot at `position` playing `role`: a
+/// goalkeeper in goal and an outfield player outside it first, then the slot value, then the
+/// role fit, then the lower squad index.
+#[derive(Debug, Clone, Copy)]
+struct Pick {
+    score: f64,
+    fit: f64,
+    squad: usize,
+}
+
+/// Far below any rating: a goalkeeper outfield, or an outfield player in goal, comes last.
+const WRONG_KIND: f64 = 100.0;
+
+impl Pick {
+    fn of(
+        team: &Team,
+        squad: usize,
+        position: Position,
+        role: usize,
+        schema: &TacticsSchema,
+        attrs: &AttributeSchema,
+    ) -> Self {
+        let p = &team.squad[squad];
+        let kind = (p.position == Position::GK) == (position == Position::GK);
+        let score = slot_value(p, position, schema.ai.out_of_position_margin)
+            - if kind { 0.0 } else { WRONG_KIND };
+        Self {
+            score,
+            fit: role_fit(p, role, schema, attrs),
+            squad,
+        }
+    }
+
+    /// Best first.
+    fn order(&self, other: &Self) -> std::cmp::Ordering {
+        other
+            .score
+            .total_cmp(&self.score)
+            .then(other.fit.total_cmp(&self.fit))
+            .then(self.squad.cmp(&other.squad))
+    }
+}
+
+/// The best player in `candidates` for a slot at `position` playing `role`: a goalkeeper for a
+/// goalkeeper's slot and an outfield player for any other while one is there, then the highest
+/// slot value (his rating at the position, plus the tactics file's out-of-position margin when
+/// he is listed there), then the best role fit, then the lower squad index. So a left-back
+/// takes the left-back slot and a right-back the right, and a player listed elsewhere takes it
+/// only when his rating there is higher by more than the margin.
 pub(crate) fn best_for(
     team: &Team,
     candidates: &[usize],
@@ -110,24 +174,11 @@ pub(crate) fn best_for(
     schema: &TacticsSchema,
     attrs: &AttributeSchema,
 ) -> Option<usize> {
-    let suits = &schema.roles[role].positions;
-    let keeper_role = suits.contains(&Position::GK);
-    let pick = |filter: &dyn Fn(Position) -> bool| {
-        candidates
-            .iter()
-            .copied()
-            .filter(|&s| filter(team.squad[s].position))
-            .map(|s| (role_fit(&team.squad[s], role, schema, attrs), s))
-            .fold(None::<(f64, usize)>, |best, (fit, s)| match best {
-                Some((b, _)) if b >= fit => best,
-                _ => Some((fit, s)),
-            })
-            .map(|(_, s)| s)
-    };
-    pick(&|p| p == position)
-        .or_else(|| pick(&|p| suits.contains(&p)))
-        .or_else(|| pick(&|p| keeper_role || p != Position::GK))
-        .or_else(|| pick(&|_| true))
+    candidates
+        .iter()
+        .map(|&s| Pick::of(team, s, position, role, schema, attrs))
+        .min_by(Pick::order)
+        .map(|p| p.squad)
 }
 
 /// The AI manager's pre-match setup for `team` with the tactics file's default tactics:
@@ -136,55 +187,197 @@ pub fn pre_match(team: &Team, schema: &TacticsSchema, attrs: &AttributeSchema) -
     pre_match_for(team, Tactics::defaults(schema), schema, attrs)
 }
 
-/// The AI manager's pre-match setup for `team` starting with `tactics`: the best-fitting
-/// player for each slot's position and role in slot order (see [`best_for`]), and a bench of
-/// `bench_size` with the best remaining goalkeeper first and then the best remaining players
-/// by fit to their own position's first role. So a side that starts in another formation fields players whose
-/// position suits that formation's slots, as it does in the default one.
+/// The line a position plays in: defence, midfield, or attack; `None` for the goalkeeper.
+fn line_of(position: Position) -> Option<usize> {
+    match position {
+        Position::GK => None,
+        Position::CB | Position::LB | Position::RB => Some(0),
+        Position::DM | Position::CM | Position::AM => Some(1),
+        Position::LW | Position::RW | Position::ST => Some(2),
+    }
+}
+
+/// The AI manager's pre-match setup for `team` starting with `tactics`.
+///
+/// The lineup: every (player, slot) pair is valued as [`best_for`] values it, and the slots
+/// fill from the best pair down; then any swap of two starters, or of a starter and a spare,
+/// that raises the lineup's summed value is made until none does. So each slot holds the
+/// player with the best rating at its position, a listed player keeps his place against a
+/// close rating, and a player clearly better at another position than its listed player plays
+/// there.
+///
+/// The bench of `bench_size`: the best spare goalkeeper; then for each line of the formation
+/// (defence, midfield, attack) a spare listed at the line's position with the most slots, else
+/// the spare with the best rating at one of the line's slot positions; then a full-back and a
+/// winger when the formation plays them and the bench has none; then, one at a time, the spare
+/// listed at the formation's position with the most slots for each bench player already listed
+/// there, the best natural rating first. So the bench covers the positions most players play.
 pub fn pre_match_for(
     team: &Team,
     tactics: Tactics,
     schema: &TacticsSchema,
     attrs: &AttributeSchema,
 ) -> Setup {
-    let mut free: Vec<usize> = (0..team.squad.len()).collect();
-    let mut lineup = [0usize; PLAYERS_PER_TEAM];
     let slots = &schema.formations[usize::from(tactics.formation)].slots;
-    for (slot, place) in lineup.iter_mut().enumerate() {
+    let n = team.squad.len();
+    let pick = |squad: usize, slot: usize| {
         let role = usize::from(tactics.roles[slot].role);
-        // A validated squad holds at least eleven players.
-        let pick =
-            best_for(team, &free, slots[slot].position, role, schema, attrs).unwrap_or(free[0]);
-        *place = pick;
-        free.retain(|&s| s != pick);
+        Pick::of(team, squad, slots[slot].position, role, schema, attrs)
+    };
+    let mut pairs: Vec<(Pick, usize)> = (0..n)
+        .flat_map(|s| (0..PLAYERS_PER_TEAM).map(move |slot| (s, slot)))
+        .map(|(s, slot)| (pick(s, slot), slot))
+        .collect();
+    pairs.sort_by(|a, b| a.0.order(&b.0).then(a.1.cmp(&b.1)));
+    let mut taken = vec![false; n];
+    let mut filled = [None::<usize>; PLAYERS_PER_TEAM];
+    for (p, slot) in pairs {
+        if !taken[p.squad] && filled[slot].is_none() {
+            taken[p.squad] = true;
+            filled[slot] = Some(p.squad);
+        }
     }
-    let mut bench = Vec::new();
+    // A validated squad holds at least eleven players, so every slot is filled.
+    let mut lineup: [usize; PLAYERS_PER_TEAM] =
+        core::array::from_fn(|slot| filled[slot].unwrap_or(0));
+    // Swaps that raise the summed value. Each made swap raises it strictly, so the loop ends.
+    let score = |s: usize, slot: usize| pick(s, slot).score;
+    const EPS: f64 = 1e-9;
+    loop {
+        let mut improved = false;
+        for a in 0..PLAYERS_PER_TEAM {
+            for b in a + 1..PLAYERS_PER_TEAM {
+                let (pa, pb) = (lineup[a], lineup[b]);
+                if score(pa, b) + score(pb, a) > score(pa, a) + score(pb, b) + EPS {
+                    lineup.swap(a, b);
+                    improved = true;
+                }
+            }
+            for s in 0..n {
+                if !lineup.contains(&s) && score(s, a) > score(lineup[a], a) + EPS {
+                    lineup[a] = s;
+                    improved = true;
+                }
+            }
+        }
+        if !improved {
+            break;
+        }
+    }
+    let mut free: Vec<usize> = (0..n).filter(|s| !lineup.contains(s)).collect();
     let size = usize::from(schema.ai.bench_size);
-    let keeper_role = schema.default_role(Position::GK);
+    let margin = schema.ai.out_of_position_margin;
+    let mut bench: Vec<usize> = Vec::new();
+    let take = |bench: &mut Vec<usize>, free: &mut Vec<usize>, s: usize| {
+        bench.push(s);
+        free.retain(|&f| f != s);
+    };
+    // The keeper.
     let keepers: Vec<usize> = free
         .iter()
         .copied()
         .filter(|&s| team.squad[s].position == Position::GK)
         .collect();
+    let keeper_role = schema.default_role(Position::GK);
     if size > 0
         && let Some(gk) = best_for(team, &keepers, Position::GK, keeper_role, schema, attrs)
     {
-        bench.push(gk);
-        free.retain(|&s| s != gk);
+        take(&mut bench, &mut free, gk);
     }
-    let mut rest: Vec<(f64, usize)> = free
-        .iter()
-        .map(|&s| {
-            let role = schema.default_role(team.squad[s].position);
-            (role_fit(&team.squad[s], role, schema, attrs), s)
-        })
-        .collect();
-    rest.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
-    bench.extend(
-        rest.into_iter()
-            .map(|(_, s)| s)
-            .take(size.saturating_sub(bench.len())),
-    );
+    // How many slots of the formation play at `p`, and how many bench players are listed there.
+    let slots_at = |p: Position| slots.iter().filter(|s| s.position == p).count();
+    let covered = |bench: &[usize], p: Position| {
+        bench
+            .iter()
+            .filter(|&&s| team.squad[s].position == p)
+            .count()
+    };
+    let outfield = |free: &[usize]| -> Vec<usize> {
+        free.iter()
+            .copied()
+            .filter(|&s| team.squad[s].position != Position::GK)
+            .collect()
+    };
+    // One spare for each line of the formation: one listed at the line's position with the
+    // most slots first, then one listed in the line, then the best rating at one of the
+    // line's slot positions.
+    for line in 0..3 {
+        let positions: Vec<Position> = slots
+            .iter()
+            .map(|s| s.position)
+            .filter(|&p| line_of(p) == Some(line))
+            .collect();
+        if positions.is_empty() || bench.len() >= size {
+            continue;
+        }
+        let best = outfield(&free)
+            .into_iter()
+            .map(|s| {
+                let p = &team.squad[s];
+                let listed = if positions.contains(&p.position) {
+                    slots_at(p.position)
+                } else {
+                    0
+                };
+                let in_line = line_of(p.position) == Some(line);
+                let value = positions
+                    .iter()
+                    .map(|&at| slot_value(p, at, margin))
+                    .fold(f64::NEG_INFINITY, f64::max);
+                (listed, in_line, value, s)
+            })
+            .min_by(|a, b| {
+                b.0.cmp(&a.0)
+                    .then(b.1.cmp(&a.1))
+                    .then(b.2.total_cmp(&a.2))
+                    .then(a.3.cmp(&b.3))
+            });
+        if let Some((_, _, _, s)) = best {
+            take(&mut bench, &mut free, s);
+        }
+    }
+    // Wide cover: a full-back and a winger, when the formation plays the position and the
+    // bench has nobody listed at either side yet.
+    for pair in [[Position::LB, Position::RB], [Position::LW, Position::RW]] {
+        if bench.len() >= size
+            || !pair.iter().any(|&p| slots_at(p) > 0)
+            || pair.iter().any(|&p| covered(&bench, p) > 0)
+        {
+            continue;
+        }
+        let best = free
+            .iter()
+            .copied()
+            .filter(|&s| {
+                pair.contains(&team.squad[s].position) && slots_at(team.squad[s].position) > 0
+            })
+            .min_by(|&a, &b| {
+                natural(&team.squad[b])
+                    .total_cmp(&natural(&team.squad[a]))
+                    .then(a.cmp(&b))
+            });
+        if let Some(s) = best {
+            take(&mut bench, &mut free, s);
+        }
+    }
+    // The rest, one at a time: the spare listed at the formation's position with the most slots
+    // for each bench player already listed there, then the best natural rating.
+    while bench.len() < size && !free.is_empty() {
+        let need = |s: usize| {
+            let p = team.squad[s].position;
+            slots_at(p) as f64 / (1 + covered(&bench, p)) as f64
+        };
+        let best = free.iter().copied().min_by(|&a, &b| {
+            need(b)
+                .total_cmp(&need(a))
+                .then(natural(&team.squad[b]).total_cmp(&natural(&team.squad[a])))
+                .then(a.cmp(&b))
+        });
+        let Some(s) = best else {
+            break;
+        };
+        take(&mut bench, &mut free, s);
+    }
     Setup {
         tactics,
         lineup,
@@ -192,7 +385,134 @@ pub fn pre_match_for(
     }
 }
 
-/// The pre-match setup version 1: the AI manager's [`pre_match`].
+/// The advice's estimate of one style for a squad: how well the lineup the AI would field for
+/// it suits its key jobs, with the advice's error added, and the formation of that lineup.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StyleEstimate {
+    pub fit: f64,
+    pub formation: u8,
+}
+
+/// The seed of the advice's error for `side` (0 home) of the match with `seed`: SHA-256 over
+/// the match seed, the side, the club id, and the label `style-advice`. The advice reads no
+/// match stream, so play draws the same numbers with or without it.
+fn advice_seed(seed: u64, side: usize, club_id: &str) -> u64 {
+    let mut h = Sha256::new();
+    h.update(seed.to_le_bytes());
+    h.update([side as u8]);
+    h.update(club_id.as_bytes());
+    h.update(b"style-advice");
+    let d = h.finalize();
+    u64::from_le_bytes(core::array::from_fn(|i| d[i]))
+}
+
+/// The staff advice on each style for `team` (`side` of the match with `seed`), in the styles
+/// file's order. For each style: the lineup [`pre_match_for`] picks in each of its formations,
+/// the formation whose lineup has the highest summed rating at its slots (the first in the
+/// list on a tie), and over that lineup's players at the style's fit positions the weighted
+/// mean of the style's fit attributes less the same players' mean over every visible outfield
+/// attribute, so a squad's level does not decide the pick; plus a draw of the advice's error.
+/// Nothing keeps an estimate: play never reads one.
+pub fn style_estimates(
+    team: &Team,
+    styles: &Styles,
+    schema: &TacticsSchema,
+    attrs: &AttributeSchema,
+    seed: u64,
+    side: usize,
+) -> Vec<StyleEstimate> {
+    let visible: Vec<usize> = attrs
+        .attributes
+        .iter()
+        .enumerate()
+        .filter(|(_, d)| {
+            !d.hidden && matches!(d.group, Group::Technical | Group::Mental | Group::Physical)
+        })
+        .map(|(i, _)| i)
+        .collect();
+    let mut rng = EngineRng::from_seed(advice_seed(seed, side, &team.club_id));
+    styles
+        .styles
+        .iter()
+        .map(|style| {
+            let mut best: Option<(f64, u8, Setup)> = None;
+            for &f in &style.formations {
+                let setup = pre_match_for(team, style.tactics(f, schema), schema, attrs);
+                let slots = &schema.formations[usize::from(f)].slots;
+                let total: f64 = setup
+                    .lineup
+                    .iter()
+                    .zip(slots)
+                    .map(|(&s, slot)| team.squad[s].positions[slot.position as usize].decimal())
+                    .sum();
+                if best.as_ref().is_none_or(|(t, _, _)| total > *t) {
+                    best = Some((total, f, setup));
+                }
+            }
+            // A checked style lists at least one formation.
+            let Some((_, formation, setup)) = best else {
+                return StyleEstimate {
+                    fit: f64::NEG_INFINITY,
+                    formation: 0,
+                };
+            };
+            let slots = &schema.formations[usize::from(formation)].slots;
+            let weight: f64 = style.fit.iter().map(|(_, w)| w).sum();
+            let gaps: Vec<f64> = setup
+                .lineup
+                .iter()
+                .zip(slots)
+                .filter(|(_, slot)| style.fit_positions.contains(&slot.position))
+                .map(|(&s, _)| {
+                    let a = &team.squad[s].attributes;
+                    let fit = style
+                        .fit
+                        .iter()
+                        .map(|&(k, w)| w * a.get(k).decimal())
+                        .sum::<f64>()
+                        / weight;
+                    let level = visible.iter().map(|&k| a.get(k).decimal()).sum::<f64>()
+                        / visible.len().max(1) as f64;
+                    fit - level
+                })
+                .collect();
+            let fit = if gaps.is_empty() {
+                f64::NEG_INFINITY
+            } else {
+                gaps.iter().sum::<f64>() / gaps.len() as f64
+            };
+            StyleEstimate {
+                fit: fit + rng.bell(0.0, styles.advice_noise),
+                formation,
+            }
+        })
+        .collect()
+}
+
+/// The AI manager's pre-match tactics for `team` from the staff advice: the style with the
+/// best estimate ([`style_estimates`]; the first on a tie) in the formation the advice found
+/// for it. `None` when no style is given.
+pub fn advise(
+    team: &Team,
+    styles: &Styles,
+    schema: &TacticsSchema,
+    attrs: &AttributeSchema,
+    seed: u64,
+    side: usize,
+) -> Option<Tactics> {
+    let estimates = style_estimates(team, styles, schema, attrs, seed, side);
+    let (k, best) = estimates.iter().enumerate().fold(
+        None::<(usize, StyleEstimate)>,
+        |acc, (k, e)| match acc {
+            Some((_, b)) if b.fit >= e.fit => acc,
+            _ => Some((k, *e)),
+        },
+    )?;
+    Some(styles.styles[k].tactics(best.formation, schema))
+}
+
+/// The pre-match setup version 1: the AI manager's [`pre_match`], and its pick of a style
+/// from the staff advice ([`advise`]).
 pub struct PreMatchV1;
 
 impl PreMatchModule for PreMatchV1 {
@@ -208,14 +528,30 @@ impl PreMatchModule for PreMatchV1 {
     ) -> Setup {
         pre_match_for(team, start, tactics, attrs)
     }
+    fn advise(
+        &self,
+        team: &Team,
+        styles: &Styles,
+        tactics: &TacticsSchema,
+        attrs: &AttributeSchema,
+        seed: u64,
+        side: usize,
+    ) -> Option<Tactics> {
+        advise(team, styles, tactics, attrs, seed, side)
+    }
 }
 
 pub const PRE_MATCH_V1_CARD: ModuleCard = ModuleCard {
-    purpose: "Picks each team's lineup for the formation it starts in, a player listed at each slot's position first and then by role fit, a bench with the best spare goalkeeper first, and the tactics file's default tactics.",
-    inputs: "The team's squad with positions and attributes, the tactics schema's roles and AI bench size, and the attribute schema.",
-    outputs: "The setup: the tactics, the squad index of each slot, and the bench.",
-    tuning: &["tactics.roles", "tactics.ai.bench_size"],
-    calibration: "none: lineup choice, no realism band",
+    purpose: "Picks each team's lineup for the formation it starts in by each player's rating at the slot's position (a listed player keeps his place unless another is clearly better there), a bench that covers the goal, every line and the wide positions, and for an AI-managed side the named style the staff advice rates best for its squad.",
+    inputs: "The team's squad with positions, position ratings and attributes, the tactics schema's roles and AI settings, the attribute schema, the named styles, the match seed and the side.",
+    outputs: "The setup: the tactics, the squad index of each slot, and the bench; for an AI-managed side, the tactics of the style it picks.",
+    tuning: &[
+        "tactics.roles",
+        "tactics.ai.bench_size",
+        "tactics.ai.out_of_position_margin",
+        "styles",
+    ],
+    calibration: "none: lineup and style choice, no realism band",
     keys: &[],
 };
 
@@ -449,8 +785,10 @@ impl Check<'_, '_> {
         t
     }
 
-    /// The best substitute on the bench for `slot`'s position and role (see [`best_for`]),
-    /// leaving out anyone already queued to come on.
+    /// The best substitute on the bench for `slot`'s position and role, leaving out anyone
+    /// already queued to come on: the highest slot value as [`best_for`] weighs it, then the
+    /// one whose own position the formation needs least for each bench player listed there,
+    /// then the best role fit, then the lower squad index.
     fn substitute_for(&self, slot: usize) -> Option<usize> {
         let side = &self.view.teams()[self.team];
         let incoming = self.queue.incoming(self.team);
@@ -463,7 +801,30 @@ impl Check<'_, '_> {
         let schema = self.view.tactics();
         let position = schema.formations[usize::from(side.tactics.formation)].slots[slot].position;
         let role = usize::from(side.tactics.roles[slot].role);
-        best_for(side, &free, position, role, schema, self.view.attributes())
+        let slots = &schema.formations[usize::from(side.tactics.formation)].slots;
+        // Among equal slot values, the one whose own position the formation needs least for
+        // each bench player listed there comes on, keeping the cover a later change may need.
+        let need = |s: usize| {
+            let p = side.squad[s].position;
+            let on_pitch = slots.iter().filter(|x| x.position == p).count();
+            let cover = free
+                .iter()
+                .filter(|&&b| side.squad[b].position == p)
+                .count();
+            on_pitch as f64 / cover.max(1) as f64
+        };
+        free.iter()
+            .map(|&s| {
+                let pick = Pick::of(side, s, position, role, schema, self.view.attributes());
+                (pick, need(s))
+            })
+            .min_by(|a, b| {
+                b.0.score
+                    .total_cmp(&a.0.score)
+                    .then(a.1.total_cmp(&b.1))
+                    .then(a.0.order(&b.0))
+            })
+            .map(|(p, _)| p.squad)
     }
 
     /// The best goalkeeper on the bench by fit to the goalkeeper's role, leaving out anyone

@@ -13,7 +13,7 @@ use anyhow::{Context, bail};
 use engine::data::traits::FROZEN_TRAITS_V1;
 use engine::data::{
     ATTRIBUTES_FILE, COMMENTARY_FILE, ContentFiles, RESTART_WAITS_FILE, RULES_FILE, SLOTS_FILE,
-    TACTICS_FILE, TEAM_A_FILE, TEAM_B_FILE, TRAITS_FILE, TUNING_FILE,
+    STYLES_FILE, TACTICS_FILE, TEAM_A_FILE, TEAM_B_FILE, TRAITS_FILE, TUNING_FILE,
 };
 use engine::{Commentary, Content, MatchConfig, Simulation};
 use script::{Backstop, LoadedPack, Pack};
@@ -43,6 +43,11 @@ const TRAITS_ROLE: &str = "traits";
 /// content has a wait table; a replay file without it plays the fixed restart delays, as
 /// every match did before the table existed.
 const RESTART_WAITS_ROLE: &str = "restart_waits";
+
+/// The named styles' role. It follows the restart wait table and is present only when the
+/// content has a styles file; a replay file without it plays the default AI tactics, as every
+/// match did before the styles existed.
+const STYLES_ROLE: &str = "styles";
 
 /// The script pack's roles. They come last and are present only when the match ran a pack.
 const PACK_ROLES: [&str; 2] = ["pack_manifest", "pack_script"];
@@ -99,6 +104,9 @@ impl InputFiles {
         files.push(file(TRAITS_ROLE, TRAITS_FILE, content.traits));
         if let Some(waits) = content.restart_waits {
             files.push(file(RESTART_WAITS_ROLE, RESTART_WAITS_FILE, waits));
+        }
+        if let Some(styles) = content.styles {
+            files.push(file(STYLES_ROLE, STYLES_FILE, styles));
         }
         if let Some(pack_dir) = script_pack {
             // The folder checks (the entry stays inside the folder) run on the disk layout.
@@ -205,6 +213,8 @@ pub fn build(
             .map_or_else(|| FROZEN_TRAITS_V1.as_bytes().to_vec(), |f| f.bytes.clone()),
         // A file without the wait table plays the fixed restart delays.
         restart_waits: inputs.get(RESTART_WAITS_ROLE).map(|f| f.bytes.clone()),
+        // A file without the styles plays the default AI tactics.
+        styles: inputs.get(STYLES_ROLE).map(|f| f.bytes.clone()),
     })?;
     // A file without the slot file plays with the built-in default selection.
     let content = match inputs.get(SLOTS_ROLE) {

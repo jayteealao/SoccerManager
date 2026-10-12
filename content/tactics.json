@@ -365,7 +365,8 @@
     "fatigue_energy": 0.55,
     "fatigue_from_minute": 55,
     "keep_for_injury_until_minute": 80,
-    "bench_size": 7
+    "bench_size": 7,
+    "out_of_position_margin": 1.5
   },
   "stands": {
     "gk": { "in_possession": { "x": 0.0, "y": 0.0 }, "out_of_possession": { "x": 0.0, "y": 0.0 } },

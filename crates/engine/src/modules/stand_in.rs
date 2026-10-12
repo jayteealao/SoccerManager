@@ -210,6 +210,17 @@ impl PreMatchModule for StandIn<dyn PreMatchModule> {
     ) -> Setup {
         self.0.setup_for(team, start, tactics, attrs)
     }
+    fn advise(
+        &self,
+        team: &Team,
+        styles: &crate::data::styles::Styles,
+        tactics: &TacticsSchema,
+        attrs: &AttributeSchema,
+        seed: u64,
+        side: usize,
+    ) -> Option<Tactics> {
+        self.0.advise(team, styles, tactics, attrs, seed, side)
+    }
 }
 
 impl Modifier for StandIn<dyn Modifier> {
