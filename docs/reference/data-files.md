@@ -702,7 +702,7 @@ The shipped copies:
 | `shots_up` | `shots_per_team` | `engine.shot_range` 23.25 | up about 10 percent |
 | `fouls_halved` | `fouls_per_team` | `engine.foul_base` 0.04, `engine.foul_aggression_weight` 0.02, `engine.foul_tackling_weight` 0.01 | about half |
 | `card_storm` | `yellow_cards_per_team` | `engine.foul_base` 1.0, `engine.yellow_base` 1.0 | far up: every tackle a foul, every foul booked |
-| `pass_completion_down` | `pass_accuracy_pct` | `engine.aim_noise` 0.6 | down about 5 points |
+| `pass_completion_down` | `pass_accuracy_pct` | `engine.aim_noise` 0.25 | down about 5 points |
 
 `proof` holds:
 

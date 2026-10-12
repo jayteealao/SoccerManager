@@ -10,9 +10,19 @@ use crate::rules::{DeadBall, Phase};
 use crate::sim::Simulation;
 use crate::team::PLAYERS_PER_TEAM;
 
-/// A seed-7 match on the shipped content, a minute in, before any late-match change.
+/// A seed-7 match on the shipped content with both sides in the default tactics: the grades
+/// the tests read assume the default instructions, which a named style can raise.
+fn config() -> crate::sim::MatchConfig {
+    let config = shipped_config(7, 90).unwrap();
+    let defaults = crate::Tactics::defaults(&config.tactics);
+    config
+        .with_ai_tactics(0, defaults)
+        .with_ai_tactics(1, defaults)
+}
+
+/// [`config`] a minute in, before any late-match change.
 fn scene() -> Simulation {
-    let mut sim = Simulation::new(shipped_config(7, 90).unwrap()).unwrap();
+    let mut sim = Simulation::new(config()).unwrap();
     sim.tick = 3_000;
     sim
 }
@@ -236,7 +246,7 @@ fn a_player_whose_stand_option_fired_in_possession_offers_and_a_lapse_holds() {
 /// the mentality minimum stays goal-side.
 #[test]
 fn losing_the_ball_sends_the_nearest_presser_at_a_sprint_and_the_others_jog_back() {
-    let mut config = shipped_config(7, 90).unwrap();
+    let mut config = config();
     config.tuning.pace.sprint_mid = 1.0;
     config.tuning.pace.sprint_slope = 0.0;
     let mut sim = Simulation::new(config).unwrap();
@@ -320,7 +330,7 @@ fn losing_the_ball_sends_the_nearest_presser_at_a_sprint_and_the_others_jog_back
 /// restarts slice will.
 #[test]
 fn a_leading_team_wastes_time_only_at_a_dead_ball() {
-    let mut config = shipped_config(7, 90).unwrap();
+    let mut config = config();
     config.tuning.pace.late_minutes = 90;
     let mut sim = Simulation::new(config).unwrap();
     sim.tick = 3_000;

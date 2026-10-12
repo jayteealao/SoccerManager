@@ -155,7 +155,11 @@ fn nobody_sprints_outside_an_urgent_job() {
 fn squad_running(file: &TeamFile, away: &TeamFile, seeds: &[u64]) -> Running {
     let content = common::content();
     let each = common::run_many(0..=seeds.len() as u64 - 1, |k| {
-        let config = MatchConfig::new(seeds[k as usize], 90, &content, [file, away]).unwrap();
+        // Both sides in the default tactics: a squad that differs in work rate alone would
+        // otherwise start in another style, which changes how far it runs.
+        let config = common::default_tactics(
+            MatchConfig::new(seeds[k as usize], 90, &content, [file, away]).unwrap(),
+        );
         running(config, 0)
     });
     let mut total = Running::default();

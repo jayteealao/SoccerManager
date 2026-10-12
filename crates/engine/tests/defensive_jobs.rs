@@ -17,8 +17,14 @@ use engine::pace::Job;
 use engine::scenario::Scene;
 
 /// Both sides placed far from the scene: home outfield on `x = -45`, away on `x = 45`.
+/// A calm scene with both sides in the default tactics, so the plan's rest-defence minimum and
+/// the duties the test reads are the tactics file's, whatever style the squads would fit.
 fn far() -> Scene {
-    spread(Scene::new(calm_match(90)), -45.0, 45.0)
+    spread(
+        Scene::new(common::default_tactics(calm_match(90))),
+        -45.0,
+        45.0,
+    )
 }
 
 fn table(s: &AttributeSchema, action: ActionKind, stage: StageKind) -> &StageTable {

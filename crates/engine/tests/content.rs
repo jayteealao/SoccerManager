@@ -399,7 +399,8 @@ fn the_shipped_flags_block_matches_the_code_flags() {
         .filter(|n| !engine::CODE_FLAGS.contains(&n.as_str()))
         .collect();
     assert!(own.is_empty(), "the shipped file declares {own:?}");
-    assert!(content.flags.is_empty());
+    // The style pick ships on; the stands ship off.
+    assert_eq!(content.flags.names(), [engine::flags::AI_STYLE_PICK]);
 }
 
 /// The team stands ship off: every stand of the loaded tactics reads 0 although the file
@@ -442,7 +443,10 @@ fn the_team_stands_read_zero_until_their_flag_is_on() {
             .into(),
         ))
         .unwrap();
-    assert_eq!(on.flags.names(), [engine::flags::TEAM_STANDS]);
+    assert_eq!(
+        on.flags.names(),
+        [engine::flags::AI_STYLE_PICK, engine::flags::TEAM_STANDS]
+    );
     assert_eq!(
         on.tactics.stands.of(Position::CB).out_of_possession.x,
         cb_out

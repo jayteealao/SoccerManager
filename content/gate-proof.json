@@ -50,7 +50,7 @@
       "flag": {
         "hypothesis": "more aim noise on a pass lowers the pass accuracy by about 5 points",
         "overrides": {
-          "engine.aim_noise": 0.6
+          "engine.aim_noise": 0.25
         },
         "owner": "engine team",
         "removal_condition": "a broken copy of the gate proof; never on in play"

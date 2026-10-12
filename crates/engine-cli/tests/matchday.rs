@@ -385,11 +385,12 @@ fn a_reconnecting_page_catches_up_on_every_ground_event_up_to_the_resume_tick() 
         &data,
         &content(),
         &[
-            // Seed 1: the lowest seed whose match stops play before the drop at tick 12,000,
-            // so the page resumes at a stoppage, not at kick-off (seed 26 until the player
-            // as a person joined the team shape, when its first stoppage came after the drop).
+            // Seed 2: the lowest seed whose match stops play before the drop at tick 12,000,
+            // so the page resumes at a stoppage, not at kick-off (seed 1 until the AI sides
+            // started in the style their staff picks, and seed 26 until the player as a
+            // person joined the team shape, each when its first stoppage came after the drop).
             "--seed",
-            "1",
+            "2",
             "--minutes",
             "10",
             "--reconnect-wait",

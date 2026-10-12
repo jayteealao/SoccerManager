@@ -267,13 +267,14 @@ fn the_golden_file_records_the_scheme_this_build_plays() {
 }
 
 /// The fixtures that reach every subsystem: seed 42, and a knockout match without a script
-/// pack that goes to extra time and a shoot-out (seed 8).
+/// pack that goes to extra time and a shoot-out (seed 2, the lowest that does; seed 8 until
+/// the AI sides started in the style their staff picks).
 fn counter_fixtures() -> [Fixture; 2] {
     [
         Fixture::seed(42),
         Fixture {
             pack: None,
-            ..Fixture::knockout(8)
+            ..Fixture::knockout(2)
         },
     ]
 }

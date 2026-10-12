@@ -31,8 +31,34 @@ pub fn content_with_stands() -> Content {
     content().with_flags(&on).expect("the stands flag turns on")
 }
 
-/// The shipped content with the `ai_style_pick` flag on: an AI-managed side starts in the named
-/// style the staff advice picks.
+/// The shipped content with the `ai_style_pick` flag off: an AI-managed side starts in the
+/// tactics file's default tactics, as before the style pick existed.
+pub fn content_without_style_pick() -> Content {
+    let off = engine::FlagStates(
+        [(
+            engine::flags::AI_STYLE_PICK.to_string(),
+            engine::FlagState::Off,
+        )]
+        .into(),
+    );
+    content()
+        .with_flags(&off)
+        .expect("the style pick flag turns off")
+}
+
+/// `config` with both sides in the AI's default tactics, each with the lineup and bench its
+/// pre-match module picks for them: the match the AI plays with the style pick off. For a
+/// scene or a batch whose premise is the default tactics, such as two squads that differ in
+/// one attribute only, which would otherwise each start in the style that fits it.
+pub fn default_tactics(config: MatchConfig) -> MatchConfig {
+    let defaults = engine::Tactics::defaults(&config.tactics);
+    config
+        .with_ai_tactics(0, defaults)
+        .with_ai_tactics(1, defaults)
+}
+
+/// The shipped content with the `ai_style_pick` flag on, its shipped state, stated for the
+/// tests of the pick: an AI-managed side starts in the named style the staff advice picks.
 pub fn content_with_style_pick() -> Content {
     let on = engine::FlagStates(
         [(
