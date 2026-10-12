@@ -29,7 +29,7 @@ test.beforeAll(() => {
 
 test('a crashed engine shows the failure and restarts from the last stoppage', async ({ page }) => {
   test.setTimeout(8 * 60_000);
-  const launcher = await startEngine({ command: 'launch', args: ['--no-start-screen', '--seed', '6', '--minutes', '20', '--web', WEB] });
+  const launcher = await startEngine({ command: 'launch', args: ['--no-start-screen', '--seed', '1', '--minutes', '20', '--web', WEB] });
   try {
     await openMatch(page, launcher.url);
     await kickOff(page);
@@ -49,9 +49,9 @@ test('a crashed engine shows the failure and restarts from the last stoppage', a
       if (ok) {
         break;
       }
-      // Seed 6 is the lowest seed that scores in a twenty-minute match once the defensive
-      // stages read the decided attributes (seed 3 until then); the half-time report holds
-      // play until CONTINUE.
+      // Seed 1 is the lowest seed that scores in a twenty-minute match once players carry
+      // their traits and weaker foot (seed 6 until then); the half-time report holds play
+      // until CONTINUE.
       const report = await page.evaluate(() => window.__touchline.report());
       if (report.open && report.kind === 'half-time') {
         await page.getByRole('button', { name: 'Continue', exact: true }).click();
