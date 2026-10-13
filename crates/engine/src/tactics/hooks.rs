@@ -36,7 +36,7 @@ pub struct Hook {
 }
 
 /// Every hook, in a fixed order.
-pub const HOOKS: [Hook; 19] = [
+pub const HOOKS: [Hook; 33] = [
     Hook {
         name: "pass.recycle",
         kind: HookKind::OptionWeight,
@@ -150,6 +150,91 @@ pub const HOOKS: [Hook; 19] = [
         kind: HookKind::Threshold,
         input: "keeper_rush_off",
         site: "decision.rs: the keeper's chase range under the line height",
+    },
+    Hook {
+        name: "pass.build_up",
+        kind: HookKind::OptionWeight,
+        input: "build_up",
+        site: "decision.rs: a long pass out of the own third (the keeper's too) and a goal \
+               kick's pick and reach, by its length",
+    },
+    Hook {
+        name: "pass.channel.left",
+        kind: HookKind::OptionWeight,
+        input: "channel_left",
+        site: "decision.rs: a pass into the side's left channel of the middle or final third",
+    },
+    Hook {
+        name: "pass.channel.centre",
+        kind: HookKind::OptionWeight,
+        input: "channel_centre",
+        site: "decision.rs: a pass into the centre channel of the middle or final third",
+    },
+    Hook {
+        name: "pass.channel.right",
+        kind: HookKind::OptionWeight,
+        input: "channel_right",
+        site: "decision.rs: a pass into the side's right channel of the middle or final third",
+    },
+    Hook {
+        name: "shot.outside_box",
+        kind: HookKind::OptionWeight,
+        input: "long_shot",
+        site: "decision.rs: the shot score from outside the penalty area",
+    },
+    Hook {
+        name: "shot.range",
+        kind: HookKind::Threshold,
+        input: "shot_reach_m",
+        site: "decision.rs: how far from goal a carrier considers a shot",
+    },
+    Hook {
+        name: "dribble.weight",
+        kind: HookKind::OptionWeight,
+        input: "dribble",
+        site: "decision.rs: the dribble score",
+    },
+    Hook {
+        name: "pass.cross",
+        kind: HookKind::OptionWeight,
+        input: "crossing",
+        site: "decision.rs: the score of a cross",
+    },
+    Hook {
+        name: "pass.cross_early",
+        kind: HookKind::OptionWeight,
+        input: "early_cross",
+        site: "decision.rs: the score of a cross from deep, before the byline",
+    },
+    Hook {
+        name: "cross.trajectory",
+        kind: HookKind::Trigger,
+        input: "cross_loft",
+        site: "decision.rs: a cross kicked driven along the ground or floated",
+    },
+    Hook {
+        name: "option.noise",
+        kind: HookKind::OptionWeight,
+        input: "freedom",
+        site: "decision.rs: a factor on the noise of every option's score",
+    },
+    Hook {
+        name: "run.depth",
+        kind: HookKind::ShapeOffset,
+        input: "run_depth_m",
+        site: "decision.rs: an attack-line player's off-ball target up or back, short of the line",
+    },
+    Hook {
+        name: "shape.fullback_run",
+        kind: HookKind::Trigger,
+        input: "fullback_run",
+        site: "shape.rs: the overlap or underlap first in a full-back's menu, lane or not",
+    },
+    Hook {
+        name: "shape.fullback_reach",
+        kind: HookKind::Threshold,
+        input: "fullback_reach",
+        site: "shape.rs: how far ahead and how near the ball a full-back's run may start",
     },
 ];
 

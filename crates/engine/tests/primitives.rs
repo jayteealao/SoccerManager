@@ -470,5 +470,5 @@ fn every_plan_input_a_decision_site_reads_has_a_hook() {
         missing.is_empty(),
         "plan inputs read with no hook: {missing:?}"
     );
-    assert_eq!(HOOKS.len(), 19);
+    assert_eq!(HOOKS.len(), 33);
 }

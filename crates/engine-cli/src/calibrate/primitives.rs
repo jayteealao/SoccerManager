@@ -28,21 +28,51 @@ use engine::data::primitives::{
 };
 use engine::data::tactics::{INSTRUCTIONS, TacticsSchema};
 use engine::measures::MatchMeasures;
+use engine::measures::runs::RunsSink;
 use engine::measures::shape::BlockHeightSink;
-use engine::{Content, MatchConfig, Simulation, Tactics};
+use engine::{Content, FanoutSink, MatchConfig, Simulation, Tactics};
 use serde::Serialize;
 
 use super::fixtures::{self, Leagues};
 
 /// The statistics the harness measures, in value order: the signature statistics, then the
 /// side's possessions and shots a match, which every step reports beside them.
-pub const STATS: [&str; 8] = [
+pub const STATS: [&str; 37] = [
     "passes_per_possession",
     "recycle_share",
     "turnovers_per_possession",
     "shot_share",
     "block_height_m",
     "hold_dribble_share",
+    "forward_pass_share",
+    "long_ball_share",
+    "own_third_long_share",
+    "goal_kick_m",
+    "keeper_long_share",
+    "wide_pass_share",
+    "entries_left_share",
+    "entries_right_share",
+    "entries_centre_share",
+    "entries_wide_share",
+    "entries_centre_left_share",
+    "entries_centre_right_share",
+    "outside_box_shot_share",
+    "shot_distance_m",
+    "takeons_per_90",
+    "crosses_per_final_third_possession",
+    "high_cross_share",
+    "low_cross_share",
+    "cross_origin_m",
+    "off_plan_share",
+    "runs_in_behind_share",
+    "fullback_runs_per_match",
+    "overlaps_per_match",
+    "underlaps_per_match",
+    "runs_per_match",
+    "crosses",
+    "entries",
+    "final_third_possessions",
+    "goals",
     "possessions",
     "shots",
 ];
@@ -64,26 +94,65 @@ fn ratio(n: f64, d: f64) -> f64 {
     if d > 0.0 { n / d } else { f64::NAN }
 }
 
-/// Side `team`'s statistics from a match's measures and block heights.
-pub fn side_stats(m: &MatchMeasures, block: &BlockHeightSink, team: usize) -> Stats {
-    let possessions = f64::from(m.possessions[team]);
-    let passes = f64::from(m.possession_passes[team]);
-    let choices: u32 = m.choices[team].iter().sum();
+/// What one match gives the harness beside its measures: the block heights, the off-ball
+/// runs, the goals, and the match's length in units of 90 minutes.
+pub struct Sinks<'a> {
+    pub block: &'a BlockHeightSink,
+    pub runs: &'a RunsSink,
+    pub goals: [u32; 2],
+    pub nineties: f64,
+}
+
+/// Side `team`'s statistics from a match's measures and sinks.
+pub fn side_stats(m: &MatchMeasures, sinks: &Sinks<'_>, team: usize) -> Stats {
+    let f = f64::from;
+    let possessions = f(m.possessions[team]);
+    let passes = f(m.possession_passes[team]);
+    let choices = f(m.choices[team].iter().sum::<u32>());
+    let s = &m.possessing[team];
+    let e = s.entries;
+    let entries = f(e.iter().sum::<u32>());
+    let runs = sinks.runs;
+    let fullback = f(runs.fullback_runs(team));
+    let n = sinks.nineties;
     [
         (passes, possessions),
-        (
-            f64::from(m.recycle_passes[team]),
-            f64::from(m.open_play_passes[team]),
-        ),
-        (f64::from(m.turnovers[team]), possessions),
-        (f64::from(m.shot_possessions[team]), possessions),
-        block.height[team],
-        (
-            f64::from(m.choices[team][2] + m.choices[team][3]),
-            f64::from(choices),
-        ),
+        (f(m.recycle_passes[team]), f(m.open_play_passes[team])),
+        (f(m.turnovers[team]), possessions),
+        (f(m.shot_possessions[team]), possessions),
+        sinks.block.height[team],
+        (f(m.choices[team][2] + m.choices[team][3]), choices),
+        (f(s.forward), f(s.passes)),
+        (f(s.long), f(s.passes)),
+        (f(s.own_third_long), f(s.own_third)),
+        (s.goal_kick_m, f(s.goal_kicks)),
+        (f(s.keeper_long), f(s.keeper_actions)),
+        (f(s.wide), f(s.upfield)),
+        (f(e[0]), entries),
+        (f(e[2]), entries),
+        (f(e[1]), entries),
+        (f(e[0] + e[2]), entries),
+        (f(e[0] + e[1]), entries),
+        (f(e[1] + e[2]), entries),
+        (f(s.outside_shots), f(s.open_shots)),
+        (s.open_shot_m, f(s.open_shots)),
+        (f(s.takeons), n),
+        (f(s.crosses), f(s.final_third_possessions)),
+        (f(s.high_crosses), f(s.crosses)),
+        (f(s.crosses - s.high_crosses), f(s.crosses)),
+        (s.cross_origin_m, f(s.crosses)),
+        (f(s.off_plan), choices),
+        (f(runs.behind[team]), f(runs.runs[team])),
+        (fullback, n),
+        (f(runs.overlaps[team]), n),
+        (f(runs.underlaps[team]), n),
+        (f(runs.runs[team]), n),
+        (f(s.crosses), 1.0),
+        (entries, 1.0),
+        (f(s.final_third_possessions), 1.0),
+        (f(sinks.goals[team]), 1.0),
         (possessions, 1.0),
-        (f64::from(m.shot_bins[team].iter().sum::<u32>()), 1.0),
+        (f(m.shot_bins[team].iter().sum::<u32>()), 1.0),
     ]
 }
 
@@ -101,12 +170,19 @@ pub fn play_one(
     }
     let mut sim = Simulation::new(config)?;
     sim.with_measures();
-    let mut block = BlockHeightSink::default();
-    sim.run(&mut block)?;
+    let mut sinks = FanoutSink::new(BlockHeightSink::default(), RunsSink::default());
+    sim.run(&mut sinks)?;
+    let (block, runs) = sinks.into_parts();
     let m = sim
         .measures()
         .context("a measures build counts the measures")?;
-    Ok([side_stats(m, &block, 0), side_stats(m, &block, 1)])
+    let sinks = Sinks {
+        block: &block,
+        runs: &runs,
+        goals: sim.summary().goals,
+        nineties: f64::from(minutes) / 90.0,
+    };
+    Ok([side_stats(m, &sinks, 0), side_stats(m, &sinks, 1)])
 }
 
 /// What one harness run needs.

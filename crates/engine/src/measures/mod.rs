@@ -28,6 +28,7 @@
 //! turnover; a possession with a shot is a shot possession. The carrier's choices count by
 //! kind, once each time his choice changes, not on every tick he holds it.
 
+pub mod runs;
 pub mod shape;
 
 use crate::TICKS_PER_SECOND;
@@ -139,6 +140,8 @@ struct Possession {
     /// A forward pass was played in it.
     forward: bool,
     shot: bool,
+    /// The ball was in the side's final third during it.
+    final_third: bool,
 }
 
 impl Possession {
@@ -150,6 +153,7 @@ impl Possession {
             recycle: 0,
             forward: false,
             shot: false,
+            final_third: false,
         }
     }
 
@@ -191,6 +195,66 @@ struct Planned {
     cell: usize,
     /// The planned target's gain toward the attacked goal, in metres.
     progress_m: f64,
+    facts: Option<PassFacts>,
+}
+
+/// What the in-possession statistics read of a planned pass.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PassFacts {
+    /// From the carrier to the planned target, in metres.
+    pub length_m: f64,
+    /// The thirds, 0 (own) to 2 (final), of the start and of the target ([`third_of`]).
+    pub start_third: usize,
+    pub target_third: usize,
+    /// The target's channel ([`crate::decision::channel`]): 0 left, 1 centre, 2 right.
+    pub channel: usize,
+    /// A cross ([`PassKind::Cross`]), and its start's distance from the attacked goal line.
+    pub cross: bool,
+    pub origin_m: f64,
+    /// The carrier keeps goal.
+    pub keeper: bool,
+}
+
+/// The in-possession counts of one side: every field is a count, or a sum of metres for an
+/// exact mean.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Possessing {
+    /// Open-play passes kicked as planned.
+    pub passes: u32,
+    /// Those gaining [`crate::decision::FORWARD_M`] or more toward goal, and those of
+    /// [`crate::decision::LONG_BALL_M`] or more.
+    pub forward: u32,
+    pub long: u32,
+    /// Those that start in the side's own third, and the long ones among them.
+    pub own_third: u32,
+    pub own_third_long: u32,
+    /// The keeper's open-play passes and clearances, and the long passes and clearances
+    /// among them.
+    pub keeper_actions: u32,
+    pub keeper_long: u32,
+    /// Passes aimed into the middle or final third, and those aimed into a wide channel.
+    pub upfield: u32,
+    pub wide: u32,
+    /// Completed passes from outside into the final third, by the target's channel.
+    pub entries: [u32; 3],
+    /// Open-play crosses, the lofted ones, and the sum of their starts' distances from the
+    /// goal line.
+    pub crosses: u32,
+    pub high_crosses: u32,
+    pub cross_origin_m: f64,
+    /// Goal kicks taken and the sum of their lengths.
+    pub goal_kicks: u32,
+    pub goal_kick_m: f64,
+    /// Open-play shots, those from outside the penalty area, and the sum of their distances.
+    pub open_shots: u32,
+    pub outside_shots: u32,
+    pub open_shot_m: f64,
+    /// Dribble choices begun with an opponent within the pressed distance.
+    pub takeons: u32,
+    /// Carrier choices that were not the top-scored option before the noise.
+    pub off_plan: u32,
+    /// Possessions (the primitives' count) that reached the final third.
+    pub final_third_possessions: u32,
 }
 
 /// The measures of one match.
@@ -234,11 +298,17 @@ pub struct MatchMeasures {
     pub shot_possessions: [u32; 2],
     /// The carrier's choices by kind, in [`CHOICES`] order, each counted when it changes.
     pub choices: [[u32; 5]; 2],
+    /// The in-possession counts.
+    pub possessing: [Possessing; 2],
     /// The last carrier and his choice.
     last_choice: Option<(usize, usize)>,
+    /// The carrier who was a pressed dribbler at the last decision.
+    taking_on: Option<usize>,
     planned: Option<Planned>,
     /// The cell of the pass in flight.
     in_flight: Option<usize>,
+    /// The channel of the pass in flight when it enters the final third from outside.
+    entry: Option<usize>,
     chain: Option<Chain>,
     possession: Option<Possession>,
     spell: Option<Spell>,
@@ -265,9 +335,12 @@ impl Default for MatchMeasures {
             turnovers: [0; 2],
             shot_possessions: [0; 2],
             choices: [[0; 5]; 2],
+            possessing: [Possessing::default(); 2],
             last_choice: None,
+            taking_on: None,
             planned: None,
             in_flight: None,
+            entry: None,
             chain: None,
             possession: None,
             spell: None,
@@ -283,26 +356,120 @@ impl MatchMeasures {
             carrier: c,
             cell,
             progress_m,
+            facts: None,
         });
     }
 
+    /// The in-possession facts of the pass carrier `c` just planned.
+    pub(crate) fn pass_facts(&mut self, c: usize, facts: PassFacts) {
+        if let Some(p) = self.planned.as_mut().filter(|p| p.carrier == c) {
+            p.facts = Some(facts);
+        }
+    }
+
+    /// The length of the pass carrier `c` planned, if he planned one with its facts.
+    pub(crate) fn planned_length(&self, c: usize) -> Option<f64> {
+        self.planned
+            .filter(|p| p.carrier == c)
+            .and_then(|p| p.facts)
+            .map(|f| f.length_m)
+    }
+
     /// Carrier `c` of `team` chose `choice`, an index into [`CHOICES`]: a choice counts when
-    /// it differs from the last carrier's last one.
-    pub(crate) fn chose(&mut self, team: usize, c: usize, choice: usize) {
-        if self.last_choice != Some((c, choice)) {
-            self.choices[team][choice] += 1;
-            self.last_choice = Some((c, choice));
+    /// it differs from the last carrier's last one, and a counted choice `off_plan` (not the
+    /// top-scored option before the noise) counts as one. A take-on begins each time a carrier
+    /// who dribbles is `pressed` and was not, at the last decision, a pressed dribbler.
+    pub(crate) fn chose(
+        &mut self,
+        team: usize,
+        c: usize,
+        choice: usize,
+        pressed: bool,
+        off_plan: bool,
+    ) {
+        let takeon = choice == 2 && pressed;
+        if takeon && self.taking_on != Some(c) {
+            self.possessing[team].takeons += 1;
+        }
+        self.taking_on = takeon.then_some(c);
+        if self.last_choice == Some((c, choice)) {
+            return;
+        }
+        self.choices[team][choice] += 1;
+        self.last_choice = Some((c, choice));
+        if off_plan {
+            self.possessing[team].off_plan += 1;
         }
     }
 
     /// Carrier `c` of `team` kicked an open-play pass: the pass he planned, else an unknown
     /// one. It is in flight and adds a pass to the side's open chain.
+    #[cfg(test)]
     pub(crate) fn kicked_pass(&mut self, c: usize, team: usize) {
+        self.kicked_pass_lofted(c, team, 0.0);
+    }
+
+    /// [`MatchMeasures::kicked_pass`] with the kick's `loft`: a planned pass with its facts
+    /// adds to the side's in-possession counts.
+    pub(crate) fn kicked_pass_lofted(&mut self, c: usize, team: usize, loft: f64) {
         let planned = self.planned.take().filter(|p| p.carrier == c);
         let cell = planned.map_or(UNKNOWN_CELL, |p| p.cell);
         self.pass_attempts[team][cell] += 1;
         self.in_flight = Some(cell);
+        self.entry = None;
+        if let Some(p) = planned
+            && let Some(f) = p.facts
+        {
+            let s = &mut self.possessing[team];
+            let long = f.length_m >= crate::decision::LONG_BALL_M;
+            s.passes += 1;
+            s.forward += u32::from(p.progress_m >= crate::decision::FORWARD_M);
+            s.long += u32::from(long);
+            if f.start_third == 0 {
+                s.own_third += 1;
+                s.own_third_long += u32::from(long);
+            }
+            if f.keeper {
+                s.keeper_actions += 1;
+                s.keeper_long += u32::from(long);
+            }
+            if f.target_third >= 1 {
+                s.upfield += 1;
+                s.wide += u32::from(f.channel != 1);
+            }
+            if f.cross {
+                s.crosses += 1;
+                s.high_crosses += u32::from(loft > 0.0);
+                s.cross_origin_m += f.origin_m;
+            }
+            if f.start_third < 2 && f.target_third == 2 {
+                self.entry = Some(f.channel);
+            }
+        }
         self.add_pass(team, false, planned.map(|p| p.progress_m));
+    }
+
+    /// The keeper of `team` cleared the ball in open play: a long action of his.
+    pub(crate) fn keeper_cleared(&mut self, team: usize) {
+        let s = &mut self.possessing[team];
+        s.keeper_actions += 1;
+        s.keeper_long += 1;
+    }
+
+    /// `team` took a goal kick `length_m` metres long.
+    pub(crate) fn goal_kick(&mut self, team: usize, length_m: f64) {
+        let s = &mut self.possessing[team];
+        s.goal_kicks += 1;
+        s.goal_kick_m += length_m;
+    }
+
+    /// `team` shot in open play from `distance_m` metres from the goal centre, from outside
+    /// the penalty area when `outside`.
+    pub(crate) fn open_shot(&mut self, team: usize, distance_m: f64, outside: bool) {
+        let s = &mut self.possessing[team];
+        s.open_shots += 1;
+        s.outside_shots += u32::from(outside);
+        s.open_shot_m += distance_m;
     }
 
     /// `team`'s restart taker played his first kick: it adds a pass to the side's chain and
@@ -316,12 +483,16 @@ impl MatchMeasures {
     pub(crate) fn kicked_other(&mut self) {
         self.planned = None;
         self.in_flight = None;
+        self.entry = None;
     }
 
     /// The pass in flight reached a team-mate of its passer.
     pub(crate) fn completed(&mut self, team: usize) {
         if let Some(cell) = self.in_flight.take() {
             self.pass_completed[team][cell] += 1;
+            if let Some(ch) = self.entry.take() {
+                self.possessing[team].entries[ch] += 1;
+            }
         }
         // A completed pass of the other side: it keeps the ball.
         if self.spell.is_some_and(|s| s.poss.team == team) {
@@ -400,6 +571,7 @@ impl MatchMeasures {
         } else if taken {
             self.turnovers[t] += 1;
         }
+        self.possessing[t].final_third_possessions += u32::from(p.final_third);
     }
 
     /// A dead ball, a goal or full time at `tick`: a spell longer than a short regain is the
@@ -413,6 +585,7 @@ impl MatchMeasures {
     /// `team` gained the ball: with no chain open, an open-play chain starts.
     pub(crate) fn gained(&mut self, team: usize, tick: u32) {
         self.in_flight = None;
+        self.entry = None;
         if self.chain.is_none() {
             self.chain = Some(Chain {
                 team,
@@ -458,6 +631,13 @@ impl MatchMeasures {
     /// One open-play tick credited to `team` with the ball in `third`.
     pub(crate) fn live_tick(&mut self, team: usize, third: usize) {
         self.third_ticks[team][third] += 1;
+        if third == 2 {
+            if let Some(s) = self.spell.as_mut().filter(|s| s.poss.team == team) {
+                s.poss.final_third = true;
+            } else if let Some(p) = self.possession.as_mut().filter(|p| p.team == team) {
+                p.final_third = true;
+            }
+        }
     }
 
     /// Full time: the open chain ends.
@@ -683,10 +863,10 @@ mod tests {
         assert_eq!(m.turnovers, [1, 0]);
         assert_eq!(m.shot_possessions, [0, 1]);
         assert_eq!(m.possessions, [1, 1]);
-        m.chose(HOME, 6, 3);
-        m.chose(HOME, 6, 3);
-        m.chose(HOME, 6, 0);
-        m.chose(HOME, 7, 0);
+        m.chose(HOME, 6, 3, false, false);
+        m.chose(HOME, 6, 3, false, false);
+        m.chose(HOME, 6, 0, false, false);
+        m.chose(HOME, 7, 0, false, false);
         assert_eq!(
             m.choices[HOME],
             [2, 0, 0, 1, 0],
@@ -752,5 +932,105 @@ mod tests {
         assert_eq!(third_of(50.0, -1.0, l), 0);
         assert_eq!(third_of(-60.0, 1.0, l), 0, "behind the own line");
         assert_eq!(third_of(60.0, 1.0, l), 2, "behind the far line");
+    }
+
+    fn facts(length_m: f64, start_third: usize, target_third: usize, channel: usize) -> PassFacts {
+        PassFacts {
+            length_m,
+            start_third,
+            target_third,
+            channel,
+            cross: false,
+            origin_m: 0.0,
+            keeper: false,
+        }
+    }
+
+    /// A 35 m pass from the own third counts long and own-third long; a 20 m forward pass into
+    /// the middle third's right channel counts forward and wide; a keeper's long pass and his
+    /// clearance are both long keeper actions.
+    #[test]
+    fn a_long_pass_from_the_own_third_counts_long_and_own_third_long() {
+        let mut m = MatchMeasures::default();
+        m.planned_pass(3, 2, 30.0);
+        m.pass_facts(3, facts(35.0, 0, 1, 1));
+        m.kicked_pass(3, HOME);
+        m.planned_pass(4, 1, 18.0);
+        m.pass_facts(4, facts(20.0, 1, 1, 2));
+        m.kicked_pass(4, HOME);
+        m.planned_pass(0, 10, 40.0);
+        m.pass_facts(
+            0,
+            PassFacts {
+                keeper: true,
+                ..facts(40.0, 0, 1, 1)
+            },
+        );
+        m.kicked_pass(0, HOME);
+        m.keeper_cleared(HOME);
+        let s = m.possessing[HOME];
+        assert_eq!((s.passes, s.forward, s.long), (3, 3, 2));
+        assert_eq!((s.own_third, s.own_third_long), (2, 2));
+        assert_eq!((s.upfield, s.wide), (3, 1));
+        assert_eq!((s.keeper_actions, s.keeper_long), (2, 2));
+        assert_eq!(m.possessing[AWAY], Possessing::default());
+    }
+
+    /// A pass from the middle third into the final third counts as an entry by its channel
+    /// only when a team-mate takes it; an interception counts none.
+    #[test]
+    fn an_entry_counts_only_when_completed() {
+        let mut m = MatchMeasures::default();
+        m.planned_pass(5, 1, 20.0);
+        m.pass_facts(5, facts(22.0, 1, 2, 0));
+        m.kicked_pass(5, HOME);
+        m.gained(AWAY, 10);
+        m.completed(AWAY);
+        assert_eq!(m.possessing[HOME].entries, [0, 0, 0]);
+        m.planned_pass(6, 1, 20.0);
+        m.pass_facts(6, facts(22.0, 1, 2, 0));
+        m.kicked_pass(6, HOME);
+        m.completed(HOME);
+        assert_eq!(m.possessing[HOME].entries, [1, 0, 0]);
+        // A pass inside the final third is no entry.
+        m.planned_pass(7, 1, 8.0);
+        m.pass_facts(7, facts(10.0, 2, 2, 1));
+        m.kicked_pass(7, HOME);
+        m.completed(HOME);
+        assert_eq!(m.possessing[HOME].entries, [1, 0, 0]);
+    }
+
+    /// A lofted cross counts high, a driven one low; a possession whose ball reached the final
+    /// third counts once when it ends; a pressed dribble counts one take-on until the carrier
+    /// stops being a pressed dribbler.
+    #[test]
+    fn crosses_final_third_possessions_and_takeons_count_by_their_definitions() {
+        let mut m = MatchMeasures::default();
+        m.touched(HOME, 0);
+        m.gained(HOME, 0);
+        m.live_tick(HOME, 1);
+        m.live_tick(HOME, 2);
+        m.live_tick(HOME, 2);
+        for (c, loft) in [(8, 4.0), (9, 0.0)] {
+            m.planned_pass(c, 7, 6.0);
+            m.pass_facts(
+                c,
+                PassFacts {
+                    cross: true,
+                    origin_m: 12.0,
+                    ..facts(18.0, 2, 2, 1)
+                },
+            );
+            m.kicked_pass_lofted(c, HOME, loft);
+        }
+        m.dead(50);
+        let s = m.possessing[HOME];
+        assert_eq!((s.crosses, s.high_crosses), (2, 1));
+        assert!((s.cross_origin_m - 24.0).abs() < 1e-12);
+        assert_eq!(s.final_third_possessions, 1);
+        for (pressed, choice) in [(true, 2), (true, 2), (false, 2), (true, 2), (true, 0)] {
+            m.chose(HOME, 9, choice, pressed, false);
+        }
+        assert_eq!(m.possessing[HOME].takeons, 2);
     }
 }

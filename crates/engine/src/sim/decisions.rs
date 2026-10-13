@@ -175,15 +175,8 @@ impl Simulation {
         // force keeps its action.
         let (o, choice) = self.carrier_override(c, &scored, o, choice);
         #[cfg(feature = "measures")]
-        if let Some(m) = self.measures.as_deref_mut() {
-            let k = match choice {
-                crate::decision::Choice::Pass => 0,
-                crate::decision::Choice::Shot => 1,
-                crate::decision::Choice::Dribble => 2,
-                crate::decision::Choice::Hold => 3,
-                crate::decision::Choice::Clear => 4,
-            };
-            m.chose(self.players[c].team, c, k);
+        if self.measures.is_some() {
+            self.measure_choice(c, &o, choice, offsets);
         }
         let carrier = crate::streams::PlayerKey::of(&self.players[c]);
         let plan = decision.plan(&self.view(), c, &o, choice);
@@ -199,16 +192,23 @@ impl Simulation {
             let (from, to) = (self.players[c].pos, self.players[j].pos);
             let d = (to - from).length();
             let gain = (to.x - from.x) * self.teams[team].attack_x;
-            let kind = crate::decision::PassKind::of(
-                from,
-                to,
-                d,
-                self.teams[team].attack_x,
-                c == self.keeper(team),
-                self.config.pitch(),
-            );
+            let attack_x = self.teams[team].attack_x;
+            let keeper = c == self.keeper(team);
+            let pitch = self.config.pitch();
+            let kind = crate::decision::PassKind::of(from, to, d, attack_x, keeper, pitch);
+            let length = pitch.length();
+            let facts = crate::measures::PassFacts {
+                length_m: d,
+                start_third: crate::measures::third_of(from.x, attack_x, length),
+                target_third: crate::measures::third_of(to.x, attack_x, length),
+                channel: crate::decision::channel(to.y, attack_x),
+                cross: kind == crate::decision::PassKind::Cross,
+                origin_m: pitch.half_length() - from.x * attack_x,
+                keeper,
+            };
             if let Some(m) = self.measures.as_deref_mut() {
                 m.planned_pass(c, crate::measures::pass_cell(kind, d), gain);
+                m.pass_facts(c, facts);
             }
         }
         match plan {
@@ -237,6 +237,49 @@ impl Simulation {
 }
 
 impl Simulation {
+    /// Count site: carrier `c` chose `choice` (his options `o`, after any override). The
+    /// choice is off the plan when it is not the top-scored option before the noise, the
+    /// draft scored again with every noise draw at its middle: another kind of option, or a
+    /// pass to another team-mate. A dribble begun with an opponent within the pressed
+    /// distance is a take-on.
+    #[cfg(feature = "measures")]
+    fn measure_choice(
+        &mut self,
+        c: usize,
+        o: &crate::decision::Options,
+        choice: crate::decision::Choice,
+        offsets: Option<crate::plugin::OptionOffsets>,
+    ) {
+        use crate::decision::Choice;
+        let decision = self.config.modules.decision;
+        let (off_plan, pressed) = {
+            let view = self.view();
+            let draft = decision.options(&view, c);
+            let middle = OptionDraws {
+                shot: 0.5,
+                passes: [0.5; crate::modules::MATES],
+                dribble_hold: (0.5, 0.5),
+                clear: 0.5,
+            };
+            let plain = decision.scored(&draft, &middle).options;
+            let (top, top_choice) = decision.choose(&view, c, &plain, offsets);
+            let off_plan = top_choice != choice
+                || (choice == Choice::Pass && top.pass.map(|p| p.1) != o.pass.map(|p| p.1));
+            (off_plan, crate::decision::pressed(&view, c))
+        };
+        let k = match choice {
+            Choice::Pass => 0,
+            Choice::Shot => 1,
+            Choice::Dribble => 2,
+            Choice::Hold => 3,
+            Choice::Clear => 4,
+        };
+        let team = self.players[c].team;
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.chose(team, c, k, pressed, off_plan);
+        }
+    }
+
     /// Player `c` shoots a shot of `kind` at the goal centred on `goal`, which `keeper`
     /// defends. An open-play shot, a penalty, a direct free kick and a shoot-out kick all come
     /// from here, and the draws are taken in the same order every time: the side (only with
@@ -284,6 +327,14 @@ impl Simulation {
                 .modules
                 .decision
                 .restart_pass(&self.view(), taker, kind, direct, aim);
+        #[cfg(feature = "measures")]
+        if kind == StoppageKind::GoalKick {
+            let team = self.players[taker].team;
+            let length = (pass.target - self.players[taker].pos).length();
+            if let Some(m) = self.measures.as_deref_mut() {
+                m.goal_kick(team, length);
+            }
+        }
         #[cfg(feature = "sensitivity")]
         if kind == StoppageKind::ThrowIn {
             let team = self.players[taker].team;

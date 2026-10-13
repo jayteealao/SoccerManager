@@ -64,6 +64,29 @@ pub const FORWARD_M: f64 = 5.0;
 /// no pass and took no shot, the other side never had the ball. The primitives' possession
 /// count and the real-team table both use it.
 pub const REGAIN_S: f64 = 2.0;
+/// A pass is long when it covers this many metres or more: the build-up term weighs such a
+/// pass from the side's own third (hook `pass.build_up`), and the long-ball statistics count
+/// it.
+pub const LONG_BALL_M: f64 = 32.0;
+/// The metres of a goal kick's score one unit of build-up adds per 45 m of the kick, and the
+/// metres one unit of build-up toward going long adds to the goal kick's reach (hook
+/// `pass.build_up`).
+pub const BUILD_UP_M: f64 = 45.0;
+pub const GOAL_KICK_REACH_M: f64 = 25.0;
+
+/// The channel of a point `y` across the pitch for a side attacking `attack_x`: 0 the side's
+/// left (where its left-back stands), 1 the centre, 2 its right. A point more than
+/// [`contract::CROSS_WIDE_M`] from the centre line is in a wide channel.
+pub fn channel(y: f64, attack_x: f64) -> usize {
+    let across = y * attack_x;
+    if across < -contract::CROSS_WIDE_M {
+        0
+    } else if across > contract::CROSS_WIDE_M {
+        2
+    } else {
+        1
+    }
+}
 
 /// A kick the carrier decided on this tick. A clearance is kicked away from danger to no
 /// team-mate, and is counted apart from a pass.
@@ -439,6 +462,7 @@ impl DecisionModule for DecisionV1 {
                 hold_the_line(view, &mut targets, team, c);
                 let sent_back = back_to_place(view, &mut targets);
                 time_runs(view, &mut targets, team, c);
+                run_depth(view, &mut targets, team, c);
                 // Pressers run at the point where they can meet the carrier's run, and go for
                 // the ball once they are close. Short of that, each leans his aim goal-side of
                 // the carrier by his press stage (positioning): a good presser closes the way
@@ -697,7 +721,9 @@ impl DecisionModule for DecisionV1 {
         } else {
             stages.share(Stage::PASS_CHOOSE)
         };
-        let noise = w.noise * (1.5 - judgement);
+        // Creative freedom (hook `option.noise`) scales the noise: a side given more freedom
+        // strays further from the top-scored option.
+        let noise = w.noise * (1.5 - judgement) * plan.freedom;
         // A lone carrier: an outfield carrier with no active outfield team-mate ahead of him.
         let depth = carrier.pos.x * attack.x;
         let lone = !keeper
@@ -709,8 +735,9 @@ impl DecisionModule for DecisionV1 {
                     && p.pos.x * attack.x > depth
             });
 
-        // Shot.
-        let shot = if !keeper && goal_dist < t.shot_range {
+        // Shot. The final third's reach (hook `shot.range`) lets a side look at shots from
+        // farther out.
+        let shot = if !keeper && goal_dist < t.shot_range + plan.shot_reach_m {
             let lane = players
                 .iter()
                 .filter(|p| p.team != team && p.id != their_keeper && p.active())
@@ -726,9 +753,10 @@ impl DecisionModule for DecisionV1 {
             } else {
                 Stage::LONG_SHOT_CHOOSE
             };
-            // Shooting from distance: outside the area, more the farther out.
+            // Shooting from distance: outside the area, more the farther out; the side's
+            // long-shot weight (hook `shot.outside_box`) acts on every shot from there.
             let distance = if choose == Stage::LONG_SHOT_CHOOSE {
-                tr(TraitKind::ShootsFromDistance) * goal_dist / t.shot_range
+                tr(TraitKind::ShootsFromDistance) * goal_dist / t.shot_range + plan.long_shot
             } else {
                 0.0
             };
@@ -804,6 +832,31 @@ impl DecisionModule for DecisionV1 {
             } else {
                 0.0
             };
+            // The side's in-possession plan weighs the pass: build-up a long pass out of its
+            // own third (hook `pass.build_up`, the keeper's included), the attacking channel
+            // a pass into a channel of the middle or final third (hooks `pass.channel.*`),
+            // crossing and early crossing a cross (hooks `pass.cross`, `pass.cross_early`).
+            // Each term is 0 at its default.
+            let build_up = if d >= LONG_BALL_M && carrier.pos.x * attack.x < -half / 3.0 {
+                plan.build_up * (d / 45.0)
+            } else {
+                0.0
+            };
+            let channel_bias = if mate.pos.x * attack.x >= -half / 3.0 {
+                match channel(mate.pos.y, side.attack_x) {
+                    0 => plan.channel_left,
+                    2 => plan.channel_right,
+                    _ => plan.channel_centre,
+                }
+            } else {
+                0.0
+            };
+            let cross = if kind == PassKind::Cross {
+                let early = half - carrier.pos.x * side.attack_x > EARLY_CROSS_M;
+                plan.crossing + if early { plan.early_cross } else { 0.0 }
+            } else {
+                0.0
+            };
             // The pass fails as its lane closes and its receiver's space shrinks; the ball
             // is lost about halfway.
             let fail = 0.5 * ((1.0 - lane / 6.0) + (1.0 - receiver_space / 8.0));
@@ -819,7 +872,10 @@ impl DecisionModule for DecisionV1 {
                 + layoff
                 + plan.slots[mate.slot].long_ball_target * (d / 45.0)
                 + flair
-                + mood_risk * forward;
+                + mood_risk * forward
+                + build_up
+                + channel_bias
+                + cross;
             let score = if has_traits {
                 let switch = d > SWITCH_M && (mate.pos.y - carrier.pos.y).abs() >= SWITCH_M;
                 let early = kind == PassKind::Cross
@@ -896,7 +952,9 @@ impl DecisionModule for DecisionV1 {
                 - loss(
                     0.5 * (f64::from(u8::from(pressed)) + (1.0 - space_ahead / 10.0)),
                     carrier.pos,
-                );
+                )
+                // The side's dribbling weight (hook `dribble.weight`), 0 at its default.
+                + plan.dribble;
             let hold = w.hold - w.hold_per_s * held_s + lone_hold
                 - mood_risk
                 - loss(0.5 * f64::from(u8::from(pressed)), carrier.pos);
@@ -1110,7 +1168,17 @@ impl DecisionModule for DecisionV1 {
         let skill = execution(view, c, execute, pressure, under, penalty, foot);
         let noise = t.aim_noise * (1.5 - skill);
         let dir = rotate(line, map_range(-noise, noise, aim));
-        let loft = if d > 25.0 { 3.0 + d * 0.08 } else { 0.0 };
+        let lofted = if d > 25.0 { 3.0 + d * 0.08 } else { 0.0 };
+        // The cross type (hook `cross.trajectory`): a driven cross stays on the ground, a
+        // floated one is lofted at every length, and the default keeps the length rule.
+        let cross_loft = view.teams()[carrier.team].plan.cross_loft;
+        let loft = if kind != PassKind::Cross || cross_loft == 0.0 {
+            lofted
+        } else if cross_loft < 0.0 {
+            0.0
+        } else {
+            3.0 + d * 0.08
+        };
         let speed = kick_speed(d, loft, t);
         Kick::Pass { dir, speed, loft }
     }
@@ -1255,6 +1323,13 @@ impl DecisionModule for DecisionV1 {
         let attack = DVec2::new(view.teams()[me.team].attack_x, 0.0);
         let delivered = kind == StoppageKind::Corner || (kind == StoppageKind::FreeKick && direct);
         let cross_at = delivered.then(|| view.pitch().penalty_spot(attack.x));
+        // Build-up (hook `pass.build_up`) weighs a goal kick by its length and lets it reach
+        // farther toward going long; 0 at its default.
+        let build_up = if kind == StoppageKind::GoalKick {
+            view.teams()[me.team].plan.build_up
+        } else {
+            0.0
+        };
         let range = if kind == StoppageKind::ThrowIn {
             let long = contract::factor(
                 c.actions.of(contract::ActionKind::LongThrow).spread(),
@@ -1262,7 +1337,7 @@ impl DecisionModule for DecisionV1 {
             );
             3.0..=(THROW_RANGE * long)
         } else {
-            4.0..=45.0
+            4.0..=(45.0 + build_up.max(0.0) * GOAL_KICK_REACH_M)
         };
         let mut candidates = [(0usize, 0.0f64); MATES];
         let mut count = 0;
@@ -1281,7 +1356,9 @@ impl DecisionModule for DecisionV1 {
             }
             let score = match cross_at {
                 Some(mark) => -(mate.pos - mark).length(),
-                None => -d + 0.2 * (mate.pos - me.pos).dot(attack),
+                None => {
+                    -d + 0.2 * (mate.pos - me.pos).dot(attack) + build_up * BUILD_UP_M * d / 45.0
+                }
             };
             let score = if traits.is_empty() || cross_at.is_some() {
                 score
@@ -1671,6 +1748,41 @@ fn time_runs(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER], team: usize, c
                 at.y += away * space * s;
             }
         }
+        targets[i] = view.pitch().clamp(at, 0.5);
+    }
+}
+
+/// `true` for a slot of the attack line: a winger or a striker by the formation's position.
+pub(crate) fn attack_line(position: Option<crate::data::team::Position>) -> bool {
+    use crate::data::team::Position;
+    matches!(position, Some(Position::LW | Position::RW | Position::ST))
+}
+
+/// The side's forward runs (hook `run.depth`) while team `team` has the ball and carrier `c`
+/// is someone else: every active attack-line player's target moves `run_depth_m` up the
+/// pitch (toward the onside line) or, below 0, back toward the ball, never past the onside
+/// line, 0.5 m short of the second-last defender. Nothing moves at the default of 0.
+fn run_depth(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER], team: usize, c: usize) {
+    let side = &view.teams()[team];
+    let run = side.plan.run_depth_m;
+    if run == 0.0 {
+        return;
+    }
+    let attack_x = side.attack_x;
+    let line = offside::second_last_depth(team, view.players(), attack_x) - ONSIDE_MARGIN;
+    for (i, p) in view.players().iter().enumerate() {
+        if p.team != team || i == c || !p.active() || !attack_line(side.plan.slots[p.slot].position)
+        {
+            continue;
+        }
+        let mut at = targets[i];
+        let depth = at.x * attack_x + run;
+        let depth = if line.is_finite() {
+            depth.min(line)
+        } else {
+            depth
+        };
+        at.x = depth * attack_x;
         targets[i] = view.pitch().clamp(at, 0.5);
     }
 }

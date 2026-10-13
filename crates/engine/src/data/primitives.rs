@@ -26,7 +26,7 @@ pub const GRADED_LEVELS: usize = 5;
 
 /// The statistics a primitive can name as its signature. The real-team table
 /// (`signatures.json`) and the engine measure each one by the same definition.
-pub const SIGNATURE_STATS: [&str; 7] = [
+pub const SIGNATURE_STATS: [&str; 31] = [
     "passes_per_possession",
     "recycle_share",
     "turnovers_per_possession",
@@ -34,6 +34,30 @@ pub const SIGNATURE_STATS: [&str; 7] = [
     "block_height_m",
     "hold_dribble_share",
     "ppda",
+    "forward_pass_share",
+    "long_ball_share",
+    "own_third_long_share",
+    "goal_kick_m",
+    "keeper_long_share",
+    "wide_pass_share",
+    "entries_left_share",
+    "entries_right_share",
+    "entries_centre_share",
+    "entries_wide_share",
+    "entries_centre_left_share",
+    "entries_centre_right_share",
+    "outside_box_shot_share",
+    "shot_distance_m",
+    "takeons_per_90",
+    "crosses_per_final_third_possession",
+    "high_cross_share",
+    "low_cross_share",
+    "cross_origin_m",
+    "off_plan_share",
+    "runs_in_behind_share",
+    "fullback_runs_per_match",
+    "overlaps_per_match",
+    "underlaps_per_match",
 ];
 
 /// The real data sources a fit may read.

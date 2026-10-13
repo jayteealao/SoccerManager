@@ -1674,8 +1674,13 @@ impl Simulation {
                 #[cfg(feature = "measures")]
                 if self.measures.is_some() {
                     let distance = (self.teams[team].target_goal() - from).length();
+                    let outside = !self.config.pitch().in_penalty_area(from, attack_x);
+                    let open = !penalty && !restart_kick;
                     if let Some(m) = self.measures.as_deref_mut() {
                         m.shot(team, distance);
+                        if open {
+                            m.open_shot(team, distance, outside);
+                        }
                     }
                 }
                 self.shot_in_flight = Some(team);
@@ -1701,8 +1706,14 @@ impl Simulation {
                     p.kicked_other();
                 }
                 #[cfg(feature = "measures")]
-                if let Some(m) = self.measures.as_deref_mut() {
-                    m.kicked_other();
+                {
+                    let keeper = c == self.keeper(team);
+                    if let Some(m) = self.measures.as_deref_mut() {
+                        m.kicked_other();
+                        if keeper {
+                            m.keeper_cleared(team);
+                        }
+                    }
                 }
             } else {
                 self.summary.passes[team] += 1;
@@ -1714,7 +1725,7 @@ impl Simulation {
                 }
                 #[cfg(feature = "measures")]
                 if let Some(m) = self.measures.as_deref_mut() {
-                    m.kicked_pass(c, team);
+                    m.kicked_pass_lofted(c, team, loft);
                 }
             }
             #[cfg(feature = "measures")]

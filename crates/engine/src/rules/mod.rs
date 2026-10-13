@@ -1015,9 +1015,26 @@ impl Simulation {
                 Some((self.restart_pass(dead.taker, dead.kind, false), false))
             }
             StoppageKind::GoalKick => {
-                let kick = self
-                    .decide_carrier(dead.taker)
-                    .unwrap_or_else(|| self.restart_pass(dead.taker, dead.kind, false));
+                let decided = self.decide_carrier(dead.taker);
+                // The goal kick's length: the planned pass, or a clearance's distance; the
+                // restart pass measures its own.
+                #[cfg(feature = "measures")]
+                if let Some(kick) = decided {
+                    let length = match kick {
+                        crate::decision::Kick::Clear { .. } => {
+                            Some(crate::decision::CLEARANCE_DISTANCE)
+                        }
+                        _ => self
+                            .measures
+                            .as_deref()
+                            .and_then(|m| m.planned_length(dead.taker)),
+                    };
+                    if let (Some(m), Some(length)) = (self.measures.as_deref_mut(), length) {
+                        m.goal_kick(dead.team, length);
+                    }
+                }
+                let kick =
+                    decided.unwrap_or_else(|| self.restart_pass(dead.taker, dead.kind, false));
                 Some((kick, false))
             }
             StoppageKind::FreeKick if !dead.direct => {

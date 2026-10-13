@@ -236,12 +236,33 @@ fn options(
             .map(|&i| (i, gap));
     }
 
+    // The side's full-back runs: the chosen run goes first in a full-back's menu and drops its
+    // touchline-lane condition (hook `shape.fullback_run`), and the run frequency scales how
+    // far ahead and how near the ball the team-mate he runs past may be (hook
+    // `shape.fullback_reach`). Neither moves anything at its default.
+    let plan = &f.side.plan;
+    let fullback_run = if plan.fullback_run > 0.0 {
+        Some(StandOption::Overlap)
+    } else if plan.fullback_run < 0.0 {
+        Some(StandOption::Underlap)
+    } else {
+        None
+    };
     for &i in &movers {
         let slot = i - f.first;
         let menu = menu_of(f.side, slot, in_possession);
         if menu[0].is_none() {
             continue;
         }
+        let fullback = matches!(plan.slots[slot].position, Some(Position::LB | Position::RB));
+        let (first, reach) = if fullback {
+            (
+                fullback_run.filter(|&o| in_possession && has(menu, o)),
+                plan.fullback_reach,
+            )
+        } else {
+            (None, 1.0)
+        };
         let me = anchors[i];
         let my_depth = f.depth(me);
         let s = f.pitch_side(slot);
@@ -253,7 +274,10 @@ fn options(
                 .filter(move |&j| j != i && j != f.keeper && players[j].active())
         };
         let mut pick = None;
-        for option in menu.iter().flatten() {
+        let order = first
+            .iter()
+            .chain(menu.iter().flatten().filter(|&&o| Some(o) != first));
+        for option in order {
             let spot = match option {
                 StandOption::Drop => dropper.filter(|&(d, _)| d == i).map(|(_, spot)| spot),
                 StandOption::Widen if s != 0.0 => {
@@ -286,7 +310,7 @@ fn options(
                         .filter(|&j| {
                             let at = players[j].pos;
                             let d = f.depth(at) - my_depth;
-                            (at.y - centre) * s > 0.0 && d > 0.0 && d <= OVERLAP_DEPTH_M
+                            (at.y - centre) * s > 0.0 && d > 0.0 && d <= OVERLAP_DEPTH_M * reach
                         })
                         .min_by(|&a, &b| {
                             let da = (players[a].pos - me).length();
@@ -295,16 +319,19 @@ fn options(
                         });
                     ahead.and_then(|j| {
                         let at = players[j].pos;
-                        let near = Some(j) == carrier || (at - ball).length() <= sizes.near_ball_m;
+                        let near =
+                            Some(j) == carrier || (at - ball).length() <= sizes.near_ball_m * reach;
                         let wide = (at.y - centre) * s >= my_out - OVERLAP_NARROWER_M;
                         let lane = at.y.abs() >= half_width - TOUCHLINE_LANE_M;
+                        // The side's chosen full-back run ignores the touchline lane.
+                        let chosen = first == Some(*option);
                         let forward = DVec2::new(f.ax, 0.0);
                         match option {
-                            StandOption::Overlap if near && wide && !lane => Some(
+                            StandOption::Overlap if near && wide && (!lane || chosen) => Some(
                                 at + forward * sizes.overlap_ahead_m
                                     + DVec2::new(0.0, s * sizes.overlap_out_m),
                             ),
-                            StandOption::Underlap if near && wide && lane => Some(
+                            StandOption::Underlap if near && wide && (lane || chosen) => Some(
                                 at + forward * sizes.underlap_ahead_m
                                     - DVec2::new(0.0, s * sizes.underlap_in_m),
                             ),
