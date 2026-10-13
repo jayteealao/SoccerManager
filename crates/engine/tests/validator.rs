@@ -67,9 +67,12 @@ fn engine_events(config: engine::MatchConfig) -> (Vec<engine::EngineEvent>, Stre
 /// The event-stream rules hold for the full engine before they judge anything else: seeds 1
 /// to 5 over 90 minutes, which bring injuries and a straight red; seeds 9, 11, 21 and 28,
 /// which bring more injuries and another red; a 10-minute match, which adds no time; a
-/// knockout match (seed 2, the lowest whose shoot-out scores) played through extra time and a
-/// shoot-out; and seed 4 between two generated top-flight clubs (league seed 1), the lowest
-/// that brings both a second yellow and a substitution the rule pack refuses. Until the AI
+/// knockout match (seed 4, the lowest whose shoot-out scores; seed 2 until tempo became
+/// patience and the mentality an appetite for risk) played through extra time and a
+/// shoot-out; and seed 1 between two generated top-flight clubs (league seed 1), the lowest
+/// that brings a second yellow, with the refused substitution brought by the other streams
+/// (seed 4, which brought both, until tempo became patience and the mentality an appetite for
+/// risk). Until the AI
 /// sides started in the style their staff picks the knockout match was seed 1 and the
 /// generated seeds were 16 and 9. Until the player as a person joined the team shape the
 /// knockout match was seed 8 and the generated seeds were 7 and 1, and seeds 1 to 5 brought the refused substitution (seed 7 until the
@@ -90,7 +93,7 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
         });
     let short = engine::MatchConfig::new(1, 10, &content, [&a, &b]).unwrap();
     streams.push(("10 minutes seed 1".into(), engine_events(short)));
-    let knockout = engine::MatchConfig::new(2, 90, &content, [&a, &b])
+    let knockout = engine::MatchConfig::new(4, 90, &content, [&a, &b])
         .unwrap()
         .with_knockout();
     let (events, rules) = engine_events(knockout);
@@ -98,10 +101,10 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
         events.iter().any(|e| e.shootout_scored == Some(true)),
         "the knockout match reached a shoot-out with a scored kick"
     );
-    streams.push(("knockout seed 2".into(), (events, rules)));
+    streams.push(("knockout seed 4".into(), (events, rules)));
     let league = engine::data::generate_league(1, 2, &content);
-    let generated = engine::MatchConfig::new(4, 90, &content, [&league[0], &league[1]]).unwrap();
-    streams.push(("generated seed 4".into(), engine_events(generated)));
+    let generated = engine::MatchConfig::new(1, 90, &content, [&league[0], &league[1]]).unwrap();
+    streams.push(("generated seed 1".into(), engine_events(generated)));
     let all: Vec<&engine::EngineEvent> = streams.iter().flat_map(|(_, (e, _))| e).collect();
     let has = |f: &dyn Fn(&engine::EngineEvent) -> bool| all.iter().any(|e| f(e));
     assert!(has(&|e| e.kind == Injury), "an injury is judged");

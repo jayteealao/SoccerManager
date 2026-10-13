@@ -4,6 +4,7 @@
 //! each time the tactics change, never per tick.
 
 pub mod change;
+pub mod hooks;
 pub mod planned;
 pub mod verdict;
 
@@ -73,8 +74,10 @@ impl Tactics {
     }
 }
 
-/// One instruction level, duty or mentality a trait of play can go against. Each names its
-/// level in the tactics file; a tactics file without that name holds nothing.
+/// One side of an instruction, a duty or a mentality a trait of play can go against. An
+/// instruction is held by the order of its level against the instruction's default (below
+/// or above it), and a mentality by its place in the list, never by a level's name, so a
+/// tactics file may name its levels freely. A duty is held by its name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Instruction {
     PressingLow,
@@ -141,39 +144,37 @@ impl Instruction {
         1 << (self as u16)
     }
 
-    /// `true` when `tactics` holds this instruction for the player in `slot`: the team's
-    /// level, mentality, or the slot's duty, by name in `schema`.
+    /// `true` when `tactics` holds this instruction for the player in `slot`: an
+    /// instruction's level below or above its default (pressing low, narrow or wide, tempo
+    /// more direct (faster) or more patient (slower) than its default, a deep or high line,
+    /// short or direct passing), the lowest mentality (defensive) or the one just below the
+    /// AI's default (cautious), or the slot's duty by its name.
     pub fn held(self, tactics: &Tactics, slot: usize, schema: &TacticsSchema) -> bool {
-        let level = |index: usize, name: &str| {
-            schema
-                .instructions
-                .level_names(index)
-                .iter()
-                .position(|n| *n == name)
-                .is_some_and(|l| l == usize::from(tactics.instructions[index]))
-        };
+        let defaults = schema.instructions.defaults();
+        let below = |index: usize| tactics.instructions[index] < defaults[index];
+        let above = |index: usize| tactics.instructions[index] > defaults[index];
+        let mentality = usize::from(tactics.mentality);
+        let default_mentality = schema.mentality_index(&schema.ai.mentality).unwrap_or(0);
         match self {
-            Instruction::PressingLow => level(PRESSING, "low"),
-            Instruction::WidthNarrow => level(WIDTH, "narrow"),
-            Instruction::WidthWide => level(WIDTH, "wide"),
-            Instruction::TempoSlower => level(TEMPO, "slower"),
-            Instruction::TempoFaster => level(TEMPO, "faster"),
-            Instruction::LineDeep => level(LINE_HEIGHT, "deep"),
-            Instruction::LineHigh => level(LINE_HEIGHT, "high"),
-            Instruction::DirectnessShort => level(DIRECTNESS, "short"),
-            Instruction::DirectnessDirect => level(DIRECTNESS, "direct"),
+            Instruction::PressingLow => below(PRESSING),
+            Instruction::WidthNarrow => below(WIDTH),
+            Instruction::WidthWide => above(WIDTH),
+            Instruction::TempoSlower => above(TEMPO),
+            Instruction::TempoFaster => below(TEMPO),
+            Instruction::LineDeep => below(LINE_HEIGHT),
+            Instruction::LineHigh => above(LINE_HEIGHT),
+            Instruction::DirectnessShort => below(DIRECTNESS),
+            Instruction::DirectnessDirect => above(DIRECTNESS),
             Instruction::DutyDefend => schema
                 .duty_index("defend")
                 .is_some_and(|d| d == usize::from(tactics.roles[slot].duty)),
             Instruction::DutyAttack => schema
                 .duty_index("attack")
                 .is_some_and(|d| d == usize::from(tactics.roles[slot].duty)),
-            Instruction::MentalityDefensive => schema
-                .mentality_index("defensive")
-                .is_some_and(|m| m == usize::from(tactics.mentality)),
-            Instruction::MentalityCautious => schema
-                .mentality_index("cautious")
-                .is_some_and(|m| m == usize::from(tactics.mentality)),
+            Instruction::MentalityDefensive => mentality == 0 && default_mentality > 0,
+            Instruction::MentalityCautious => {
+                default_mentality > 1 && mentality + 1 == default_mentality
+            }
         }
     }
 }
@@ -304,7 +305,7 @@ pub struct SlotPlan {
 /// The numbers play reads from a team's tactics.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TeamPlan {
-    /// Metres the whole block moves up: mentality plus line height.
+    /// Metres the whole block moves up out of possession: the line height.
     pub block_depth: f64,
     /// A scale on every slot's distance from the centre line.
     pub width: f64,
@@ -316,16 +317,17 @@ pub struct TeamPlan {
     /// The back line's own share of the line's organisation beside the keeper's, from the
     /// tuning's hooks.
     pub organise_back_line: f64,
-    pub tempo: f64,
+    /// The patience of the circulation: added to a short pass that does not go forward.
+    pub patience: f64,
     pub directness: f64,
     /// A factor on the team's restart delay while it leads.
     pub time_wasting: f64,
-    /// Tempo above normal or pressing above its default level: pressing and support jobs
-    /// rise one urgency grade ([`crate::pace`]).
+    /// Pressing above its default level: pressing and support jobs rise one urgency grade
+    /// ([`crate::pace`]). No tempo level lifts running pace.
     pub pace_lift: bool,
-    pub shoot: f64,
-    pub progress: f64,
-    pub hold: f64,
+    /// How much a lost ball's danger counts against each option's gain: the mentality's
+    /// appetite for risk.
+    pub loss_weight: f64,
     /// The fewest outfield players who stay goal-side of the ball while the team has it.
     pub rest_defence: usize,
     /// The sizes of the stand options; `None` takes no option.
@@ -336,6 +338,10 @@ pub struct TeamPlan {
     /// The bits of every [`Instruction`] the tactics hold for each slot's player: the team's
     /// levels and mentality, and the slot's duty. A trait of play reads them.
     pub held: [u16; PLAYERS_PER_TEAM],
+    /// Per slot: a deep line plays the keeper's rush off his line down, a high line his
+    /// staying on it; the keeper's chase range reads them.
+    pub keeper_rush_off: [bool; PLAYERS_PER_TEAM],
+    pub keeper_stay_off: [bool; PLAYERS_PER_TEAM],
     /// The anchor depth, in metres, of the attack duty and of the defend duty, for an
     /// override that plays a player at another duty's depth; 0 when the file has no such duty.
     pub attack_depth: f64,
@@ -347,6 +353,8 @@ impl TeamPlan {
     pub fn from(tactics: &Tactics, schema: &TacticsSchema, t: &Tuning) -> Self {
         let level = |index: usize| usize::from(tactics.instructions[index]);
         let ins = &schema.instructions;
+        let defaults = ins.defaults();
+        let held: [u16; PLAYERS_PER_TEAM] = std::array::from_fn(|slot| tactics.held(slot, schema));
         let press = &ins.pressing.levels[level(PRESSING)];
         let mentality = &schema.mentalities[usize::from(tactics.mentality)];
         let formation = &schema.formations[usize::from(tactics.formation)];
@@ -380,25 +388,24 @@ impl TeamPlan {
             };
         }
         Self {
-            block_depth: mentality.block_depth + ins.line_height.levels[level(LINE_HEIGHT)].value,
+            block_depth: ins.line_height.levels[level(LINE_HEIGHT)].value,
             width: ins.width.levels[level(WIDTH)].value,
             press_count: usize::from(press.press_count),
             press_distance: t.press_distance * press.press_distance_scale,
             back_line_gap: t.back_line_gap,
             organise_back_line: t.contract.hooks().organise_back_line,
-            tempo: ins.tempo.levels[level(TEMPO)].value,
+            patience: ins.tempo.levels[level(TEMPO)].value,
             directness: ins.passing_directness.levels[level(DIRECTNESS)].value,
             time_wasting: ins.time_wasting.levels[level(TIME_WASTING)].value,
-            pace_lift: ins.tempo.levels[level(TEMPO)].value > 0.0
-                || tactics.instructions[PRESSING] > ins.defaults()[PRESSING],
-            shoot: mentality.shoot,
-            progress: mentality.progress,
-            hold: mentality.hold,
+            pace_lift: tactics.instructions[PRESSING] > defaults[PRESSING],
+            loss_weight: mentality.loss_weight,
             rest_defence: usize::from(mentality.rest_defence),
             sizes: schema.stand_options,
             rest: schema.rest_defence,
             slots,
-            held: std::array::from_fn(|slot| tactics.held(slot, schema)),
+            held,
+            keeper_rush_off: held.map(|bits| bits & Instruction::LineDeep.bit() != 0),
+            keeper_stay_off: held.map(|bits| bits & Instruction::LineHigh.bit() != 0),
             attack_depth: duty_depth("attack"),
             defend_depth: duty_depth("defend"),
         }
@@ -413,18 +420,18 @@ impl TeamPlan {
             press_distance: t.press_distance,
             back_line_gap: t.back_line_gap,
             organise_back_line: t.contract.hooks().organise_back_line,
-            tempo: 0.0,
+            patience: 0.0,
             directness: 0.0,
             time_wasting: 1.0,
             pace_lift: false,
-            shoot: 0.0,
-            progress: 0.0,
-            hold: 0.0,
+            loss_weight: 0.0,
             rest_defence: 0,
             sizes: None,
             rest: None,
             slots: [SlotPlan::default(); PLAYERS_PER_TEAM],
             held: [0; PLAYERS_PER_TEAM],
+            keeper_rush_off: [false; PLAYERS_PER_TEAM],
+            keeper_stay_off: [false; PLAYERS_PER_TEAM],
             attack_depth: 0.0,
             defend_depth: 0.0,
         }
@@ -455,7 +462,7 @@ mod tests {
     }
 
     #[test]
-    fn attacking_moves_the_block_forward_and_high_pressing_sends_three() {
+    fn a_high_line_moves_the_block_up_attacking_seeks_risk_and_high_pressing_sends_three() {
         let content = shipped_content();
         let schema = &content.tactics;
         let t = &content.tuning.engine;
@@ -463,8 +470,15 @@ mod tests {
         tactics.mentality = schema.mentality_index("attacking").unwrap() as u8;
         tactics.instructions[PRESSING] = 2;
         let plan = TeamPlan::from(&tactics, schema, t);
+        assert_eq!(
+            plan.block_depth, 0.0,
+            "the mentality does not move the block"
+        );
+        tactics.instructions[LINE_HEIGHT] = 2;
+        let plan = TeamPlan::from(&tactics, schema, t);
         assert!(plan.block_depth > 0.0);
-        assert!(plan.shoot > 0.0);
+        let balanced = TeamPlan::from(&Tactics::defaults(schema), schema, t);
+        assert!(plan.loss_weight < balanced.loss_weight);
         assert_eq!(plan.press_count, 3);
         assert!(plan.press_distance > t.press_distance);
         assert!(

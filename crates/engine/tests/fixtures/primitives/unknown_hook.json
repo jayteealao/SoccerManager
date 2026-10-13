@@ -1,0 +1,28 @@
+{
+  "refusal": "pass.telepathy is not a hook",
+  "primitive": {
+    "name": "planted",
+    "kind": "graded",
+    "levels": "instructions.tempo",
+    "default": "balanced",
+    "inputs": [
+      {
+        "input": "patience",
+        "hook": "pass.telepathy"
+      }
+    ],
+    "signature": [
+      {
+        "stat": "passes_per_possession",
+        "direction": "up"
+      }
+    ],
+    "data": {
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England"
+      ],
+      "row": "tempo"
+    }
+  }
+}

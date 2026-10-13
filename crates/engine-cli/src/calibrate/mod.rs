@@ -47,6 +47,8 @@ pub mod fixtures;
 pub mod gate_proof;
 #[cfg(feature = "measures")]
 pub mod physical;
+#[cfg(feature = "measures")]
+pub mod primitives;
 pub mod rows;
 pub mod rules;
 pub mod run_folder;

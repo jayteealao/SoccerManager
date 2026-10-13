@@ -49,7 +49,7 @@ The player's attributes and state change the choice:
 
 - **Work rate** sets how often an urgent job gets a sprint, not how fast he walks or jogs. Two players with the same job therefore move differently.
 - **Determination and professionalism** set how a tired player saves energy: a player high in both keeps his urgent sprints and slows a step on normal jobs, while a player low in both skips the less urgent sprints first.
-- **Instructions and the game state** move a grade by one step: a high press or a faster tempo raises pressing and support jobs, and a team trailing late raises them too. A team that leads late and wastes time lowers its normal jobs one step, but only while the ball is dead. In open play both teams keep their normal grades, and an urgent job never drops below urgent.
+- **Instructions and the game state** move a grade by one step: a high press raises pressing and support jobs, and a team trailing late raises them too. No tempo level lifts running pace: tempo is how patiently a side circulates the ball, not how fast its players run. A team that leads late and wastes time lowers its normal jobs one step, but only while the ball is dead. In open play both teams keep their normal grades, and an urgent job never drops below urgent.
 
 Before the selector, every player ran to every target at full speed. Matches looked frantic, every player moved alike, and players ran out of energy far too early. The selector brings the sprint and high-speed counts per minute of ball in play toward the real figures, and lets a tired side show it.
 
@@ -113,3 +113,24 @@ With the shipped squads, which hold one spare per central position, some substit
 `engine-cli calibrate --suite styles` plays every ordered pairing of two different styles, with the same squad on both sides, and a formation drawn from each style's list. It reports each style's points per match, the styles it loses to clearly, and a dominance flag: a style with no clear loss, or with more than a fifth of all points, would be a style with no weakness. It also flags an identity statistic that a style does not move in its direction. Every change run plays a small sample, one match per ordered pairing, and reports it beside the verdict; the suite judges no band. See [Run the styles suite](../how-to/calibration.md#run-the-styles-suite).
 
 The suite tests presets only. The AI does not yet adapt during a match or remember which styles worked; that comes with later work on the AI manager.
+
+## Tactical primitives
+
+A tactical primitive is one setting of the tactics board: tempo, mentality, and the settings that later work adds. Each one is data in `content/tactics.json`, held to the same frame:
+
+- **Its kind.** A graded primitive has five ordered levels, a choice primitive lists its choices, and an on/off primitive has two states.
+- **Where play reads it.** It sets one or more plan inputs, and each input is read at one named hook: an option weight, a threshold, a trigger, a window or a shape offset. The hook list is fixed in the engine. A new way of scoring the carrier's options must read the same hooks, so a primitive and its tests keep their meaning when the scoring changes.
+- **What it moves.** It names a signature statistic and the way it moves as the level rises, primary first. The harness plays pairs of matches one level apart, with everything else the same, and checks that the primary statistic moves that way by more than the noise of the pairs. The check reads played matches, not the code.
+- **How big each level is.** Each level is fitted to real teams. A table of real club seasons (`content/signatures.json`) splits the teams into five quintiles of the statistic. The engine plays more passes than real teams, so a level is not fitted to the real value itself: it is fitted so that its ratio to the default level matches the ratio of its quintile's median to the middle median. The gap between the engine's and the real values is recorded for the tuning of pass volume. The held-out data (the Wyscout German league 2017/18, the 2018 World Cup and Euro 2016) is never read.
+
+No engine code names a style, and no place where a player decides reads a setting by its name. A style is a set of primitive levels in content; the trait conflicts follow the level's order against the default, not its name. A source test checks both.
+
+### Tempo is patience
+
+Tempo used to be added to every pass and taken from every hold and dribble, so a slower tempo made the carrier hold the ball and dribble into pressure. Tempo is now how patiently a side circulates the ball: when the carrier picks his pass, a short pass that does not go forward gains the level's value and a forward pass loses it. It moves which pass he picks, never whether he passes, holds or dribbles. Its signature is passes per possession, with the share of passes made before the first forward pass beside it. No tempo level lifts running pace.
+
+### Mentality is an appetite for risk
+
+Mentality used to add a flat bonus to shots and forward passes. It is now only how much the side fears losing the ball: a pass, a dribble or a hold loses the mentality's loss weight times its chance of failing times the danger of losing the ball there. A ball lost near the own goal hands the opponent a chance, and one lost near the other goal gives up the side's own, so the danger is highest at either end. An attacking mentality fears a loss least, and its weight can go below 0, so it seeks risk. The mentality also sets how many players stay behind the ball. Where the block stands belongs to the line height, which moves the block only while the other team has the ball.
+
+A shot carries no loss term. A missed shot hands the ball back at the opponent's own goal line, where it threatens nothing, and the shot spends the side's threat instead of losing it. Counted as a loss at the shooter's feet, the term held back every shot but the closest ones, so the shots left were twice as good and goals rose by half.

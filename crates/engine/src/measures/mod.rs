@@ -14,6 +14,19 @@
 //! goal, or full time. Its length counts the side's open-play passes and its restart kicks.
 //! A goal takes the phase of the restart that began the scoring side's open chain, else
 //! open play.
+//!
+//! The primitives' signatures count possessions the way the real-team table counts them in
+//! the event data, which is not the chain above: a possession starts at a side's touch or
+//! restart and passes to the other side at that side's first touch, unless the side that had
+//! the ball touches it again within [`crate::decision::REGAIN_S`] with no dead ball between
+//! while the other side completed no pass and took no shot (a short regain, merged into the
+//! possession). A dead ball, a goal or full time ends the possession. Its passes count its
+//! open-play passes and its restart kicks. An open-play pass is forward when its planned
+//! target gains [`crate::decision::FORWARD_M`] or more toward the attacked goal; the open-play
+//! passes of a possession before its first forward one are recycle passes (a restart kick is
+//! a set play and takes no part); a possession the other side takes with no shot in it is a
+//! turnover; a possession with a shot is a shot possession. The carrier's choices count by
+//! kind, once each time his choice changes, not on every tick he holds it.
 
 pub mod shape;
 
@@ -104,6 +117,9 @@ pub fn third_of(x: f64, attack_x: f64, length: f64) -> usize {
     ((from_own_line * 3.0 / length).max(0.0) as usize).min(2)
 }
 
+/// The carrier's choices, in [`MatchMeasures::choices`] order.
+pub const CHOICES: [&str; 5] = ["pass", "shot", "dribble", "hold", "clear"];
+
 /// The possession chain in progress.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Chain {
@@ -113,11 +129,68 @@ struct Chain {
     restart: Option<StoppageKind>,
 }
 
+/// A possession of the primitives' count in progress.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Possession {
+    team: usize,
+    passes: u32,
+    open_passes: u32,
+    recycle: u32,
+    /// A forward pass was played in it.
+    forward: bool,
+    shot: bool,
+}
+
+impl Possession {
+    fn new(team: usize) -> Self {
+        Self {
+            team,
+            passes: 0,
+            open_passes: 0,
+            recycle: 0,
+            forward: false,
+            shot: false,
+        }
+    }
+
+    /// A restart kick, or an open-play pass with its planned gain toward goal. A pass the
+    /// carrier did not plan (a first-time touch on, a header) has no known target: it counts
+    /// as a pass of the possession but takes no part in the recycle share.
+    fn pass(&mut self, restart: bool, progress_m: Option<f64>) {
+        self.passes += 1;
+        let Some(gain) = progress_m.filter(|_| !restart) else {
+            return;
+        };
+        self.open_passes += 1;
+        if gain >= crate::decision::FORWARD_M {
+            self.forward = true;
+        } else if !self.forward {
+            self.recycle += 1;
+        }
+    }
+}
+
+/// The other side's touches since its first touch at `start`: its possession if it keeps the
+/// ball, else a short regain merged away.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Spell {
+    start: u32,
+    poss: Possession,
+}
+
+/// [`crate::decision::REGAIN_S`] in ticks.
+fn regain_ticks() -> u32 {
+    // The constant is a few seconds: the cast is exact.
+    (crate::decision::REGAIN_S * f64::from(TICKS_PER_SECOND)).round() as u32
+}
+
 /// The pass the carrier planned this tick.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Planned {
     carrier: usize,
     cell: usize,
+    /// The planned target's gain toward the attacked goal, in metres.
+    progress_m: f64,
 }
 
 /// The measures of one match.
@@ -147,10 +220,28 @@ pub struct MatchMeasures {
     /// The sum of the chains' passes and of their ticks, for exact means.
     pub chain_passes: [u32; 2],
     pub chain_ticks: [u64; 2],
+    /// Possessions of the primitives' count ended (the module header defines them).
+    pub possessions: [u32; 2],
+    /// Their passes and restart kicks.
+    pub possession_passes: [u32; 2],
+    /// Their open-play passes with a planned target.
+    pub open_play_passes: [u32; 2],
+    /// The open-play passes played before their possession's first forward one.
+    pub recycle_passes: [u32; 2],
+    /// Possessions the other side took with no shot in them.
+    pub turnovers: [u32; 2],
+    /// Possessions that held a shot of their side.
+    pub shot_possessions: [u32; 2],
+    /// The carrier's choices by kind, in [`CHOICES`] order, each counted when it changes.
+    pub choices: [[u32; 5]; 2],
+    /// The last carrier and his choice.
+    last_choice: Option<(usize, usize)>,
     planned: Option<Planned>,
     /// The cell of the pass in flight.
     in_flight: Option<usize>,
     chain: Option<Chain>,
+    possession: Option<Possession>,
+    spell: Option<Spell>,
 }
 
 impl Default for MatchMeasures {
@@ -167,36 +258,58 @@ impl Default for MatchMeasures {
             chain_second_bins: [[0; CHAIN_SECOND_BINS]; 2],
             chain_passes: [0; 2],
             chain_ticks: [0; 2],
+            possessions: [0; 2],
+            possession_passes: [0; 2],
+            open_play_passes: [0; 2],
+            recycle_passes: [0; 2],
+            turnovers: [0; 2],
+            shot_possessions: [0; 2],
+            choices: [[0; 5]; 2],
+            last_choice: None,
             planned: None,
             in_flight: None,
             chain: None,
+            possession: None,
+            spell: None,
         }
     }
 }
 
 impl MatchMeasures {
-    /// Carrier `c` planned a pass of `cell`.
-    pub(crate) fn planned_pass(&mut self, c: usize, cell: usize) {
-        self.planned = Some(Planned { carrier: c, cell });
+    /// Carrier `c` planned a pass of `cell` whose target gains `progress_m` metres toward the
+    /// attacked goal.
+    pub(crate) fn planned_pass(&mut self, c: usize, cell: usize, progress_m: f64) {
+        self.planned = Some(Planned {
+            carrier: c,
+            cell,
+            progress_m,
+        });
+    }
+
+    /// Carrier `c` of `team` chose `choice`, an index into [`CHOICES`]: a choice counts when
+    /// it differs from the last carrier's last one.
+    pub(crate) fn chose(&mut self, team: usize, c: usize, choice: usize) {
+        if self.last_choice != Some((c, choice)) {
+            self.choices[team][choice] += 1;
+            self.last_choice = Some((c, choice));
+        }
     }
 
     /// Carrier `c` of `team` kicked an open-play pass: the pass he planned, else an unknown
     /// one. It is in flight and adds a pass to the side's open chain.
     pub(crate) fn kicked_pass(&mut self, c: usize, team: usize) {
-        let cell = self
-            .planned
-            .take()
-            .filter(|p| p.carrier == c)
-            .map_or(UNKNOWN_CELL, |p| p.cell);
+        let planned = self.planned.take().filter(|p| p.carrier == c);
+        let cell = planned.map_or(UNKNOWN_CELL, |p| p.cell);
         self.pass_attempts[team][cell] += 1;
         self.in_flight = Some(cell);
-        self.add_pass(team);
+        self.add_pass(team, false, planned.map(|p| p.progress_m));
     }
 
-    /// `team`'s restart taker played his first kick: it adds a pass to the side's chain.
+    /// `team`'s restart taker played his first kick: it adds a pass to the side's chain and
+    /// possession.
     pub(crate) fn restart_kicked(&mut self, team: usize) {
         self.kicked_other();
-        self.add_pass(team);
+        self.add_pass(team, true, None);
     }
 
     /// Any kick that is not a pass: no plan and no pass stays in flight.
@@ -210,11 +323,21 @@ impl MatchMeasures {
         if let Some(cell) = self.in_flight.take() {
             self.pass_completed[team][cell] += 1;
         }
+        // A completed pass of the other side: it keeps the ball.
+        if self.spell.is_some_and(|s| s.poss.team == team) {
+            self.take_over();
+        }
     }
 
     /// `team` shot from `distance_m` metres from the centre of the goal it attacks.
     pub(crate) fn shot(&mut self, team: usize, distance_m: f64) {
         self.kicked_other();
+        if let Some(s) = self.spell.as_mut().filter(|s| s.poss.team == team) {
+            s.poss.shot = true;
+            self.take_over();
+        } else if let Some(p) = self.possession.as_mut().filter(|p| p.team == team) {
+            p.shot = true;
+        }
         // The float-to-int cast saturates; a distance is never negative.
         let bin = (distance_m.max(0.0) as usize).min(SHOT_BINS - 1);
         self.shot_bins[team][bin] += 1;
@@ -226,6 +349,65 @@ impl MatchMeasures {
         if self.chain.is_some_and(|ch| ch.team != team) {
             self.end_chain(tick);
         }
+        self.spell_timeout(tick);
+        match self.possession {
+            None => self.possession = Some(Possession::new(team)),
+            // The side with the ball touches it again: a short regain.
+            Some(p) if p.team == team => self.spell = None,
+            Some(_) => {
+                if self.spell.is_none() {
+                    self.spell = Some(Spell {
+                        start: tick,
+                        poss: Possession::new(team),
+                    });
+                }
+            }
+        }
+    }
+
+    /// The other side's spell has lasted longer than a short regain: it has the ball.
+    fn spell_timeout(&mut self, tick: u32) {
+        if self
+            .spell
+            .is_some_and(|s| tick.saturating_sub(s.start) > regain_ticks())
+        {
+            self.take_over();
+        }
+    }
+
+    /// The other side's spell becomes its possession from its first touch; the possession
+    /// before it ends as a turnover.
+    fn take_over(&mut self) {
+        if let Some(s) = self.spell.take() {
+            self.close_possession(true);
+            self.possession = Some(s.poss);
+        }
+    }
+
+    /// Ends the open possession; `taken` when the other side took the ball. An open spell
+    /// that never became a possession is merged away.
+    fn close_possession(&mut self, taken: bool) {
+        let Some(p) = self.possession.take() else {
+            return;
+        };
+        let t = p.team;
+        self.possessions[t] += 1;
+        self.possession_passes[t] += p.passes;
+        self.open_play_passes[t] += p.open_passes;
+        self.recycle_passes[t] += p.recycle;
+        if p.shot {
+            self.shot_possessions[t] += 1;
+        } else if taken {
+            self.turnovers[t] += 1;
+        }
+    }
+
+    /// A dead ball, a goal or full time at `tick`: a spell longer than a short regain is the
+    /// other side's possession, any other spell is merged away, and the possession ends.
+    fn possession_stops(&mut self, tick: u32) {
+        self.spell_timeout(tick);
+        self.spell = None;
+        self.close_possession(false);
     }
 
     /// `team` gained the ball: with no chain open, an open-play chain starts.
@@ -250,12 +432,15 @@ impl MatchMeasures {
             passes: 0,
             restart: Some(kind),
         });
+        self.possession_stops(tick);
+        self.possession = Some(Possession::new(team));
     }
 
     /// The ball went dead: the open chain ends and nothing stays in flight.
     pub(crate) fn dead(&mut self, tick: u32) {
         self.kicked_other();
         self.end_chain(tick);
+        self.possession_stops(tick);
     }
 
     /// `team` scored: the goal takes the phase of the scoring side's open chain, then the
@@ -267,6 +452,7 @@ impl MatchMeasures {
             .and_then(|ch| ch.restart);
         self.goals_by_phase[team][phase_of(restart)] += 1;
         self.end_chain(tick);
+        self.possession_stops(tick);
     }
 
     /// One open-play tick credited to `team` with the ball in `third`.
@@ -277,11 +463,19 @@ impl MatchMeasures {
     /// Full time: the open chain ends.
     pub(crate) fn finish(&mut self, tick: u32) {
         self.end_chain(tick);
+        self.possession_stops(tick);
     }
 
-    fn add_pass(&mut self, team: usize) {
+    /// A pass of `team`: a restart kick, or an open-play pass with its planned gain toward
+    /// goal when known.
+    fn add_pass(&mut self, team: usize, restart: bool, progress_m: Option<f64>) {
         if let Some(ch) = self.chain.as_mut().filter(|ch| ch.team == team) {
             ch.passes += 1;
+        }
+        if let Some(s) = self.spell.as_mut().filter(|s| s.poss.team == team) {
+            s.poss.pass(restart, progress_m);
+        } else if let Some(p) = self.possession.as_mut().filter(|p| p.team == team) {
+            p.pass(restart, progress_m);
         }
     }
 
@@ -318,7 +512,7 @@ mod tests {
         m.touched(HOME, 120);
         m.gained(HOME, 120);
         for (c, t) in [(3, 150), (4, 180)] {
-            m.planned_pass(c, pass_cell(PassKind::Pass, 12.0));
+            m.planned_pass(c, pass_cell(PassKind::Pass, 12.0), 8.0);
             m.kicked_pass(c, HOME);
             m.touched(HOME, t);
             m.completed(HOME);
@@ -405,7 +599,7 @@ mod tests {
         let mut m = MatchMeasures::default();
         m.gained(HOME, 0);
         for c in 0..16 {
-            m.planned_pass(c, 0);
+            m.planned_pass(c, 0, 0.0);
             m.kicked_pass(c, HOME);
             m.completed(HOME);
         }
@@ -434,12 +628,105 @@ mod tests {
     #[test]
     fn an_unplanned_pass_is_unknown_and_an_interception_completes_nothing() {
         let mut m = MatchMeasures::default();
-        m.planned_pass(2, 4);
+        m.planned_pass(2, 4, 0.0);
         m.kicked_pass(5, HOME);
         assert_eq!(m.pass_attempts[HOME][UNKNOWN_CELL], 1);
         m.gained(AWAY, 3);
         m.completed(AWAY);
         assert_eq!(m.pass_completed, [[0; PASS_CELLS]; 2]);
+    }
+
+    /// A back pass then a forward pass counts one recycle pass; the passes after the forward
+    /// pass count none; a dead ball ends the possession with no turnover.
+    #[test]
+    fn passes_before_the_first_forward_pass_are_recycle_passes() {
+        let mut m = MatchMeasures::default();
+        m.touched(HOME, 0);
+        m.gained(HOME, 0);
+        for (c, gain, t) in [(2, -6.0, 30), (3, 12.0, 60), (4, -3.0, 90)] {
+            m.planned_pass(c, 0, gain);
+            m.kicked_pass(c, HOME);
+            m.touched(HOME, t);
+            m.completed(HOME);
+            m.gained(HOME, t);
+        }
+        m.dead(100);
+        assert_eq!(m.recycle_passes, [1, 0]);
+        assert_eq!(m.possession_passes, [3, 0]);
+        assert_eq!(m.open_play_passes, [3, 0]);
+        assert_eq!(m.possessions, [1, 0]);
+        assert_eq!(m.turnovers, [0, 0], "a dead ball is no turnover");
+    }
+
+    /// An interception the other side keeps past a short regain ends the possession as a
+    /// turnover from its first touch; a shot then a save is a shot possession, not a turnover.
+    #[test]
+    fn an_interception_is_a_turnover_and_a_saved_shot_is_a_shot_possession() {
+        let r = regain_ticks();
+        let mut m = MatchMeasures::default();
+        m.touched(HOME, 0);
+        m.gained(HOME, 0);
+        m.planned_pass(3, 0, 10.0);
+        m.kicked_pass(3, HOME);
+        m.touched(AWAY, 20);
+        m.gained(AWAY, 20);
+        assert_eq!(m.turnovers, [0, 0], "not yet: a short regain may follow");
+        m.shot(AWAY, 16.0);
+        assert_eq!(
+            m.turnovers,
+            [1, 0],
+            "the shot shows the away side had the ball"
+        );
+        m.touched(HOME, 40 + r + 1);
+        m.gained(HOME, 40 + r + 1);
+        m.touched(AWAY, 60 + 3 * r);
+        assert_eq!(m.turnovers, [1, 0]);
+        assert_eq!(m.shot_possessions, [0, 1]);
+        assert_eq!(m.possessions, [1, 1]);
+        m.chose(HOME, 6, 3);
+        m.chose(HOME, 6, 3);
+        m.chose(HOME, 6, 0);
+        m.chose(HOME, 7, 0);
+        assert_eq!(
+            m.choices[HOME],
+            [2, 0, 0, 1, 0],
+            "a choice counts when it changes"
+        );
+    }
+
+    /// The other side's touch that the side with the ball follows within a short regain, with
+    /// no completed pass and no shot, is merged: one possession, its passes kept, no turnover.
+    /// A completed pass of the other side takes the ball at once. A restart kick counts as a
+    /// pass of the possession but never as a recycle pass.
+    #[test]
+    fn a_short_regain_is_merged_and_a_completed_pass_takes_the_ball() {
+        let r = regain_ticks();
+        let mut m = MatchMeasures::default();
+        m.restart_taken(StoppageKind::ThrowIn, HOME, 0);
+        m.planned_pass(2, 0, -2.0);
+        m.restart_kicked(HOME);
+        m.touched(AWAY, 10);
+        m.kicked_other();
+        m.touched(HOME, 10 + r);
+        m.gained(HOME, 10 + r);
+        m.planned_pass(4, 0, 20.0);
+        m.kicked_pass(4, HOME);
+        m.touched(AWAY, 100);
+        m.gained(AWAY, 100);
+        m.planned_pass(13, 0, 6.0);
+        m.kicked_pass(13, AWAY);
+        m.touched(AWAY, 110);
+        m.completed(AWAY);
+        m.gained(AWAY, 110);
+        assert_eq!(m.possessions, [1, 0]);
+        assert_eq!(m.possession_passes, [2, 0]);
+        assert_eq!(m.open_play_passes, [1, 0]);
+        assert_eq!(m.recycle_passes, [0, 0]);
+        assert_eq!(m.turnovers, [1, 0]);
+        m.dead(400);
+        assert_eq!(m.possessions, [1, 1]);
+        assert_eq!(m.possession_passes, [2, 1]);
+        assert_eq!(m.turnovers, [1, 0]);
     }
 
     #[test]

@@ -47,13 +47,23 @@ use crate::rules::offside;
 use crate::shape;
 use crate::sim::{WIDE_SPREAD, wide_of_goal};
 use crate::streams::{Action, map_range};
-use crate::tactics::Instruction;
 use crate::team::PLAYERS_PER_TEAM;
 use crate::traits::{
     CHANNEL_Y_M, EARLY_CROSS_M, LATE_RUN_DEPTH_M, LATE_RUN_WIDTH_M, SWITCH_M, TraitKind,
 };
 use crate::tuning::Tuning;
 use serde_json::json;
+
+/// A pass of this length or less that gains less than [`FORWARD_M`] toward goal recycles the
+/// ball: tempo's patience is added to it (hook `pass.recycle`).
+pub const RECYCLE_M: f64 = 20.0;
+/// A pass is forward when it gains this many metres or more toward the attacked goal.
+pub const FORWARD_M: f64 = 5.0;
+/// A short regain: when the side that had the ball acts on it again within this many seconds
+/// of the other side's first touch, with no dead ball between, and the other side completed
+/// no pass and took no shot, the other side never had the ball. The primitives' possession
+/// count and the real-team table both use it.
+pub const REGAIN_S: f64 = 2.0;
 
 /// A kick the carrier decided on this tick. A clearance is kicked away from danger to no
 /// team-mate, and is counted apart from a pass.
@@ -647,6 +657,22 @@ impl DecisionModule for DecisionV1 {
             }
         };
 
+        // Risk appetite (hook `option.loss_danger`): a pass, a dribble or a hold loses
+        // `loss_weight x failure chance x danger`. Losing the ball at `at` hands the opponent
+        // the threat of that place near the side's own goal and gives up the side's own threat
+        // near the goal it attacks; each grows with the square of the nearness to its goal, so
+        // the danger is 1 at either goal line and 0.5 at halfway. A shot has no loss term: a
+        // missed shot gives the ball back at the opponent's own goal line, where it threatens
+        // nothing, and the shot spends the side's threat instead of losing it. (Counted as a
+        // loss at the shooter's feet, it held back every shot but the closest, so the shots
+        // left were twice as good and goals rose by half.)
+        let half = view.pitch().half_length();
+        let loss = |fail: f64, at: DVec2| {
+            let s = ((at.x * side.attack_x + half) / (2.0 * half)).clamp(0.0, 1.0);
+            let danger = (1.0 - s) * (1.0 - s) + s * s;
+            plan.loss_weight * fail.clamp(0.0, 1.0) * danger
+        };
+
         // Pressure and space around the carrier.
         let mut nearest_opp = f64::INFINITY;
         let mut nearest_opp_pos = carrier.pos;
@@ -711,7 +737,6 @@ impl DecisionModule for DecisionV1 {
                     - w.shot_distance * goal_dist / t.shot_range
                     + under_pressure
                     + skill(choose)
-                    + plan.shoot
                     + role.shoot
                     + mood_risk
                     + distance,
@@ -722,6 +747,7 @@ impl DecisionModule for DecisionV1 {
 
         // Passes.
         let mut passes = [(0usize, 0.0f64); MATES];
+        let mut pass_pick = [0.0f64; MATES];
         let mut pass_count = 0;
         for j in 0..players.len() {
             let mate = &players[j];
@@ -766,14 +792,30 @@ impl DecisionModule for DecisionV1 {
             } else {
                 0.0
             };
-            let score = (w.progress + plan.progress + role.progress) * progress
+            // Patience weighs keeping the ball in the side's circulation against playing
+            // forward when the carrier picks his pass: a short pass that does not go forward
+            // gains it, a forward pass loses it, so a negative patience plays forward early.
+            // It moves which pass he picks, never whether he passes, holds or dribbles.
+            let gain = (mate.pos - carrier.pos).dot(attack);
+            let recycle = if gain >= FORWARD_M {
+                -plan.patience
+            } else if d <= RECYCLE_M {
+                plan.patience
+            } else {
+                0.0
+            };
+            // The pass fails as its lane closes and its receiver's space shrinks; the ball
+            // is lost about halfway.
+            let fail = 0.5 * ((1.0 - lane / 6.0) + (1.0 - receiver_space / 8.0));
+            let score = (w.progress + role.progress) * progress
                 + skill(Stage::PASS_SEE) * forward
                 + w.teamwork_bonus * stages.skill(kind.choose())
                 + w.lane * (lane / 6.0)
                 + w.space * (receiver_space / 8.0)
                 - w.distance * (d / 45.0)
                 + plan.directness * (d / 45.0)
-                + plan.tempo
+                + recycle
+                - loss(fail, (carrier.pos + mate.pos) * 0.5)
                 + layoff
                 + plan.slots[mate.slot].long_ball_target * (d / 45.0)
                 + flair
@@ -815,6 +857,7 @@ impl DecisionModule for DecisionV1 {
                 score
             };
             passes[pass_count] = (j, score);
+            pass_pick[pass_count] = recycle;
             pass_count += 1;
         }
 
@@ -849,10 +892,14 @@ impl DecisionModule for DecisionV1 {
                 + if held < 10 { w.first_touch } else { 0.0 }
                 + skill(Stage::DRIBBLE_CHOOSE)
                 + role.dribble
-                - plan.tempo
-                + lone_dribble;
-            let hold =
-                w.hold + plan.hold - plan.tempo - w.hold_per_s * held_s + lone_hold - mood_risk;
+                + lone_dribble
+                - loss(
+                    0.5 * (f64::from(u8::from(pressed)) + (1.0 - space_ahead / 10.0)),
+                    carrier.pos,
+                );
+            let hold = w.hold - w.hold_per_s * held_s + lone_hold
+                - mood_risk
+                - loss(0.5 * f64::from(u8::from(pressed)), carrier.pos);
             let (dribble, hold, tricks) = if has_traits {
                 let pressed_only = |k: TraitKind| if pressed { tr(k) } else { 0.0 };
                 let dwell = tr(TraitKind::DwellsOnBall);
@@ -891,6 +938,7 @@ impl DecisionModule for DecisionV1 {
             shot,
             passes,
             pass_count,
+            pass_pick,
             dribble_hold,
             clear,
             carry,
@@ -902,17 +950,20 @@ impl DecisionModule for DecisionV1 {
         let noise = draft.noise;
         let jitter = |u: f64| map_range(-noise, noise, u);
         let shot = draft.shot.map(|s| s + jitter(draws.shot));
-        let mut pass: Option<(f64, usize)> = None;
+        let mut pass: Option<(f64, usize, f64)> = None;
         let mut candidates = [(0usize, 0.0f64); MATES];
-        let drafted = draft.passes[..draft.pass_count].iter().zip(&draws.passes);
-        for (candidate, (&(j, s), &u)) in candidates.iter_mut().zip(drafted) {
+        let drafted = draft.passes[..draft.pass_count]
+            .iter()
+            .zip(&draws.passes)
+            .zip(&draft.pass_pick);
+        for (candidate, ((&(j, s), &u), &pick)) in candidates.iter_mut().zip(drafted) {
             let score = s + jitter(u);
             *candidate = (j, score);
-            if pass.is_none_or(|(best, _)| score > best) {
-                pass = Some((score, j));
+            if pass.is_none_or(|(best, ..)| score > best) {
+                pass = Some((score, j, pick));
             }
         }
-        let pass = pass.map(|(s, j)| (s - draft.carry, j));
+        let pass = pass.map(|(s, j, pick)| (s - pick - draft.carry, j));
         let (dribble, hold) = match draft.dribble_hold {
             Some((dribble, hold)) => (
                 dribble.map(|d| d + jitter(draws.dribble_hold.0)),
@@ -1557,15 +1608,15 @@ pub(crate) fn keeper_ranges(view: &MatchView<'_>, gk: usize) -> (f64, f64) {
     let traits = view.traits(gk);
     let tw = view.tuning().contract.traits();
     let p = view.player(gk);
-    let held = view.teams()[p.team].plan.held[p.slot];
+    let plan = &view.teams()[p.team].plan;
     let rush = traits.weight(TraitKind::RushesOut, tw);
     let stay = traits.weight(TraitKind::StaysOnLine, tw);
-    let rush_played = if held & Instruction::LineDeep.bit() != 0 {
+    let rush_played = if plan.keeper_rush_off[p.slot] {
         0.0
     } else {
         rush
     };
-    let stay_played = if held & Instruction::LineHigh.bit() != 0 {
+    let stay_played = if plan.keeper_stay_off[p.slot] {
         0.0
     } else {
         stay
@@ -1906,37 +1957,140 @@ mod tests {
         assert!(kicked, "the carrier never passed or shot");
     }
 
-    #[test]
-    fn an_attacking_mentality_raises_the_shoot_score_for_the_same_scene() {
-        let content = crate::data::test_support::shipped_content();
+    /// The options of the home striker at `(x, 2)` under `tactics` and the tactics file
+    /// `schema`, noise off, with the away outfield players far back and the home team-mates
+    /// placed by `mates` (slot, position); every other home outfield player stands out of
+    /// passing range.
+    fn scene(
+        schema: &crate::data::tactics::TacticsSchema,
+        tactics: crate::tactics::Tactics,
+        x: f64,
+        mates: &[(usize, DVec2)],
+        opps: &[(usize, DVec2)],
+    ) -> Options {
         let mut config = shipped_config(7, 1).unwrap();
         config.tuning.decision.noise = 0.0;
-        let shot_score = |mentality: &str| {
-            let mut tactics = crate::tactics::Tactics::defaults(&content.tactics);
-            tactics.mentality = content.tactics.mentality_index(mentality).unwrap() as u8;
-            let mut sim = Simulation::new(config.clone().with_tactics(0, tactics)).unwrap();
-            let striker = 9;
-            sim.players[striker].pos = DVec2::new(40.0, 2.0);
-            let their_keeper = sim.keeper(1);
-            for p in sim
-                .players
-                .iter_mut()
-                .filter(|p| p.team == 1 && p.id != their_keeper)
-            {
-                p.pos = DVec2::new(-40.0, p.pos.y);
+        config.tactics = schema.clone();
+        let mut sim = Simulation::new(config.with_tactics(0, tactics)).unwrap();
+        let striker = 9;
+        sim.players[striker].pos = DVec2::new(x, 2.0);
+        let their_keeper = sim.keeper(1);
+        for p in sim
+            .players
+            .iter_mut()
+            .filter(|p| p.team == 1 && p.id != their_keeper)
+        {
+            p.pos = DVec2::new(-50.0, p.pos.y);
+        }
+        if !mates.is_empty() {
+            let own_keeper = sim.keeper(0);
+            for (i, p) in sim.players.iter_mut().enumerate() {
+                if p.team == 0 && i != striker && p.id != own_keeper {
+                    p.pos = DVec2::new(x - 50.0, 30.0);
+                }
             }
-            sim.carrier = Some(striker);
-            sim.tick = 100;
-            sim.options(striker)
+            sim.players[own_keeper].pos = DVec2::new(-52.0, 0.0);
+        }
+        for &(slot, pos) in mates {
+            sim.players[slot].pos = pos;
+        }
+        for &(i, pos) in opps {
+            sim.players[i].pos = pos;
+        }
+        sim.carrier = Some(striker);
+        sim.tick = 100;
+        sim.options(striker)
+    }
+
+    /// Tempo is patience: no tempo level moves the hold or the dribble score of a scene.
+    #[test]
+    fn no_tempo_level_moves_the_hold_or_the_dribble_score() {
+        use crate::data::tactics::TEMPO;
+        let content = crate::data::test_support::shipped_content();
+        let schema = &content.tactics;
+        let opp = [(13, DVec2::new(12.0, 3.0))];
+        let base = |level: u8| {
+            let mut tactics = crate::tactics::Tactics::defaults(schema);
+            tactics.instructions[TEMPO] = level;
+            let o = scene(schema, tactics, 10.0, &[], &opp);
+            (o.hold, o.dribble)
+        };
+        let levels = schema.instructions.tempo.levels.len() as u8;
+        assert_eq!(levels, 5);
+        for level in 0..levels {
+            assert_eq!(base(level), base(2), "tempo level {level}");
+        }
+    }
+
+    /// Mentality is a risk appetite with no flat term: with every loss weight at 0, the shot
+    /// and the pass scores of a scene are the same under every mentality.
+    #[test]
+    fn with_no_loss_weight_no_mentality_moves_the_shot_or_the_pass_score() {
+        let content = crate::data::test_support::shipped_content();
+        let mut schema = content.tactics.clone();
+        for m in &mut schema.mentalities {
+            m.loss_weight = 0.0;
+        }
+        let mates = [(10, DVec2::new(30.0, 12.0))];
+        let score = |mentality: usize| {
+            let mut tactics = crate::tactics::Tactics::defaults(&schema);
+            tactics.mentality = mentality as u8;
+            let o = scene(&schema, tactics, 40.0, &mates, &[]);
+            (o.shot, o.pass.map(|(s, _)| s))
+        };
+        for m in 0..schema.mentalities.len() {
+            assert_eq!(score(m), score(0), "mentality {m}");
+        }
+    }
+
+    /// A shot has no loss term: no loss weight, risk-averse or risk-seeking, moves the shot
+    /// score of a scene.
+    #[test]
+    fn no_loss_weight_moves_the_shot_score() {
+        let content = crate::data::test_support::shipped_content();
+        let shot = |weight: f64| {
+            let mut schema = content.tactics.clone();
+            for m in &mut schema.mentalities {
+                m.loss_weight = weight;
+            }
+            let tactics = crate::tactics::Tactics::defaults(&schema);
+            scene(&schema, tactics, 40.0, &[], &[])
                 .shot
                 .expect("inside the shooting range")
         };
-        let defensive = shot_score("defensive");
-        let balanced = shot_score("balanced");
-        let attacking = shot_score("attacking");
+        for weight in [-2.0, 0.0, 0.5, 3.0] {
+            assert_eq!(shot(weight), shot(0.0), "loss weight {weight}");
+        }
+    }
+
+    /// A higher loss weight lowers a risky forward pass (a narrow lane to a marked receiver)
+    /// more than a safe square pass (an open lane to a free team-mate).
+    #[test]
+    fn a_higher_loss_weight_lowers_a_risky_forward_pass_more_than_a_safe_square_pass() {
+        let content = crate::data::test_support::shipped_content();
+        let pass_score = |weight: f64, risky: bool| {
+            let mut schema = content.tactics.clone();
+            for m in &mut schema.mentalities {
+                m.loss_weight = weight;
+            }
+            let tactics = crate::tactics::Tactics::defaults(&schema);
+            let (mate, opps): (DVec2, Vec<(usize, DVec2)>) = if risky {
+                (
+                    DVec2::new(-10.0, 4.0),
+                    vec![(13, DVec2::new(-12.0, 2.2)), (14, DVec2::new(-10.0, 5.5))],
+                )
+            } else {
+                (DVec2::new(-30.0, 14.0), Vec::new())
+            };
+            let o = scene(&schema, tactics, -30.0, &[(10, mate)], &opps);
+            o.pass.expect("a team-mate in range").0
+        };
+        let risky_drop = pass_score(0.0, true) - pass_score(2.0, true);
+        let safe_drop = pass_score(0.0, false) - pass_score(2.0, false);
+        assert!(safe_drop >= 0.0, "{safe_drop}");
         assert!(
-            defensive < balanced && balanced < attacking,
-            "{defensive} {balanced} {attacking}"
+            risky_drop > safe_drop,
+            "risky {risky_drop}, safe {safe_drop}"
         );
     }
 

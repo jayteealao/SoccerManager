@@ -6,6 +6,7 @@ pub mod attributes;
 pub mod convert;
 pub mod generator;
 pub mod names;
+pub mod primitives;
 pub mod restart_waits;
 pub mod rules;
 pub mod styles;
@@ -489,8 +490,9 @@ pub fn load_tuning_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TuningFile>
     }
 }
 
-/// Loads a tactics file's bytes in either version this build reads; a version 1 file is
-/// converted ([`convert::tactics_v1_to_v2`]) and checked as a current file.
+/// Loads a tactics file's bytes in any version this build reads; a version 1 file is
+/// converted to version 2 ([`convert::tactics_v1_to_v2`]), a version 2 file to version 3
+/// ([`convert::tactics_v2_to_v3`]), and the result is checked as a current file.
 pub fn load_tactics_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TacticsSchema>, EngineError> {
     const KIND: &str = "tactics";
     match peek_version(KIND, bytes, shown)? {
@@ -498,17 +500,19 @@ pub fn load_tactics_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TacticsSch
             let value = parse_checked::<TacticsSchema>(KIND, bytes, shown, &())?;
             Ok(loaded(KIND, bytes, shown, value, TACTICS_VERSION, None))
         }
-        convert::TACTICS_V1 => {
-            let v1: convert::TacticsV1 = parse(KIND, bytes, shown)?;
-            let value = checked(KIND, shown, convert::tactics_v1_to_v2(v1), &())?;
-            Ok(loaded(
-                KIND,
-                bytes,
-                shown,
-                value,
-                convert::TACTICS_V1,
-                Some(convert::TACTICS_V1),
-            ))
+        found @ (convert::TACTICS_V1 | convert::TACTICS_V2) => {
+            let v2 = if found == convert::TACTICS_V1 {
+                let v1: convert::TacticsV1 = parse(KIND, bytes, shown)?;
+                convert::tactics_v1_to_v2(v1)
+            } else {
+                parse(KIND, bytes, shown)?
+            };
+            let v3 = convert::tactics_v2_to_v3(v2)
+                .map_err(|reason| refused(KIND, shown, "tactics".into(), reason))?;
+            let value: TacticsSchema = serde_json::from_value(v3)
+                .map_err(|e| refused(KIND, shown, "converted file".into(), e.to_string()))?;
+            let value = checked(KIND, shown, value, &())?;
+            Ok(loaded(KIND, bytes, shown, value, found, Some(found)))
         }
         found => Err(version_refused(KIND, shown, found, TACTICS_VERSION)),
     }

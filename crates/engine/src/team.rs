@@ -552,7 +552,12 @@ impl Team {
         };
         // The role's offset comes after the existing sums, so an offset of 0 keeps every
         // anchor's bits.
-        let depth = (fx + self.plan.block_depth + plan.depth + offset.x) * sx;
+        let block = if in_possession {
+            0.0
+        } else {
+            self.plan.block_depth
+        };
+        let depth = (fx + block + plan.depth + offset.x) * sx;
         let side = self.slot_side(slot);
         let base = DVec2::new(
             (depth - self.pitch.half_length()) * self.attack_x,

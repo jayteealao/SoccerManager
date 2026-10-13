@@ -174,6 +174,17 @@ impl Simulation {
         // The carrier's moment: a strong trait may override his choice, and an override in
         // force keeps its action.
         let (o, choice) = self.carrier_override(c, &scored, o, choice);
+        #[cfg(feature = "measures")]
+        if let Some(m) = self.measures.as_deref_mut() {
+            let k = match choice {
+                crate::decision::Choice::Pass => 0,
+                crate::decision::Choice::Shot => 1,
+                crate::decision::Choice::Dribble => 2,
+                crate::decision::Choice::Hold => 3,
+                crate::decision::Choice::Clear => 4,
+            };
+            m.chose(self.players[c].team, c, k);
+        }
         let carrier = crate::streams::PlayerKey::of(&self.players[c]);
         let plan = decision.plan(&self.view(), c, &o, choice);
         #[cfg(feature = "sensitivity")]
@@ -187,6 +198,7 @@ impl Simulation {
             let team = self.players[c].team;
             let (from, to) = (self.players[c].pos, self.players[j].pos);
             let d = (to - from).length();
+            let gain = (to.x - from.x) * self.teams[team].attack_x;
             let kind = crate::decision::PassKind::of(
                 from,
                 to,
@@ -196,7 +208,7 @@ impl Simulation {
                 self.config.pitch(),
             );
             if let Some(m) = self.measures.as_deref_mut() {
-                m.planned_pass(c, crate::measures::pass_cell(kind, d));
+                m.planned_pass(c, crate::measures::pass_cell(kind, d), gain);
             }
         }
         match plan {

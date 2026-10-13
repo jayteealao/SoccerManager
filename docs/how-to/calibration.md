@@ -420,6 +420,26 @@ Each match's row then holds, per side:
 
 The measures read the match and change nothing: a seed plays the same match with or without them, and `calib.results_digest` is the same. A build without the feature prints that it has no measures as the run starts, writes zeros in the measure columns, and judges the bands of the band file only. `calib.rows.measures` in `report.json` says which build ran.
 
+## Check and fit a tactical primitive
+
+A tactical primitive is a setting of the tactics board, such as tempo or mentality, declared in the `primitives` block of `content/tactics.json`. Each one names the statistic it should move. To check that every level step moves it, build with the `measures` feature and run the harness:
+
+```bash
+cargo build --release -p engine-cli --features measures
+target/release/engine-cli --content-dir content primitives check --primitive tempo --pairs 200 --out runs/tempo-check.json
+```
+
+Each step plays 200 pairs of matches, the tested side one level apart on the same seed. Standard error lists any failed step with its numbers, and the run exits with 2. A step is judged on its primary statistic, the first in its `signature` list; a secondary statistic that does not move beyond the noise prints as a `secondary miss` and does not fail the step. The noise of 40 pairs often covers a real step, so use 200 pairs before you trust a failure.
+
+To fit one level to real teams, read the real-team table and search the level's value:
+
+```bash
+target/release/engine-cli --content-dir content signatures
+target/release/engine-cli --content-dir content primitives fit --primitive tempo --level patient --matches 200 --out runs/tempo-patient.json
+```
+
+The fit aims at a ratio, not at the real value itself: the ratio of the level's quintile median to the middle median in `signatures.json`, against the ratio of the engine's level to its default level. The engine plays more passes than real teams, so the absolute values differ; the result names both, and the gap belongs to the tuning of pass volume. Copy the fitted `search.value` into the level in `tactics.json` and the record into the primitive's `fits`; the load refuses a fit record whose values differ from the level's.
+
 ## Build a faster calibrate binary
 
 Measure a faster build before you keep it:

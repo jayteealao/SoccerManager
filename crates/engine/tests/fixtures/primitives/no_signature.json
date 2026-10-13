@@ -1,0 +1,23 @@
+{
+  "refusal": "a primitive names at least one signature statistic",
+  "primitive": {
+    "name": "planted",
+    "kind": "graded",
+    "levels": "instructions.tempo",
+    "default": "balanced",
+    "inputs": [
+      {
+        "input": "patience",
+        "hook": "pass.recycle"
+      }
+    ],
+    "signature": [],
+    "data": {
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England"
+      ],
+      "row": "tempo"
+    }
+  }
+}

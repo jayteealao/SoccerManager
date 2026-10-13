@@ -25,6 +25,7 @@ mod restart_waits;
 mod resume;
 mod season;
 mod serve;
+mod signatures;
 mod simulate;
 mod state_files;
 mod stream_run;
@@ -121,6 +122,9 @@ fn main() {
         cli::Command::Guard(opts) => guard::run(&opts),
         cli::Command::FastModel(opts) => fast_model::run(content_dir, &opts),
         cli::Command::RestartWaits(opts) => restart_waits::run(content_dir, &opts),
+        cli::Command::Signatures(opts) => signatures::run(content_dir, &opts),
+        #[cfg(feature = "measures")]
+        cli::Command::Primitives(opts) => calibrate::primitives::run(content_dir, &opts),
         cli::Command::MatchdayTiming(opts) => matchday::timing::run(content_dir, &opts),
     };
     match result {

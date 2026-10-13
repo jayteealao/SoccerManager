@@ -5,7 +5,7 @@
     {
       "name": "possession",
       "mentality": "positive",
-      "instructions": { "width": "wide", "tempo": "slower", "passing_directness": "short" },
+      "instructions": { "width": "wide", "tempo": "patient", "passing_directness": "short" },
       "duties": { "DM": "defend", "LB": "support", "RB": "support" },
       "formations": ["4-3-3", "4-2-3-1", "4-1-4-1"],
       "identity": [
@@ -30,7 +30,7 @@
     {
       "name": "high_press",
       "mentality": "positive",
-      "instructions": { "pressing": "high", "line_height": "high", "tempo": "faster" },
+      "instructions": { "pressing": "high", "line_height": "high", "tempo": "direct" },
       "duties": { "ST": "attack", "LW": "support", "RW": "support" },
       "formations": ["4-3-3", "4-2-3-1", "4-4-2"],
       "identity": [
@@ -42,7 +42,7 @@
     {
       "name": "counter_attack",
       "mentality": "cautious",
-      "instructions": { "line_height": "deep", "tempo": "faster", "passing_directness": "direct" },
+      "instructions": { "line_height": "deep", "tempo": "direct", "passing_directness": "direct" },
       "duties": { "ST": "attack", "LW": "attack", "RW": "attack" },
       "formations": ["4-4-2", "4-2-3-1", "4-4-1-1"],
       "identity": [
@@ -54,7 +54,7 @@
     {
       "name": "direct",
       "mentality": "balanced",
-      "instructions": { "passing_directness": "direct", "tempo": "faster" },
+      "instructions": { "passing_directness": "direct", "tempo": "direct" },
       "duties": { "ST": "attack" },
       "formations": ["4-4-2", "4-4-1-1", "3-5-2"],
       "identity": [
@@ -79,7 +79,7 @@
     {
       "name": "gegenpress",
       "mentality": "attacking",
-      "instructions": { "pressing": "high", "line_height": "high", "tempo": "faster", "passing_directness": "short" },
+      "instructions": { "pressing": "high", "line_height": "high", "tempo": "direct", "passing_directness": "short" },
       "duties": { "CM": "attack", "ST": "attack" },
       "formations": ["4-3-3", "4-2-3-1", "4-1-2-1-2"],
       "identity": [
@@ -91,7 +91,7 @@
     {
       "name": "park_the_bus",
       "mentality": "defensive",
-      "instructions": { "pressing": "low", "line_height": "deep", "width": "narrow", "tempo": "slower" },
+      "instructions": { "pressing": "low", "line_height": "deep", "width": "narrow", "tempo": "patient" },
       "duties": {
         "CB": "defend", "LB": "defend", "RB": "defend", "DM": "defend", "CM": "defend",
         "AM": "defend", "LW": "defend", "RW": "defend", "ST": "defend"

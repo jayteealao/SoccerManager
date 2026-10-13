@@ -582,6 +582,52 @@ The command plays the seeded matches with a zero table (every extra 0, no quick 
 
 Exit codes: 0 when the table is written; 1 when a flag is refused, the real file cannot be read or lacks a column, or the written table fails its check.
 
+## signatures
+
+Write the real-team signature table, `content/signatures.json`, from the fit data of the real-data folder: for each statistic a tactical primitive moves, its spread across real club seasons and the median of each quintile (see [signatures.json](data-files.md#signaturesjson)).
+
+```text
+engine-cli signatures [OPTIONS]
+```
+
+| Flag | Value | Default | Meaning |
+|---|---|---|---|
+| `--real-data` | folder | the main checkout's `.scratch/out`, as `calibrate --real-data` | The measured real data holding `wy2_matches.csv`, `wy2_team_matches.csv` and `wy2_events.csv.gz`, and `sb2_events.csv.gz` for the StatsBomb check. |
+| `--out` | path | `signatures.json` in the content folder | Where the table goes. |
+| `--competitions` | list | `England,France,Italy,Spain` | The competitions to read, comma separated. |
+
+The held-out sets are never read: rows of other competitions are skipped before they are parsed, a held-out competition asked for by name stops the run with `held-out set: <name> is never read`, and so does an event whose match belongs to a held-out competition. Two runs on the same files write the same bytes. Output: one JSON line with the file written, the rows, the teams and the matches.
+
+Exit codes: 0 when the table is written; 1 when a flag is refused, a file cannot be read or lacks a column, a held-out set is reached, or a statistic has fewer than 5 teams.
+
+## primitives
+
+Check or fit a tactical primitive from played matches. Only a build with the `measures` cargo feature has this command.
+
+```text
+engine-cli primitives check --primitive <NAME> [OPTIONS]
+engine-cli primitives fit --primitive <NAME> --level <LEVEL> [OPTIONS]
+engine-cli primitives reach --primitive <NAME> [OPTIONS]
+```
+
+| Flag | Value | Default | Meaning |
+|---|---|---|---|
+| `--primitive` | name | required | The primitive's name in the tactics file. |
+| `--step` | level | every step | `check`: the level to step up from. |
+| `--level` | level | required | `fit`: the level to fit; the default level is the base of every ratio and is never fitted. |
+| `--pairs` | 1 or more | 40 | `check`: pairs of matches per step. |
+| `--matches` | 1 or more | 40 | `fit` and `reach`: matches per evaluation. |
+| `--evals` | 1 or more | 12 | `fit`: the most evaluations of the search. |
+| `--table` | path | `signatures.json` in the content folder | `fit`: the signature table. |
+| `--seed` | integer | 9 | The equal suite's seed: its clubs and fixtures. |
+| `--jobs` | 1 or more | the logical cores | Matches played at once. |
+| `--minutes` | 1 or more | 90 | Minutes of play per match. |
+| `--out` | path | standard output only | Where the JSON result goes. |
+
+Every run plays the equal suite's fixtures with the home club on both sides, the tested side alternating home and away, the opponent on the default tactics, and the AI's in-match tactic changes off. `check` plays each pair twice on the same seed, the tested side one level apart (or, for a choice primitive, each choice against the default choice), and passes a step when its primary statistic moves in its direction by more than 1.96 standard errors of the paired difference (a jackknife over the pairs, each statistic pooled as sum over sum). A secondary statistic is reported beside it and printed as a `secondary miss` when it does not move that far; it does not decide the step. A failed step prints `<primitive>: <from> -> <to> fails: <stat> moved <difference> (noise <noise>, wanted <direction>)`. `fit` plays the default level once, then searches the level's first plan input by bisection until the ratio of the level's primary statistic to the default level's is within the noise of the real ratio (the level's quintile median over the middle median of `signatures.json`); it reports the value, the achieved ratio, the engine and real values, and each secondary statistic's ratio against its real quintile range. `reach` plays the first plan input at both ends of its range.
+
+Exit codes: 0 when every step passes, the fit ran or the ends were played; 1 when a flag is refused, the primitive or level does not exist, or the fit reads a held-out set; 2 when a step fails.
+
 ## Debug trace file
 
 `simulate --debug-trace <file>` writes the debug trace of one match as JSON Lines. Debug mode is switched on when the match is built, before the opening kick-off; a build without the `debug-trace` cargo feature (default on) refuses the flag.

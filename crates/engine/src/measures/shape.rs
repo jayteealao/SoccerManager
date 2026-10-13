@@ -637,6 +637,61 @@ impl TickSink for ShapeSink {
     }
 }
 
+/// The height of each side's block out of possession: the distance of its outfield centroid
+/// from its own goal line, at the same 5 Hz ball-in-play samples as the slide (a side in
+/// possession, 9 or more outfield players). Per side, home first: the sum of the heights in
+/// metres and the samples, so many matches pool exactly. The mentality's signature reads it.
+#[derive(Debug, Clone, Default)]
+pub struct BlockHeightSink {
+    /// Per side: (sum of heights in metres, samples).
+    pub height: [(f64, f64); 2],
+    last_live: u32,
+    steps: u32,
+}
+
+impl BlockHeightSink {
+    /// The mean block height of `team`, in metres; `None` with no sample.
+    pub fn mean(&self, team: usize) -> Option<f64> {
+        let (sum, n) = self.height[team];
+        (n > 0.0).then(|| sum / n)
+    }
+}
+
+impl TickSink for BlockHeightSink {
+    fn on_tick(&mut self, _record: &TickRecord) -> Result<(), EngineError> {
+        Ok(())
+    }
+
+    fn on_step(&mut self, sim: &Simulation) -> Result<(), EngineError> {
+        self.steps += 1;
+        let live_ticks = sim.summary().live_ticks;
+        let live = live_ticks > self.last_live;
+        self.last_live = live_ticks;
+        let Some(owner) = sim.possession_phase() else {
+            return Ok(());
+        };
+        if !live || !self.steps.is_multiple_of(SAMPLE_TICKS) {
+            return Ok(());
+        }
+        let team = 1 - owner;
+        let keeper = sim.keeper(team);
+        let (sum, n) = sim
+            .players()
+            .iter()
+            .enumerate()
+            .filter(|(i, p)| p.team == team && *i != keeper && p.active())
+            .fold((0.0, 0usize), |(s, n), (_, p)| (s + p.pos.x, n + 1));
+        if n < SLIDE_MIN_PLAYERS {
+            return Ok(());
+        }
+        let half = sim.config().pitch().half_length();
+        let x = sum / n as f64 * sim.teams[team].attack_x;
+        self.height[team].0 += x + half;
+        self.height[team].1 += 1.0;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

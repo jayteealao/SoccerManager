@@ -1,4 +1,4 @@
-//! Team shape in seeded matches: a duty or a mentality moves the shape the way it says, and
+//! Team shape in seeded matches: a duty or the line height moves the shape the way it says, and
 //! in build-up from the back the centre-backs split, a midfielder drops and the full-backs
 //! push on. The scripted fixtures of each mechanism are the engine's own tests
 //! (`sim/shape_tests.rs`).
@@ -70,11 +70,13 @@ fn mean_depth(config: MatchConfig, slots: &[usize]) -> f64 {
 }
 
 /// Shape AC-3: over the same 20 seeded minutes, an attacking duty takes the left-back at
-/// least 2 m further up on average than a defending one, and an attacking mentality takes the
-/// home outfield at least 2 m further up than a balanced one. 2 m is a quarter of the 8 m
-/// the content moves a slot between those duties or mentalities.
+/// least 2 m further up on average than a defending one, and a high line takes the home
+/// outfield at least 2 m further up than a deep one. 2 m is a quarter of the 8 m the content
+/// moves a slot between those duties, and a fifth of the 10 m between those lines, which
+/// move the block only while the other team has the ball. The block is the line height's:
+/// a mentality is the side's appetite for risk and moves no anchor.
 #[test]
-fn a_duty_and_a_mentality_move_the_shape_the_way_they_say() {
+fn a_duty_and_the_line_height_move_the_shape_the_way_they_say() {
     const SMALLEST_SHIFT_M: f64 = 2.0;
     let duty = |name: &str| {
         seeded(20, |t, schema| {
@@ -88,16 +90,16 @@ fn a_duty_and_a_mentality_move_the_shape_the_way_they_say() {
         "left-back: defend {defend:.2} m, attack {attack:.2} m"
     );
     let outfield: Vec<usize> = (1..11).collect();
-    let mentality = |name: &str| {
-        seeded(20, |t, schema| {
-            t.mentality = schema.mentality_index(name).unwrap() as u8;
+    let line = |level: u8| {
+        seeded(20, |t, _| {
+            t.instructions[engine::data::tactics::LINE_HEIGHT] = level;
         })
     };
-    let balanced = mean_depth(mentality("balanced"), &outfield);
-    let attacking = mean_depth(mentality("attacking"), &outfield);
+    let deep = mean_depth(line(0), &outfield);
+    let high = mean_depth(line(2), &outfield);
     assert!(
-        attacking - balanced >= SMALLEST_SHIFT_M,
-        "home outfield: balanced {balanced:.2} m, attacking {attacking:.2} m"
+        high - deep >= SMALLEST_SHIFT_M,
+        "home outfield: a deep line {deep:.2} m, a high line {high:.2} m"
     );
 }
 

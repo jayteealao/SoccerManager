@@ -17,9 +17,10 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | File | Schema version | Holds |
 |---|---|---|
 | `attributes.json` | 4 | The attribute schema: 30 to 50 names in four groups, each with its job in play (two of them hidden values), the stage tables that blend them for every action, and the skill gates |
-| `tuning.json` | 5 | Engine constants, the attribute contract with the state caps, the body jobs and consistency, decision weights, injury rates, the generator's world spread, fatigue curve, stream buffer, the hidden values' words and the match rating |
+| `tuning.json` | 6 | Engine constants, the attribute contract with the state caps, the body jobs and consistency, decision weights, injury rates, the generator's world spread, fatigue curve, stream buffer, the hidden values' words and the match rating |
 | `rules/default.json` | 4 | The rule pack |
-| `tactics.json` | 1 | Ten formations, mentalities, team instructions, roles, duties, and the AI manager's settings |
+| `tactics.json` | 3 | Ten formations, mentalities, team instructions, roles, duties, the AI manager's settings, and the tactical primitives: what each setting of the tactics board moves, where play reads it, and how its levels were fitted to real teams |
+| `signatures.json` | 1 | The real-team signature table: for each statistic a tactical primitive moves, its spread across real club seasons, the five quintiles and each quintile's median. No match reads it; the primitives harness fits the levels to it. Written by `engine-cli signatures`, never by hand |
 | `traits.json` | 1 | The trait catalogue: the 31 traits of play a player may carry, each with the engine choice it acts on and, for nine pairs, its opposite. Part of the content hash; a team file naming a trait it does not hold, or two opposites on one player, is refused |
 | `restart-waits.json` | 1 | The restart wait table: for each kind of restart, the drawn extra wait beyond the visible steps, as 21 quantiles from real restart waits, the limit on the visible steps, the late-lead factor and the quick-restart rule. Optional: content without it plays the fixed `restart_delay_s` delays. Part of the content hash when present; written by `engine-cli restart-waits`, never by hand |
 | `styles.json` | 1 | The eight named styles: each with a mentality, instruction levels, duty hints, the formations that suit it, the statistics that show it, and the attributes its key jobs read. Optional: content without it keeps the AI manager on the tactics file's default setup and cannot play the styles suite. Part of the content hash when present |
@@ -30,7 +31,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `sensitivity.json` | 1 | The sensitivity rules: one rule per attribute job and per body job, the thresholds they are judged by, the size of a run, and the five-match rule. Only the sensitivity run and the rules stage of a change run read it; the content hash does not |
 | `gate-proof.json` | 1 | The gate proof: the broken copies of the engine that `engine-cli calibrate proof` plays, and the pass and fail rates of the last proof with the gate it measured. No match reads it; neither the content hash nor the old engine's cache key includes it |
 
-Every file starts with `"schema_version"`. A file with another version is refused, except `realism-bands.json`, which also reads versions 4, 3 and 2: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files are read in version 3 and in versions 2 and 1, and `tactics.json` in version 2 and in version 1; an older version converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 5 and in versions 4, 3, 2 and 1, and `tuning.json` in version 6 and in versions 5, 4, 3 and 2; an older version converts on load with the contract tables of the build that introduced it, copies compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. A version 2 tuning file converts through version 3; a version 3 file gains the state caps, the body jobs, `fatigue.group_weights` and `fatigue.sprint_cap` from the second copy; a version 4 file gains `engine.contract.consistency`, `hidden`, `match_rating` and `generator.world.hidden` from the third copy; a version 5 file's `engine.decision.pressure` becomes both `shot_under_pressure` and `takeon_under_pressure`, with its value. A version 1 to 4 attribute file converts to version 5 the same way (see [Version 4 files](#version-4-files) and [Version 2 files](#version-2-files)). Any other version is refused the same way.
+Every file starts with `"schema_version"`. A file with another version is refused, except `realism-bands.json`, which also reads versions 4, 3 and 2: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files are read in version 3 and in versions 2 and 1, and `tactics.json` in version 3 and in versions 2 and 1; an older version converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 5 and in versions 4, 3, 2 and 1, and `tuning.json` in version 6 and in versions 5, 4, 3 and 2; an older version converts on load with the contract tables of the build that introduced it, copies compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. A version 2 tuning file converts through version 3; a version 3 file gains the state caps, the body jobs, `fatigue.group_weights` and `fatigue.sprint_cap` from the second copy; a version 4 file gains `engine.contract.consistency`, `hidden`, `match_rating` and `generator.world.hidden` from the third copy; a version 5 file's `engine.decision.pressure` becomes both `shot_under_pressure` and `takeon_under_pressure`, with its value. A version 1 to 4 attribute file converts to version 5 the same way (see [Version 4 files](#version-4-files) and [Version 2 files](#version-2-files)). Any other version is refused the same way.
 
 ## attributes.json
 
@@ -218,7 +219,9 @@ A carrier's clearance goes toward the far half, turned by up to `clearances.aim_
 
 #### decision
 
-The ball carrier scores every option and takes the highest: a pass to each team-mate with an open lane, a dribble, a shot, a clearance, or holding the ball. Each score is a weighted sum of features, plus the team's mentality, instructions, and each player's role and duty from `tactics.json`, plus noise. Every weight is -5 to 5 unless noted.
+The ball carrier scores every option and takes the highest: a pass to each team-mate with an open lane, a dribble, a shot, a clearance, or holding the ball. Each score is a weighted sum of features, plus the team's instructions and each player's role and duty from `tactics.json`, plus noise. Every weight is -5 to 5 unless noted.
+
+The mentality adds no flat bonus to any option. It is the team's appetite for risk: a pass, a dribble or a hold loses the mentality's `loss_weight` times the option's failure chance times the danger of losing the ball where it would be lost. The danger is 1 at either goal line and 0.5 at halfway: a ball lost near the own goal hands the opponent a chance, and one lost near the other goal gives up the side's own. A pass fails as its lane closes and its receiver's space shrinks, and is lost about halfway; a dribble fails under pressure and with little space ahead, a hold under pressure, each at the carrier. A shot has no loss term: a missed shot gives the ball back at the opponent's own goal line, and the shot spends the side's threat rather than losing it. Tempo is the circulation's patience: when the carrier picks his pass, a short pass (20 m or less) that gains less than 5 m toward goal gains the tempo level's value and a forward pass loses it. The value moves which pass he picks, never whether he passes, holds or dribbles.
 
 | Field | Default | Meaning |
 |---|---|---|
@@ -869,7 +872,8 @@ Every other club file in `teams/` plays in the background round of a served matc
 | Field | Holds | Bound |
 |---|---|---|
 | formations | `{ "name", "slots" }`; eleven slots `{ "x", "y", "position" }` in metres from the own goal line (1 to 100) and from the centre line (-33 to 33) on a 105 by 68 ground; the slots scale with the home ground | 1 to 16; slot 0 is the only `GK` |
-| mentalities | `{ "name", "block_depth", "shoot", "progress", "hold", "rest_defence" }`: metres the block moves up (-20 to 20), offsets on shots, forward passes, and holding the ball (-2 to 2), and the fewest outfield players who stay goal-side of the ball while the team has it (0 to 10; optional, 0 when absent) | 1 to 9 |
+| mentalities | `{ "name", "loss_weight", "rest_defence" }`: how much the danger of a lost ball counts against an option's gain (-5 to 5; below 0 the side seeks risk; see [decision](#decision)), and the fewest outfield players who stay goal-side of the ball while the team has it (0 to 10; optional, 0 when absent). Where the block stands is the line height's, not the mentality's | 1 to 9 |
+| primitives | optional; the tactical primitives (see [Primitives](#primitives)) | none when absent |
 | instructions | the six team instructions, each `{ "default", "levels" }` with 2 to 5 levels | see below |
 | roles | `{ "name", "positions", "attributes", "in_possession", "out_of_possession", "preferred_actions", "teammates", "options" }`: the positions it suits, attribute weights (0 to 10, each a name in `attributes.json`) the AI manager uses to pick players, the role's behaviours, and its stand options (see below) | 1 to 64; a role for every position a formation uses |
 | duties | `{ "name", "depth", "risk", "scale" }`: metres the anchor moves up (-15 to 15), an offset on forward passes and dribbles (-2 to 2), and a scale on the role's preferred actions (0.5 to 1.5) | 1 to 5 |
@@ -893,7 +897,7 @@ A player takes the first option of his menu whose condition holds, read from the
 
 While a team has the ball, at least its mentality's `rest_defence` outfield players stand goal-side of the ball, or of the halfway line while the ball is in the team's own half, and never more than the outfield players less one. Below that number, the players with the most defensive duty and the least far forward are held back at their stand across the pitch; above it, a support or defend duty goes forward only with a team-mate goal-side within `lane_m` across, and when a full-back goes forward the nearest team-mate who would also go stays to cover him if his familiarity is at least `cover_familiarity_min`.
 
-The instructions are `pressing` (levels `{ "name", "press_count", "press_distance_scale" }`: how many players press the carrier, 0 to 4, and a scale on `press_distance`, 0.1 to 3), `width` (a scale on each slot's distance from the centre line), `tempo` (added to passes and taken from dribbles and holding), `line_height` (metres the block moves up), `passing_directness` (a bonus for longer passes), and `time_wasting` (a factor on the drawn restart extra while the team leads, or on the fixed restart delay when the content has no restart wait table). Every level other than a pressing level is `{ "name", "value" }`, with the value -20 to 20.
+The instructions are `pressing` (levels `{ "name", "press_count", "press_distance_scale" }`: how many players press the carrier, 0 to 4, and a scale on `press_distance`, 0.1 to 3), `width` (a scale on each slot's distance from the centre line), `tempo` (the circulation's patience, five levels from `very_direct` to `very_patient`; see [decision](#decision)), `line_height` (metres the block moves up while the other team has the ball), `passing_directness` (a bonus for longer passes), and `time_wasting` (a factor on the drawn restart extra while the team leads, or on the fixed restart delay when the content has no restart wait table). Every level other than a pressing level is `{ "name", "value" }`, with the value -20 to 20.
 
 | ai field | Meaning | Default |
 |---|---|---|
@@ -909,6 +913,40 @@ The instructions are `pressing` (levels `{ "name", "press_count", "press_distanc
 The AI picks its starters by each player's rating at each slot's position (the team file's `positions`), plus the margin at his listed position: the best player-and-slot pairs first, a goalkeeper slot to a goalkeeper while one is free, then swaps of two players that raise the summed rating. The bench covers the goal, then each line (defence: CB, LB, RB; midfield: DM, CM, AM; attack: ST, LW, RW) with at least one player, then a full-back and a winger when the squad has a spare, then the positions the formation uses most. A substitute is the bench player with the best rating at the slot.
 
 A bad value is refused by field, and a role attribute the attribute schema does not hold is refused by name.
+
+### Primitives
+
+A tactical primitive is one setting of the tactics board, as data. Each entry of `primitives` says what kind of setting it is, which plan inputs it sets, where play reads each input, which statistic it moves and which way, and where its level values come from. No match reads an entry: play reads only the level values. The entries let the load checks and the harness (`engine-cli primitives`) hold every setting to the same frame.
+
+| Field | Holds |
+|---|---|
+| name | the primitive's name, unique in the file |
+| kind | `graded` (5 ordered levels), `choice` (a list of choices) or `on_off` (two states, off first) |
+| levels | a graded primitive's level block: `instructions.<instruction>` or `mentalities`; the block holds the level values, so a match stores a level as an index |
+| choices | a choice primitive's choices, each `{ "name", "values", "stat" }`: the value of each input and the statistic the choice raises |
+| states | an on/off primitive's two states |
+| default | the level, choice or state a side has when nothing is set |
+| inputs | `{ "input", "hook" }`: each plan input it sets and the hook that reads it. The hooks are a fixed list in the engine (for example `pass.recycle` reads `patience`, `option.loss_danger` reads `loss_weight`); a hook reads exactly one input |
+| signature | `{ "stat", "direction" }`: the statistics the primitive moves, primary first, each `up` or `down` as the level rises. Statistics: `passes_per_possession`, `recycle_share`, `turnovers_per_possession`, `shot_share`, `block_height_m`, `hold_dribble_share`, `ppda` |
+| data | `{ "source", "competitions", "row" }`: the real data the levels are fitted to and the row of `signatures.json`, or `{ "none" }` with the reason no real data fits |
+| fits | optional; the fit of each level: `{ "level", "values", "target", "achieved", "noise", "matches", "seed", "unreachable" }`. `target` is the real ratio of the level's quintile median to the real median, `achieved` the engine's ratio of the level to the default level, with its paired noise (1.96 standard errors) |
+
+The load refuses, by name: a graded primitive whose block has other than 5 levels, a choice primitive with no choices, an on/off primitive without exactly two states, a default that is not one of its levels, no input, an unknown hook, a hook that reads another input, an unknown statistic, no signature, neither a source nor a reason (or both), a held-out competition (the Wyscout German league 2017/18, the 2018 World Cup and Euro 2016 are never read), and a fit whose values differ from its level's.
+
+A version 2 file converts on load: tempo takes the five shipped levels, each mentality drops its block depth and its flat shot, pass and hold offsets and takes the shipped loss weight of its place in the list, and the file takes the shipped primitive entries. Its trait conflicts follow the level order: a tempo level below the default holds `tempo:faster`, one above holds `tempo:slower`, and the same for the other instructions; the lowest mentality holds `mentality:defensive` and the one below the default `mentality:cautious`.
+
+## signatures.json
+
+The real-team signature table. For each statistic a tactical primitive moves, it holds the spread of that statistic across the real club seasons of the fit data: the quintile edges at 20, 40, 60 and 80 percent, the range and the median of each quintile, and the lowest and highest team. A graded primitive's five levels are fitted to the five quintile medians, as ratios to the middle quintile's median. `engine-cli signatures` writes it from the Wyscout 2017/18 club data of England, France, Italy and Spain (see [the CLI reference](cli.md#signatures)); write it again with the same command, never by hand.
+
+| Field | Holds |
+|---|---|
+| schema_version | 1 |
+| held_out | the held-out sets the table never read, as `source:competition` |
+| rows | one per statistic: `primitive`, `stat`, `source`, `competitions`, `teams`, `matches`, `quintile_edges` (4), `quintile_ranges` (5 pairs), `medians` (5), `min`, `max` |
+| checks | the same statistic in another source, for comparison only: `stat`, `source`, `competitions`, `teams`, `median`, `min`, `max` |
+
+The real statistics and the engine's measures share one definition. A possession starts at a team's action on the ball and passes to the other team at that team's first action on it, unless the team that had the ball acts on it again within 2 seconds while the other team completed no pass and took no shot: that short regain stays in the first team's possession. A dead ball or the end of a half ends a possession. Its passes count open-play passes and restart kicks; a pass is forward when it gains 5 m or more toward the attacked goal; the recycle share is the open-play passes before the possession's first forward pass over all its open-play passes; a turnover is a possession the other team takes with no shot in it. Each statistic is pooled over a team's season (sum over sum) before the quintiles are taken across the teams. PPDA is the sum of the opponent's passes in its build-up zone over the sum of the team's defensive actions.
 
 ## commentary/en.json
 

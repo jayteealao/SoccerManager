@@ -533,8 +533,50 @@ fn a_team_file_of_another_version_is_refused_naming_both() {
     );
 }
 
+/// A version 2 tactics file (three tempo levels, a block depth and flat offsets per
+/// mentality, no primitives) converts to the shipped version 3 file: tempo takes the five
+/// patience levels, each mentality drops its block depth and offsets and takes its loss weight
+/// by its place, and the file the primitive entries with their fits.
 #[test]
-fn a_version_1_tactics_file_converts_to_the_shipped_version_2_file() {
+fn a_version_2_tactics_file_converts_to_the_shipped_version_3_file() {
+    let path = common::content_dir().path(engine::data::TACTICS_FILE);
+    let mut v2: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    v2["schema_version"] = 2.into();
+    v2.as_object_mut().unwrap().remove("primitives").unwrap();
+    v2["instructions"]["tempo"] = serde_json::json!({
+        "default": "normal",
+        "levels": [
+            { "name": "slower", "value": -0.15 },
+            { "name": "normal", "value": 0.0 },
+            { "name": "faster", "value": 0.15 }
+        ]
+    });
+    for (i, m) in v2["mentalities"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .enumerate()
+    {
+        let m = m.as_object_mut().unwrap();
+        m.remove("loss_weight").unwrap();
+        let offset = 0.15 * (i as f64 - 2.0);
+        m.insert("block_depth".into(), (offset * 4.0 / 0.15).into());
+        m.insert("shoot".into(), offset.into());
+        m.insert("progress".into(), offset.into());
+        m.insert("hold".into(), (-offset * 2.0 / 3.0).into());
+    }
+    let converted =
+        engine::data::load_tactics_bytes(&serde_json::to_vec(&v2).unwrap(), "tactics-v2.json")
+            .unwrap();
+    assert_eq!(converted.converted_from, Some(2));
+    let shipped = common::content().tactics;
+    assert_eq!(converted.value.instructions, shipped.instructions);
+    assert_eq!(converted.value.mentalities, shipped.mentalities);
+    assert_eq!(converted.value.primitives, shipped.primitives);
+}
+
+#[test]
+fn a_version_1_tactics_file_converts_to_the_shipped_version_3_file() {
     let v1 = fixture_bytes("tactics-v1.json");
     let converted = engine::data::load_tactics_bytes(&v1, "tactics-v1.json").unwrap();
     assert_eq!(converted.converted_from, Some(1));

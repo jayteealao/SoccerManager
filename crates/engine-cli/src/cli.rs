@@ -59,6 +59,11 @@ pub enum Command {
     FastModel(FastModelOpts),
     /// Write the wait table: real waits less the visible steps.
     RestartWaits(RestartWaitsOpts),
+    /// Write the real-team signature table of the tactical primitives.
+    Signatures(SignaturesOpts),
+    /// Check or fit a tactical primitive from played matches.
+    #[cfg(feature = "measures")]
+    Primitives(PrimitivesOpts),
     /// Time a whole matchday on a limited number of cores; a test seam.
     #[command(hide = true)]
     MatchdayTiming(TimingOpts),
@@ -86,6 +91,111 @@ pub struct RestartWaitsOpts {
     /// Where the table goes, usually content/restart-waits.json.
     #[arg(long, value_name = "FILE")]
     pub out: PathBuf,
+}
+
+/// The real-team signature table command.
+#[derive(Debug, Args)]
+pub struct SignaturesOpts {
+    /// The measured real data holding the Wyscout files.
+    #[arg(
+        long = "real-data",
+        value_name = "DIR",
+        long_help = "The folder of measured real data holding wy2_matches.csv,\n\
+                     wy2_team_matches.csv and wy2_events.csv.gz (and\n\
+                     sb2_events.csv.gz for the StatsBomb check); default the\n\
+                     main checkout's .scratch/out, as calibrate --real-data."
+    )]
+    pub real_data: Option<PathBuf>,
+    /// Where the table goes; default signatures.json in the content folder.
+    #[arg(long, value_name = "FILE")]
+    pub out: Option<PathBuf>,
+    /// The competitions to read, comma separated.
+    #[arg(
+        long,
+        value_name = "LIST",
+        long_help = "The competitions to read, comma separated; default\n\
+                     England,France,Italy,Spain. A held-out set (Germany,\n\
+                     World_Cup, European_Championship) is refused."
+    )]
+    pub competitions: Option<String>,
+}
+
+/// The primitives harness.
+#[cfg(feature = "measures")]
+#[derive(Debug, Args)]
+pub struct PrimitivesOpts {
+    #[command(subcommand)]
+    pub action: PrimitivesAction,
+}
+
+/// What the primitives harness does.
+#[cfg(feature = "measures")]
+#[derive(Debug, Subcommand)]
+pub enum PrimitivesAction {
+    /// Step a primitive one level up, or each choice against its default.
+    Check {
+        /// The primitive's name in the tactics file.
+        #[arg(long)]
+        primitive: String,
+        /// The level to step up from; default every step.
+        #[arg(long)]
+        step: Option<String>,
+        /// Pairs of matches per step.
+        #[arg(long, default_value_t = 40)]
+        pairs: u32,
+        /// Seed of the equal suite whose clubs and fixtures the pairs use.
+        #[arg(long, default_value_t = 9)]
+        seed: u64,
+        /// Matches played at once; default the number of logical cores.
+        #[arg(long)]
+        jobs: Option<u32>,
+        /// Minutes of play per match.
+        #[arg(long, default_value_t = 90)]
+        minutes: u32,
+        /// Where the JSON result goes; default standard output only.
+        #[arg(long, value_name = "FILE")]
+        out: Option<PathBuf>,
+    },
+    /// Fit one level's first plan input to its real quintile median.
+    Fit {
+        #[arg(long)]
+        primitive: String,
+        /// The level to fit.
+        #[arg(long)]
+        level: String,
+        /// Matches per evaluation.
+        #[arg(long, default_value_t = 40)]
+        matches: u32,
+        #[arg(long, default_value_t = 9)]
+        seed: u64,
+        #[arg(long)]
+        jobs: Option<u32>,
+        #[arg(long, default_value_t = 90)]
+        minutes: u32,
+        /// The most evaluations of the search.
+        #[arg(long, default_value_t = 12)]
+        evals: usize,
+        /// The signature table; default signatures.json in the content folder.
+        #[arg(long, value_name = "FILE")]
+        table: Option<PathBuf>,
+        #[arg(long, value_name = "FILE")]
+        out: Option<PathBuf>,
+    },
+    /// Measure each signature statistic at both ends of the first input's range.
+    Reach {
+        #[arg(long)]
+        primitive: String,
+        #[arg(long, default_value_t = 40)]
+        matches: u32,
+        #[arg(long, default_value_t = 9)]
+        seed: u64,
+        #[arg(long)]
+        jobs: Option<u32>,
+        #[arg(long, default_value_t = 90)]
+        minutes: u32,
+        #[arg(long, value_name = "FILE")]
+        out: Option<PathBuf>,
+    },
 }
 
 /// The hidden timing run of a matchday.

@@ -221,10 +221,17 @@ fn long_throws(v: f64) -> f64 {
 }
 
 /// The home midfielder carries at (0, 0), rated `v` in flair, with a team-mate 30 m ahead
-/// and one behind him: his draft scores.
+/// and one behind him: his draft scores. Every mentality's loss weight is 0, so the scene reads
+/// flair alone and not the team's appetite for risk.
 fn flair_draft(v: f64) -> engine::modules::OptionDraft {
     let carrier = index(0, 6);
-    let sim = far()
+    let mut config = calm_match(90);
+    for m in &mut config.tactics.mentalities {
+        m.loss_weight = 0.0;
+    }
+    let tactics = engine::Tactics::defaults(&config.tactics);
+    let config = config.with_tactics(0, tactics);
+    let sim = spread(Scene::new(config), -45.0, 45.0)
         .place(carrier, DVec2::ZERO)
         .place(index(0, 9), DVec2::new(30.0, 5.0))
         .place(index(0, 4), DVec2::new(-8.0, 10.0))

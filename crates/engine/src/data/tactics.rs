@@ -13,8 +13,13 @@ use crate::data::attributes::AttributeSchema;
 use crate::data::team::Position;
 use crate::team::PLAYERS_PER_TEAM;
 
-/// Schema version this build reads and writes. Version 1 files convert on load.
-pub const TACTICS_VERSION: u32 = 2;
+/// Schema version this build reads and writes. Version 1 and 2 files convert on load.
+/// Version 3 makes tempo the patience of the circulation (five levels from very direct to
+/// very patient), makes the mentality a risk appetite (a loss weight in place of the flat
+/// shoot, progress and hold offsets), and adds the tactical primitives (`primitives`); a
+/// version 2 file takes them from a copy compiled into the build
+/// ([`crate::data::convert::tactics_v2_to_v3`]).
+pub const TACTICS_VERSION: u32 = 3;
 
 /// The six team instructions, in the order a [`crate::tactics::Tactics`] stores their levels.
 pub const INSTRUCTIONS: [&str; 6] = [
@@ -66,6 +71,12 @@ pub struct TacticsSchema {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]
     pub rest_defence: Option<RestDefence>,
+    /// The tactical primitives: each setting of the tactics board, the plan inputs it sets,
+    /// the hook that reads each, its signature statistics and its fit to real teams. A file
+    /// without it declares none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[garde(dive)]
+    pub primitives: Vec<crate::data::primitives::Primitive>,
 }
 
 /// Each position's stand per phase, as an offset from its formation slot: metres up the
@@ -248,21 +259,19 @@ pub struct FormationSlot {
     pub position: Position,
 }
 
-/// A mentality: how far the whole block moves up (metres, negative drops it) and the offsets
-/// it adds to the carrier's shoot, forward-pass, and hold scores.
+/// A mentality: the team's appetite for risk and nothing else. It sets how much a lost
+/// ball's danger counts against an option's gain (the loss weight, -5 to 5; below 0 the side
+/// seeks risk) and the rest-defence minimum. Where the block stands belongs to the line
+/// height, not to the mentality.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct Mentality {
     #[garde(length(min = 1, max = 32))]
     pub name: String,
-    #[garde(range(min = -20.0, max = 20.0))]
-    pub block_depth: f64,
-    #[garde(range(min = -2.0, max = 2.0))]
-    pub shoot: f64,
-    #[garde(range(min = -2.0, max = 2.0))]
-    pub progress: f64,
-    #[garde(range(min = -2.0, max = 2.0))]
-    pub hold: f64,
+    /// Each option of the carrier loses `loss_weight x failure chance x danger`; the danger
+    /// of losing the ball at a place is read in `decision.rs` (hook `option.loss_danger`).
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub loss_weight: f64,
     /// The fewest outfield players who stay goal-side of the ball while the team has it.
     #[serde(default)]
     #[garde(range(min = 0, max = 10))]
@@ -279,7 +288,9 @@ pub struct Instructions {
     /// A scale on each slot's distance from the centre line of the pitch.
     #[garde(dive)]
     pub width: Instruction<Level>,
-    /// Added to every pass score and taken from the dribble and hold scores.
+    /// The patience of the circulation: added to the score of a short pass that does not go
+    /// forward, so a patient side recycles the ball before it plays forward and a direct side
+    /// plays forward sooner.
     #[garde(dive)]
     pub tempo: Instruction<Level>,
     /// Metres the whole block moves up (negative drops it).
@@ -626,7 +637,7 @@ impl TacticsSchema {
         if self.duty_index(&self.ai.duty).is_none() {
             return Err(("ai.duty".into(), format!("{} is not a duty", self.ai.duty)));
         }
-        Ok(())
+        crate::data::primitives::check(self)
     }
 
     pub fn formation_index(&self, name: &str) -> Option<usize> {
@@ -701,7 +712,7 @@ mod tests {
             ]
         );
         assert_eq!(t.mentalities.len(), 5);
-        assert_eq!(t.instructions.defaults(), [1, 1, 1, 1, 1, 0]);
+        assert_eq!(t.instructions.defaults(), [1, 1, 2, 1, 1, 0]);
         assert_eq!(t.slots(0), crate::team::FORMATION_442);
         assert_eq!(t.duties.len(), 3);
     }

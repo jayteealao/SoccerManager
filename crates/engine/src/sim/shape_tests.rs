@@ -141,7 +141,7 @@ fn at_anchors(sim: &mut Simulation) {
 }
 
 /// Where player `i` stands by the content numbers alone: his formation slot, moved by the
-/// mentality and line height, his duty, and his position's stand plus his role's offset
+/// line height out of possession, his duty, and his position's stand plus his role's offset
 /// for the phase, widened, scaled to the ground and mirrored for his team, plus the ball
 /// shift. Worked here from the tactics file, not through the anchor.
 fn by_content(sim: &Simulation, schema: &TacticsSchema, i: usize, phase: bool) -> DVec2 {
@@ -153,7 +153,6 @@ fn by_content(sim: &Simulation, schema: &TacticsSchema, i: usize, phase: bool) -
     let rd = tactics.roles[p.slot];
     let role = &schema.roles[usize::from(rd.role)];
     let duty = &schema.duties[usize::from(rd.duty)];
-    let mentality = &schema.mentalities[usize::from(tactics.mentality)];
     let ins = &schema.instructions;
     let line = ins.line_height.levels[usize::from(tactics.instructions[3])].value;
     let width = ins.width.levels[usize::from(tactics.instructions[1])].value;
@@ -175,7 +174,9 @@ fn by_content(sim: &Simulation, schema: &TacticsSchema, i: usize, phase: bool) -
     };
     let pitch = sim.config.pitch();
     let (gx, gy) = pitch.scale();
-    let depth = (fx + mentality.block_depth + line + duty.depth + sx + rx) * gx;
+    // The line height moves the block out of possession only.
+    let block = if phase { 0.0 } else { line };
+    let depth = (fx + block + duty.depth + sx + rx) * gx;
     let side = if fy.abs() < 0.5 { 0.0 } else { fy.signum() };
     let ax = team.attack_x;
     let base = DVec2::new(

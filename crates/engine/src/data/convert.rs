@@ -46,8 +46,8 @@ use crate::data::attributes::{
     ATTRIBUTES_VERSION, ActionTables, AttributeDef, AttributeSchema, Direction, Group, Job,
 };
 use crate::data::tactics::{
-    AiTuning, Duty, Formation, Instructions, Mentality, Offset, PreferredActions, Role,
-    TacticsSchema, Teammates,
+    AiTuning, Duty, Formation, Instructions, Offset, PreferredActions, Role, TacticsSchema,
+    Teammates,
 };
 use crate::data::team::{
     Club, Foot, MAX_SQUAD, PlayerEntry, Position, Side, TEAM_VERSION, TeamFile,
@@ -58,8 +58,9 @@ use crate::rating::{MAX_TENTHS, MIN_TENTHS, Rating};
 /// The team file versions the converters read.
 pub const TEAM_V1: u32 = 1;
 pub const TEAM_V2: u32 = 2;
-/// The tactics file version the converter reads.
+/// The tactics file versions the converters read.
 pub const TACTICS_V1: u32 = 1;
+pub const TACTICS_V2: u32 = 2;
 /// The attribute file versions the converters read.
 pub const ATTRIBUTES_V1: u32 = 1;
 pub const ATTRIBUTES_V2: u32 = 2;
@@ -818,29 +819,44 @@ pub struct DutyV1 {
     pub risk: f64,
 }
 
-/// A version 1 tactics file. Everything but roles and duties has the current shape. It is
-/// checked after conversion, as a current file.
+/// A mentality in a version 1 or 2 tactics file: flat offsets on the carrier's shoot,
+/// forward-pass and hold scores in place of the loss weight.
+#[derive(Debug, Clone, PartialEq, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct MentalityV2 {
+    pub name: String,
+    pub block_depth: f64,
+    pub shoot: f64,
+    pub progress: f64,
+    pub hold: f64,
+    #[serde(default)]
+    pub rest_defence: u8,
+}
+
+/// A version 1 tactics file. Everything but roles, duties and mentalities has the version 2
+/// shape. It is checked after conversion, as a current file.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TacticsV1 {
     pub schema_version: u32,
     pub formations: Vec<Formation>,
-    pub mentalities: Vec<Mentality>,
+    pub mentalities: Vec<MentalityV2>,
     pub instructions: Instructions,
     pub roles: Vec<RoleV1>,
     pub duties: Vec<DutyV1>,
     pub ai: AiTuning,
 }
 
-/// A version 1 tactics file in the current shape, with values that keep today's play: the
-/// role's shoot, dribble, and progress offsets become its preferred actions, its positions
-/// in and out of possession move nothing, teammates treat it as before, and every duty
-/// scales its role by 1. The caller validates the result as a current file.
-pub fn tactics_v1_to_v2(file: TacticsV1) -> TacticsSchema {
-    TacticsSchema {
-        schema_version: crate::data::tactics::TACTICS_VERSION,
+/// A version 1 tactics file in the version 2 shape, as JSON, with values that keep the play
+/// of version 2: the role's shoot, dribble, and progress offsets become its preferred actions,
+/// its positions in and out of possession move nothing, teammates treat it as before, and
+/// every duty scales its role by 1. [`tactics_v2_to_v3`] lifts the result.
+pub fn tactics_v1_to_v2(file: TacticsV1) -> serde_json::Value {
+    let mentalities = file.mentalities;
+    let schema = TacticsSchema {
+        schema_version: TACTICS_V2,
         formations: file.formations,
-        mentalities: file.mentalities,
+        mentalities: Vec::new(),
         instructions: file.instructions,
         roles: file
             .roles
@@ -874,5 +890,70 @@ pub fn tactics_v1_to_v2(file: TacticsV1) -> TacticsSchema {
         stands: Default::default(),
         stand_options: None,
         rest_defence: None,
+        primitives: Vec::new(),
+    };
+    let mut value = serde_json::to_value(schema).expect("a tactics file serialises");
+    value["mentalities"] = serde_json::to_value(mentalities).expect("a mentality serialises");
+    value
+}
+
+/// The copy of the version 3 additions compiled into the build: tempo's levels, the loss
+/// weight of each mentality by its place, and the primitive entries.
+pub const FROZEN_TACTICS_V3: &str = include_str!("frozen-tactics-v3.json");
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenTacticsV3 {
+    tempo: serde_json::Value,
+    loss_weight: Vec<f64>,
+    primitives: serde_json::Value,
+}
+
+/// A version 2 tactics file, as JSON, in the version 3 shape: tempo takes the five patience
+/// levels of the frozen copy, each mentality drops its block depth (the line height owns
+/// where the block stands) and its flat shoot, progress and hold offsets and takes the frozen
+/// loss weight of its place in the list (the first mentality the first
+/// weight, the last the last, the rest by their share of the way between), and the file
+/// takes the frozen primitive entries. The caller parses and checks the result as a current
+/// file.
+pub fn tactics_v2_to_v3(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let frozen: FrozenTacticsV3 = serde_json::from_str(FROZEN_TACTICS_V3)
+        .expect("the frozen tactics copy parses; a test checks it");
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert(
+        "schema_version".into(),
+        serde_json::Value::from(crate::data::tactics::TACTICS_VERSION),
+    );
+    obj.insert("primitives".into(), frozen.primitives);
+    obj.get_mut("instructions")
+        .and_then(|i| i.as_object_mut())
+        .ok_or_else(|| "instructions is missing".to_string())?
+        .insert("tempo".into(), frozen.tempo);
+    let mentalities = obj
+        .get_mut("mentalities")
+        .and_then(|m| m.as_array_mut())
+        .ok_or_else(|| "mentalities is missing".to_string())?;
+    let n = mentalities.len();
+    let last = frozen.loss_weight.len() - 1;
+    for (i, m) in mentalities.iter_mut().enumerate() {
+        let m = m
+            .as_object_mut()
+            .ok_or_else(|| format!("mentalities[{i}] is not an object"))?;
+        for key in ["block_depth", "shoot", "progress", "hold"] {
+            m.remove(key);
+        }
+        // The place along the list, 0 for the first and the last weight for the last.
+        let place = if n > 1 {
+            ((i * last) as f64 / (n - 1) as f64).round() as usize
+        } else {
+            last / 2
+        };
+        m.insert(
+            "loss_weight".into(),
+            serde_json::Value::from(frozen.loss_weight[place]),
+        );
     }
+    Ok(file)
 }

@@ -1,0 +1,28 @@
+{
+  "refusal": "a graded primitive has exactly 5 levels; instructions.pressing has 3",
+  "primitive": {
+    "name": "planted",
+    "kind": "graded",
+    "levels": "instructions.pressing",
+    "default": "mid",
+    "inputs": [
+      {
+        "input": "patience",
+        "hook": "pass.recycle"
+      }
+    ],
+    "signature": [
+      {
+        "stat": "passes_per_possession",
+        "direction": "up"
+      }
+    ],
+    "data": {
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England"
+      ],
+      "row": "tempo"
+    }
+  }
+}

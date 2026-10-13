@@ -450,6 +450,10 @@ pub struct OptionDraft {
     /// The open team-mates in roster order and their pass scores.
     pub passes: [(usize, f64); MATES],
     pub pass_count: usize,
+    /// Each pass's share of its score that moves which pass is picked but not how the pass
+    /// option compares with the others (the team's patience): it is taken off the picked
+    /// pass's score after the pick.
+    pub pass_pick: [f64; MATES],
     /// The dribble and hold scores; `None` for a keeper. The dribble score is `None` when
     /// an opponent is close and the carrier does not try a take-on (the skill gate).
     pub dribble_hold: Option<(Option<f64>, f64)>,

@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "formations": [
     {
       "name": "4-4-2",
@@ -163,11 +163,11 @@
     }
   ],
   "mentalities": [
-    { "name": "defensive", "block_depth": -8.0, "shoot": -0.3, "progress": -0.3, "hold": 0.2, "rest_defence": 6 },
-    { "name": "cautious", "block_depth": -4.0, "shoot": -0.15, "progress": -0.15, "hold": 0.1, "rest_defence": 5 },
-    { "name": "balanced", "block_depth": 0.0, "shoot": 0.0, "progress": 0.0, "hold": 0.0, "rest_defence": 4 },
-    { "name": "positive", "block_depth": 4.0, "shoot": 0.15, "progress": 0.15, "hold": -0.1, "rest_defence": 3 },
-    { "name": "attacking", "block_depth": 8.0, "shoot": 0.3, "progress": 0.3, "hold": -0.2, "rest_defence": 2 }
+    { "name": "defensive", "loss_weight": 1.875, "rest_defence": 6 },
+    { "name": "cautious", "loss_weight": 0.664062, "rest_defence": 5 },
+    { "name": "balanced", "loss_weight": 0.5, "rest_defence": 4 },
+    { "name": "positive", "loss_weight": 0.3125, "rest_defence": 3 },
+    { "name": "attacking", "loss_weight": 0.0, "rest_defence": 2 }
   ],
   "instructions": {
     "pressing": {
@@ -187,11 +187,13 @@
       ]
     },
     "tempo": {
-      "default": "normal",
+      "default": "balanced",
       "levels": [
-        { "name": "slower", "value": -0.15 },
-        { "name": "normal", "value": 0.0 },
-        { "name": "faster", "value": 0.15 }
+        { "name": "very_direct", "value": -2.0 },
+        { "name": "direct", "value": -0.5 },
+        { "name": "balanced", "value": 0.0 },
+        { "name": "patient", "value": 0.125 },
+        { "name": "very_patient", "value": 0.203125 }
       ]
     },
     "line_height": {
@@ -392,5 +394,167 @@
     "space_m": 6.0,
     "near_ball_m": 10.0
   },
-  "rest_defence": { "hold_margin_m": 2.0, "lane_m": 15.0, "cover_familiarity_min": -0.5 }
+  "rest_defence": { "hold_margin_m": 2.0, "lane_m": 15.0, "cover_familiarity_min": -0.5 },
+  "primitives": [
+    {
+      "name": "tempo",
+      "kind": "graded",
+      "levels": "instructions.tempo",
+      "default": "balanced",
+      "inputs": [
+        {
+          "input": "patience",
+          "hook": "pass.recycle"
+        }
+      ],
+      "signature": [
+        {
+          "stat": "passes_per_possession",
+          "direction": "up"
+        },
+        {
+          "stat": "recycle_share",
+          "direction": "up"
+        }
+      ],
+      "data": {
+        "source": "wyscout_2017_18",
+        "competitions": [
+          "England",
+          "France",
+          "Italy",
+          "Spain"
+        ],
+        "row": "tempo"
+      },
+      "fits": [
+        {
+          "level": "very_direct",
+          "values": {
+            "patience": -2.0
+          },
+          "target": 0.850245,
+          "achieved": 0.871564,
+          "noise": 0.049068,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "direct",
+          "values": {
+            "patience": -0.5
+          },
+          "target": 0.924127,
+          "achieved": 0.924064,
+          "noise": 0.043923,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "patient",
+          "values": {
+            "patience": 0.125
+          },
+          "target": 1.161351,
+          "achieved": 1.162582,
+          "noise": 0.031625,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "very_patient",
+          "values": {
+            "patience": 0.203125
+          },
+          "target": 1.445039,
+          "achieved": 1.46585,
+          "noise": 0.048149,
+          "matches": 200,
+          "seed": 9
+        }
+      ]
+    },
+    {
+      "name": "mentality",
+      "kind": "graded",
+      "levels": "mentalities",
+      "default": "balanced",
+      "inputs": [
+        {
+          "input": "loss_weight",
+          "hook": "option.loss_danger"
+        },
+        {
+          "input": "rest_defence",
+          "hook": "shape.rest_defence"
+        }
+      ],
+      "signature": [
+        {
+          "stat": "turnovers_per_possession",
+          "direction": "up"
+        },
+        {
+          "stat": "shot_share",
+          "direction": "up"
+        }
+      ],
+      "data": {
+        "source": "wyscout_2017_18",
+        "competitions": [
+          "England",
+          "France",
+          "Italy",
+          "Spain"
+        ],
+        "row": "mentality"
+      },
+      "fits": [
+        {
+          "level": "defensive",
+          "values": {
+            "loss_weight": 1.875
+          },
+          "target": 0.960221,
+          "achieved": 0.961735,
+          "noise": 0.011097,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "cautious",
+          "values": {
+            "loss_weight": 0.664062
+          },
+          "target": 0.98421,
+          "achieved": 0.98313,
+          "noise": 0.00675,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "positive",
+          "values": {
+            "loss_weight": 0.3125
+          },
+          "target": 1.019914,
+          "achieved": 1.017381,
+          "noise": 0.007433,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "attacking",
+          "values": {
+            "loss_weight": 0.0
+          },
+          "target": 1.040373,
+          "achieved": 1.043317,
+          "noise": 0.008827,
+          "matches": 200,
+          "seed": 9
+        }
+      ]
+    }
+  ]
 }
