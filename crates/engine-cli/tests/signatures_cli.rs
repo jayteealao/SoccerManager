@@ -25,6 +25,32 @@ fn fixture(dir: &Path, planted: bool) -> PathBuf {
         events.push_str(&format!(
             "England,m{i},{i},1H,1.0,{i},1,MD,Pass,Simple pass,30,50,40,50,1801\n"
         ));
+        // The in-possession rows: a keeper's 42 m pass from his own third, a cross from the
+        // left wing into the final third (high for an even team), a take-on, a shot that
+        // starts further up for a higher team, and a goal kick (35 + i) % of the length long.
+        let high = if i % 2 == 0 { "801" } else { "802" };
+        events.push_str(&format!(
+            "England,m{i},{},1H,1.2,{i},2,GK,Pass,Simple pass,5,50,45,50,1801\n",
+            200 + i
+        ));
+        events.push_str(&format!(
+            "England,m{i},{},1H,1.5,{i},1,MD,Pass,Cross,60,10,95,50,{high} 1801\n",
+            300 + i
+        ));
+        events.push_str(&format!(
+            "England,m{i},{},1H,2.0,{i},1,FW,Duel,Ground attacking duel,70,30,72,30,503 1801\n",
+            400 + i
+        ));
+        events.push_str(&format!(
+            "England,m{i},{},1H,2.5,{i},1,FW,Shot,Shot,{},50,100,50,\n",
+            500 + i,
+            75 + 2 * i
+        ));
+        events.push_str(&format!(
+            "England,m{i},{},1H,3.0,{i},2,GK,Free Kick,Goal kick,5,50,{},50,\n",
+            600 + i,
+            40 + i
+        ));
         events.push_str(&format!(
             "England,m{i},{},1H,4.0,{i},1,MD,Interruption,Ball out of the field,40,50,,,\n",
             100 + i
@@ -134,5 +160,95 @@ fn the_ppda_row_holds_the_quintiles_of_the_fit_teams() {
     assert_eq!(row["medians"], serde_json::json!([1.5, 3.5, 5.5, 7.5, 9.5]));
     assert_eq!(row["min"], 1.0);
     assert_eq!(row["max"], 10.0);
+    std::fs::remove_dir_all(&data).unwrap();
+}
+
+/// The row of `stat` in `table`.
+fn row<'a>(table: &'a serde_json::Value, stat: &str) -> &'a serde_json::Value {
+    table["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["stat"] == stat)
+        .unwrap_or_else(|| panic!("a {stat} row"))
+}
+
+/// The in-possession rows of the ten fixture teams, worked out by hand from the events.
+#[test]
+fn the_in_possession_rows_follow_the_shared_definitions() {
+    let data = temp("engine-cli-signatures", "possession");
+    let real = fixture(&data.join("real"), false);
+    let table: serde_json::Value =
+        serde_json::from_str(&run(&data, &real, "table.json", &[]).unwrap()).unwrap();
+    let flat = |stat: &str, v: f64| {
+        let r = row(&table, stat);
+        assert_eq!(
+            (r["min"].as_f64(), r["max"].as_f64()),
+            (Some(v), Some(v)),
+            "{stat}: {r}"
+        );
+    };
+    flat("keeper_long_share", 1.0);
+    flat("takeons_per_90", 1.0);
+    flat("entries_centre_share", 1.0);
+    flat("crosses_per_final_third_possession", 1.0);
+    let r = row(&table, "goal_kick_m");
+    assert!(
+        (r["min"].as_f64().unwrap() - 36.0 * 1.05).abs() < 1e-6,
+        "{r}"
+    );
+    assert!(
+        (r["max"].as_f64().unwrap() - 45.0 * 1.05).abs() < 1e-6,
+        "{r}"
+    );
+    let r = row(&table, "outside_box_shot_share");
+    assert_eq!(
+        (r["min"].as_f64(), r["max"].as_f64()),
+        (Some(0.0), Some(1.0)),
+        "{r}"
+    );
+    let r = row(&table, "high_cross_share");
+    assert_eq!(
+        (r["min"].as_f64(), r["max"].as_f64()),
+        (Some(0.0), Some(1.0)),
+        "{r}"
+    );
+    std::fs::remove_dir_all(&data).unwrap();
+}
+
+/// The SkillCorner runs of three teams: five targets spread evenly between the lowest and the
+/// highest team, marked thin-sample.
+#[test]
+fn the_runs_rows_are_thin_sample_and_spread_evenly() {
+    let data = temp("engine-cli-signatures", "runs");
+    let real = fixture(&data.join("real"), false);
+    let mut sc = String::from("match_id,team_shortname,event_type,event_subtype,player_position\n");
+    let mut add = |m: &str, team: &str, kind: &str, sub: &str, pos: &str, n: usize| {
+        for _ in 0..n {
+            sc.push_str(&format!("{m},{team},{kind},{sub},{pos}\n"));
+        }
+    };
+    // A: 4 forward runs, 1 in behind. B: 2, both in behind. C: 5, none in behind.
+    add("m1", "A", "off_ball_run", "behind", "CF", 1);
+    add("m2", "A", "off_ball_run", "coming_short", "LW", 3);
+    add("m1", "A", "off_ball_run", "overlap", "LB", 2);
+    add("m1", "B", "off_ball_run", "behind", "RW", 2);
+    add("m1", "B", "off_ball_run", "underlap", "RWB", 1);
+    add("m2", "C", "off_ball_run", "run_ahead_of_the_ball", "CF", 5);
+    add("m2", "C", "off_ball_run", "overlap", "RB", 3);
+    let file = std::fs::File::create(real.join("sc_dynamic_events.csv.gz")).unwrap();
+    let mut gz = flate2::write::GzEncoder::new(file, flate2::Compression::default());
+    gz.write_all(sc.as_bytes()).unwrap();
+    gz.finish().unwrap();
+    let table: serde_json::Value =
+        serde_json::from_str(&run(&data, &real, "table.json", &[]).unwrap()).unwrap();
+    let behind = row(&table, "runs_in_behind_share");
+    assert_eq!(behind["thin_sample"], true, "{behind}");
+    assert_eq!(behind["source"], "skillcorner_open");
+    assert_eq!(
+        behind["medians"],
+        serde_json::json!([0.0, 0.25, 0.5, 0.75, 1.0])
+    );
+    assert!(row(&table, "ppda").get("thin_sample").is_none());
     std::fs::remove_dir_all(&data).unwrap();
 }

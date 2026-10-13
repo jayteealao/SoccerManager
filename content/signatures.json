@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "held_out": [
     "wyscout_2017_18:Germany",
     "wyscout_2017_18:World_Cup",
@@ -255,6 +255,1148 @@
       ],
       "min": 3.911638,
       "max": 7.465866
+    },
+    {
+      "primitive": "passing_directness",
+      "stat": "forward_pass_share",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        0.493792,
+        0.510562,
+        0.519276,
+        0.532059
+      ],
+      "quintile_ranges": [
+        [
+          0.453112,
+          0.493792
+        ],
+        [
+          0.493792,
+          0.510562
+        ],
+        [
+          0.510562,
+          0.519276
+        ],
+        [
+          0.519276,
+          0.532059
+        ],
+        [
+          0.532059,
+          0.567714
+        ]
+      ],
+      "medians": [
+        0.480358,
+        0.499806,
+        0.514037,
+        0.524284,
+        0.539216
+      ],
+      "min": 0.453112,
+      "max": 0.567714
+    },
+    {
+      "primitive": "passing_directness",
+      "stat": "long_ball_share",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        0.127585,
+        0.14226,
+        0.161192,
+        0.175789
+      ],
+      "quintile_ranges": [
+        [
+          0.088471,
+          0.127585
+        ],
+        [
+          0.127585,
+          0.14226
+        ],
+        [
+          0.14226,
+          0.161192
+        ],
+        [
+          0.161192,
+          0.175789
+        ],
+        [
+          0.175789,
+          0.218855
+        ]
+      ],
+      "medians": [
+        0.12275,
+        0.137957,
+        0.153047,
+        0.169233,
+        0.18201
+      ],
+      "min": 0.088471,
+      "max": 0.218855
+    },
+    {
+      "primitive": "build_up",
+      "stat": "own_third_long_share",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        0.18175,
+        0.199761,
+        0.226469,
+        0.251525
+      ],
+      "quintile_ranges": [
+        [
+          0.105321,
+          0.18175
+        ],
+        [
+          0.18175,
+          0.199761
+        ],
+        [
+          0.199761,
+          0.226469
+        ],
+        [
+          0.226469,
+          0.251525
+        ],
+        [
+          0.251525,
+          0.368229
+        ]
+      ],
+      "medians": [
+        0.159107,
+        0.186083,
+        0.211996,
+        0.241846,
+        0.277633
+      ],
+      "min": 0.105321,
+      "max": 0.368229
+    },
+    {
+      "primitive": "build_up",
+      "stat": "goal_kick_m",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        62.80281,
+        63.840954,
+        64.830692,
+        66.348571
+      ],
+      "quintile_ranges": [
+        [
+          58.540697,
+          62.80281
+        ],
+        [
+          62.80281,
+          63.840954
+        ],
+        [
+          63.840954,
+          64.830692
+        ],
+        [
+          64.830692,
+          66.348571
+        ],
+        [
+          66.348571,
+          69.176538
+        ]
+      ],
+      "medians": [
+        61.772636,
+        63.546062,
+        64.170241,
+        65.695959,
+        67.27896
+      ],
+      "min": 58.540697,
+      "max": 69.176538
+    },
+    {
+      "primitive": "build_up",
+      "stat": "keeper_long_share",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        0.431554,
+        0.513183,
+        0.567937,
+        0.670537
+      ],
+      "quintile_ranges": [
+        [
+          0.197952,
+          0.431554
+        ],
+        [
+          0.431554,
+          0.513183
+        ],
+        [
+          0.513183,
+          0.567937
+        ],
+        [
+          0.567937,
+          0.670537
+        ],
+        [
+          0.670537,
+          0.795356
+        ]
+      ],
+      "medians": [
+        0.374002,
+        0.467433,
+        0.538736,
+        0.615686,
+        0.728935
+      ],
+      "min": 0.197952,
+      "max": 0.795356
+    },
+    {
+      "primitive": "width",
+      "stat": "wide_pass_share",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        0.415872,
+        0.437806,
+        0.455479,
+        0.483742
+      ],
+      "quintile_ranges": [
+        [
+          0.363909,
+          0.415872
+        ],
+        [
+          0.415872,
+          0.437806
+        ],
+        [
+          0.437806,
+          0.455479
+        ],
+        [
+          0.455479,
+          0.483742
+        ],
+        [
+          0.483742,
+          0.511841
+        ]
+      ],
+      "medians": [
+        0.387578,
+        0.43108,
+        0.448464,
+        0.471338,
+        0.490442
+      ],
+      "min": 0.363909,
+      "max": 0.511841
+    },
+    {
+      "primitive": "attacking_channel",
+      "stat": "entries_left_share",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        0.250401,
+        0.269986,
+        0.295632,
+        0.316554
+      ],
+      "quintile_ranges": [
+        [
+          0.218952,
+          0.250401
+        ],
+        [
+          0.250401,
+          0.269986
+        ],
+        [
+          0.269986,
+          0.295632
+        ],
+        [
+          0.295632,
+          0.316554
+        ],
+        [
+          0.316554,
+          0.3535
+        ]
+      ],
+      "medians": [
+        0.244422,
+        0.261076,
+        0.283191,
+        0.308236,
+        0.322926
+      ],
+      "min": 0.218952,
+      "max": 0.3535
+    },
+    {
+      "primitive": "attacking_channel",
+      "stat": "entries_right_share",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        0.254684,
+        0.275333,
+        0.297166,
+        0.318979
+      ],
+      "quintile_ranges": [
+        [
+          0.20401,
+          0.254684
+        ],
+        [
+          0.254684,
+          0.275333
+        ],
+        [
+          0.275333,
+          0.297166
+        ],
+        [
+          0.297166,
+          0.318979
+        ],
+        [
+          0.318979,
+          0.371856
+        ]
+      ],
+      "medians": [
+        0.247301,
+        0.26328,
+        0.286327,
+        0.306425,
+        0.334353
+      ],
+      "min": 0.20401,
+      "max": 0.371856
+    },
+    {
+      "primitive": "attacking_channel",
+      "stat": "entries_centre_share",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        0.390285,
+        0.416979,
+        0.442351,
+        0.470229
+      ],
+      "quintile_ranges": [
+        [
+          0.337209,
+          0.390285
+        ],
+        [
+          0.390285,
+          0.416979
+        ],
+        [
+          0.416979,
+          0.442351
+        ],
+        [
+          0.442351,
+          0.470229
+        ],
+        [
+          0.470229,
+          0.522409
+        ]
+      ],
+      "medians": [
+        0.3754,
+        0.402053,
+        0.425835,
+        0.454241,
+        0.485863
+      ],
+      "min": 0.337209,
+      "max": 0.522409
+    },
+    {
+      "primitive": "attacking_channel",
+      "stat": "entries_wide_share",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        0.529771,
+        0.557649,
+        0.583021,
+        0.609715
+      ],
+      "quintile_ranges": [
+        [
+          0.477591,
+          0.529771
+        ],
+        [
+          0.529771,
+          0.557649
+        ],
+        [
+          0.557649,
+          0.583021
+        ],
+        [
+          0.583021,
+          0.609715
+        ],
+        [
+          0.609715,
+          0.662791
+        ]
+      ],
+      "medians": [
+        0.514137,
+        0.545759,
+        0.574165,
+        0.597947,
+        0.6246
+      ],
+      "min": 0.477591,
+      "max": 0.662791
+    },
+    {
+      "primitive": "attacking_channel",
+      "stat": "entries_centre_left_share",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        0.681021,
+        0.702834,
+        0.724667,
+        0.745316
+      ],
+      "quintile_ranges": [
+        [
+          0.628144,
+          0.681021
+        ],
+        [
+          0.681021,
+          0.702834
+        ],
+        [
+          0.702834,
+          0.724667
+        ],
+        [
+          0.724667,
+          0.745316
+        ],
+        [
+          0.745316,
+          0.79599
+        ]
+      ],
+      "medians": [
+        0.665647,
+        0.693575,
+        0.713673,
+        0.73672,
+        0.752699
+      ],
+      "min": 0.628144,
+      "max": 0.79599
+    },
+    {
+      "primitive": "attacking_channel",
+      "stat": "entries_centre_right_share",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        0.683446,
+        0.704368,
+        0.730014,
+        0.749599
+      ],
+      "quintile_ranges": [
+        [
+          0.6465,
+          0.683446
+        ],
+        [
+          0.683446,
+          0.704368
+        ],
+        [
+          0.704368,
+          0.730014
+        ],
+        [
+          0.730014,
+          0.749599
+        ],
+        [
+          0.749599,
+          0.781048
+        ]
+      ],
+      "medians": [
+        0.677074,
+        0.691764,
+        0.716809,
+        0.738924,
+        0.755578
+      ],
+      "min": 0.6465,
+      "max": 0.781048
+    },
+    {
+      "primitive": "final_third",
+      "stat": "outside_box_shot_share",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        0.382282,
+        0.404635,
+        0.429549,
+        0.450838
+      ],
+      "quintile_ranges": [
+        [
+          0.275862,
+          0.382282
+        ],
+        [
+          0.382282,
+          0.404635
+        ],
+        [
+          0.404635,
+          0.429549
+        ],
+        [
+          0.429549,
+          0.450838
+        ],
+        [
+          0.450838,
+          0.525822
+        ]
+      ],
+      "medians": [
+        0.363942,
+        0.398419,
+        0.413309,
+        0.438458,
+        0.47698
+      ],
+      "min": 0.275862,
+      "max": 0.525822
+    },
+    {
+      "primitive": "final_third",
+      "stat": "shot_distance_m",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        17.99212,
+        18.459271,
+        18.892375,
+        19.321748
+      ],
+      "quintile_ranges": [
+        [
+          15.720113,
+          17.99212
+        ],
+        [
+          17.99212,
+          18.459271
+        ],
+        [
+          18.459271,
+          18.892375
+        ],
+        [
+          18.892375,
+          19.321748
+        ],
+        [
+          19.321748,
+          20.335933
+        ]
+      ],
+      "medians": [
+        17.65903,
+        18.251027,
+        18.545183,
+        19.088866,
+        19.909093
+      ],
+      "min": 15.720113,
+      "max": 20.335933
+    },
+    {
+      "primitive": "dribbling",
+      "stat": "takeons_per_90",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        12.142105,
+        13.184211,
+        13.936842,
+        15.384211
+      ],
+      "quintile_ranges": [
+        [
+          8.315789,
+          12.142105
+        ],
+        [
+          12.142105,
+          13.184211
+        ],
+        [
+          13.184211,
+          13.936842
+        ],
+        [
+          13.936842,
+          15.384211
+        ],
+        [
+          15.384211,
+          22.315789
+        ]
+      ],
+      "medians": [
+        11.052632,
+        12.657895,
+        13.605263,
+        14.605263,
+        16.026316
+      ],
+      "min": 8.315789,
+      "max": 22.315789
+    },
+    {
+      "primitive": "crossing",
+      "stat": "crosses_per_final_third_possession",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        0.24459,
+        0.263246,
+        0.278043,
+        0.296219
+      ],
+      "quintile_ranges": [
+        [
+          0.169254,
+          0.24459
+        ],
+        [
+          0.24459,
+          0.263246
+        ],
+        [
+          0.263246,
+          0.278043
+        ],
+        [
+          0.278043,
+          0.296219
+        ],
+        [
+          0.296219,
+          0.352742
+        ]
+      ],
+      "medians": [
+        0.2352,
+        0.255102,
+        0.268165,
+        0.286064,
+        0.312424
+      ],
+      "min": 0.169254,
+      "max": 0.352742
+    },
+    {
+      "primitive": "cross_type",
+      "stat": "high_cross_share",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        0.527987,
+        0.554726,
+        0.581789,
+        0.610178
+      ],
+      "quintile_ranges": [
+        [
+          0.456215,
+          0.527987
+        ],
+        [
+          0.527987,
+          0.554726
+        ],
+        [
+          0.554726,
+          0.581789
+        ],
+        [
+          0.581789,
+          0.610178
+        ],
+        [
+          0.610178,
+          0.699856
+        ]
+      ],
+      "medians": [
+        0.507261,
+        0.545767,
+        0.5659,
+        0.592397,
+        0.625231
+      ],
+      "min": 0.456215,
+      "max": 0.699856
+    },
+    {
+      "primitive": "cross_type",
+      "stat": "low_cross_share",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        0.389822,
+        0.418211,
+        0.445274,
+        0.472013
+      ],
+      "quintile_ranges": [
+        [
+          0.300144,
+          0.389822
+        ],
+        [
+          0.389822,
+          0.418211
+        ],
+        [
+          0.418211,
+          0.445274
+        ],
+        [
+          0.445274,
+          0.472013
+        ],
+        [
+          0.472013,
+          0.543785
+        ]
+      ],
+      "medians": [
+        0.374769,
+        0.407603,
+        0.4341,
+        0.454233,
+        0.492739
+      ],
+      "min": 0.300144,
+      "max": 0.543785
+    },
+    {
+      "primitive": "cross_type",
+      "stat": "cross_origin_m",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        12.90176,
+        13.600954,
+        14.208276,
+        14.9513
+      ],
+      "quintile_ranges": [
+        [
+          11.407667,
+          12.90176
+        ],
+        [
+          12.90176,
+          13.600954
+        ],
+        [
+          13.600954,
+          14.208276
+        ],
+        [
+          14.208276,
+          14.9513
+        ],
+        [
+          14.9513,
+          16.839394
+        ]
+      ],
+      "medians": [
+        12.479287,
+        13.251871,
+        14.007495,
+        14.748334,
+        15.480336
+      ],
+      "min": 11.407667,
+      "max": 16.839394
+    },
+    {
+      "primitive": "forward_runs",
+      "stat": "runs_in_behind_share",
+      "source": "skillcorner_open",
+      "competitions": [
+        "A-League"
+      ],
+      "teams": 13,
+      "matches": 20,
+      "quintile_edges": [
+        0.105323,
+        0.127935,
+        0.150548,
+        0.17316
+      ],
+      "quintile_ranges": [
+        [
+          0.082711,
+          0.105323
+        ],
+        [
+          0.105323,
+          0.127935
+        ],
+        [
+          0.127935,
+          0.150548
+        ],
+        [
+          0.150548,
+          0.17316
+        ],
+        [
+          0.17316,
+          0.195772
+        ]
+      ],
+      "medians": [
+        0.094017,
+        0.116629,
+        0.139242,
+        0.161854,
+        0.184466
+      ],
+      "min": 0.094017,
+      "max": 0.184466,
+      "thin_sample": true
+    },
+    {
+      "primitive": "fullback_run_frequency",
+      "stat": "fullback_runs_per_match",
+      "source": "skillcorner_open",
+      "competitions": [
+        "A-League"
+      ],
+      "teams": 13,
+      "matches": 20,
+      "quintile_edges": [
+        2.0,
+        4.0,
+        6.0,
+        8.0
+      ],
+      "quintile_ranges": [
+        [
+          0.0,
+          2.0
+        ],
+        [
+          2.0,
+          4.0
+        ],
+        [
+          4.0,
+          6.0
+        ],
+        [
+          6.0,
+          8.0
+        ],
+        [
+          8.0,
+          10.0
+        ]
+      ],
+      "medians": [
+        1.0,
+        3.0,
+        5.0,
+        7.0,
+        9.0
+      ],
+      "min": 1.0,
+      "max": 9.0,
+      "thin_sample": true
+    },
+    {
+      "primitive": "fullback_runs",
+      "stat": "overlaps_per_match",
+      "source": "skillcorner_open",
+      "competitions": [
+        "A-League"
+      ],
+      "teams": 13,
+      "matches": 20,
+      "quintile_edges": [
+        0.821429,
+        2.464286,
+        4.107143,
+        5.75
+      ],
+      "quintile_ranges": [
+        [
+          -0.821429,
+          0.821429
+        ],
+        [
+          0.821429,
+          2.464286
+        ],
+        [
+          2.464286,
+          4.107143
+        ],
+        [
+          4.107143,
+          5.75
+        ],
+        [
+          5.75,
+          7.392857
+        ]
+      ],
+      "medians": [
+        0.0,
+        1.642857,
+        3.285714,
+        4.928571,
+        6.571429
+      ],
+      "min": 0.0,
+      "max": 6.571429,
+      "thin_sample": true
+    },
+    {
+      "primitive": "fullback_runs",
+      "stat": "underlaps_per_match",
+      "source": "skillcorner_open",
+      "competitions": [
+        "A-League"
+      ],
+      "teams": 13,
+      "matches": 20,
+      "quintile_edges": [
+        1.0625,
+        2.1875,
+        3.3125,
+        4.4375
+      ],
+      "quintile_ranges": [
+        [
+          -0.0625,
+          1.0625
+        ],
+        [
+          1.0625,
+          2.1875
+        ],
+        [
+          2.1875,
+          3.3125
+        ],
+        [
+          3.3125,
+          4.4375
+        ],
+        [
+          4.4375,
+          5.5625
+        ]
+      ],
+      "medians": [
+        0.5,
+        1.625,
+        2.75,
+        3.875,
+        5.0
+      ],
+      "min": 0.5,
+      "max": 5.0,
+      "thin_sample": true
     }
   ],
   "checks": [
