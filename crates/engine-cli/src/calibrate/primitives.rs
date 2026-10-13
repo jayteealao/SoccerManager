@@ -334,6 +334,22 @@ pub struct StepVerdict {
     /// Every statistic the harness measures, the pooled value of each arm (lower level
     /// first).
     pub means: BTreeMap<String, [f64; 2]>,
+    /// Every statistic the harness measures, its paired difference (second arm less first)
+    /// and that difference's noise (1.96 standard errors), so that a statistic a step must
+    /// leave alone can be read against its noise.
+    pub differences: BTreeMap<String, [f64; 2]>,
+}
+
+/// The paired difference of every statistic in `pairs` and its noise.
+pub fn arm_differences(pairs: &[Vec<Stats>]) -> BTreeMap<String, [f64; 2]> {
+    STATS
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            let (difference, se, _) = pooled(&units(pairs, i, &[0, 1]));
+            (s.to_string(), [difference, 1.96 * se])
+        })
+        .collect()
 }
 
 /// The pooled value of every statistic in each arm of `pairs`.
@@ -421,6 +437,7 @@ pub fn check(
                     stats,
                     pass,
                     means: arm_means(&pairs),
+                    differences: arm_differences(&pairs),
                 });
             }
         }
@@ -453,6 +470,7 @@ pub fn check(
                     stats,
                     pass,
                     means: arm_means(&pairs),
+                    differences: arm_differences(&pairs),
                 });
             }
         }
@@ -1041,6 +1059,29 @@ mod tests {
         assert!(judge(&pairs, 0, Direction::Up).pass);
         assert!(!judge(&pairs, 0, Direction::Down).pass);
         assert!(!judge(&pairs, 1, Direction::Up).pass, "inside the noise");
+    }
+
+    /// Every statistic's paired difference comes with its noise, so a statistic a step must
+    /// leave alone reads inside its noise and one the step moves reads beyond it.
+    #[test]
+    fn every_statistic_reports_its_paired_difference_and_noise() {
+        let mut pairs = Vec::new();
+        for i in 0..20 {
+            let mut a = [(0.0, 1.0); STATS.len()];
+            let mut b = [(0.0, 1.0); STATS.len()];
+            a[0] = (30.0 + f64::from(i % 3), 10.0);
+            b[0] = (a[0].0 + 5.0, 10.0);
+            let held = stat_index("hold_dribble_share").unwrap();
+            a[held] = (20.0, 100.0);
+            b[held] = (20.0 + if i % 2 == 0 { 1.0 } else { -1.0 }, 100.0);
+            pairs.push(vec![a, b]);
+        }
+        let d = arm_differences(&pairs);
+        assert_eq!(d.len(), STATS.len());
+        let [moved, noise] = d["passes_per_possession"];
+        assert!(moved > noise, "{moved} {noise}");
+        let [held, noise] = d["hold_dribble_share"];
+        assert!(held.abs() <= noise && noise > 0.0, "{held} {noise}");
     }
 
     /// Pooling is a sum over a sum: one short match with a wild ratio moves the pooled value
