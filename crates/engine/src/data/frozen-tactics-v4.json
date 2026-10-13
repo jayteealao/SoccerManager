@@ -1,0 +1,37 @@
+{
+  "width": {
+    "default": "normal",
+    "levels": [
+      {
+        "name": "narrow",
+        "value": 0.85
+      },
+      {
+        "name": "normal",
+        "value": 1.0
+      },
+      {
+        "name": "wide",
+        "value": 1.15
+      }
+    ]
+  },
+  "passing_directness": {
+    "default": "mixed",
+    "levels": [
+      {
+        "name": "short",
+        "value": -0.2
+      },
+      {
+        "name": "mixed",
+        "value": 0.0
+      },
+      {
+        "name": "direct",
+        "value": 0.2
+      }
+    ]
+  },
+  "primitives": []
+}

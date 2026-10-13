@@ -575,6 +575,46 @@ fn a_version_2_tactics_file_converts_to_the_shipped_version_3_file() {
     assert_eq!(converted.value.primitives, shipped.primitives);
 }
 
+/// A version 3 tactics file (three width and three directness levels, only the tempo and
+/// mentality primitives) converts to the shipped version 4 file: width and passing directness
+/// take their five levels, and the file takes every primitive entry version 4 adds, after its
+/// own.
+#[test]
+fn a_version_3_tactics_file_converts_to_the_shipped_version_4_file() {
+    let path = common::content_dir().path(engine::data::TACTICS_FILE);
+    let mut v3: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    v3["schema_version"] = 3.into();
+    v3["primitives"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|p| p["name"] == "tempo" || p["name"] == "mentality");
+    v3["instructions"]["width"] = serde_json::json!({
+        "default": "normal",
+        "levels": [
+            { "name": "narrow", "value": 0.85 },
+            { "name": "normal", "value": 1.0 },
+            { "name": "wide", "value": 1.15 }
+        ]
+    });
+    v3["instructions"]["passing_directness"] = serde_json::json!({
+        "default": "mixed",
+        "levels": [
+            { "name": "short", "value": -0.2 },
+            { "name": "mixed", "value": 0.0 },
+            { "name": "direct", "value": 0.2 }
+        ]
+    });
+    let converted =
+        engine::data::load_tactics_bytes(&serde_json::to_vec(&v3).unwrap(), "tactics-v3.json")
+            .unwrap();
+    assert_eq!(converted.converted_from, Some(3));
+    let shipped = common::content().tactics;
+    assert_eq!(converted.value.instructions, shipped.instructions);
+    assert_eq!(converted.value.mentalities, shipped.mentalities);
+    assert_eq!(converted.value.primitives, shipped.primitives);
+    assert_eq!(converted.value.roles, shipped.roles);
+}
+
 #[test]
 fn a_version_1_tactics_file_converts_to_the_shipped_version_3_file() {
     let v1 = fixture_bytes("tactics-v1.json");

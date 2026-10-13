@@ -23,8 +23,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use anyhow::{Context, bail};
 use engine::data::TeamFile;
 use engine::data::primitives::{
-    Direction, Primitive, PrimitiveKind, block_names, held_out, input_field, level_value,
-    set_level_value,
+    Direction, OWN, Primitive, PrimitiveKind, held_out, input_field, level_value, set_level_value,
+    settings,
 };
 use engine::data::tactics::{INSTRUCTIONS, TacticsSchema};
 use engine::measures::MatchMeasures;
@@ -136,8 +136,26 @@ pub fn primitive<'a>(schema: &'a TacticsSchema, name: &str) -> anyhow::Result<&'
         .with_context(|| format!("the tactics file has no primitive {name}"))
 }
 
+/// `tactics` with primitive `p` at level or choice `level`: in the settings when `p` owns its
+/// levels or choices, else in its level block.
+pub fn with_level(
+    mut tactics: Tactics,
+    schema: &TacticsSchema,
+    p: &Primitive,
+    level: usize,
+) -> anyhow::Result<Tactics> {
+    if p.is_setting() {
+        let k = settings(schema)
+            .position(|o| o.name == p.name)
+            .with_context(|| format!("{} is not a setting", p.name))?;
+        tactics.settings[k] = u8::try_from(level).context("a level index")?;
+        return Ok(tactics);
+    }
+    with_block_level(tactics, p.levels.as_deref().unwrap_or_default(), level)
+}
+
 /// `tactics` with the level block `block` at level `level`.
-pub fn with_level(mut tactics: Tactics, block: &str, level: usize) -> anyhow::Result<Tactics> {
+fn with_block_level(mut tactics: Tactics, block: &str, level: usize) -> anyhow::Result<Tactics> {
     let level = u8::try_from(level).context("a level index")?;
     if block == "mentalities" {
         tactics.mentality = level;
@@ -152,7 +170,8 @@ pub fn with_level(mut tactics: Tactics, block: &str, level: usize) -> anyhow::Re
 }
 
 /// A side's setting as plan input values: the content with those values written into a level
-/// of each input's block that the defaults do not use, and the tactics that select it.
+/// of each input's block (or a step or choice of the primitive that owns the input) that the
+/// defaults do not use, and the tactics that select it.
 pub fn with_values(
     content: &Content,
     values: &BTreeMap<String, f64>,
@@ -166,6 +185,20 @@ pub fn with_values(
         if !(lo..=hi).contains(value) {
             bail!("{input} {value} lies outside its range {lo} to {hi}");
         }
+        if block == OWN {
+            let p = c
+                .tactics
+                .primitives
+                .iter()
+                .find(|p| p.is_setting() && p.inputs.iter().any(|i| &i.input == input))
+                .cloned()
+                .with_context(|| format!("no primitive owns {input}"))?;
+            let default = p.default_index(&c.tactics).context("a default")?;
+            let spare = if default == 0 { 1 } else { 0 };
+            set_level_value(&mut c.tactics, input, spare, *value);
+            tactics = with_level(tactics, &c.tactics, &p, spare)?;
+            continue;
+        }
         let default = if block == "mentalities" {
             usize::from(defaults.mentality)
         } else {
@@ -177,7 +210,7 @@ pub fn with_values(
         };
         let spare = if default == 0 { 1 } else { 0 };
         set_level_value(&mut c.tactics, input, spare, *value);
-        tactics = with_level(tactics, block, spare)?;
+        tactics = with_block_level(tactics, block, spare)?;
     }
     Ok((c, tactics))
 }
@@ -401,7 +434,6 @@ pub fn check(
     let mut out = Vec::new();
     match p.kind {
         PrimitiveKind::Graded => {
-            let block = p.levels.clone().unwrap_or_default();
             let steps: Vec<usize> = match from {
                 Some(level) => vec![
                     names
@@ -417,7 +449,7 @@ pub fn check(
                 let arms = [l, l + 1].map(|level| -> anyhow::Result<Arm> {
                     Ok(Arm {
                         content: content.clone(),
-                        tactics: with_level(defaults, &block, level)?,
+                        tactics: with_level(defaults, &content.tactics, &p, level)?,
                     })
                 });
                 let [a, b] = arms;
@@ -447,9 +479,32 @@ pub fn check(
                 .iter()
                 .find(|c| c.name == p.default)
                 .context("the default choice")?;
-            let (dc, dt) = with_values(&content, &default.values)?;
+            // A choice whose inputs the choices own is selected in the settings; one that sets
+            // a level block's input is written into a spare level of that block.
+            let owned = p
+                .inputs
+                .iter()
+                .all(|i| input_field(&i.input).is_some_and(|(b, ..)| b == OWN));
+            let defaults = Tactics::defaults(&content.tactics);
+            let arm_of =
+                |choice: &engine::data::primitives::Choice| -> anyhow::Result<(Content, Tactics)> {
+                    if owned {
+                        let k = p
+                            .choices
+                            .iter()
+                            .position(|c| c.name == choice.name)
+                            .context("a choice")?;
+                        Ok((
+                            content.clone(),
+                            with_level(defaults, &content.tactics, &p, k)?,
+                        ))
+                    } else {
+                        with_values(&content, &choice.values)
+                    }
+                };
+            let (dc, dt) = arm_of(default)?;
             for choice in p.choices.iter().filter(|c| c.name != p.default) {
-                let (cc, ct) = with_values(&content, &choice.values)?;
+                let (cc, ct) = arm_of(choice)?;
                 let arms = [
                     Arm {
                         content: dc.clone(),
@@ -715,8 +770,7 @@ pub fn fit(
         }
     }
     let row = p.data.row.clone().context("a data row")?;
-    let block = p.levels.clone().unwrap_or_default();
-    let names = block_names(&content.tactics, &block);
+    let names = p.level_names(&content.tactics);
     let q = names
         .iter()
         .position(|n| *n == level)
@@ -750,7 +804,7 @@ pub fn fit(
         }],
         &salt,
     )?;
-    let tested = with_level(defaults, &block, q)?;
+    let tested = with_level(defaults, &content.tactics, &p, q)?;
     let played: std::cell::RefCell<Vec<(f64, Vec<Vec<Stats>>)>> = Default::default();
     let eval = |x: f64| -> anyhow::Result<(f64, f64)> {
         let mut c = content.clone();

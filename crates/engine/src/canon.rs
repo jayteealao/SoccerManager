@@ -153,6 +153,7 @@ impl Writer {
             self.u8(rd.role);
             self.u8(rd.duty);
         }
+        self.raw(&t.settings);
     }
 
     /// A player's state deltas, one byte per attribute group, and the effective values they

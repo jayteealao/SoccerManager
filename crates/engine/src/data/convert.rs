@@ -61,6 +61,7 @@ pub const TEAM_V2: u32 = 2;
 /// The tactics file versions the converters read.
 pub const TACTICS_V1: u32 = 1;
 pub const TACTICS_V2: u32 = 2;
+pub const TACTICS_V3: u32 = 3;
 /// The attribute file versions the converters read.
 pub const ATTRIBUTES_V1: u32 = 1;
 pub const ATTRIBUTES_V2: u32 = 2;
@@ -922,10 +923,7 @@ pub fn tactics_v2_to_v3(mut file: serde_json::Value) -> Result<serde_json::Value
     let obj = file
         .as_object_mut()
         .ok_or_else(|| "the file is not an object".to_string())?;
-    obj.insert(
-        "schema_version".into(),
-        serde_json::Value::from(crate::data::tactics::TACTICS_VERSION),
-    );
+    obj.insert("schema_version".into(), serde_json::Value::from(TACTICS_V3));
     obj.insert("primitives".into(), frozen.primitives);
     obj.get_mut("instructions")
         .and_then(|i| i.as_object_mut())
@@ -954,6 +952,50 @@ pub fn tactics_v2_to_v3(mut file: serde_json::Value) -> Result<serde_json::Value
             "loss_weight".into(),
             serde_json::Value::from(frozen.loss_weight[place]),
         );
+    }
+    Ok(file)
+}
+
+/// The copy of the version 4 additions compiled into the build: the five levels of width and
+/// of passing directness, and the primitive entries version 4 adds.
+pub const FROZEN_TACTICS_V4: &str = include_str!("frozen-tactics-v4.json");
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenTacticsV4 {
+    width: serde_json::Value,
+    passing_directness: serde_json::Value,
+    primitives: Vec<serde_json::Value>,
+}
+
+/// A version 3 tactics file, as JSON, in the version 4 shape: width and passing directness
+/// take the five levels of the frozen copy, and the file takes each frozen primitive entry it
+/// does not hold by name. The caller parses and checks the result as a current file.
+pub fn tactics_v3_to_v4(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let frozen: FrozenTacticsV4 = serde_json::from_str(FROZEN_TACTICS_V4)
+        .expect("the frozen tactics copy parses; a test checks it");
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert(
+        "schema_version".into(),
+        serde_json::Value::from(crate::data::tactics::TACTICS_VERSION),
+    );
+    let instructions = obj
+        .get_mut("instructions")
+        .and_then(|i| i.as_object_mut())
+        .ok_or_else(|| "instructions is missing".to_string())?;
+    instructions.insert("width".into(), frozen.width);
+    instructions.insert("passing_directness".into(), frozen.passing_directness);
+    let primitives = obj
+        .entry("primitives")
+        .or_insert_with(|| serde_json::Value::Array(Vec::new()))
+        .as_array_mut()
+        .ok_or_else(|| "primitives is not a list".to_string())?;
+    for entry in frozen.primitives {
+        if !primitives.iter().any(|p| p["name"] == entry["name"]) {
+            primitives.push(entry);
+        }
     }
     Ok(file)
 }

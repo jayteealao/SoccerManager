@@ -8,6 +8,7 @@ pub mod hooks;
 pub mod planned;
 pub mod verdict;
 
+use crate::data::primitives::{OWN, SETTINGS_MAX, input_field, settings};
 use crate::data::tactics::{
     DIRECTNESS, LINE_HEIGHT, MENU_MAX, Offset, PRESSING, RestDefence, StandOffset, StandOption,
     StandOptionSizes, TEMPO, TIME_WASTING, TacticsSchema, WIDTH,
@@ -32,11 +33,39 @@ pub struct Tactics {
     pub instructions: [u8; 6],
     /// Per formation slot.
     pub roles: [RoleDuty; PLAYERS_PER_TEAM],
+    /// The level or choice of each primitive that owns its levels or choices, in the order of
+    /// [`crate::data::primitives::settings`]; the bytes past the last such primitive are 0.
+    pub settings: [u8; SETTINGS_MAX],
+}
+
+/// The default level or choice of every primitive that owns its levels or choices, in the
+/// order of [`crate::data::primitives::settings`].
+pub fn default_settings(schema: &TacticsSchema) -> [u8; SETTINGS_MAX] {
+    let mut out = [0u8; SETTINGS_MAX];
+    for (o, p) in out.iter_mut().zip(settings(schema)) {
+        // A checked schema names every default among at most five levels or a few choices.
+        *o = p.default_index(schema).unwrap_or(0) as u8;
+    }
+    out
+}
+
+/// `true` when every setting of `settings` indexes a level or a choice of its primitive and
+/// every byte past the last primitive is 0.
+pub fn settings_in_range(settings: &[u8; SETTINGS_MAX], schema: &TacticsSchema) -> bool {
+    let owners: Vec<_> = crate::data::primitives::settings(schema).collect();
+    settings
+        .iter()
+        .enumerate()
+        .all(|(k, &s)| match owners.get(k) {
+            Some(p) => usize::from(s) < p.level_names(schema).len(),
+            None => s == 0,
+        })
 }
 
 impl Tactics {
     /// The tactics file's defaults for the AI manager: its formation, mentality, and duty,
-    /// every instruction at its default, and each slot's first suitable role.
+    /// every instruction and every setting at its default, and each slot's first suitable
+    /// role.
     pub fn defaults(schema: &TacticsSchema) -> Self {
         // A checked schema resolves every AI name and holds at most 64 roles and 16
         // formations, so the indices fit a byte.
@@ -55,6 +84,7 @@ impl Tactics {
             mentality: schema.mentality_index(&schema.ai.mentality).unwrap_or(0) as u8,
             instructions: schema.instructions.defaults(),
             roles,
+            settings: default_settings(schema),
         }
     }
 
@@ -346,9 +376,64 @@ pub struct TeamPlan {
     /// override that plays a player at another duty's depth; 0 when the file has no such duty.
     pub attack_depth: f64,
     pub defend_depth: f64,
+    /// Build-up: added, in proportion to the pass length, to a long pass that starts in the
+    /// side's own third, the keeper's included; the keeper's goal-kick pick reads it too.
+    pub build_up: f64,
+    /// The attacking channel: added to a pass whose target lies in the left, the centre or
+    /// the right channel of the middle or final third, left as the side's left-back stands.
+    pub channel_left: f64,
+    pub channel_centre: f64,
+    pub channel_right: f64,
+    /// Final third: added to a shot from outside the penalty area.
+    pub long_shot: f64,
+    /// Final third: metres added to the range within which a shot is considered.
+    pub shot_reach_m: f64,
+    /// Dribbling: added to the dribble score.
+    pub dribble: f64,
+    /// Crossing frequency: added to a cross.
+    pub crossing: f64,
+    /// Cross type: added to a cross from far out (an early cross).
+    pub early_cross: f64,
+    /// Cross type: a cross's trajectory; below 0 driven low, above 0 floated, 0 the length
+    /// rule of every pass.
+    pub cross_loft: f64,
+    /// Creative freedom: a factor on the spread of the choice noise around the plan's
+    /// preferences.
+    pub freedom: f64,
+    /// Forward runs: metres a forward's timed-run target moves toward the onside line, or
+    /// toward his own goal below 0; never past the line.
+    pub run_depth_m: f64,
+    /// Full-back runs: -1 the underlap, 1 the overlap goes first in a full-back's menu and
+    /// holds wherever the team-mate ahead stands; 0 keeps the role's menu.
+    pub fullback_run: f64,
+    /// Full-back runs: a factor on the reach of a full-back's overlap and underlap.
+    pub fullback_reach: f64,
 }
 
 impl TeamPlan {
+    /// Sets the plan input `input` that a primitive's own step or choice holds; an input the
+    /// plan does not hold is ignored (a checked tactics file names none).
+    fn set_input(&mut self, input: &str, v: f64) {
+        let field = match input {
+            "build_up" => &mut self.build_up,
+            "channel_left" => &mut self.channel_left,
+            "channel_centre" => &mut self.channel_centre,
+            "channel_right" => &mut self.channel_right,
+            "long_shot" => &mut self.long_shot,
+            "shot_reach_m" => &mut self.shot_reach_m,
+            "dribble" => &mut self.dribble,
+            "crossing" => &mut self.crossing,
+            "early_cross" => &mut self.early_cross,
+            "cross_loft" => &mut self.cross_loft,
+            "freedom" => &mut self.freedom,
+            "run_depth_m" => &mut self.run_depth_m,
+            "fullback_run" => &mut self.fullback_run,
+            "fullback_reach" => &mut self.fullback_reach,
+            _ => return,
+        };
+        *field = v;
+    }
+
     /// The plan of `tactics` under the tactics file and the tuning.
     pub fn from(tactics: &Tactics, schema: &TacticsSchema, t: &Tuning) -> Self {
         let level = |index: usize| usize::from(tactics.instructions[index]);
@@ -387,7 +472,7 @@ impl TeamPlan {
                 menu_out: menu(&role.options.out_of_possession),
             };
         }
-        Self {
+        let mut plan = Self {
             block_depth: ins.line_height.levels[level(LINE_HEIGHT)].value,
             width: ins.width.levels[level(WIDTH)].value,
             press_count: usize::from(press.press_count),
@@ -408,10 +493,24 @@ impl TeamPlan {
             keeper_stay_off: held.map(|bits| bits & Instruction::LineHigh.bit() != 0),
             attack_depth: duty_depth("attack"),
             defend_depth: duty_depth("defend"),
+            ..Self::neutral(t)
+        };
+        // Each primitive that owns its levels or choices sets its own inputs from the level
+        // or choice the tactics store.
+        for (p, &at) in settings(schema).zip(&tactics.settings) {
+            for ih in &p.inputs {
+                let own = input_field(&ih.input).is_some_and(|(block, ..)| block == OWN);
+                if let Some(v) = p.own_value(&ih.input, usize::from(at)).filter(|_| own) {
+                    plan.set_input(&ih.input, v);
+                }
+            }
         }
+        plan
     }
 
-    /// The plan of the tactics file's defaults: the neutral plan the geometry tests use.
+    /// The plan of the tactics file's defaults: the neutral plan the geometry tests use. Every
+    /// input a primitive's own steps or choices hold is at its neutral value, where it moves
+    /// nothing.
     pub fn neutral(t: &Tuning) -> Self {
         Self {
             block_depth: 0.0,
@@ -434,6 +533,20 @@ impl TeamPlan {
             keeper_stay_off: [false; PLAYERS_PER_TEAM],
             attack_depth: 0.0,
             defend_depth: 0.0,
+            build_up: 0.0,
+            channel_left: 0.0,
+            channel_centre: 0.0,
+            channel_right: 0.0,
+            long_shot: 0.0,
+            shot_reach_m: 0.0,
+            dribble: 0.0,
+            crossing: 0.0,
+            early_cross: 0.0,
+            cross_loft: 0.0,
+            freedom: 1.0,
+            run_depth_m: 0.0,
+            fullback_run: 0.0,
+            fullback_reach: 1.0,
         }
     }
 }

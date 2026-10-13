@@ -147,7 +147,7 @@ fn every_bad_primitive_entry_is_refused_by_name() {
         .filter(|p| p.extension().is_some_and(|e| e == "json"))
         .collect();
     files.sort();
-    assert_eq!(files.len(), 12);
+    assert_eq!(files.len(), 16);
     for file in files {
         let case: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
@@ -160,6 +160,45 @@ fn every_bad_primitive_entry_is_refused_by_name() {
             file.display()
         );
     }
+}
+
+/// The tactics store at most 16 primitives that own their levels or choices: a file with more
+/// is refused, naming the count and the limit.
+#[test]
+fn more_settings_than_the_tactics_store_are_refused() {
+    let mut v = shipped_tactics_json();
+    let owning = common::content()
+        .tactics
+        .primitives
+        .iter()
+        .filter(|p| p.is_setting())
+        .count();
+    let list = v["primitives"].as_array_mut().unwrap();
+    for i in 0..=(engine::data::primitives::SETTINGS_MAX - owning) {
+        list.push(serde_json::json!({
+            "name": format!("planted_{i}"),
+            "kind": "choice",
+            "choices": [
+                { "name": "a", "values": { "patience": 0.0 }, "stat": "passes_per_possession" },
+                { "name": "b", "values": { "patience": 1.0 }, "stat": "passes_per_possession" }
+            ],
+            "default": "a",
+            "inputs": [{ "input": "patience", "hook": "pass.recycle" }],
+            "signature": [{ "stat": "passes_per_possession", "direction": "up" }],
+            "data": { "none": "a planted entry" }
+        }));
+    }
+    let bytes = serde_json::to_vec(&v).unwrap();
+    let loaded = engine::data::load_tactics_bytes(&bytes, "tactics.json").unwrap();
+    let (field, reason) = loaded
+        .value
+        .check(&common::content().attributes)
+        .unwrap_err();
+    assert_eq!(field, "primitives");
+    assert!(
+        reason.contains("17 primitives own their levels or choices; the tactics store at most 16"),
+        "{reason}"
+    );
 }
 
 /// The source of `path` with every `#[cfg(test)]` module cut: the tests sit at the end of a

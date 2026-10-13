@@ -65,6 +65,9 @@
 //!   left play (two f64), the tick the ball appears at the spot (u32), the drawn extra in
 //!   ticks (u32), the quick restart as a byte, and the hard limit (u32), so a match resumed
 //!   while the ball waits where it left play resumes the same wait.
+//!   Version 17 adds the tactical settings: each team's tactics end with the level or choice
+//!   of each primitive that owns its levels or choices (16 bytes, in the tactics file's
+//!   order, 0 past the last), so a resumed match keeps every setting.
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -95,7 +98,7 @@ use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
 use crate::team::PLAYERS_PER_TEAM;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 16;
+pub const VERSION: u16 = 17;
 /// The earliest layout version the strict reader still reads: version 8 has no matchday mark.
 const FIRST_READ: u16 = 8;
 /// The released builds from before the snapshot recorded its engine version: the full commit
@@ -813,11 +816,16 @@ impl<'a> Reader<'a> {
                 duty: self.u8()?,
             };
         }
+        let mut settings = [0u8; crate::data::primitives::SETTINGS_MAX];
+        for s in &mut settings {
+            *s = self.u8()?;
+        }
         Ok(Tactics {
             formation,
             mentality,
             instructions,
             roles,
+            settings,
         })
     }
     /// A player's state deltas, one byte per attribute group.
@@ -1401,6 +1409,7 @@ fn tactics_in_range(t: &Tactics, schema: &crate::data::tactics::TacticsSchema) -
         && t.roles.iter().all(|rd| {
             usize::from(rd.role) < schema.roles.len() && usize::from(rd.duty) < schema.duties.len()
         })
+        && crate::tactics::settings_in_range(&t.settings, schema)
 }
 
 #[cfg(test)]
@@ -1439,7 +1448,7 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 16"),
+                .contains("unknown version 1; this build reads 17"),
             "{err}"
         );
     }

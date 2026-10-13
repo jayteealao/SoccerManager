@@ -1,0 +1,56 @@
+{
+  "refusal": "only a graded primitive whose levels are \"own\" lists steps",
+  "primitive": {
+    "name": "planted",
+    "kind": "graded",
+    "levels": "instructions.tempo",
+    "steps": [
+      {
+        "name": "very_low",
+        "values": {
+          "build_up": 0.0
+        }
+      },
+      {
+        "name": "low",
+        "values": {
+          "build_up": 0.1
+        }
+      },
+      {
+        "name": "mid",
+        "values": {
+          "build_up": 0.2
+        }
+      },
+      {
+        "name": "high",
+        "values": {
+          "build_up": 0.30000000000000004
+        }
+      },
+      {
+        "name": "very_high",
+        "values": {
+          "build_up": 0.4
+        }
+      }
+    ],
+    "default": "balanced",
+    "inputs": [
+      {
+        "input": "patience",
+        "hook": "pass.recycle"
+      }
+    ],
+    "signature": [
+      {
+        "stat": "passes_per_possession",
+        "direction": "up"
+      }
+    ],
+    "data": {
+      "none": "a planted entry"
+    }
+  }
+}

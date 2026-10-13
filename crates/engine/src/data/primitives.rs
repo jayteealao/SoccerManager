@@ -7,7 +7,11 @@
 //!
 //! The levels of a graded primitive live in a level block of the tactics file (an
 //! instruction's levels, or the mentality list), so the tactics a match stores keep their
-//! shape: a level is an index into its block. [`check`] refuses a bad entry by name.
+//! shape: a level is an index into its block. A graded primitive may instead own its levels
+//! (`levels: "own"`, with its five `steps` and each step's input values), as a choice
+//! primitive owns its choices; the tactics then store its level or choice in
+//! [`crate::tactics::Tactics::settings`], one byte per owning primitive in the file's order.
+//! [`check`] refuses a bad entry by name.
 
 use std::collections::BTreeMap;
 
@@ -55,12 +59,42 @@ pub fn held_out(source: &str, competition: &str) -> bool {
         .any(|(s, c)| *s == source && c.eq_ignore_ascii_case(competition))
 }
 
-/// Where each plan input of a graded primitive is written in its level block: the block, the
-/// field of each level, and the range the field allows.
-pub const INPUT_FIELDS: [(&str, &str, &str, f64, f64); 3] = [
+/// The level block of a primitive that owns its levels (its `steps`) or its choices.
+pub const OWN: &str = "own";
+
+/// The most primitives that own their levels or choices: the bytes of
+/// [`crate::tactics::Tactics::settings`].
+pub const SETTINGS_MAX: usize = 16;
+
+/// Where each plan input of a primitive is written: the block (a level block of the tactics
+/// file, or [`OWN`] for an input the primitive's own steps or choices hold), the field of each
+/// level, and the range the field allows.
+pub const INPUT_FIELDS: [(&str, &str, &str, f64, f64); 19] = [
     ("patience", "instructions.tempo", "value", -2.0, 2.0),
     ("loss_weight", "mentalities", "loss_weight", -5.0, 5.0),
     ("rest_defence", "mentalities", "rest_defence", 0.0, 10.0),
+    ("width", "instructions.width", "value", 0.5, 1.5),
+    (
+        "directness",
+        "instructions.passing_directness",
+        "value",
+        -1.0,
+        1.0,
+    ),
+    ("build_up", OWN, "build_up", -2.0, 2.0),
+    ("channel_left", OWN, "channel_left", -2.0, 2.0),
+    ("channel_centre", OWN, "channel_centre", -2.0, 2.0),
+    ("channel_right", OWN, "channel_right", -2.0, 2.0),
+    ("long_shot", OWN, "long_shot", -2.0, 2.0),
+    ("shot_reach_m", OWN, "shot_reach_m", 0.0, 15.0),
+    ("dribble", OWN, "dribble", -2.0, 2.0),
+    ("crossing", OWN, "crossing", -2.0, 2.0),
+    ("early_cross", OWN, "early_cross", -2.0, 2.0),
+    ("cross_loft", OWN, "cross_loft", -1.0, 1.0),
+    ("freedom", OWN, "freedom", 0.0, 3.0),
+    ("run_depth_m", OWN, "run_depth_m", -15.0, 15.0),
+    ("fullback_run", OWN, "fullback_run", -1.0, 1.0),
+    ("fullback_reach", OWN, "fullback_reach", 0.25, 3.0),
 ];
 
 /// The block, field and range of plan input `input`.
@@ -131,6 +165,17 @@ pub struct Choice {
     pub stat: String,
 }
 
+/// One level of a graded primitive that owns its levels: its name and the value it gives
+/// each of the primitive's inputs.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct Step {
+    #[garde(length(min = 1, max = 32))]
+    pub name: String,
+    #[garde(skip)]
+    pub values: BTreeMap<String, f64>,
+}
+
 /// The real data a primitive's levels are fitted to, or why none fits.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
@@ -189,10 +234,15 @@ pub struct Primitive {
     pub name: String,
     #[garde(skip)]
     pub kind: PrimitiveKind,
-    /// A graded primitive's level block: `instructions.<instruction>` or `mentalities`.
+    /// A graded primitive's level block: `instructions.<instruction>`, `mentalities`, or
+    /// [`OWN`] for its own `steps`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(skip)]
     pub levels: Option<String>,
+    /// The levels of a graded primitive that owns them, in order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[garde(dive)]
+    pub steps: Vec<Step>,
     /// A choice primitive's choices.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[garde(dive)]
@@ -219,6 +269,9 @@ impl Primitive {
     /// The names of the primitive's levels, choices or states, in order.
     pub fn level_names<'a>(&'a self, schema: &'a TacticsSchema) -> Vec<&'a str> {
         match self.kind {
+            PrimitiveKind::Graded if self.owns_levels() => {
+                self.steps.iter().map(|s| s.name.as_str()).collect()
+            }
             PrimitiveKind::Graded => self
                 .levels
                 .as_deref()
@@ -235,6 +288,43 @@ impl Primitive {
             .iter()
             .position(|n| *n == self.default)
     }
+
+    /// `true` for a graded primitive whose levels are its own `steps`.
+    pub fn owns_levels(&self) -> bool {
+        self.kind == PrimitiveKind::Graded && self.levels.as_deref() == Some(OWN)
+    }
+
+    /// `true` when the tactics store this primitive's level or choice in
+    /// [`crate::tactics::Tactics::settings`]: it owns its levels, or it is a choice.
+    pub fn is_setting(&self) -> bool {
+        self.owns_levels() || self.kind == PrimitiveKind::Choice
+    }
+
+    /// The value level or choice `level` gives plan input `input`, when the primitive owns
+    /// it. A choice that does not name an input leaves it at its neutral value: `None`.
+    pub fn own_value(&self, input: &str, level: usize) -> Option<f64> {
+        if self.owns_levels() {
+            self.steps.get(level)?.values.get(input).copied()
+        } else if self.kind == PrimitiveKind::Choice {
+            self.choices.get(level)?.values.get(input).copied()
+        } else {
+            None
+        }
+    }
+}
+
+/// The primitives whose level or choice the tactics store in
+/// [`crate::tactics::Tactics::settings`], in the file's order: the settings' byte order.
+pub fn settings(schema: &TacticsSchema) -> impl Iterator<Item = &Primitive> {
+    schema.primitives.iter().filter(|p| p.is_setting())
+}
+
+/// The primitive that sets plan input `input`.
+fn owner<'a>(schema: &'a TacticsSchema, input: &str) -> Option<&'a Primitive> {
+    schema
+        .primitives
+        .iter()
+        .find(|p| p.inputs.iter().any(|i| i.input == input))
 }
 
 /// The level names of block `block`, or none when the tactics file has no such block.
@@ -249,26 +339,48 @@ pub fn block_names<'a>(schema: &'a TacticsSchema, block: &str) -> Vec<&'a str> {
         .unwrap_or_default()
 }
 
-/// The value of plan input `input` at level `level` of its block.
+/// The value of plan input `input` at level `level` of its block, or of the steps or choices
+/// of the primitive that owns it.
 pub fn level_value(schema: &TacticsSchema, input: &str, level: usize) -> Option<f64> {
     match input {
         "patience" => schema.instructions.tempo.levels.get(level).map(|l| l.value),
+        "width" => schema.instructions.width.levels.get(level).map(|l| l.value),
+        "directness" => schema
+            .instructions
+            .passing_directness
+            .levels
+            .get(level)
+            .map(|l| l.value),
         "loss_weight" => schema.mentalities.get(level).map(|m| m.loss_weight),
         "rest_defence" => schema
             .mentalities
             .get(level)
             .map(|m| f64::from(m.rest_defence)),
-        _ => None,
+        _ => owner(schema, input)?.own_value(input, level),
     }
 }
 
-/// Sets plan input `input` at level `level` of its block to `value`; `false` when the input
-/// or the level does not exist.
+/// Sets plan input `input` at level `level` of its block, or of its primitive's steps or
+/// choices, to `value`; `false` when the input or the level does not exist.
 pub fn set_level_value(schema: &mut TacticsSchema, input: &str, level: usize, value: f64) -> bool {
     match input {
         "patience" => schema
             .instructions
             .tempo
+            .levels
+            .get_mut(level)
+            .map(|l| l.value = value)
+            .is_some(),
+        "width" => schema
+            .instructions
+            .width
+            .levels
+            .get_mut(level)
+            .map(|l| l.value = value)
+            .is_some(),
+        "directness" => schema
+            .instructions
+            .passing_directness
             .levels
             .get_mut(level)
             .map(|l| l.value = value)
@@ -284,7 +396,23 @@ pub fn set_level_value(schema: &mut TacticsSchema, input: &str, level: usize, va
             .get_mut(level)
             .map(|m| m.rest_defence = value.round().clamp(0.0, 10.0) as u8)
             .is_some(),
-        _ => false,
+        _ => {
+            let Some(p) = schema
+                .primitives
+                .iter_mut()
+                .find(|p| p.inputs.iter().any(|i| i.input == input))
+            else {
+                return false;
+            };
+            let values = if p.owns_levels() {
+                p.steps.get_mut(level).map(|s| &mut s.values)
+            } else if p.kind == PrimitiveKind::Choice {
+                p.choices.get_mut(level).map(|c| &mut c.values)
+            } else {
+                None
+            };
+            values.map(|v| v.insert(input.to_string(), value)).is_some()
+        }
     }
 }
 
@@ -301,12 +429,91 @@ pub fn check(schema: &TacticsSchema) -> Result<(), Refusal> {
         }
         check_one(schema, p)?;
     }
+    let owning = settings(schema).count();
+    if owning > SETTINGS_MAX {
+        return Err((
+            "primitives".into(),
+            format!(
+                "{owning} primitives own their levels or choices; the tactics store at most \
+                 {SETTINGS_MAX}"
+            ),
+        ));
+    }
+    Ok(())
+}
+
+/// The checks of a primitive's own steps: exactly [`GRADED_LEVELS`] of them, each name once,
+/// and each step giving every input of the primitive a value inside the input's range.
+fn check_steps(p: &Primitive) -> Result<(), Refusal> {
+    let n = &p.name;
+    if p.steps.len() != GRADED_LEVELS {
+        return Err(refuse(
+            n,
+            "steps",
+            format!(
+                "a graded primitive has exactly {GRADED_LEVELS} levels; it has {}",
+                p.steps.len()
+            ),
+        ));
+    }
+    for (i, s) in p.steps.iter().enumerate() {
+        if p.steps[..i].iter().any(|o| o.name == s.name) {
+            return Err(refuse(n, "steps", format!("{} appears twice", s.name)));
+        }
+        for ih in &p.inputs {
+            if !s.values.contains_key(&ih.input) {
+                return Err(refuse(
+                    n,
+                    "steps",
+                    format!("step {} gives no value to {}", s.name, ih.input),
+                ));
+            }
+        }
+        check_values(n, "steps", &s.name, &s.values, p)?;
+    }
+    Ok(())
+}
+
+/// Each value of a step or a choice sets an input of the primitive, inside the input's range.
+fn check_values(
+    n: &str,
+    what: &str,
+    level: &str,
+    values: &BTreeMap<String, f64>,
+    p: &Primitive,
+) -> Result<(), Refusal> {
+    for (k, v) in values {
+        if !p.inputs.iter().any(|i| &i.input == k) {
+            return Err(refuse(
+                n,
+                what,
+                format!("{level} sets {k}, which is not an input of the primitive"),
+            ));
+        }
+        if let Some((_, _, lo, hi)) = input_field(k)
+            && !(lo..=hi).contains(v)
+        {
+            return Err(refuse(
+                n,
+                what,
+                format!("{level} gives {k} {v}, outside its range {lo} to {hi}"),
+            ));
+        }
+    }
     Ok(())
 }
 
 fn check_one(schema: &TacticsSchema, p: &Primitive) -> Result<(), Refusal> {
     let n = &p.name;
+    if !p.steps.is_empty() && !p.owns_levels() {
+        return Err(refuse(
+            n,
+            "steps",
+            format!("only a graded primitive whose levels are \"{OWN}\" lists steps"),
+        ));
+    }
     match p.kind {
+        PrimitiveKind::Graded if p.owns_levels() => check_steps(p)?,
         PrimitiveKind::Graded => {
             let Some(block) = p.levels.as_deref() else {
                 return Err(refuse(
@@ -342,21 +549,11 @@ fn check_one(schema: &TacticsSchema, p: &Primitive) -> Result<(), Refusal> {
                     "a choice primitive lists its choices".into(),
                 ));
             }
-            for c in &p.choices {
-                if let Some(k) = c
-                    .values
-                    .keys()
-                    .find(|k| !p.inputs.iter().any(|i| &i.input == *k))
-                {
-                    return Err(refuse(
-                        n,
-                        "choices",
-                        format!(
-                            "choice {} sets {k}, which is not an input of the primitive",
-                            c.name
-                        ),
-                    ));
+            for (i, c) in p.choices.iter().enumerate() {
+                if p.choices[..i].iter().any(|o| o.name == c.name) {
+                    return Err(refuse(n, "choices", format!("{} appears twice", c.name)));
                 }
+                check_values(n, "choices", &format!("choice {}", c.name), &c.values, p)?;
                 if !SIGNATURE_STATS.contains(&c.stat.as_str()) {
                     return Err(refuse(
                         n,

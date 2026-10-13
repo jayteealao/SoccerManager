@@ -18,8 +18,12 @@ use crate::team::PLAYERS_PER_TEAM;
 /// very patient), makes the mentality a risk appetite (a loss weight in place of the flat
 /// shoot, progress and hold offsets), and adds the tactical primitives (`primitives`); a
 /// version 2 file takes them from a copy compiled into the build
-/// ([`crate::data::convert::tactics_v2_to_v3`]).
-pub const TACTICS_VERSION: u32 = 3;
+/// ([`crate::data::convert::tactics_v2_to_v3`]). Version 4 adds the primitives that own their
+/// levels (`levels: "own"` with their `steps`) or their choices, whose level or choice the
+/// tactics store as settings, and gives width and passing directness five levels; a version 3
+/// file takes them from a copy compiled into the build
+/// ([`crate::data::convert::tactics_v3_to_v4`]).
+pub const TACTICS_VERSION: u32 = 4;
 
 /// The six team instructions, in the order a [`crate::tactics::Tactics`] stores their levels.
 pub const INSTRUCTIONS: [&str; 6] = [

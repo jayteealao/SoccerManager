@@ -165,6 +165,7 @@ impl Team {
                 mentality: 0,
                 instructions: [0; 6],
                 roles: [RoleDuty::default(); PLAYERS_PER_TEAM],
+                settings: [0; crate::data::primitives::SETTINGS_MAX],
             },
             plan: TeamPlan::neutral(&t),
             active: [true; PLAYERS_PER_TEAM],
