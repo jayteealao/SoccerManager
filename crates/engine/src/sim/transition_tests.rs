@@ -32,11 +32,12 @@ fn an_interception_opens_both_windows_and_a_throw_in_closes_them() {
     assert_eq!(sim.since_loss_s(0), Some(50.0 * dt));
     assert_eq!(sim.since_regain_s(0), None);
     assert_eq!(sim.since_loss_s(1), None);
+    let touchline = DVec2::new(0.0, sim.config.pitch().half_width());
     sim.open_dead_ball(
         StoppageKind::ThrowIn,
         StoppageKind::ThrowIn,
         0,
-        DVec2::new(0.0, 34.0),
+        touchline,
         false,
     );
     assert_eq!(sim.regained_at, [None; 2]);

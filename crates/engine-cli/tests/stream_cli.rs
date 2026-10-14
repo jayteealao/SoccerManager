@@ -263,7 +263,7 @@ fn a_drop_before_the_first_stoppage_goes_back_to_kick_off() {
         .args([
             "serve",
             "--seed",
-            "20",
+            "0",
             "--minutes",
             "2",
             "--reconnect-wait",
@@ -295,7 +295,8 @@ fn a_drop_before_the_first_stoppage_goes_back_to_kick_off() {
             Incoming::Closed => panic!("the match closed before it resumed"),
         }
     };
-    // Seed 20 first stops play at tick 2,123, after the drop, so the capture taken at
+    // Seed 0, the lowest that does, first stops play after the drop (seed 20 until the
+    // running pace lifted on a counter rather than with the press), so the capture taken at
     // kick-off, with the same seed and lineup, is the restart point.
     assert_eq!(first, 1);
     drop(client);

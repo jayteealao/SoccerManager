@@ -996,7 +996,7 @@ pub struct CalibrateOpts {
     /// Play only this styles pairing; repeatable.
     #[arg(
         long = "style-pairing",
-        value_name = "HOME v AWAY",
+        value_name = "PAIRING",
         long_help = "Play only this ordered pairing of the styles suite (--suite\n\
                      styles); repeatable.\n\n\
                      Name it as the home style and the away style joined by v,\n\
