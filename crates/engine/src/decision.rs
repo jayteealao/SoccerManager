@@ -126,6 +126,8 @@ pub const TRAP_WINDOW_S: f64 = 2.0;
 /// Stop short goal kicks (hook `press.screen_short`) and the goal-kick pick: a team-mate of
 /// the kicker with an opponent within this many metres of him is screened.
 pub const SCREEN_M: f64 = 4.0;
+/// The metres of a goal kick's score a screened team-mate loses.
+pub const SCREENED_M: f64 = 20.0;
 /// The tackle decision (hook `tackle.decide`): the cost of a foul's chance, in units of the
 /// win chance, at no danger; the danger of a foul doubles it near the own goal. Set from the
 /// probe of the default sides: at 0.1 a defender declines only a tackle he is far likelier to
@@ -1568,6 +1570,16 @@ impl DecisionModule for DecisionV1 {
                 None => {
                     -d + 0.2 * (mate.pos - me.pos).dot(attack) + build_up * BUILD_UP_M * d / 45.0
                 }
+            };
+            // At a goal kick a screened team-mate, an opponent within [`SCREEN_M`] of him,
+            // scores less: the keeper looks past him.
+            let score = if kind == StoppageKind::GoalKick
+                && players.iter().any(|q| {
+                    q.team != me.team && q.active() && (q.pos - mate.pos).length() < SCREEN_M
+                }) {
+                score - SCREENED_M
+            } else {
+                score
             };
             let score = if traits.is_empty() || cross_at.is_some() {
                 score
