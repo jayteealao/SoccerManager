@@ -1,0 +1,195 @@
+{
+  "primitives": [
+    {
+      "name": "on_winning_the_ball",
+      "kind": "graded",
+      "levels": "own",
+      "steps": [
+        {
+          "name": "always_keep_shape",
+          "values": {
+            "counter": -1.0
+          }
+        },
+        {
+          "name": "keep_shape",
+          "values": {
+            "counter": -0.5
+          }
+        },
+        {
+          "name": "mixed",
+          "values": {
+            "counter": 0.0
+          }
+        },
+        {
+          "name": "counter",
+          "values": {
+            "counter": 0.5
+          }
+        },
+        {
+          "name": "always_counter",
+          "values": {
+            "counter": 1.0
+          }
+        }
+      ],
+      "default": "mixed",
+      "inputs": [
+        {
+          "input": "counter",
+          "hook": "regain.counter"
+        }
+      ],
+      "signature": [
+        {
+          "stat": "counter_attacks_per_match",
+          "direction": "up"
+        },
+        {
+          "stat": "regain_to_shot_s",
+          "direction": "down"
+        }
+      ],
+      "data": {
+        "source": "wyscout_2017_18",
+        "competitions": [
+          "England",
+          "France",
+          "Italy",
+          "Spain"
+        ],
+        "row": "on_winning_the_ball",
+        "deferred": "the levels keep their seeded values until the fit"
+      }
+    },
+    {
+      "name": "on_losing_the_ball",
+      "kind": "graded",
+      "levels": "own",
+      "steps": [
+        {
+          "name": "always_regroup",
+          "values": {
+            "counter_press": -1.0
+          }
+        },
+        {
+          "name": "regroup",
+          "values": {
+            "counter_press": -0.5
+          }
+        },
+        {
+          "name": "mixed",
+          "values": {
+            "counter_press": 0.0
+          }
+        },
+        {
+          "name": "counter_press",
+          "values": {
+            "counter_press": 1.0
+          }
+        },
+        {
+          "name": "always_counter_press",
+          "values": {
+            "counter_press": 2.0
+          }
+        }
+      ],
+      "default": "mixed",
+      "inputs": [
+        {
+          "input": "counter_press",
+          "hook": "loss.counter_press"
+        }
+      ],
+      "signature": [
+        {
+          "stat": "counterpress_pressures_per_loss",
+          "direction": "up"
+        },
+        {
+          "stat": "counterpress_regain_share",
+          "direction": "up"
+        }
+      ],
+      "data": {
+        "source": "statsbomb_open",
+        "competitions": [
+          "1. Bundesliga 2023/2024",
+          "FIFA World Cup 2022",
+          "UEFA Euro 2020",
+          "UEFA Euro 2024"
+        ],
+        "row": "on_losing_the_ball",
+        "deferred": "neutral at the default and not judged or fitted yet: more pressers for longer after a loss do not yet win the ball back in this engine; judged and fitted with pressing intensity and the tackle decision"
+      }
+    },
+    {
+      "name": "counter_press_length",
+      "kind": "graded",
+      "levels": "own",
+      "steps": [
+        {
+          "name": "very_short",
+          "values": {
+            "counter_press_s": 2.0
+          }
+        },
+        {
+          "name": "short",
+          "values": {
+            "counter_press_s": 3.5
+          }
+        },
+        {
+          "name": "normal",
+          "values": {
+            "counter_press_s": 5.0
+          }
+        },
+        {
+          "name": "long",
+          "values": {
+            "counter_press_s": 6.5
+          }
+        },
+        {
+          "name": "very_long",
+          "values": {
+            "counter_press_s": 8.0
+          }
+        }
+      ],
+      "default": "normal",
+      "inputs": [
+        {
+          "input": "counter_press_s",
+          "hook": "loss.counter_press_window"
+        }
+      ],
+      "signature": [
+        {
+          "stat": "last_counterpress_s",
+          "direction": "up"
+        }
+      ],
+      "data": {
+        "source": "statsbomb_open",
+        "competitions": [
+          "1. Bundesliga 2023/2024",
+          "FIFA World Cup 2022",
+          "UEFA Euro 2020",
+          "UEFA Euro 2024"
+        ],
+        "row": "counter_press_length",
+        "deferred": "no effect at the default on losing the ball and not judged or fitted yet; judged and fitted with on losing the ball, pressing intensity and the tackle decision"
+      }
+    }
+  ]
+}

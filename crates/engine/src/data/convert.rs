@@ -1022,14 +1022,37 @@ fn tempo_name_v5(name: &mut serde_json::Value) {
     }
 }
 
+/// The copy of the version 5 additions compiled into the build: the primitive entries version
+/// 5 adds (on winning the ball, on losing the ball, counter-press length).
+pub const FROZEN_TACTICS_V5: &str = include_str!("frozen-tactics-v5.json");
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenTacticsV5 {
+    primitives: Vec<serde_json::Value>,
+}
+
 /// A version 4 tactics file, as JSON, in the version 5 shape: the tempo levels take their
 /// version 5 names (very fast to very slow) in the tempo block, its default, and the default
-/// and fit records of the primitive whose levels are the tempo block. Values and order do not
-/// change. The caller parses and checks the result as a current file.
+/// and fit records of the primitive whose levels are the tempo block, with values and order
+/// unchanged; and the file takes each frozen primitive entry it does not hold by name. The
+/// caller parses and checks the result as a current file.
 pub fn tactics_v4_to_v5(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let frozen: FrozenTacticsV5 = serde_json::from_str(FROZEN_TACTICS_V5)
+        .expect("the frozen tactics copy parses; a test checks it");
     let obj = file
         .as_object_mut()
         .ok_or_else(|| "the file is not an object".to_string())?;
+    let primitives = obj
+        .entry("primitives")
+        .or_insert_with(|| serde_json::Value::Array(Vec::new()))
+        .as_array_mut()
+        .ok_or_else(|| "primitives is not a list".to_string())?;
+    for entry in frozen.primitives {
+        if !primitives.iter().any(|p| p["name"] == entry["name"]) {
+            primitives.push(entry);
+        }
+    }
     obj.insert(
         "schema_version".into(),
         serde_json::Value::from(crate::data::tactics::TACTICS_VERSION),

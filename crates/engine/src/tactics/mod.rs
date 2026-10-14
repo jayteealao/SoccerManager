@@ -418,7 +418,7 @@ pub struct TeamPlan {
     /// ([`crate::decision::COUNTER_RUN_M`]); 0 moves nothing.
     pub counter: f64,
     /// On losing the ball: while the side's counter-press window is open, its press reach
-    /// takes the factor 1 plus this (0 at -1: nobody presses; past the pitch at the top).
+    /// takes the factor 1 plus this (0 at -1: nobody presses).
     pub counter_press: f64,
     /// Counter-press length: the seconds the counter-press window stays open after an
     /// open-play loss; 0 opens none.

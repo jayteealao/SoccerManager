@@ -92,6 +92,30 @@ pub const COUNTERPRESS_LAST_S: f64 = 10.0;
 /// attack-line player may start a run in behind while the regain window is open.
 pub const COUNTER_RUN_M: f64 = 10.0;
 
+/// On winning the ball (hook `regain.counter`): side `team`'s on-winning weight while its
+/// regain window is open, [`COUNTER_WINDOW_S`] after it won the ball in open play and still
+/// on it; 0 otherwise, and 0 at the default level.
+pub(crate) fn counter_weight(view: &MatchView<'_>, team: usize) -> f64 {
+    match view.since_regain_s(team) {
+        Some(s) if s < COUNTER_WINDOW_S => view.teams()[team].plan.counter,
+        _ => 0.0,
+    }
+}
+
+/// On losing the ball and counter-press length (hooks `loss.counter_press` and
+/// `loss.counter_press_window`): the factor on how far from the carrier side `team`'s nearest
+/// players start to press; how many press stays the pressing level's. While its counter-press
+/// window is open, `counter_press_s` seconds after it lost the ball in open play with the
+/// other side still on it, the factor is 1 plus its counter-press, never below 0; otherwise 1.
+/// The default level's counter-press is 0, so a side presses as its pressing level says.
+pub(crate) fn counter_press_factor(view: &MatchView<'_>, team: usize) -> f64 {
+    let plan = &view.teams()[team].plan;
+    match view.since_loss_s(team) {
+        Some(s) if s < plan.counter_press_s => (1.0 + plan.counter_press).max(0.0),
+        _ => 1.0,
+    }
+}
+
 /// The channel of a point `y` across the pitch for a side attacking `attack_x`: 0 the side's
 /// left (where its left-back stands), 1 the centre, 2 its right. A point more than
 /// [`contract::CROSS_WIDE_M`] from the centre line is in a wide channel.
@@ -162,11 +186,11 @@ impl Choice {
     }
 }
 
-/// The most opponents a pressing instruction can send at the carrier.
 /// Metres short of the second-last defender at which a lone forward holds the line, so he
 /// stays onside.
 pub(crate) const ONSIDE_MARGIN: f64 = 0.5;
 
+/// The most opponents a pressing instruction can send at the carrier.
 pub const MAX_PRESSERS: usize = 4;
 /// The furthest ahead, in seconds, an average presser aims along the carrier's run: beyond
 /// it the carrier's run is too uncertain to chase. A presser's intercept stage (anticipation)
@@ -417,8 +441,10 @@ impl DecisionModule for DecisionV1 {
                 // Teammates hold their anchors; the nearest opponents press, as many and from
                 // as far as the defending team's pressing instruction says, less one for each
                 // player the defending team has lost.
+                // Inside its counter-press window the side's players press from farther, or
+                // from nearer, or not at all.
                 let count = teams[def].pressers().min(MAX_PRESSERS);
-                let reach = teams[def].plan.press_distance;
+                let reach = teams[def].plan.press_distance * counter_press_factor(view, def);
                 // While the defending side trails, each presser's determination widens his
                 // reach.
                 let goals = view.goals();
@@ -650,7 +676,7 @@ impl DecisionModule for DecisionV1 {
                 // default (no forward runs) every run stops at a pass, as before.
                 let mut runners = 0u32;
                 if let Some(team) = view.pass_in_flight().filter(|&team| {
-                    teams[team].plan.run_start_m != 0.0 && ball.vel.x * teams[team].attack_x > 0.0
+                    run_start(view, team) != 0.0 && ball.vel.x * teams[team].attack_x > 0.0
                 }) {
                     for (i, p) in players.iter().enumerate() {
                         if p.team == team
@@ -767,6 +793,9 @@ impl DecisionModule for DecisionV1 {
         // nothing, and the shot spends the side's threat instead of losing it. (Counted as a
         // loss at the shooter's feet, it held back every shot but the closest, so the shots
         // left were twice as good and goals rose by half.)
+        // On winning the ball: inside the side's regain window a counter plays the ball
+        // forward and holds it less; 0 outside it and at the default.
+        let counter = counter_weight(view, team);
         let half = view.pitch().half_length();
         let loss = |fail: f64, at: DVec2| {
             let s = ((at.x * side.attack_x + half) / (2.0 * half)).clamp(0.0, 1.0);
@@ -946,6 +975,7 @@ impl DecisionModule for DecisionV1 {
                 + w.space * (receiver_space / 8.0)
                 - w.distance * (d / 45.0)
                 + plan.directness * (gain.max(0.0) / 45.0)
+                + counter * (gain.max(0.0) / 45.0)
                 + recycle
                 - loss(fail, (carrier.pos + mate.pos) * 0.5)
                 + layoff
@@ -1036,6 +1066,7 @@ impl DecisionModule for DecisionV1 {
                 + plan.dribble;
             let hold = w.hold - w.hold_per_s * held_s + lone_hold
                 - mood_risk
+                - counter
                 - loss(0.5 * f64::from(u8::from(pressed)), carrier.pos);
             let (dribble, hold, tricks) = if has_traits {
                 let pressed_only = |k: TraitKind| if pressed { tr(k) } else { 0.0 };
@@ -1856,6 +1887,19 @@ const COME_SHORT_TO_M: f64 = 5.0;
 /// A forward within this many metres of his place stands in it.
 const SETTLED_M: f64 = 2.0;
 
+/// How far from the defensive line side `team`'s attack-line players may start a timed run:
+/// its forward runs (hook `run.start`); inside its regain window a positive on-winning weight
+/// lets them start a run in behind from up to `counter x COUNTER_RUN_M` metres.
+fn run_start(view: &MatchView<'_>, team: usize) -> f64 {
+    let start = view.teams()[team].plan.run_start_m;
+    let counter = counter_weight(view, team);
+    if counter > 0.0 {
+        start.max(counter * COUNTER_RUN_M)
+    } else {
+        start
+    }
+}
+
 /// The side's forward runs (hook `run.start`) while team `team` has the ball and carrier `c`
 /// is someone else. Nothing moves at the default of 0. The level sets how far from the
 /// defensive line a forward may start a timed run: while a pass is on (the carrier is not
@@ -1871,7 +1915,7 @@ const SETTLED_M: f64 = 2.0;
 /// frequency rises with the level. Returns the roster bits of the runners.
 fn forward_runs(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER], team: usize, c: usize) -> u32 {
     let side = &view.teams()[team];
-    let start = side.plan.run_start_m;
+    let start = run_start(view, team);
     let mut running = 0u32;
     if start == 0.0 {
         return running;
@@ -2656,5 +2700,162 @@ mod tests {
         let (charged, _) = carry_scene(1.0, 80, None);
         assert_eq!(pass(&free), pass(&charged), "past the window");
         assert_eq!(free.clear, charged.clear, "past the window");
+    }
+
+    /// `s` seconds in ticks.
+    fn ticks(s: f64) -> u32 {
+        (s * f64::from(crate::TICKS_PER_SECOND)).round() as u32
+    }
+
+    /// The options of the home striker at `(0, 2)` with one open team-mate at `mate`, noise
+    /// off, the home side's on-winning weight `counter`, having won the ball `since_s` seconds
+    /// ago in open play (`None`: no regain).
+    fn counter_scene(counter: f64, since_s: Option<f64>, mate: DVec2) -> Options {
+        let mut config = shipped_config(7, 1).unwrap();
+        config.tuning.decision.noise = 0.0;
+        let mut sim = Simulation::new(config).unwrap();
+        let striker = 9;
+        sim.players[striker].pos = DVec2::new(0.0, 2.0);
+        let (own_keeper, their_keeper) = (sim.keeper(0), sim.keeper(1));
+        for (i, p) in sim.players.iter_mut().enumerate() {
+            if p.team == 1 && p.id != their_keeper {
+                p.pos = DVec2::new(-50.0, p.pos.y);
+            } else if p.team == 0 && i != striker && p.id != own_keeper {
+                p.pos = DVec2::new(-50.0, 30.0);
+            }
+        }
+        sim.players[10].pos = mate;
+        sim.teams[0].plan.counter = counter;
+        sim.carrier = Some(striker);
+        sim.possession_phase = Some(0);
+        sim.tick = 2_000;
+        sim.control_since = 2_000;
+        sim.regained_at[0] = since_s.map(|s| 2_000 - ticks(s));
+        sim.options(striker)
+    }
+
+    /// On winning the ball (hook `regain.counter`): inside the regain window the on-winning
+    /// weight adds `counter x gain / 45` to a forward pass, nothing to a back pass, and takes
+    /// `counter` from the hold; at the default weight, past the window or with no regain it
+    /// moves nothing.
+    #[test]
+    fn the_counter_term_acts_only_inside_the_regain_window() {
+        let ahead = DVec2::new(30.0, 2.0);
+        let behind = DVec2::new(-30.0, 2.0);
+        let pass = |o: &Options| o.pass.expect("an open team-mate").0;
+        let hold = |o: &Options| o.hold.expect("an outfield carrier");
+        let inside = Some(COUNTER_WINDOW_S / 2.0);
+        let base = counter_scene(0.0, inside, ahead);
+        let counter = counter_scene(1.0, inside, ahead);
+        assert!((pass(&counter) - pass(&base) - 30.0 / 45.0).abs() < 1e-9);
+        assert!((hold(&base) - hold(&counter) - 1.0).abs() < 1e-9);
+        let back = counter_scene(1.0, inside, behind);
+        assert_eq!(pass(&back), pass(&counter_scene(0.0, inside, behind)));
+        for since in [Some(COUNTER_WINDOW_S + 0.5), None] {
+            let o = counter_scene(1.0, since, ahead);
+            let b = counter_scene(0.0, since, ahead);
+            assert_eq!((pass(&o), hold(&o)), (pass(&b), hold(&b)), "{since:?}");
+        }
+    }
+
+    /// The jobs of a home carrier's opponents at `(0, 0)` with one away player at `(d, 0)` and
+    /// the rest 45 m away; the away side's counter-press `press` and window `window_s`, having
+    /// lost the ball `since_s` seconds ago (`None`: no loss).
+    fn press_scene(d: f64, press: f64, window_s: f64, since_s: Option<f64>) -> Targets {
+        let mut sim = Simulation::new(shipped_config(7, 1).unwrap()).unwrap();
+        let carrier = 6;
+        sim.players[carrier].pos = DVec2::ZERO;
+        let their_keeper = sim.keeper(1);
+        for (k, p) in sim
+            .players
+            .iter_mut()
+            .filter(|p| p.team == 1 && p.id != their_keeper)
+            .enumerate()
+        {
+            p.pos = DVec2::new(-45.0, -27.0 + 6.0 * k as f64);
+        }
+        let presser = PLAYERS_PER_TEAM + 5;
+        sim.players[presser].pos = DVec2::new(d, 0.0);
+        sim.teams[1].plan.counter_press = press;
+        sim.teams[1].plan.counter_press_s = window_s;
+        sim.carrier = Some(carrier);
+        sim.possession_phase = Some(0);
+        sim.tick = 2_000;
+        sim.lost_at[1] = since_s.map(|s| 2_000 - ticks(s));
+        let view = sim.view();
+        sim.config.modules.decision.targets(&view)
+    }
+
+    /// On losing the ball and counter-press length (hooks `loss.counter_press` and
+    /// `loss.counter_press_window`): inside the window a factor of 0 leaves a close opponent
+    /// unpressing and a high factor sends one from beyond the press distance; the window ends
+    /// at its length, and with no loss the press is the pressing level's.
+    #[test]
+    fn the_counter_press_factor_acts_only_inside_its_window() {
+        let presser = PLAYERS_PER_TEAM + 5;
+        let presses = |t: Targets| t.jobs[presser] == Job::Press;
+        assert!(
+            presses(press_scene(3.0, 0.0, 5.0, None)),
+            "the press at 3 m"
+        );
+        assert!(!presses(press_scene(3.0, -1.0, 5.0, Some(1.0))), "all drop");
+        assert!(
+            presses(press_scene(3.0, -1.0, 5.0, Some(5.5))),
+            "window over"
+        );
+        assert!(!presses(press_scene(35.0, 0.0, 5.0, None)), "out of reach");
+        assert!(
+            presses(press_scene(35.0, 2.0, 5.0, Some(4.5))),
+            "from farther"
+        );
+        assert!(
+            !presses(press_scene(35.0, 2.0, 5.0, Some(5.5))),
+            "window over"
+        );
+        assert!(
+            !presses(press_scene(35.0, 2.0, 0.0, Some(0.5))),
+            "no window"
+        );
+        // The default level's counter-press of 0 leaves the press as the pressing level's.
+        assert!(presses(press_scene(3.0, 0.0, 5.0, Some(1.0))), "default");
+        assert!(!presses(press_scene(35.0, 0.0, 5.0, Some(1.0))), "default");
+    }
+
+    /// On winning the ball, the forward-run start: inside the regain window a positive
+    /// on-winning weight lets an onside striker start a run in behind from up to
+    /// `counter x COUNTER_RUN_M` metres short of the line; past the window, or with a weight of
+    /// 0 or below, he does not run.
+    #[test]
+    fn a_counter_sends_a_striker_in_behind_inside_the_window() {
+        let job = |counter: f64, since_s: Option<f64>| {
+            let mut sim = Simulation::new(shipped_config(7, 1).unwrap()).unwrap();
+            let carrier = 6;
+            sim.players[carrier].pos = DVec2::ZERO;
+            let their_keeper = sim.keeper(1);
+            for (k, p) in sim
+                .players
+                .iter_mut()
+                .filter(|p| p.team == 1 && p.id != their_keeper)
+                .enumerate()
+            {
+                p.pos = DVec2::new(30.0, -27.0 + 6.0 * k as f64);
+            }
+            // 5 m short of the onside line (29.5 m).
+            let at = DVec2::new(24.5, -6.0);
+            sim.players[9].pos = at;
+            sim.players[9].target = at;
+            sim.teams[0].plan.counter = counter;
+            sim.carrier = Some(carrier);
+            sim.possession_phase = Some(0);
+            sim.tick = 2_000;
+            sim.regained_at[0] = since_s.map(|s| 2_000 - ticks(s));
+            let view = sim.view();
+            sim.config.modules.decision.targets(&view).jobs[9]
+        };
+        assert_eq!(job(1.0, Some(2.0)), Job::TimedRun);
+        assert_ne!(job(0.4, Some(2.0)), Job::TimedRun, "4 m reach");
+        assert_ne!(job(1.0, Some(COUNTER_WINDOW_S + 1.0)), Job::TimedRun);
+        assert_ne!(job(0.0, Some(2.0)), Job::TimedRun);
+        assert_ne!(job(-1.0, Some(2.0)), Job::TimedRun);
     }
 }
