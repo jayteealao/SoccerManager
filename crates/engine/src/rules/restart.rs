@@ -405,6 +405,108 @@ pub fn target(
     pitch.clamp(at, 0.5)
 }
 
+/// Room, in metres, that a player walking round the circle the law keeps him out of leaves
+/// outside it.
+const ROUND_MARGIN: f64 = 1.0;
+
+/// The distance the law keeps player `i` from the spot of `dead` while it waits: an opponent
+/// at a throw-in (2 m, IFAB Law 15), at a free kick, a corner and a kick-off (9.15 m, Laws 13,
+/// 17 and 8), everyone but the taker at a dropped ball (4 m, Law 8), and everyone but the taker
+/// and the defending goalkeeper at a penalty (9.15 m from the mark, Law 14). `None` for a
+/// player the law keeps nowhere, and at a goal kick, whose rule is the penalty area.
+fn kept_distance(dead: &DeadBall, i: usize, players: &[Player], teams: &[Team; 2]) -> Option<f64> {
+    if i == dead.taker {
+        return None;
+    }
+    let p = &players[i];
+    let opponent = p.team != dead.team;
+    match dead.kind {
+        StoppageKind::ThrowIn if opponent => Some(THROW_IN_DISTANCE),
+        StoppageKind::FreeKick | StoppageKind::Corner | StoppageKind::KickOff if opponent => {
+            Some(KICK_DISTANCE)
+        }
+        StoppageKind::Injury => Some(DROP_BALL_DISTANCE),
+        StoppageKind::Penalty if !(opponent && teams[p.team].keeper_slot() == p.slot) => {
+            Some(KICK_DISTANCE)
+        }
+        _ => None,
+    }
+}
+
+/// The point player `i` steers to on his way to his restart `place` while `dead` waits. A
+/// player the law keeps a distance from the spot never walks through that circle, so he never
+/// pushes the taker off the ball: when he is inside the circle, or his straight path would come
+/// nearer the spot than the distance, he heads for a point `ROUND_MARGIN` outside the circle:
+/// straight out from the spot when he is inside it, or a step round the circle toward
+/// his place's side when he is outside it, the shorter way unless that way leaves the pitch
+/// further. The loop asks every tick, so he walks round the circle and then straight to his
+/// place. Every other player, a place the law does not clear, and a point the pitch's edge
+/// would pull back inside the distance get `place` itself, as before.
+pub fn route(
+    dead: &DeadBall,
+    i: usize,
+    players: &[Player],
+    teams: &[Team; 2],
+    place: DVec2,
+) -> DVec2 {
+    let Some(distance) = kept_distance(dead, i, players, teams) else {
+        return place;
+    };
+    let spot = dead.spot;
+    let pos = players[i].pos;
+    let from = (pos - spot).length();
+    if (place - spot).length() < distance - JUDGE_MARGIN {
+        return place;
+    }
+    if from >= distance && math::segment_distance(spot, pos, place) >= distance - 1e-9 {
+        return place;
+    }
+    let round = distance + ROUND_MARGIN;
+    let pitch = teams[players[i].team].pitch();
+    // A point the pitch's edge has not pulled back inside the distance; a spot near a line
+    // has part of its circle off the pitch.
+    let clear = |q: DVec2| (q - spot).length() >= distance;
+    if from < distance {
+        // Out of the circle by the shortest way that stays on the pitch.
+        let at = outside_on_pitch(pitch, pos, spot, round, toward(spot, place), 0.5);
+        return if clear(at) { at } else { place };
+    }
+    // Round the circle from his own bearing to his place's, the shorter way unless that way
+    // leaves the pitch further (a spot near a line has part of its circle off the pitch).
+    let out = toward(spot, pos);
+    let to = toward(spot, place);
+    let short = math::atan2(out.perp_dot(to), out.dot(to));
+    let long = if short < 0.0 {
+        short + std::f64::consts::TAU
+    } else {
+        short - std::f64::consts::TAU
+    };
+    let on_round = |angle: f64| {
+        let (sin, cos) = math::sin_cos(angle);
+        spot + DVec2::new(out.x * cos - out.y * sin, out.x * sin + out.y * cos) * round
+    };
+    let off_pitch = |arc: f64| {
+        (1..ARC_SAMPLES)
+            .map(|k| {
+                let q = on_round(arc * k as f64 / ARC_SAMPLES as f64);
+                (pitch.clamp(q, 0.5) - q).length()
+            })
+            .fold(0.0, f64::max)
+    };
+    let arc = if off_pitch(long) < off_pitch(short) {
+        long
+    } else {
+        short
+    };
+    // At most the turn whose chord on the walking circle stays outside the distance.
+    let most = math::acos(distance / round);
+    let at = pitch.clamp(on_round(arc.clamp(-most, most)), 0.5);
+    if clear(at) { at } else { place }
+}
+
+/// Points along an arc of the walking circle that `route` checks against the pitch's edge.
+const ARC_SAMPLES: usize = 12;
+
 /// Where player `i` stands for a kick of the penalty shoot-out (IFAB Law 10): the kicker at
 /// the mark, the defending keeper `keepers[1 - dead.team]` on the goal line, the kicking
 /// team's keeper on the goal line where it meets the penalty-area line, and every other
@@ -655,7 +757,10 @@ impl RestartsModule for RestartsV1 {
     fn target(&self, view: &MatchView<'_>, dead: &DeadBall, i: usize) -> DVec2 {
         match view.referee().shootout.as_ref() {
             Some(shootout) => shootout_target(view.pitch(), dead, i, shootout.keepers),
-            None => target(dead, i, view.players(), view.teams(), view.tuning()),
+            None => {
+                let place = target(dead, i, view.players(), view.teams(), view.tuning());
+                route(dead, i, view.players(), view.teams(), place)
+            }
         }
     }
 
@@ -963,6 +1068,88 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    /// Walks player `i` toward his route, `step` metres a tick, until he reaches `place`;
+    /// returns his nearest approach to the spot.
+    fn walk(
+        d: &DeadBall,
+        i: usize,
+        players: &mut [Player],
+        teams: &[Team; 2],
+        place: DVec2,
+    ) -> f64 {
+        let mut nearest = f64::MAX;
+        for _ in 0..2_000 {
+            let to = route(d, i, players, teams, place);
+            let p = &mut players[i];
+            p.pos += math::clamp_len(to - p.pos, 0.2);
+            nearest = nearest.min((p.pos - d.spot).length());
+            if (p.pos - place).length() < 1e-6 {
+                return nearest;
+            }
+        }
+        panic!("player {i} never reached {place}");
+    }
+
+    /// The seed-4 throw-in fault: an opponent whose place lies across the spot walks round the
+    /// 2 m circle, never through the taker, and still reaches his place; a team-mate of the
+    /// taker, whom the law keeps nowhere, walks straight.
+    #[test]
+    fn an_opponent_walks_round_the_throw_in_spot_to_his_place() {
+        let config = shipped_config(1, 90).unwrap();
+        let mut players = config.players.clone();
+        let spot = DVec2::new(10.0, 34.0);
+        let d = dead(StoppageKind::ThrowIn, 0, spot, 5);
+        let place = DVec2::new(14.0, 32.5);
+        players[13].pos = DVec2::new(6.0, 33.6);
+        let nearest = walk(&d, 13, &mut players, &config.teams, place);
+        assert!(nearest >= THROW_IN_DISTANCE, "came within {nearest} m");
+        // Straight along the line he would have passed 0.76 m from the spot or nearer.
+        assert!(math::segment_distance(spot, DVec2::new(6.0, 33.6), place) < 1.0);
+        players[3].pos = DVec2::new(6.0, 33.6);
+        assert_eq!(route(&d, 3, &players, &config.teams, place), place);
+    }
+
+    /// Every kind with a distance: an opponent (everyone at a dropped ball) walking from one
+    /// side of the spot to the other keeps the distance the law asks, from a start outside the
+    /// circle and from a start inside it; a path that keeps the distance is left straight.
+    #[test]
+    fn players_the_law_keeps_away_walk_round_every_restart_spot() {
+        let config = shipped_config(1, 90).unwrap();
+        let spot = DVec2::new(5.0, -3.0);
+        for (kind, distance) in [
+            (StoppageKind::ThrowIn, THROW_IN_DISTANCE),
+            (StoppageKind::FreeKick, KICK_DISTANCE),
+            (StoppageKind::Corner, KICK_DISTANCE),
+            (StoppageKind::KickOff, KICK_DISTANCE),
+            (StoppageKind::Injury, DROP_BALL_DISTANCE),
+            (StoppageKind::Penalty, KICK_DISTANCE),
+        ] {
+            let d = dead(kind, 0, spot, 5);
+            let mut players = config.players.clone();
+            let place = spot + DVec2::new(distance + 3.0, 0.5);
+            players[13].pos = spot - DVec2::new(distance + 3.0, 0.0);
+            let nearest = walk(&d, 13, &mut players, &config.teams, place);
+            assert!(
+                nearest >= distance - 1e-9,
+                "{kind:?}: came within {nearest} m"
+            );
+            players[13].pos = spot - DVec2::new(0.5 * distance, 0.2);
+            let start = (players[13].pos - spot).length();
+            let nearest = walk(&d, 13, &mut players, &config.teams, place);
+            assert!(
+                nearest >= start - 1e-9,
+                "{kind:?}: from inside, came within {nearest} m"
+            );
+            players[13].pos = spot + DVec2::new(0.0, distance + 3.0);
+            let wide = spot + DVec2::new(distance + 3.0, distance + 3.0);
+            assert_eq!(
+                route(&d, 13, &players, &config.teams, wide),
+                wide,
+                "{kind:?}"
+            );
         }
     }
 

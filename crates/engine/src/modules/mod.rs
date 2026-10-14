@@ -255,7 +255,8 @@ pub trait RestartsModule: Send + Sync + 'static {
     fn job(&self, view: &MatchView<'_>, dead: &DeadBall, i: usize) -> crate::pace::Job;
     /// Ticks a shoot-out kick waits before it may be taken.
     fn shootout_delay_ticks(&self, view: &MatchView<'_>) -> u32;
-    /// Where player `i` stands while `dead` waits.
+    /// The point player `i` steers to while `dead` waits: where he stands, or a point on his
+    /// way there round the distance the law keeps him from the spot.
     fn target(&self, view: &MatchView<'_>, dead: &DeadBall, i: usize) -> DVec2;
     /// `true` when the visible steps of `dead` are done at tick `now`: the taker at the ball
     /// and every player the law moves moved (at a shoot-out kick, also its delay passed).
