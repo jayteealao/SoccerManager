@@ -1215,9 +1215,9 @@ mod tests {
         assert_eq!(x.regains, 1);
     }
 
-    /// A fast break starts with a regain at or behind halfway and reaches the final third
-    /// within the window: a regain beyond halfway, or one that reaches it too late, is none;
-    /// the regain-to-shot time reads the first shot.
+    /// A fast break starts with a regain in the start zone and reaches the final third within
+    /// the window: a regain beyond the zone, or one that reaches it too late, is none; the
+    /// regain-to-shot time reads the first shot.
     #[test]
     fn a_fast_break_starts_in_the_own_half_and_reaches_the_final_third_in_time() {
         let mut m = MatchMeasures::default();
@@ -1234,7 +1234,7 @@ mod tests {
         m.clock(3_000 + window + S, [(0.0, 1), (40.0, 2)]);
         m.live_tick(AWAY, 2);
         m.dead(3_000 + window + 2 * S);
-        // From beyond halfway.
+        // From beyond the start zone.
         regain(&mut m, AWAY, 5_000, 5.0);
         m.clock(5_000 + S, [(0.0, 1), (40.0, 2)]);
         m.live_tick(AWAY, 2);

@@ -78,11 +78,14 @@ pub const GOAL_KICK_REACH_M: f64 = 25.0;
 /// ball in open play, while it keeps it, the side's on-winning terms act (hook
 /// `regain.counter`); and a possession that starts with a regain at or behind
 /// [`COUNTER_START_M`] and reaches the attacked final third within it is a fast break. The
-/// signature command and the measures share it.
-pub const COUNTER_WINDOW_S: f64 = 10.0;
-/// The deepest start of a fast break, in metres past halfway toward the attacked goal (below
-/// 0 inside the side's own half).
-pub const COUNTER_START_M: f64 = 0.0;
+/// signature command and the measures share it. Set from the counter-attacks Wyscout's
+/// analysts tagged in the four fit leagues: 80 percent of the tagged possessions that reach
+/// the final third reach it within 12.6 s.
+pub const COUNTER_WINDOW_S: f64 = 13.0;
+/// The most advanced start of a fast break, in metres past halfway toward the attacked goal
+/// (below 0 inside the side's own half): 80 percent of the tagged counter-attacks start at or
+/// behind it.
+pub const COUNTER_START_M: f64 = -7.0;
 /// The counter-press figures read the losing side's pressures within this many seconds of an
 /// open-play loss, and its regains within the same time.
 pub const COUNTERPRESS_S: f64 = 5.0;

@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "held_out": [
     "wyscout_2017_18:Germany",
     "wyscout_2017_18:World_Cup",
@@ -1207,6 +1207,56 @@
       "max": 16.839394
     },
     {
+      "primitive": "on_winning_the_ball",
+      "stat": "counter_attacks_per_match",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "matches": 1520,
+      "quintile_edges": [
+        5.147368,
+        5.736842,
+        6.342105,
+        6.9
+      ],
+      "quintile_ranges": [
+        [
+          4.289474,
+          5.147368
+        ],
+        [
+          5.147368,
+          5.736842
+        ],
+        [
+          5.736842,
+          6.342105
+        ],
+        [
+          6.342105,
+          6.9
+        ],
+        [
+          6.9,
+          8.368421
+        ]
+      ],
+      "medians": [
+        4.644737,
+        5.394737,
+        6.092105,
+        6.5,
+        7.171053
+      ],
+      "min": 4.289474,
+      "max": 8.368421
+    },
+    {
       "primitive": "fullback_run_frequency",
       "stat": "fullback_runs_per_match",
       "source": "skillcorner_open",
@@ -1447,6 +1497,210 @@
       "max": 0.123737,
       "thin_sample": true,
       "national_teams": true
+    },
+    {
+      "primitive": "on_winning_the_ball",
+      "stat": "regain_to_shot_s",
+      "source": "statsbomb_open",
+      "competitions": [
+        "1. Bundesliga 2023/2024",
+        "FIFA World Cup 2022",
+        "UEFA Euro 2020",
+        "UEFA Euro 2024"
+      ],
+      "teams": 98,
+      "matches": 200,
+      "quintile_edges": [
+        13.630709,
+        15.594223,
+        17.400573,
+        20.59541
+      ],
+      "quintile_ranges": [
+        [
+          7.384167,
+          13.630709
+        ],
+        [
+          13.630709,
+          15.594223
+        ],
+        [
+          15.594223,
+          17.400573
+        ],
+        [
+          17.400573,
+          20.59541
+        ],
+        [
+          20.59541,
+          28.100731
+        ]
+      ],
+      "medians": [
+        11.036665,
+        15.028703,
+        16.43594,
+        19.2776,
+        23.30269
+      ],
+      "min": 7.384167,
+      "max": 28.100731,
+      "national_teams": true
+    },
+    {
+      "primitive": "on_losing_the_ball",
+      "stat": "counterpress_pressures_per_loss",
+      "source": "statsbomb_open",
+      "competitions": [
+        "1. Bundesliga 2023/2024",
+        "FIFA World Cup 2022",
+        "UEFA Euro 2020",
+        "UEFA Euro 2024"
+      ],
+      "teams": 98,
+      "matches": 200,
+      "quintile_edges": [
+        0.268883,
+        0.293069,
+        0.320418,
+        0.357832
+      ],
+      "quintile_ranges": [
+        [
+          0.197719,
+          0.268883
+        ],
+        [
+          0.268883,
+          0.293069
+        ],
+        [
+          0.293069,
+          0.320418
+        ],
+        [
+          0.320418,
+          0.357832
+        ],
+        [
+          0.357832,
+          0.526627
+        ]
+      ],
+      "medians": [
+        0.254864,
+        0.28481,
+        0.306839,
+        0.337662,
+        0.385189
+      ],
+      "min": 0.197719,
+      "max": 0.526627,
+      "national_teams": true
+    },
+    {
+      "primitive": "on_losing_the_ball",
+      "stat": "counterpress_regain_share",
+      "source": "statsbomb_open",
+      "competitions": [
+        "1. Bundesliga 2023/2024",
+        "FIFA World Cup 2022",
+        "UEFA Euro 2020",
+        "UEFA Euro 2024"
+      ],
+      "teams": 98,
+      "matches": 200,
+      "quintile_edges": [
+        0.171359,
+        0.193912,
+        0.207764,
+        0.227885
+      ],
+      "quintile_ranges": [
+        [
+          0.101124,
+          0.171359
+        ],
+        [
+          0.171359,
+          0.193912
+        ],
+        [
+          0.193912,
+          0.207764
+        ],
+        [
+          0.207764,
+          0.227885
+        ],
+        [
+          0.227885,
+          0.28125
+        ]
+      ],
+      "medians": [
+        0.161037,
+        0.181818,
+        0.2,
+        0.21865,
+        0.239504
+      ],
+      "min": 0.101124,
+      "max": 0.28125,
+      "national_teams": true
+    },
+    {
+      "primitive": "counter_press_length",
+      "stat": "last_counterpress_s",
+      "source": "statsbomb_open",
+      "competitions": [
+        "1. Bundesliga 2023/2024",
+        "FIFA World Cup 2022",
+        "UEFA Euro 2020",
+        "UEFA Euro 2024"
+      ],
+      "teams": 98,
+      "matches": 200,
+      "quintile_edges": [
+        4.591783,
+        4.793108,
+        4.966139,
+        5.10352
+      ],
+      "quintile_ranges": [
+        [
+          4.101807,
+          4.591783
+        ],
+        [
+          4.591783,
+          4.793108
+        ],
+        [
+          4.793108,
+          4.966139
+        ],
+        [
+          4.966139,
+          5.10352
+        ],
+        [
+          5.10352,
+          5.571012
+        ]
+      ],
+      "medians": [
+        4.5207,
+        4.69569,
+        4.863346,
+        5.025925,
+        5.230586
+      ],
+      "min": 4.101807,
+      "max": 5.571012,
+      "national_teams": true
     }
   ],
   "checks": [
@@ -1529,6 +1783,105 @@
       "median": 0.11913,
       "min": 0.081281,
       "max": 0.171569
+    },
+    {
+      "stat": "tagged_counter_attacks_per_match",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "median": 2.776316,
+      "min": 1.315789,
+      "max": 4.263158,
+      "rank_correlation": 0.543967,
+      "against": "on_winning_the_ball counter_attacks_per_match"
+    },
+    {
+      "stat": "regain_to_shot_s",
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England",
+        "France",
+        "Italy",
+        "Spain"
+      ],
+      "teams": 80,
+      "median": 12.832223,
+      "min": 7.729824,
+      "max": 20.422636
+    },
+    {
+      "stat": "regain_to_shot_s",
+      "source": "statsbomb_open",
+      "competitions": [
+        "1. Bundesliga 2023/2024"
+      ],
+      "teams": 18,
+      "median": 16.885852,
+      "min": 7.8956,
+      "max": 26.9295
+    },
+    {
+      "stat": "counterpress_pressures_per_loss",
+      "source": "statsbomb_open",
+      "competitions": [
+        "1. Bundesliga 2023/2024"
+      ],
+      "teams": 18,
+      "median": 0.34569,
+      "min": 0.20915,
+      "max": 0.526627
+    },
+    {
+      "stat": "counterpress_regain_share",
+      "source": "statsbomb_open",
+      "competitions": [
+        "1. Bundesliga 2023/2024"
+      ],
+      "teams": 18,
+      "median": 0.176412,
+      "min": 0.101124,
+      "max": 0.235035
+    },
+    {
+      "stat": "last_counterpress_s",
+      "source": "statsbomb_open",
+      "competitions": [
+        "1. Bundesliga 2023/2024"
+      ],
+      "teams": 18,
+      "median": 4.929685,
+      "min": 4.494732,
+      "max": 5.554694
+    },
+    {
+      "stat": "counterpress_flag_within_window_share",
+      "source": "statsbomb_open",
+      "competitions": [
+        "1. Bundesliga 2023/2024",
+        "FIFA World Cup 2022",
+        "UEFA Euro 2020",
+        "UEFA Euro 2024"
+      ],
+      "teams": 98,
+      "median": 0.64294,
+      "min": 0.5,
+      "max": 0.808824
+    },
+    {
+      "stat": "counter_press_engagements_per_match",
+      "source": "skillcorner_open",
+      "competitions": [
+        "A-League"
+      ],
+      "teams": 13,
+      "median": 38.666667,
+      "min": 31.0,
+      "max": 49.0
     }
   ]
 }

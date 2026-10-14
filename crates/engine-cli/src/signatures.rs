@@ -24,6 +24,19 @@
 //! season (sum over sum) before the quintiles are taken across the teams. PPDA is the sum of
 //! the opponent's passes in its build-up zone over the sum of the team's defensive actions.
 //!
+//! The transition rows follow [`engine::measures::transitions`]: a regain is a possession that
+//! starts with the other team's possession ending in open play (no dead ball between), at the
+//! side's first touch; a fast break is a regain that starts at or behind
+//! [`engine::decision::COUNTER_START_M`] and reaches the attacked final third within
+//! [`engine::decision::COUNTER_WINDOW_S`] (an on-ball action of the side there). The fast-break
+//! row reads the Wyscout fit leagues, with Wyscout's counter-attack tag (1901) as a check. The
+//! StatsBomb open data, with the same possession rule, gives the regain-to-shot time and the
+//! counter-press figures: the losing side's Pressure events within
+//! [`engine::decision::COUNTERPRESS_S`] of each open-play loss, its regains within that time,
+//! and its last pressure within [`engine::decision::COUNTERPRESS_LAST_S`]; one value per team
+//! and competition, marked as national teams (three of the four competitions are national-team
+//! tournaments), with a Bundesliga-only check and StatsBomb's own counterpress flag as checks.
+//!
 //! The output is a pure function of the input files: keys in a fixed order, values rounded to
 //! 6 decimals, and no time stamp, so two runs write the same bytes.
 
@@ -35,7 +48,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, bail};
 use engine::ContentDir;
 use engine::data::primitives::held_out;
-use engine::decision::{FORWARD_M, REGAIN_S};
+use engine::decision::{
+    COUNTER_START_M, COUNTER_WINDOW_S, COUNTERPRESS_LAST_S, COUNTERPRESS_S, FORWARD_M, REGAIN_S,
+};
 use serde::Serialize;
 
 use crate::cli::SignaturesOpts;
@@ -50,8 +65,12 @@ pub const FIT_LEAGUES: [&str; 4] = ["England", "France", "Italy", "Spain"];
 const PITCH_M: f64 = 105.0;
 
 /// The table's format version. Version 2 adds the in-possession rows and the thin-sample rows
-/// of the SkillCorner runs.
-pub const SIGNATURES_VERSION: u32 = 2;
+/// of the SkillCorner runs; version 3 the transition rows and their checks.
+pub const SIGNATURES_VERSION: u32 = 3;
+/// The StatsBomb competitions that are held-out sets: never read.
+pub const STATSBOMB_HELD_OUT: [&str; 2] = ["FIFA World Cup 2018", "UEFA Euro 2016"];
+/// The StatsBomb competition of club teams; the others are national-team tournaments.
+pub const STATSBOMB_CLUBS: &str = "1. Bundesliga 2023/2024";
 /// The source name of the SkillCorner open data.
 pub const SKILLCORNER: &str = "skillcorner_open";
 /// The competition of the SkillCorner open data.
@@ -106,6 +125,65 @@ pub struct Check {
     pub median: f64,
     pub min: f64,
     pub max: f64,
+    /// The rank correlation across the teams with the row of `against`, when the check
+    /// compares a definition with a row's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rank_correlation: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub against: Option<String>,
+}
+
+impl Check {
+    /// The check of `values` (one per team).
+    fn of(stat: &str, source: &str, competitions: &[String], values: &[f64]) -> Option<Self> {
+        let mut v: Vec<f64> = values.iter().copied().filter(|x| x.is_finite()).collect();
+        if v.is_empty() {
+            return None;
+        }
+        v.sort_by(f64::total_cmp);
+        Some(Self {
+            stat: stat.into(),
+            source: source.into(),
+            competitions: competitions.to_vec(),
+            teams: v.len(),
+            median: round6(quantile(&v, 0.5)),
+            min: round6(v[0]),
+            max: round6(v[v.len() - 1]),
+            rank_correlation: None,
+            against: None,
+        })
+    }
+}
+
+/// The ranks of `v`, the mean rank for ties.
+fn ranks(v: &[f64]) -> Vec<f64> {
+    let mut order: Vec<usize> = (0..v.len()).collect();
+    order.sort_by(|&a, &b| v[a].total_cmp(&v[b]));
+    let mut out = vec![0.0; v.len()];
+    let mut i = 0;
+    while i < order.len() {
+        let mut j = i;
+        while j + 1 < order.len() && v[order[j + 1]] == v[order[i]] {
+            j += 1;
+        }
+        let rank = (i + j) as f64 / 2.0;
+        for &k in &order[i..=j] {
+            out[k] = rank;
+        }
+        i = j + 1;
+    }
+    out
+}
+
+/// Spearman's rank correlation of `a` and `b`: the Pearson correlation of their ranks.
+fn spearman(a: &[f64], b: &[f64]) -> f64 {
+    let (ra, rb) = (ranks(a), ranks(b));
+    let n = ra.len() as f64;
+    let (ma, mb) = (ra.iter().sum::<f64>() / n, rb.iter().sum::<f64>() / n);
+    let cov: f64 = ra.iter().zip(&rb).map(|(x, y)| (x - ma) * (y - mb)).sum();
+    let va: f64 = ra.iter().map(|x| (x - ma).powi(2)).sum();
+    let vb: f64 = rb.iter().map(|y| (y - mb).powi(2)).sum();
+    cov / (va * vb).sqrt()
 }
 
 /// The table.
@@ -302,6 +380,14 @@ struct Season {
     crosses: f64,
     high_crosses: f64,
     cross_origin_m: f64,
+    /// Possessions that started with a regain, the fast breaks among them, those with a shot
+    /// and the summed seconds from their start to the first shot; and the possessions with an
+    /// on-ball action Wyscout tagged as a counter-attack (1901).
+    regains: f64,
+    fast_breaks: f64,
+    regain_shots: f64,
+    regain_shot_s: f64,
+    tagged_counters: f64,
 }
 
 /// The possession in progress.
@@ -314,10 +400,34 @@ struct Possession {
     forward: bool,
     shot: bool,
     final_third: bool,
+    /// Its first touch: the second, the depth past halfway toward the attacked goal in
+    /// metres, and whether it is a regain (the other team's possession ended in open play).
+    start: f64,
+    start_m: f64,
+    regain: bool,
+    /// The second it first reached the attacked final third, and of its first shot.
+    final_at: Option<f64>,
+    shot_at: Option<f64>,
+    /// An on-ball action tagged as a counter-attack (1901).
+    tagged: bool,
+}
+
+/// One on-ball action as a possession reads it: a shot, a restart kick, or an open-play pass
+/// gaining `gain` metres; `final_third` when it starts in the final third; `tagged` when
+/// Wyscout tagged it as a counter-attack.
+#[derive(Debug, Clone, Copy)]
+struct Act {
+    sec: f64,
+    shot: bool,
+    pass: bool,
+    restart: bool,
+    gain: f64,
+    final_third: bool,
+    tagged: bool,
 }
 
 impl Possession {
-    fn new(team: u64) -> Self {
+    fn new(team: u64, start: f64, start_m: f64, regain: bool) -> Self {
         Self {
             team,
             passes: 0,
@@ -326,15 +436,33 @@ impl Possession {
             forward: false,
             shot: false,
             final_third: false,
+            start,
+            start_m,
+            regain,
+            final_at: None,
+            shot_at: None,
+            tagged: false,
         }
     }
 
-    /// An on-ball action: a shot, a restart kick, or an open-play pass gaining `gain` metres;
-    /// `final_third` when it starts in the final third.
-    fn act(&mut self, shot: bool, pass: bool, restart: bool, gain: f64, final_third: bool) {
+    fn act(&mut self, a: Act) {
+        let Act {
+            sec,
+            shot,
+            pass,
+            restart,
+            gain,
+            final_third,
+            tagged,
+        } = a;
         self.final_third |= final_third;
+        self.tagged |= tagged;
+        if final_third && self.final_at.is_none() {
+            self.final_at = Some(sec);
+        }
         if shot {
             self.shot = true;
+            self.shot_at.get_or_insert(sec);
         } else if pass {
             self.passes += 1;
             if restart {
@@ -391,6 +519,21 @@ fn close(p: Option<Possession>, end: End, seasons: &mut BTreeMap<u64, Season>) {
         s.shot_possessions += 1;
     } else if end == End::Turnover {
         s.turnovers += 1;
+    }
+    if p.tagged {
+        s.tagged_counters += 1.0;
+    }
+    if p.regain {
+        s.regains += 1.0;
+        if p.start_m <= COUNTER_START_M
+            && p.final_at.is_some_and(|f| f - p.start <= COUNTER_WINDOW_S)
+        {
+            s.fast_breaks += 1.0;
+        }
+        if let Some(t) = p.shot_at {
+            s.regain_shots += 1.0;
+            s.regain_shot_s += t - p.start;
+        }
     }
 }
 
@@ -625,23 +768,34 @@ fn wyscout_seasons(
             (Ok(x0), Ok(x1)) => (x1 - x0) * PITCH_M / 100.0,
             _ => 0.0,
         };
+        let act = Act {
+            sec,
+            shot,
+            pass,
+            restart,
+            gain,
+            final_third,
+            tagged: c[c_tags].split([' ', ';']).any(|t| t == "1901"),
+        };
+        // The depth past halfway of the first touch; none without a position.
+        let start_m = at[0].map_or(f64::INFINITY, |x| (x - 50.0) * PITCH_M / 100.0);
         match open.as_mut() {
             None => {
-                let mut p = Possession::new(team);
-                p.act(shot, pass, restart, gain, final_third);
+                let mut p = Possession::new(team, sec, start_m, false);
+                p.act(act);
                 open = Some(p);
             }
             Some(p) if p.team == team => {
                 // The team with the ball acts again: a short regain.
                 spell = None;
-                p.act(shot, pass, restart, gain, final_third);
+                p.act(act);
             }
             Some(_) => {
                 let s = spell.get_or_insert(Spell {
                     start: sec,
-                    poss: Possession::new(team),
+                    poss: Possession::new(team, sec, start_m, true),
                 });
-                s.poss.act(shot, pass, restart, gain, final_third);
+                s.poss.act(act);
                 let completed = pass && c[c_tags].split([' ', ';']).any(|t| t == "1801");
                 if shot || completed {
                     take_over(&mut open, &mut spell, &mut seasons);
@@ -694,24 +848,18 @@ fn statsbomb_check(dir: &Path) -> anyhow::Result<Option<Check>> {
         }
         competitions.insert(comp);
     }
-    let mut values: Vec<f64> = teams
+    let values: Vec<f64> = teams
         .values()
         .filter(|(_, p)| !p.is_empty())
         .map(|(n, p)| *n as f64 / p.len() as f64)
         .collect();
-    if values.is_empty() {
-        return Ok(None);
-    }
-    values.sort_by(f64::total_cmp);
-    Ok(Some(Check {
-        stat: "passes_per_possession".into(),
-        source: STATSBOMB.into(),
-        competitions: competitions.into_iter().collect(),
-        teams: values.len(),
-        median: round6(quantile(&values, 0.5)),
-        min: round6(values[0]),
-        max: round6(values[values.len() - 1]),
-    }))
+    let competitions: Vec<String> = competitions.into_iter().collect();
+    Ok(Check::of(
+        "passes_per_possession",
+        STATSBOMB,
+        &competitions,
+        &values,
+    ))
 }
 
 /// One SkillCorner team's full-back runs: its full-backs' overlaps and underlaps, and its
@@ -910,22 +1058,410 @@ fn tracking_rows(dir: &Path) -> anyhow::Result<(Vec<Row>, Vec<Check>)> {
                 )?;
                 row.national_teams = national;
                 rows.push(row);
-            } else if !values.is_empty() {
-                let mut v = values.clone();
-                v.sort_by(f64::total_cmp);
-                checks.push(Check {
-                    stat: stat.into(),
-                    source: source.clone(),
-                    competitions: competitions.to_vec(),
-                    teams: v.len(),
-                    median: round6(quantile(&v, 0.5)),
-                    min: round6(v[0]),
-                    max: round6(v[v.len() - 1]),
-                });
+            } else {
+                checks.extend(Check::of(stat, source, &competitions, &values));
             }
         }
     }
     Ok((rows, checks))
+}
+
+/// One StatsBomb team's transitions in one competition (sums and counts, as the engine's
+/// [`engine::measures::transitions::Transitions`]).
+#[derive(Debug, Clone, Default)]
+struct SbTeam {
+    matches: BTreeSet<String>,
+    regain_shots: f64,
+    regain_shot_s: f64,
+    losses: f64,
+    pressures: f64,
+    flagged: f64,
+    flagged_in_window: f64,
+    regains_in_window: f64,
+    last_pressures: f64,
+    last_pressure_s: f64,
+}
+
+/// An open-play loss of a StatsBomb team: when the other team first touched the ball, its
+/// pressures since, and the last of them within [`COUNTERPRESS_LAST_S`].
+#[derive(Debug, Clone, Copy)]
+struct SbLoss {
+    team: usize,
+    at: f64,
+    pressures: f64,
+    flagged: f64,
+    last: Option<f64>,
+    regained: bool,
+}
+
+impl SbLoss {
+    fn count(self, t: &mut SbTeam) {
+        t.losses += 1.0;
+        t.pressures += self.pressures;
+        t.flagged_in_window += self.flagged;
+        if self.regained {
+            t.regains_in_window += 1.0;
+        }
+        if let Some(last) = self.last {
+            t.last_pressures += 1.0;
+            t.last_pressure_s += last - self.at;
+        }
+    }
+}
+
+/// A StatsBomb possession in progress, on the shared rule: its team (an index into the
+/// teams), its first touch, whether it is a regain, and its first shot.
+#[derive(Debug, Clone, Copy)]
+struct SbPossession {
+    team: usize,
+    start: f64,
+    regain: bool,
+    shot_at: Option<f64>,
+}
+
+/// The seconds of a StatsBomb time stamp `hh:mm:ss.fff` within its period.
+fn sb_seconds(ts: &str) -> Option<f64> {
+    let mut it = ts.split(':');
+    let (h, m, s) = (it.next()?, it.next()?, it.next()?);
+    Some(h.parse::<f64>().ok()? * 3600.0 + m.parse::<f64>().ok()? * 60.0 + s.parse::<f64>().ok()?)
+}
+
+/// The StatsBomb teams, as (competition, team), and their transition counts.
+type SbTeams = (Vec<(String, String)>, Vec<SbTeam>);
+
+/// The transition counts of each team and competition of the StatsBomb open data at `path`
+/// (`sb2_events.csv.gz`) on the shared possession rule; a held-out competition stops the run.
+///
+/// The on-ball actions are passes, shots, carries, dribbles, received balls, clearances,
+/// interceptions, recoveries and miscontrols; a dead ball is a foul, an offside, an injury
+/// stoppage, a substitution, a dropped ball, a half's end, or a restart pass (kick-off,
+/// throw-in, free kick, goal kick, corner), which also starts the next possession. A pressure
+/// is a Pressure event of the side.
+fn statsbomb_teams(path: &Path) -> anyhow::Result<SbTeams> {
+    let file = "sb2_events.csv.gz";
+    let mut it = lines(path)?;
+    let header = cells(&it.next().context("an empty sb2_events.csv.gz")??);
+    let col = |n: &str| column(&header, n, file);
+    let (c_mid, c_period, c_ts, c_type, c_team, c_sub, c_out, c_cp, c_comp, c_season) = (
+        col("mid")?,
+        col("period")?,
+        col("ts")?,
+        col("type")?,
+        col("team")?,
+        col("sub")?,
+        col("out")?,
+        col("cp")?,
+        col("comp")?,
+        col("season")?,
+    );
+    // (competition, team) -> its index and counts.
+    let mut index: BTreeMap<(String, String), usize> = BTreeMap::new();
+    let mut teams: Vec<SbTeam> = Vec::new();
+    let mut keys: Vec<(String, String)> = Vec::new();
+    let mut half: Option<(String, String)> = None;
+    let mut open: Option<SbPossession> = None;
+    let mut spell: Option<(f64, SbPossession)> = None;
+    let mut losses: Vec<SbLoss> = Vec::new();
+    // Ends a possession: a regain with a shot adds its time.
+    let end = |p: Option<SbPossession>, teams: &mut Vec<SbTeam>| {
+        if let Some(p) = p.filter(|p| p.regain)
+            && let Some(s) = p.shot_at
+        {
+            teams[p.team].regain_shots += 1.0;
+            teams[p.team].regain_shot_s += s - p.start;
+        }
+    };
+    // A dead ball: the possession ends and every loss in progress is counted.
+    let dead = |open: &mut Option<SbPossession>,
+                spell: &mut Option<(f64, SbPossession)>,
+                losses: &mut Vec<SbLoss>,
+                teams: &mut Vec<SbTeam>| {
+        *spell = None;
+        end(open.take(), teams);
+        for l in losses.drain(..) {
+            l.count(&mut teams[l.team]);
+        }
+    };
+    for line in it {
+        let c = cells(&line?);
+        if c.len() <= c_season {
+            continue;
+        }
+        let comp = format!("{} {}", c[c_comp], c[c_season]);
+        if STATSBOMB_HELD_OUT.contains(&comp.as_str()) {
+            bail!("held-out set: {comp} is never read");
+        }
+        let key = (c[c_mid].clone(), c[c_period].clone());
+        if half.as_ref() != Some(&key) {
+            dead(&mut open, &mut spell, &mut losses, &mut teams);
+            half = Some(key);
+        }
+        let Some(sec) = sb_seconds(&c[c_ts]) else {
+            continue;
+        };
+        let ty = c[c_type].as_str();
+        let team = {
+            let k = (comp.clone(), c[c_team].clone());
+            *index.entry(k.clone()).or_insert_with(|| {
+                teams.push(SbTeam::default());
+                keys.push(k);
+                teams.len() - 1
+            })
+        };
+        teams[team].matches.insert(c[c_mid].clone());
+        // A spell older than the short-regain time becomes the other team's possession: the
+        // team that had the ball lost it at the spell's first touch.
+        if let Some((start, _)) = spell.filter(|(start, _)| sec - start > REGAIN_S) {
+            let (_, p) = spell.take().expect("a spell");
+            take_over_sb(&mut open, p, start, &mut losses, &mut teams, end);
+        }
+        let restart = ty == "Pass"
+            && matches!(
+                c[c_sub].as_str(),
+                "Kick Off" | "Throw-in" | "Free Kick" | "Goal Kick" | "Corner"
+            );
+        if restart
+            || matches!(
+                ty,
+                "Foul Committed"
+                    | "Offside"
+                    | "Injury Stoppage"
+                    | "Substitution"
+                    | "Referee Ball-Drop"
+                    | "Half End"
+            )
+        {
+            dead(&mut open, &mut spell, &mut losses, &mut teams);
+            if !restart {
+                continue;
+            }
+        }
+        if ty == "Pressure" {
+            for l in losses.iter_mut().filter(|l| l.team == team) {
+                let since = sec - l.at;
+                if since < 0.0 {
+                    continue;
+                }
+                if since <= COUNTERPRESS_S {
+                    l.pressures += 1.0;
+                }
+                if since <= COUNTERPRESS_LAST_S {
+                    l.last = Some(sec);
+                }
+            }
+            if c[c_cp] == "True" {
+                teams[team].flagged += 1.0;
+                for l in losses.iter_mut().filter(|l| l.team == team) {
+                    if (0.0..=COUNTERPRESS_S).contains(&(sec - l.at)) {
+                        l.flagged += 1.0;
+                    }
+                }
+            }
+            continue;
+        }
+        let on_ball = matches!(
+            ty,
+            "Pass"
+                | "Shot"
+                | "Carry"
+                | "Dribble"
+                | "Ball Receipt*"
+                | "Clearance"
+                | "Interception"
+                | "Ball Recovery"
+                | "Miscontrol"
+        ) && (ty != "Ball Receipt*" || c[c_out].is_empty());
+        if !on_ball {
+            continue;
+        }
+        let shot = ty == "Shot";
+        let completed = ty == "Pass" && c[c_out].is_empty();
+        match open.as_mut() {
+            None => {
+                open = Some(SbPossession {
+                    team,
+                    start: sec,
+                    regain: false,
+                    shot_at: shot.then_some(sec),
+                });
+            }
+            Some(p) if p.team == team => {
+                spell = None;
+                if shot {
+                    p.shot_at.get_or_insert(sec);
+                }
+            }
+            Some(_) => {
+                let (start, s) = spell.get_or_insert((
+                    sec,
+                    SbPossession {
+                        team,
+                        start: sec,
+                        regain: true,
+                        shot_at: None,
+                    },
+                ));
+                let start = *start;
+                if shot {
+                    s.shot_at.get_or_insert(sec);
+                }
+                if shot || completed {
+                    let (_, p) = spell.take().expect("a spell");
+                    take_over_sb(&mut open, p, start, &mut losses, &mut teams, end);
+                }
+            }
+        }
+    }
+    dead(&mut open, &mut spell, &mut losses, &mut teams);
+    Ok((keys, teams))
+}
+
+/// The rows and checks of the StatsBomb open data in `dir` ([`statsbomb_teams`]): per team
+/// and competition, the regain-to-shot time, the counter-press pressures per loss and regains
+/// within [`COUNTERPRESS_S`], and the time to the last pressure within
+/// [`COUNTERPRESS_LAST_S`]. The rows are marked as national teams, with a club-only check from
+/// the Bundesliga, and a check of StatsBomb's own counterpress flag. None without the file.
+fn statsbomb_transitions(dir: &Path) -> anyhow::Result<(Vec<Row>, Vec<Check>)> {
+    let path = dir.join("sb2_events.csv.gz");
+    if !path.exists() {
+        return Ok((Vec::new(), Vec::new()));
+    }
+    let (keys, teams) = statsbomb_teams(&path)?;
+    let national: Vec<String> = keys
+        .iter()
+        .map(|(comp, _)| comp.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let matches: BTreeSet<&String> = teams.iter().flat_map(|t| &t.matches).collect();
+    let per = |f: &dyn Fn(&SbTeam) -> (f64, f64), clubs: bool| -> Vec<f64> {
+        teams
+            .iter()
+            .zip(&keys)
+            .filter(|(_, (comp, _))| !clubs || comp == STATSBOMB_CLUBS)
+            .map(|(t, _)| f(t))
+            .filter(|(_, d)| *d > 0.0)
+            .map(|(n, d)| n / d)
+            .collect()
+    };
+    type Stat<'a> = (&'a str, &'a str, &'a dyn Fn(&SbTeam) -> (f64, f64));
+    let stats: [Stat<'_>; 4] = [
+        ("on_winning_the_ball", "regain_to_shot_s", &|t| {
+            (t.regain_shot_s, t.regain_shots)
+        }),
+        (
+            "on_losing_the_ball",
+            "counterpress_pressures_per_loss",
+            &|t| (t.pressures, t.losses),
+        ),
+        ("on_losing_the_ball", "counterpress_regain_share", &|t| {
+            (t.regains_in_window, t.losses)
+        }),
+        ("counter_press_length", "last_counterpress_s", &|t| {
+            (t.last_pressure_s, t.last_pressures)
+        }),
+    ];
+    let mut rows = Vec::new();
+    let mut checks = Vec::new();
+    if teams.is_empty() {
+        return Ok((rows, checks));
+    }
+    let clubs = [STATSBOMB_CLUBS.to_string()];
+    for (primitive, stat, f) in stats {
+        let mut row = spread(primitive, stat, &national, matches.len(), &per(f, false))?;
+        row.source = STATSBOMB.into();
+        row.national_teams = true;
+        rows.push(row);
+        checks.extend(Check::of(stat, STATSBOMB, &clubs, &per(f, true)));
+    }
+    // StatsBomb's counterpress flag: the share of each team's flagged pressures that fall
+    // within the counter-press time of an open-play loss.
+    checks.extend(Check::of(
+        "counterpress_flag_within_window_share",
+        STATSBOMB,
+        &national,
+        &per(&|t| (t.flagged_in_window, t.flagged), false),
+    ));
+    Ok((rows, checks))
+}
+
+/// The other team's spell `p`, first touch at `start`, becomes its possession: the open one
+/// ends (`end`), its team lost the ball at `start`, and a loss of `p`'s team in progress ends
+/// as a regain when it is within the counter-press time.
+fn take_over_sb(
+    open: &mut Option<SbPossession>,
+    p: SbPossession,
+    start: f64,
+    losses: &mut Vec<SbLoss>,
+    teams: &mut Vec<SbTeam>,
+    end: impl Fn(Option<SbPossession>, &mut Vec<SbTeam>),
+) {
+    let lost = open.take();
+    end(lost, teams);
+    // The regaining team's own losses end now.
+    let mut k = 0;
+    while k < losses.len() {
+        if losses[k].team == p.team {
+            let mut l = losses.remove(k);
+            l.regained = start - l.at <= COUNTERPRESS_S;
+            l.count(&mut teams[l.team]);
+        } else {
+            k += 1;
+        }
+    }
+    if let Some(lost) = lost {
+        losses.push(SbLoss {
+            team: lost.team,
+            at: start,
+            pressures: 0.0,
+            flagged: 0.0,
+            last: None,
+            regained: false,
+        });
+    }
+    *open = Some(p);
+}
+
+/// The SkillCorner check of the counter-press: per club, its `counter_press` engagements per
+/// match (a thin sample of 20 A-League matches). None without the file.
+fn skillcorner_counter_press(dir: &Path) -> anyhow::Result<Option<Check>> {
+    let file = "sc_dynamic_events.csv.gz";
+    let path = dir.join(file);
+    if !path.exists() {
+        return Ok(None);
+    }
+    let mut it = lines(&path)?;
+    let header = cells(&it.next().context("an empty sc_dynamic_events.csv.gz")??);
+    let col = |n: &str| column(&header, n, file);
+    let (c_match, c_team, c_type, c_sub) = (
+        col("match_id")?,
+        col("team_shortname")?,
+        col("event_type")?,
+        col("event_subtype")?,
+    );
+    let mut teams: BTreeMap<String, (f64, BTreeSet<String>)> = BTreeMap::new();
+    for line in it {
+        let c = cells(&line?);
+        if c.len() <= c_match.max(c_team).max(c_type).max(c_sub) {
+            continue;
+        }
+        let t = teams.entry(c[c_team].clone()).or_default();
+        t.1.insert(c[c_match].clone());
+        if c[c_type] == "on_ball_engagement" && c[c_sub] == "counter_press" {
+            t.0 += 1.0;
+        }
+    }
+    let values: Vec<f64> = teams
+        .values()
+        .filter(|(_, m)| !m.is_empty())
+        .map(|(n, m)| n / m.len() as f64)
+        .collect();
+    Ok(Check::of(
+        "counter_press_engagements_per_match",
+        SKILLCORNER,
+        &[SKILLCORNER_LEAGUE.to_string()],
+        &values,
+    ))
 }
 
 /// The table of the fit data in `dir` for `competitions`.
@@ -945,7 +1481,7 @@ pub fn build(dir: &Path, competitions: &[String]) -> anyhow::Result<Table> {
     let entries = |s: &Season, share: &dyn Fn(&[f64; 3]) -> f64| {
         (share(&s.entries), s.entries.iter().sum::<f64>())
     };
-    let stats: [(&str, &str, Vec<f64>); 24] = [
+    let stats: [(&str, &str, Vec<f64>); 25] = [
         (
             "tempo",
             "passes_per_possession",
@@ -1062,6 +1598,11 @@ pub fn build(dir: &Path, competitions: &[String]) -> anyhow::Result<Table> {
             "cross_origin_m",
             ratio(&|s| (s.cross_origin_m, s.crosses)),
         ),
+        (
+            "on_winning_the_ball",
+            "counter_attacks_per_match",
+            ratio(&|s| (s.fast_breaks, s.team_matches)),
+        ),
     ];
     let mut rows = Vec::new();
     for (primitive, stat, values) in stats {
@@ -1072,6 +1613,30 @@ pub fn build(dir: &Path, competitions: &[String]) -> anyhow::Result<Table> {
     rows.extend(tracked);
     let mut checks: Vec<Check> = statsbomb_check(dir)?.into_iter().collect();
     checks.extend(tracked_checks);
+    // The counter-attack tag against the fast-break definition, and the Wyscout
+    // regain-to-shot time beside the StatsBomb row.
+    let fast = ratio(&|s| (s.fast_breaks, s.team_matches));
+    let tagged = ratio(&|s| (s.tagged_counters, s.team_matches));
+    if let Some(mut c) = Check::of(
+        "tagged_counter_attacks_per_match",
+        WYSCOUT,
+        competitions,
+        &tagged,
+    ) {
+        c.rank_correlation = Some(round6(spearman(&tagged, &fast)));
+        c.against = Some("on_winning_the_ball counter_attacks_per_match".into());
+        checks.push(c);
+    }
+    checks.extend(Check::of(
+        "regain_to_shot_s",
+        WYSCOUT,
+        competitions,
+        &ratio(&|s| (s.regain_shot_s, s.regain_shots)),
+    ));
+    let (sb_rows, sb_checks) = statsbomb_transitions(dir)?;
+    rows.extend(sb_rows);
+    checks.extend(sb_checks);
+    checks.extend(skillcorner_counter_press(dir)?);
     Ok(Table {
         schema_version: SIGNATURES_VERSION,
         held_out: engine::data::primitives::HELD_OUT
@@ -1193,5 +1758,109 @@ mod tests {
         assert_eq!(row.quintile_ranges[0], [1.0, 2.8]);
         assert_eq!(row.quintile_ranges[4], [8.2, 10.0]);
         assert!(spread("p", "ppda", &[], 1, &v[..4]).is_err());
+    }
+
+    /// Writes `text` gzipped to `path`.
+    fn gzip(path: &Path, text: &str) {
+        use std::io::Write;
+        let file = File::create(path).unwrap();
+        let mut gz = flate2::write::GzEncoder::new(file, flate2::Compression::default());
+        gz.write_all(text.as_bytes()).unwrap();
+        gz.finish().unwrap();
+    }
+
+    /// A folder for one test's files.
+    fn folder(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("sm-signatures-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Team 2 wins the ball 10.5 m inside its own half (a tagged counter-attack), reaches the
+    /// final third 3 s later and shoots 6 s after the regain: a fast break with a regain shot.
+    /// After a dead ball it wins the ball again 10.5 m into the other half: a regain, but no
+    /// fast break. Team 1 starts both of its possessions after a dead ball: no regain.
+    #[test]
+    fn a_fast_break_is_a_regain_from_the_start_zone_that_reaches_the_final_third_in_time() {
+        let dir = folder("fast-break");
+        std::fs::write(dir.join("wy2_matches.csv"), "comp,match\nEngland,m1\n").unwrap();
+        std::fs::write(
+            dir.join("wy2_team_matches.csv"),
+            "match,team,opp_build_vs,def_act\nm1,1,10,5\nm1,2,20,5\n",
+        )
+        .unwrap();
+        let rows = [
+            "1,0.0,1,Pass,Simple pass,30,50,45,50,1801",
+            "2,2.0,2,Pass,Simple pass,40,50,55,50,1801 1901",
+            "3,5.0,2,Pass,Simple pass,70,50,80,50,1801",
+            "4,8.0,2,Shot,Shot,85,50,100,50,",
+            "5,9.0,2,Interruption,Ball out of the field,100,50,,,",
+            "6,20.0,1,Pass,Simple pass,50,50,52,50,1801",
+            "7,21.0,2,Pass,Simple pass,60,50,62,50,1801",
+            "8,40.0,2,Pass,Simple pass,80,50,90,50,1801",
+        ];
+        let mut events =
+            String::from("comp,match,id,period,sec,team,player,role,ev,sub,x0,y0,x1,y1,tags\n");
+        for r in rows {
+            let c: Vec<&str> = r.splitn(4, ',').collect();
+            events.push_str(&format!(
+                "England,m1,{},1H,{},{},7,MD,{}\n",
+                c[0], c[1], c[2], c[3]
+            ));
+        }
+        gzip(&dir.join("wy2_events.csv.gz"), &events);
+        let (seasons, _) = wyscout_seasons(&dir, &["England".to_string()]).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        let two = seasons[&2];
+        assert_eq!((two.regains, two.fast_breaks), (2.0, 1.0));
+        assert_eq!((two.regain_shots, two.regain_shot_s), (1.0, 6.0));
+        assert_eq!(two.tagged_counters, 1.0);
+        assert_eq!(seasons[&1].regains, 0.0);
+    }
+
+    /// StatsBomb: A loses the ball at 4 s, presses twice (one flagged as a counterpress) and
+    /// wins it back at 8 s, then shoots 4 s later; B, having lost it at 8 s, never presses
+    /// before the goal kick. A held-out tournament stops the run.
+    #[test]
+    fn the_counter_press_counts_follow_the_shared_possession_rule() {
+        let dir = folder("counter-press");
+        let head = "mid,period,ts,type,team,sub,out,cp,comp,season\n";
+        let rows = [
+            "00:00:00.000,Pass,A,Kick Off,,False",
+            "00:00:02.000,Pass,A,,,False",
+            "00:00:04.000,Ball Receipt*,B,,,False",
+            "00:00:04.500,Pass,B,,,False",
+            "00:00:05.000,Pressure,A,,,True",
+            "00:00:07.000,Pressure,A,,,False",
+            "00:00:08.000,Ball Recovery,A,,,False",
+            "00:00:08.500,Pass,A,,,False",
+            "00:00:12.000,Shot,A,,,False",
+            "00:00:13.000,Pass,B,Goal Kick,,False",
+        ];
+        let mut text = String::from(head);
+        for r in rows {
+            let c: Vec<&str> = r.splitn(2, ',').collect();
+            text.push_str(&format!("1,1,{},{},1. Bundesliga,2023/2024\n", c[0], c[1]));
+        }
+        let path = dir.join("sb2_events.csv.gz");
+        gzip(&path, &text);
+        let (keys, teams) = statsbomb_teams(&path).unwrap();
+        let of = |name: &str| &teams[keys.iter().position(|(_, t)| t == name).unwrap()];
+        let a = of("A");
+        assert_eq!(
+            (a.losses, a.pressures, a.regains_in_window),
+            (1.0, 2.0, 1.0)
+        );
+        assert_eq!((a.last_pressures, a.last_pressure_s), (1.0, 3.0));
+        assert_eq!((a.regain_shots, a.regain_shot_s), (1.0, 4.0));
+        assert_eq!((a.flagged, a.flagged_in_window), (1.0, 1.0));
+        let b = of("B");
+        assert_eq!((b.losses, b.pressures, b.last_pressures), (1.0, 0.0, 0.0));
+        text.push_str("2,1,00:00:01.000,Pass,C,,,False,UEFA Euro,2016\n");
+        gzip(&path, &text);
+        let err = statsbomb_teams(&path).unwrap_err().to_string();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(err.contains("held-out set: UEFA Euro 2016"), "{err}");
     }
 }
