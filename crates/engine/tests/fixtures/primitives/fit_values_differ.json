@@ -1,10 +1,10 @@
 {
-  "refusal": "the fit of patient gives patience 9; the level holds",
+  "refusal": "the fit of slow gives patience 9; the level holds",
   "primitive": {
     "name": "planted",
     "kind": "graded",
     "levels": "instructions.tempo",
-    "default": "balanced",
+    "default": "normal",
     "inputs": [
       {
         "input": "patience",
@@ -26,7 +26,7 @@
     },
     "fits": [
       {
-        "level": "patient",
+        "level": "slow",
         "values": {
           "patience": 9.0
         },

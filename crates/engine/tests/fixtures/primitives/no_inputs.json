@@ -4,7 +4,7 @@
     "name": "planted",
     "kind": "graded",
     "levels": "instructions.tempo",
-    "default": "balanced",
+    "default": "normal",
     "inputs": [],
     "signature": [
       {

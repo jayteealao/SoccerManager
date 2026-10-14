@@ -12,10 +12,10 @@ use std::process::Output;
 use common::{bin, edited_content, temp};
 use serde_json::{Value, json};
 
-/// The content folder in `data` with tempo's `patient` level set to `patience`. The planted
+/// The content folder in `data` with tempo's `slow` level set to `patience`. The planted
 /// value is no fit, so tempo's fit records go: content refuses a level that differs from its
 /// own fit.
-fn tempo_patient(data: &Path, patience: f64) -> PathBuf {
+fn tempo_slow(data: &Path, patience: f64) -> PathBuf {
     edited_content(data, "tactics.json", |t| {
         t["instructions"]["tempo"]["levels"][3]["value"] = json!(patience);
         let tempo = t["primitives"]
@@ -50,13 +50,13 @@ const SHORT: [&str; 6] = ["--pairs", "8", "--minutes", "30", "--jobs", "4"];
 #[test]
 fn a_graded_primitive_moving_against_its_direction_fails_and_names_the_step() {
     let data = temp("engine-cli-primitives", "against");
-    let content = tempo_patient(&data, -2.0);
-    let mut args = vec!["check", "--primitive", "tempo", "--step", "balanced"];
+    let content = tempo_slow(&data, -2.0);
+    let mut args = vec!["check", "--primitive", "tempo", "--step", "normal"];
     args.extend(SHORT);
     let run = primitives(&data, &content, &args);
     assert_eq!(run.status.code(), Some(2), "{}", stderr(&run));
     assert!(
-        stderr(&run).contains("tempo: balanced -> patient fails: passes_per_possession"),
+        stderr(&run).contains("tempo: normal -> slow fails: passes_per_possession"),
         "{}",
         stderr(&run)
     );
@@ -66,16 +66,16 @@ fn a_graded_primitive_moving_against_its_direction_fails_and_names_the_step() {
 #[test]
 fn a_graded_primitive_moving_with_its_direction_passes() {
     let data = temp("engine-cli-primitives", "with");
-    let content = tempo_patient(&data, 2.0);
+    let content = tempo_slow(&data, 2.0);
     let out = data.join("check.json");
-    let mut args = vec!["check", "--primitive", "tempo", "--step", "balanced"];
+    let mut args = vec!["check", "--primitive", "tempo", "--step", "normal"];
     args.extend(SHORT);
     args.extend(["--out", out.to_str().unwrap()]);
     let run = primitives(&data, &content, &args);
     assert_eq!(run.status.code(), Some(0), "{}", stderr(&run));
     let result: Value = serde_json::from_str(&std::fs::read_to_string(&out).unwrap()).unwrap();
     let step = &result["steps"][0];
-    assert_eq!(step["step"], "balanced -> patient");
+    assert_eq!(step["step"], "normal -> slow");
     assert_eq!(step["stats"][0]["stat"], "passes_per_possession");
     assert!(step["stats"][0]["difference"].as_f64().unwrap() > 0.0);
     std::fs::remove_dir_all(&data).unwrap();
@@ -290,7 +290,7 @@ fn a_quintile_fit_and_a_thin_sample_fit_land_within_their_noise() {
 /// near the value the tactics file holds (verify runs it).
 #[test]
 #[ignore = "plays up to 2,600 full matches; verify runs it"]
-fn the_fit_of_tempo_patient_lands_within_the_noise_of_its_real_ratio() {
+fn the_fit_of_tempo_slow_lands_within_the_noise_of_its_real_ratio() {
     let data = temp("engine-cli-primitives", "fit");
     let content = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content");
     let out = data.join("fit.json");
@@ -302,7 +302,7 @@ fn the_fit_of_tempo_patient_lands_within_the_noise_of_its_real_ratio() {
             "--primitive",
             "tempo",
             "--level",
-            "patient",
+            "slow",
             "--matches",
             "200",
             "--out",

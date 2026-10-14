@@ -395,7 +395,7 @@ fn first_touch_scene(mood: f64) -> Vec<EngineEvent> {
         .carrier(Some(me))
         .control_since(1_000)
         .with_trait(me, "releases_ball_early", Some(TraitStrength::Strong))
-        .instruction(0, TEMPO, "patient")
+        .instruction(0, TEMPO, "slow")
         .mood(me, mood)
         .build();
     for _ in 0..2 * engine::TICKS_PER_SECOND {

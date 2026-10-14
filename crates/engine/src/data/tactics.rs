@@ -22,8 +22,10 @@ use crate::team::PLAYERS_PER_TEAM;
 /// levels (`levels: "own"` with their `steps`) or their choices, whose level or choice the
 /// tactics store as settings, and gives width and passing directness five levels; a version 3
 /// file takes them from a copy compiled into the build
-/// ([`crate::data::convert::tactics_v3_to_v4`]).
-pub const TACTICS_VERSION: u32 = 4;
+/// ([`crate::data::convert::tactics_v3_to_v4`]). Version 5 names the tempo levels by speed,
+/// very fast to very slow, with the same values; a version 4 file takes the names
+/// ([`crate::data::convert::tactics_v4_to_v5`]).
+pub const TACTICS_VERSION: u32 = 5;
 
 /// The six team instructions, in the order a [`crate::tactics::Tactics`] stores their levels.
 pub const INSTRUCTIONS: [&str; 6] = [

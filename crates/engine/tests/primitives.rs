@@ -87,13 +87,7 @@ fn the_shipped_primitives_are_complete() {
     let tempo = t.primitives.iter().find(|p| p.name == "tempo").unwrap();
     assert_eq!(
         tempo.level_names(t),
-        [
-            "very_direct",
-            "direct",
-            "balanced",
-            "patient",
-            "very_patient"
-        ]
+        ["very_fast", "fast", "normal", "slow", "very_slow"]
     );
     assert_eq!(tempo.signature[0].stat, "passes_per_possession");
     assert_eq!(tempo.signature[0].direction, Direction::Up);
@@ -528,6 +522,11 @@ fn no_engine_code_names_a_style() {
             "direct",
             "the direct free kick's key in the rule pack",
         ),
+        (
+            "data/convert.rs",
+            "direct",
+            "a version 4 tempo level name that the converter renames",
+        ),
     ];
     let mut files = Vec::new();
     rust_files(&src(), &mut files);
@@ -555,7 +554,7 @@ fn no_engine_code_names_a_style() {
 #[test]
 fn no_decision_site_reads_an_instruction_by_name() {
     let names = tactic_names();
-    assert!(names.contains(&"patient".to_string()));
+    assert!(names.contains(&"slow".to_string()));
     let mut found = Vec::new();
     for path in decision_sites() {
         for f in decision_site_findings(&non_test_source(&path), &names) {
@@ -564,12 +563,12 @@ fn no_decision_site_reads_an_instruction_by_name() {
     }
     assert!(found.is_empty(), "{found:?}");
     let planted = format!(
-        "{}\nfn planted(level: &str) -> bool {{ level == \"patient\" }}\n",
+        "{}\nfn planted(level: &str) -> bool {{ level == \"slow\" }}\n",
         non_test_source(&src().join("decision.rs"))
     );
     assert_eq!(
         decision_site_findings(&planted, &names),
-        ["literal \"patient\""]
+        ["literal \"slow\""]
     );
 }
 

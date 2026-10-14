@@ -435,7 +435,7 @@ To fit one level to real teams, read the real-team table and search the level's 
 
 ```bash
 target/release/engine-cli --content-dir content signatures
-target/release/engine-cli --content-dir content primitives fit --primitive tempo --level patient --matches 200 --out runs/tempo-patient.json
+target/release/engine-cli --content-dir content primitives fit --primitive tempo --level slow --matches 200 --out runs/tempo-slow.json
 ```
 
 The fit aims at a ratio, not at the real value itself: the ratio of the level's quintile median to the middle median in `signatures.json`, against the ratio of the engine's level to its default level. The engine plays more passes than real teams, so the absolute values differ; the result names both, and the gap belongs to the tuning of pass volume. Copy the fitted `search.value` into the level in `tactics.json` and the record into the primitive's `fits`; the load refuses a fit record whose values differ from the level's.

@@ -494,7 +494,7 @@ fn a_strong_trait_against_its_instruction_records_the_override() {
         .carrier(Some(ME))
         .control_since(1_000)
         .with_trait(ME, "releases_ball_early", Some(TraitStrength::Strong))
-        .instruction(0, TEMPO, "patient")
+        .instruction(0, TEMPO, "slow")
         .mood(ME, -50.0)
         .build();
     let mut found = None;

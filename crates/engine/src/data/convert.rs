@@ -62,6 +62,7 @@ pub const TEAM_V2: u32 = 2;
 pub const TACTICS_V1: u32 = 1;
 pub const TACTICS_V2: u32 = 2;
 pub const TACTICS_V3: u32 = 3;
+pub const TACTICS_V4: u32 = 4;
 /// The attribute file versions the converters read.
 pub const ATTRIBUTES_V1: u32 = 1;
 pub const ATTRIBUTES_V2: u32 = 2;
@@ -977,10 +978,7 @@ pub fn tactics_v3_to_v4(mut file: serde_json::Value) -> Result<serde_json::Value
     let obj = file
         .as_object_mut()
         .ok_or_else(|| "the file is not an object".to_string())?;
-    obj.insert(
-        "schema_version".into(),
-        serde_json::Value::from(crate::data::tactics::TACTICS_VERSION),
-    );
+    obj.insert("schema_version".into(), serde_json::Value::from(TACTICS_V4));
     let instructions = obj
         .get_mut("instructions")
         .and_then(|i| i.as_object_mut())
@@ -995,6 +993,77 @@ pub fn tactics_v3_to_v4(mut file: serde_json::Value) -> Result<serde_json::Value
     for entry in frozen.primitives {
         if !primitives.iter().any(|p| p["name"] == entry["name"]) {
             primitives.push(entry);
+        }
+    }
+    Ok(file)
+}
+
+/// The tempo level names of version 5, by the names earlier files gave the same levels: the
+/// version 3 and 4 names (very direct to very patient) and the version 1 and 2 names (slower,
+/// normal, faster). A name not in the list is kept.
+const TEMPO_NAMES_V5: [(&str, &str); 8] = [
+    ("very_direct", "very_fast"),
+    ("direct", "fast"),
+    ("balanced", "normal"),
+    ("patient", "slow"),
+    ("very_patient", "very_slow"),
+    ("faster", "fast"),
+    ("normal", "normal"),
+    ("slower", "slow"),
+];
+
+fn tempo_name_v5(name: &mut serde_json::Value) {
+    if let Some(new) = name
+        .as_str()
+        .and_then(|old| TEMPO_NAMES_V5.iter().find(|(o, _)| *o == old))
+        .map(|(_, new)| *new)
+    {
+        *name = serde_json::Value::from(new);
+    }
+}
+
+/// A version 4 tactics file, as JSON, in the version 5 shape: the tempo levels take their
+/// version 5 names (very fast to very slow) in the tempo block, its default, and the default
+/// and fit records of the primitive whose levels are the tempo block. Values and order do not
+/// change. The caller parses and checks the result as a current file.
+pub fn tactics_v4_to_v5(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert(
+        "schema_version".into(),
+        serde_json::Value::from(crate::data::tactics::TACTICS_VERSION),
+    );
+    let tempo = obj
+        .get_mut("instructions")
+        .and_then(|i| i.get_mut("tempo"))
+        .and_then(|t| t.as_object_mut())
+        .ok_or_else(|| "instructions.tempo is missing".to_string())?;
+    if let Some(default) = tempo.get_mut("default") {
+        tempo_name_v5(default);
+    }
+    if let Some(levels) = tempo.get_mut("levels").and_then(|l| l.as_array_mut()) {
+        for level in levels {
+            if let Some(name) = level.get_mut("name") {
+                tempo_name_v5(name);
+            }
+        }
+    }
+    if let Some(primitives) = obj.get_mut("primitives").and_then(|p| p.as_array_mut()) {
+        for entry in primitives
+            .iter_mut()
+            .filter(|p| p["levels"] == "instructions.tempo")
+        {
+            if let Some(default) = entry.get_mut("default") {
+                tempo_name_v5(default);
+            }
+            if let Some(fits) = entry.get_mut("fits").and_then(|f| f.as_array_mut()) {
+                for fit in fits {
+                    if let Some(level) = fit.get_mut("level") {
+                        tempo_name_v5(level);
+                    }
+                }
+            }
         }
     }
     Ok(file)

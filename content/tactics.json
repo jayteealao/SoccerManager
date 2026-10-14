@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "formations": [
     {
       "name": "4-4-2",
@@ -189,13 +189,13 @@
       ]
     },
     "tempo": {
-      "default": "balanced",
+      "default": "normal",
       "levels": [
-        { "name": "very_direct", "value": -2.0 },
-        { "name": "direct", "value": -0.5 },
-        { "name": "balanced", "value": 0.0 },
-        { "name": "patient", "value": 0.125 },
-        { "name": "very_patient", "value": 0.203125 }
+        { "name": "very_fast", "value": -2.0 },
+        { "name": "fast", "value": -0.5 },
+        { "name": "normal", "value": 0.0 },
+        { "name": "slow", "value": 0.125 },
+        { "name": "very_slow", "value": 0.203125 }
       ]
     },
     "line_height": {
@@ -404,7 +404,7 @@
       "name": "tempo",
       "kind": "graded",
       "levels": "instructions.tempo",
-      "default": "balanced",
+      "default": "normal",
       "inputs": [
         {
           "input": "patience",
@@ -433,7 +433,7 @@
       },
       "fits": [
         {
-          "level": "very_direct",
+          "level": "very_fast",
           "values": {
             "patience": -2.0
           },
@@ -444,7 +444,7 @@
           "seed": 9
         },
         {
-          "level": "direct",
+          "level": "fast",
           "values": {
             "patience": -0.5
           },
@@ -455,7 +455,7 @@
           "seed": 9
         },
         {
-          "level": "patient",
+          "level": "slow",
           "values": {
             "patience": 0.125
           },
@@ -466,7 +466,7 @@
           "seed": 9
         },
         {
-          "level": "very_patient",
+          "level": "very_slow",
           "values": {
             "patience": 0.203125
           },

@@ -615,6 +615,67 @@ fn a_version_3_tactics_file_converts_to_the_shipped_version_4_file() {
     assert_eq!(converted.value.roles, shipped.roles);
 }
 
+/// A version 4 tactics file (tempo levels named very direct to very patient) converts to the
+/// shipped version 5 file: the tempo levels, the default and the tempo primitive's default and
+/// fit records take the names very fast to very slow, with the same values and order; passing
+/// directness keeps its names.
+#[test]
+fn a_version_4_tactics_file_converts_to_the_shipped_version_5_file() {
+    let path = common::content_dir().path(engine::data::TACTICS_FILE);
+    let mut v4: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    v4["schema_version"] = 4.into();
+    let old = [
+        "very_direct",
+        "direct",
+        "balanced",
+        "patient",
+        "very_patient",
+    ];
+    v4["instructions"]["tempo"]["default"] = "balanced".into();
+    for (level, name) in v4["instructions"]["tempo"]["levels"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .zip(old)
+    {
+        level["name"] = name.into();
+    }
+    let tempo = v4["primitives"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|p| p["name"] == "tempo")
+        .unwrap();
+    tempo["default"] = "balanced".into();
+    for fit in tempo["fits"].as_array_mut().unwrap() {
+        let renamed = match fit["level"].as_str().unwrap() {
+            "very_fast" => "very_direct",
+            "fast" => "direct",
+            "slow" => "patient",
+            "very_slow" => "very_patient",
+            other => panic!("unexpected tempo fit level {other}"),
+        };
+        fit["level"] = renamed.into();
+    }
+    let converted =
+        engine::data::load_tactics_bytes(&serde_json::to_vec(&v4).unwrap(), "tactics-v4.json")
+            .unwrap();
+    assert_eq!(converted.converted_from, Some(4));
+    let shipped = common::content().tactics;
+    assert_eq!(converted.value.instructions, shipped.instructions);
+    assert_eq!(converted.value.mentalities, shipped.mentalities);
+    assert_eq!(converted.value.primitives, shipped.primitives);
+    assert_eq!(converted.value.roles, shipped.roles);
+    let names: Vec<&str> = shipped
+        .instructions
+        .tempo
+        .levels
+        .iter()
+        .map(|l| l.name.as_str())
+        .collect();
+    assert_eq!(names, ["very_fast", "fast", "normal", "slow", "very_slow"]);
+}
+
 #[test]
 fn a_version_1_tactics_file_converts_to_the_shipped_version_3_file() {
     let v1 = fixture_bytes("tactics-v1.json");

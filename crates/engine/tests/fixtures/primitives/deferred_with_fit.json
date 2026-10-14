@@ -4,7 +4,7 @@
     "name": "planted",
     "kind": "graded",
     "levels": "instructions.tempo",
-    "default": "balanced",
+    "default": "normal",
     "inputs": [
       {
         "input": "patience",
@@ -27,7 +27,7 @@
     },
     "fits": [
       {
-        "level": "patient",
+        "level": "slow",
         "values": {
           "patience": 0.125
         },
