@@ -622,14 +622,9 @@ impl JobProbe {
 }
 
 impl crate::sim::Simulation {
-    /// `true` when an active opponent of player `c` stands within the pressing distance.
+    /// `true` when player `c` is pressed ([`crate::pressure::pressed`]).
     fn probe_pressed(&self, c: usize) -> bool {
-        let me = &self.players[c];
-        self.players.iter().any(|p| {
-            p.team != me.team
-                && p.active()
-                && (p.pos - me.pos).length() < crate::contract::PRESSED_M
-        })
+        crate::pressure::pressed(&self.players, &self.players[c])
     }
 
     /// Count site: the carrier `c` decided `choice` with `plan`.

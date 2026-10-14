@@ -281,13 +281,142 @@ fn a_tackle_happens_only_when_the_decision_chooses_it() {
     assert_eq!(sim.streams.draws(), draws);
 }
 
-/// The pressure mechanism's touch: a slow ball near a home receiver. Receiving his side's
-/// pass free, he reaches it; under pressure (an away player within the pressed distance) he
-/// reaches it only within the pressed share of his reach, so the ball runs on; on the other
-/// side's pass he defends it and keeps his full reach, since the mechanism reads only the
+/// Everyone far from the centre and still; home player 9 at the centre facing the goal he
+/// attacks.
+fn clear(sim: &mut Simulation) {
+    let ax = sim.teams[0].attack_x;
+    for i in 0..2 * PLAYERS_PER_TEAM {
+        sim.players[i].pos = DVec2::new(-40.0 + i as f64 * 0.1, 30.0);
+        sim.players[i].vel = DVec2::ZERO;
+    }
+    sim.players[9].pos = DVec2::ZERO;
+    sim.players[9].facing = DVec2::new(ax, 0.0);
+}
+
+/// The pressure model's pass penalty in play: the sideways share of home carrier 9's pass to
+/// team-mate 10, `length` metres straight ahead, at the widest aim, with the away players
+/// `opps` (each at a place and a velocity, both written for the side attacking +x) and
+/// everyone else far away; the pass and pressure stage shares set to `passing` and
+/// `composure` when given.
+fn pass_noise(
+    length: f64,
+    opps: &[(DVec2, DVec2)],
+    passing: Option<f64>,
+    composure: Option<f64>,
+) -> f64 {
+    use crate::contract::Stage;
+    let mut sim = scene();
+    clear(&mut sim);
+    let ax = sim.teams[0].attack_x;
+    sim.players[10].pos = DVec2::new(ax * length, 0.0);
+    for (k, &(at, vel)) in opps.iter().enumerate() {
+        let o = PLAYERS_PER_TEAM + 2 + k;
+        sim.players[o].pos = DVec2::new(at.x * ax, at.y);
+        sim.players[o].vel = DVec2::new(vel.x * ax, vel.y);
+    }
+    if let Some(s) = passing {
+        sim.stages[9].share[Stage::PASS_EXECUTE.index()] = s;
+    }
+    if let Some(s) = composure {
+        sim.stages[9].share[Stage::PASS_PRESSURE.index()] = s;
+    }
+    let kick = crate::decision::DecisionV1.pass_kick(&sim.view(), 9, 10, 1.0);
+    let crate::decision::Kick::Pass { dir, .. } = kick else {
+        panic!("a pass");
+    };
+    DVec2::new(ax, 0.0).perp_dot(dir).abs()
+}
+
+/// Each factor of the pressure model moves a pass's penalty its way (every scene stays below
+/// the pressed threshold, so only the graded penalty differs): a nearer opponent, a second
+/// one, one closing on the passer, one on his blind side, a longer pass and lower composure
+/// each widen the pass; with no opponent within the far distance the pass is as free.
+#[test]
+fn each_pressure_factor_moves_a_pass_its_way() {
+    let still = DVec2::ZERO;
+    let front = |m: f64| (DVec2::new(m, 0.0), still);
+    let free = pass_noise(12.0, &[], None, None);
+    assert!(free > 0.0);
+    assert_eq!(
+        pass_noise(12.0, &[front(crate::pressure::FAR_M + 0.5)], None, None),
+        free,
+        "beyond the far distance"
+    );
+    let at_4 = pass_noise(12.0, &[front(4.0)], None, None);
+    let at_3_5 = pass_noise(12.0, &[front(3.5)], None, None);
+    assert!(at_4 > free && at_3_5 > at_4, "closer");
+    let two = pass_noise(
+        12.0,
+        &[
+            (DVec2::new(4.0, 0.5), still),
+            (DVec2::new(4.0, -0.5), still),
+        ],
+        None,
+        None,
+    );
+    assert!(two > at_4, "more");
+    let closing = pass_noise(
+        12.0,
+        &[(DVec2::new(3.5, 0.0), DVec2::new(-4.0, 0.0))],
+        None,
+        None,
+    );
+    assert!(closing > at_3_5, "faster");
+    let behind = pass_noise(12.0, &[front(-3.5)], None, None);
+    assert!(behind > at_3_5, "blind side");
+    let ratio = |length: f64| {
+        pass_noise(length, &[front(3.5)], None, None) / pass_noise(length, &[], None, None)
+    };
+    assert!(ratio(24.0) > ratio(8.0), "longer pass");
+    let composed = |s: f64| {
+        pass_noise(12.0, &[front(3.5)], None, Some(s)) / pass_noise(12.0, &[], None, Some(s))
+    };
+    assert!(composed(0.8) < composed(0.3), "higher composure");
+    let passer = |s: f64| {
+        pass_noise(12.0, &[front(3.5)], Some(s), None) / pass_noise(12.0, &[], Some(s), None)
+    };
+    assert!(passer(0.8) < passer(0.3), "better passing");
+}
+
+/// The pressure model's reception penalty in play: a faster ball, a receiver facing his own
+/// goal and a lower reception stage (first touch leading) each raise it; no opponent near
+/// leaves none.
+#[test]
+fn each_reception_factor_moves_the_touch_its_way() {
+    use crate::contract::Stage;
+    let penalty = |speed: f64, back: bool, first_touch: Option<f64>, opp: f64| {
+        let mut sim = scene();
+        clear(&mut sim);
+        let ax = sim.teams[0].attack_x;
+        if back {
+            sim.players[9].facing = DVec2::new(-ax, 0.0);
+        }
+        sim.players[PLAYERS_PER_TEAM + 9].pos = DVec2::new(0.0, opp);
+        if let Some(s) = first_touch {
+            sim.stages[9].share[Stage::RECEIVE_EXECUTE.index()] = s;
+        }
+        crate::possession::reception_penalty(&sim.view(), &sim.players[9], speed)
+    };
+    assert_eq!(penalty(0.5, false, None, crate::pressure::FAR_M + 1.0), 0.0);
+    let base = penalty(0.3, false, None, 2.0);
+    assert!(base > 0.0);
+    assert!(penalty(0.9, false, None, 2.0) > base, "faster ball");
+    assert!(penalty(0.3, true, None, 2.0) > base, "facing back");
+    assert!(
+        penalty(0.3, false, Some(0.8), 2.0) < penalty(0.3, false, Some(0.3), 2.0),
+        "better first touch"
+    );
+    assert!(penalty(0.3, false, None, 1.0) > base, "closer");
+}
+
+/// The pressure model's touch: a slow ball near a home receiver. Receiving his side's pass
+/// free, he reaches it; pressed hard enough (an away player 2 m away, the scale raised so the
+/// cut passes the ball's distance) he reaches it only within the cut share of his reach, so
+/// the ball runs on; with the opponent beyond the far distance he reaches it; on the other
+/// side's pass he defends it and keeps his full reach, since the model reads only the
 /// receiving side.
 #[test]
-fn a_pressed_receiver_reaches_his_pass_only_within_the_pressed_share() {
+fn a_pressed_receiver_reaches_his_pass_only_within_the_cut_share() {
     use crate::modules::PossessionModule;
     let r = 9;
     let d = PLAYERS_PER_TEAM + 9;
@@ -295,10 +424,7 @@ fn a_pressed_receiver_reaches_his_pass_only_within_the_pressed_share() {
         let mut sim = scene();
         sim.config.tuning.decision.touch_under_pressure = touch;
         let reach = sim.config.tuning.reach_radius * sim.players[r].derived.knobs.intercept;
-        for i in 0..2 * PLAYERS_PER_TEAM {
-            sim.players[i].pos = DVec2::new(-40.0 + i as f64 * 0.1, 30.0);
-        }
-        sim.players[r].pos = DVec2::new(0.0, 0.0);
+        clear(&mut sim);
         sim.players[d].pos = DVec2::new(0.0, gap);
         sim.ball.pos = DVec2::new(0.8 * reach, 0.0).extend(0.0);
         sim.ball.vel = DVec2::new(1.0, 0.0).extend(0.0);
@@ -310,15 +436,15 @@ fn a_pressed_receiver_reaches_his_pass_only_within_the_pressed_share() {
             .and_then(|l| l.best)
             .map(|(_, i)| i)
     };
-    assert_eq!(place(0.0, 2.0, 0), Some(r), "free of the mechanism");
+    assert_eq!(place(0.0, 2.0, 0), Some(r), "free of the model");
     assert_eq!(
-        place(0.5, 6.0, 0),
+        place(4.0, crate::pressure::FAR_M + 1.0, 0),
         Some(r),
-        "no opponent within the pressed distance"
+        "no opponent within the far distance"
     );
-    assert_eq!(place(0.5, 2.0, 0), None, "pressed: the ball runs on");
+    assert_eq!(place(4.0, 2.0, 0), None, "pressed: the ball runs on");
     assert_eq!(
-        place(0.5, 2.0, 1),
+        place(4.0, 2.0, 1),
         Some(r),
         "defending the other side's pass"
     );

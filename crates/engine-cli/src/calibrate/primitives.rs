@@ -37,7 +37,7 @@ use super::fixtures::{self, Leagues};
 
 /// The statistics the harness measures, in value order: the signature statistics, then the
 /// side's possessions and shots a match, which every step reports beside them.
-pub const STATS: [&str; 65] = [
+pub const STATS: [&str; 75] = [
     "passes_per_possession",
     "recycle_share",
     "turnovers_per_possession",
@@ -97,6 +97,16 @@ pub const STATS: [&str; 65] = [
     "pressed_pass_completion",
     "free_touch_loss",
     "pressed_touch_loss",
+    "pass_completion_0_1m",
+    "pass_completion_1_2m",
+    "pass_completion_2_3m",
+    "pass_completion_3_5m",
+    "pass_completion_5m_plus",
+    "touch_loss_0_1m",
+    "touch_loss_1_2m",
+    "touch_loss_2_3m",
+    "touch_loss_3_5m",
+    "touch_loss_5m_plus",
     "crosses",
     "entries",
     "final_third_possessions",
@@ -215,6 +225,16 @@ pub fn side_stats(m: &MatchMeasures, sinks: &Sinks<'_>, team: usize) -> Stats {
         (f(s.pressure_completed[1]), f(s.pressure_passes[1])),
         (f(s.touches_lost[0]), f(s.touches[0])),
         (f(s.touches_lost[1]), f(s.touches[1])),
+        (f(s.band_completed[0]), f(s.band_passes[0])),
+        (f(s.band_completed[1]), f(s.band_passes[1])),
+        (f(s.band_completed[2]), f(s.band_passes[2])),
+        (f(s.band_completed[3]), f(s.band_passes[3])),
+        (f(s.band_completed[4]), f(s.band_passes[4])),
+        (f(s.band_lost[0]), f(s.band_touches[0])),
+        (f(s.band_lost[1]), f(s.band_touches[1])),
+        (f(s.band_lost[2]), f(s.band_touches[2])),
+        (f(s.band_lost[3]), f(s.band_touches[3])),
+        (f(s.band_lost[4]), f(s.band_touches[4])),
         (f(s.crosses), 1.0),
         (entries, 1.0),
         (f(s.final_third_possessions), 1.0),

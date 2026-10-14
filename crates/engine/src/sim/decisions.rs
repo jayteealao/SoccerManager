@@ -256,11 +256,7 @@ impl Simulation {
         if carrier.facing.x * attack_x <= crate::decision::FACING_BACK_COS {
             return;
         }
-        let at = carrier.pos;
-        let pressed = self.players.iter().any(|p| {
-            p.team == def && p.active() && (p.pos - at).length() < crate::contract::PRESSED_M
-        });
-        if pressed {
+        if crate::pressure::pressed(&self.players, carrier) {
             return;
         }
         self.trap_at[def] = Some(self.tick);
@@ -270,18 +266,17 @@ impl Simulation {
         }
     }
 
-    /// Count site: the players of side `def` within the pressed distance of carrier `c` press
-    /// him ([`crate::measures::MatchMeasures::pressure`]).
+    /// Count site: the players of side `def` whose own pressure on carrier `c` passes the
+    /// pressure model's threshold press him ([`crate::pressure::presses`],
+    /// [`crate::measures::MatchMeasures::pressure`]).
     #[cfg(feature = "measures")]
     fn measure_pressure(&mut self, def: usize, c: usize) {
-        let at = self.players[c].pos;
+        let carrier = &self.players[c];
         let near = self
             .players
             .iter()
             .enumerate()
-            .filter(|(_, p)| {
-                p.team == def && p.active() && (p.pos - at).length() < crate::contract::PRESSED_M
-            })
+            .filter(|(_, p)| p.team == def && crate::pressure::presses(carrier, p))
             .fold(0u32, |bits, (i, _)| bits | (1 << i));
         let tick = self.tick;
         if let Some(m) = self.measures.as_deref_mut() {

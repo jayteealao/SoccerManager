@@ -28,6 +28,7 @@ pub mod pitch;
 pub mod player;
 pub mod plugin;
 pub mod possession;
+pub mod pressure;
 pub mod rating;
 pub mod record;
 pub mod rng;

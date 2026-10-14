@@ -5,8 +5,9 @@
 //! - an open-play loss is the end of a side's possession by the other side's touch, with no
 //!   dead ball between (a short regain is no loss); its time is the other side's first touch;
 //! - a regain is the start of the side's next possession in open play, at its first touch;
-//! - a pressure is an opponent's first entry within [`crate::contract::PRESSED_M`] of the
-//!   carrier in that carrier's spell on the ball;
+//! - a pressure is an opponent's first press of the carrier in that carrier's spell on the
+//!   ball: his own share of the carrier's pressure intensity passes the pressure model's
+//!   threshold ([`crate::pressure::presses`]);
 //! - a fast break is a possession that starts with a regain at or behind
 //!   [`crate::decision::COUNTER_START_M`] and reaches the attacked final third within
 //!   [`crate::decision::COUNTER_WINDOW_S`];

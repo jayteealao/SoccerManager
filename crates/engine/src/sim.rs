@@ -1817,11 +1817,13 @@ impl Simulation {
                         / pitch.length();
                     let outfield = c != self.keeper(team);
                     let pressed = outfield && crate::decision::pressed(&self.view(), c);
+                    let band =
+                        crate::pressure::band(crate::decision::nearest_opponent_m(&self.view(), c));
                     if let Some(m) = self.measures.as_deref_mut() {
                         m.kicked_pass_lofted(c, team, loft);
                         m.pass_start(team, share);
                         if outfield {
-                            m.pass_pressed(team, pressed);
+                            m.pass_pressed(team, pressed, band);
                         }
                     }
                 }

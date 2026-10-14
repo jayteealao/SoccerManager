@@ -225,8 +225,9 @@ struct BallAt {
 /// within `keeper_reach` times his claim factor (and his claim range for a ball above head
 /// height in his own penalty area). The ball must be under `reach_height` times his aerial
 /// factor, and only a keeper reaches a ball faster than `control_speed` times his receive
-/// factor. An outfield player receiving his side's pass in flight under pressure reaches it
-/// only within `1 - decision.touch_under_pressure` of his reach.
+/// factor. An outfield player receiving his side's pass in flight reaches it only within
+/// `1 - decision.touch_under_pressure` times his pressure penalty of his reach
+/// ([`reception_penalty`]).
 #[inline]
 fn reach(
     view: &MatchView<'_>,
@@ -257,25 +258,35 @@ fn reach(
     if d >= reach {
         return None;
     }
-    // The pressure mechanism: an outfield receiver of his side's pass under pressure reaches
-    // the ball only within the pressed share of his reach.
+    // The pressure model: an outfield receiver of his side's pass reaches the ball only within
+    // `1 - touch_under_pressure x penalty` of his reach, so a pressed first touch more often
+    // lets the ball run on.
     let touch = t.decision.touch_under_pressure;
     if !keeper
         && touch > 0.0
         && view.pass_in_flight() == Some(p.team)
-        && d >= reach * (1.0 - touch)
-        && under_pressure(view, p)
+        && d >= reach * (1.0 - touch).max(0.0)
     {
-        return None;
+        let cut = touch * reception_penalty(view, p, ball.speed / (t.control_speed * k.receive));
+        if d >= reach * (1.0 - cut) {
+            return None;
+        }
     }
     Some(d)
 }
 
-/// `true` when an active opponent of player `p` stands within the pressed distance.
-fn under_pressure(view: &MatchView<'_>, p: &crate::player::Player) -> bool {
-    view.players().iter().any(|o| {
-        o.team != p.team && o.active() && (o.pos - p.pos).length() < crate::contract::PRESSED_M
-    })
+/// The pressure model's penalty of player `p`'s reception of a ball at `speed_share` of the
+/// fastest he controls: his intensity x the reception's difficulty (the ball's speed, facing
+/// his own goal) x (1 - his reception stage share, first touch leading).
+pub fn reception_penalty(view: &MatchView<'_>, p: &crate::player::Player, speed_share: f64) -> f64 {
+    let intensity = crate::pressure::intensity(view.players(), p);
+    if intensity <= 0.0 {
+        return 0.0;
+    }
+    let facing_back = (1.0 - p.facing.x * view.attack_x(p.team)) / 2.0;
+    let difficulty = crate::pressure::reception_difficulty(speed_share, facing_back);
+    let resistance = view.skills(p.id).share(Stage::RECEIVE_EXECUTE);
+    crate::pressure::penalty(intensity, difficulty, resistance)
 }
 
 /// The nearest active player within reach of a loose ball (see [`reach`]). A ball faster

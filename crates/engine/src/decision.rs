@@ -391,12 +391,10 @@ impl PassKind {
     }
 }
 
-/// `true` when an active opponent of player `c` stands within the pressing distance.
+/// `true` when player `c` is pressed: his pressure intensity passes the one threshold
+/// ([`crate::pressure::pressed`]).
 pub(crate) fn pressed(view: &MatchView<'_>, c: usize) -> bool {
-    let me = view.player(c);
-    view.players()
-        .iter()
-        .any(|p| p.team != me.team && p.active() && (p.pos - me.pos).length() < contract::PRESSED_M)
+    crate::pressure::pressed(view.players(), view.player(c))
 }
 
 /// The distance in metres from player `c` to the nearest active opponent; infinite with none.
@@ -941,6 +939,10 @@ impl DecisionModule for DecisionV1 {
                 space_ahead = space_ahead.min(dist);
             }
         }
+        // The carrier's option scores (the carry window, the take-on, the loss terms and the
+        // clear in his own third) read whether his nearest opponent stands within the pressed
+        // distance, the choice rule that predates the pressure model; how well he then carries
+        // out the pass reads the model's graded intensity ([`crate::pressure`]).
         let pressed = nearest_opp < contract::PRESSED_M;
         let judgement = if pressed {
             stages.pressed_share(Stage::PASS_CHOOSE, Stage::PASS_PRESSURE)
@@ -1372,8 +1374,10 @@ impl DecisionModule for DecisionV1 {
     /// A pass's aim noise falls as its execution share rises: the execute stage of its kind
     /// (passing, technique for a chip, crossing, a keeper's throwing or kicking), with the
     /// pressure stage when an opponent is close, and a chip the body cannot pull off loses
-    /// its gate penalty. A pressed outfield passer's aim noise grows by the share
-    /// `decision.pass_under_pressure` (the pressure mechanism).
+    /// its gate penalty. The pressure model ([`crate::pressure`]): an outfield passer's aim
+    /// noise grows by `decision.pass_under_pressure` times his penalty, his pressure
+    /// intensity x the pass's difficulty (length, loft) x (1 - his resistance, the mean of
+    /// the pass's execute and pressure stage shares).
     fn pass_kick(&self, view: &MatchView<'_>, c: usize, j: usize, aim: f64) -> Kick {
         let t = view.tuning();
         let carrier = view.player(c);
@@ -1398,11 +1402,17 @@ impl DecisionModule for DecisionV1 {
         };
         let skill = execution(view, c, execute, pressure, under, penalty, foot);
         let noise = t.aim_noise * (1.5 - skill);
-        // The pressure mechanism: a pressed outfield passer's aim noise grows.
-        let noise = if under {
-            noise * (1.0 + t.decision.pass_under_pressure)
-        } else {
-            noise
+        // The pressure model: an outfield passer's aim noise grows with his penalty.
+        let noise = match pressure {
+            Some(ps) => {
+                let intensity = crate::pressure::intensity(view.players(), carrier);
+                let stages = view.skills(c);
+                let resistance = (stages.share(execute) + stages.share(ps)) / 2.0;
+                let difficulty = crate::pressure::pass_difficulty(d, kind != PassKind::Pass);
+                let penalty = crate::pressure::penalty(intensity, difficulty, resistance);
+                noise * (1.0 + t.decision.pass_under_pressure * penalty)
+            }
+            None => noise,
         };
         let dir = rotate(line, map_range(-noise, noise, aim));
         let lofted = if d > 25.0 { 3.0 + d * 0.08 } else { 0.0 };

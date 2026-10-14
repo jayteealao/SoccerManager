@@ -632,8 +632,9 @@ impl Simulation {
             return;
         };
         let pressed = crate::decision::pressed(&self.view(), i);
+        let band = crate::pressure::band(crate::decision::nearest_opponent_m(&self.view(), i));
         if let Some(m) = self.measures.as_deref_mut() {
-            m.received(team, pressed);
+            m.received(team, pressed, band);
         }
     }
 
