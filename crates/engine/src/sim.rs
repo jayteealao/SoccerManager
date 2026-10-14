@@ -10,6 +10,8 @@ mod hooks;
 mod manager;
 pub mod mood;
 mod movement;
+#[cfg(test)]
+mod oop_tests;
 mod overrides;
 mod pace;
 #[cfg(test)]
@@ -694,6 +696,18 @@ pub struct Simulation {
     /// `possession_phase`, so a restart opens no window and the snapshot never needs them.
     pub(crate) regained_at: [Option<u32>; 2],
     pub(crate) lost_at: [Option<u32>; 2],
+    /// Per pressing side, the tick each press trigger of the other side last fired in open
+    /// play, in [`crate::decision::TRIGGERS`] order: a back pass, a poor touch, a receiver
+    /// facing his own goal, a pass to a full-back or into a wide channel. Each fires whatever
+    /// the plan; a side's press reads only the triggers its plan switches on. Every dead ball
+    /// clears them, like `regained_at`, so the snapshot never needs them.
+    pub(crate) trigger_at: [[Option<u32>; 4]; 2],
+    /// Per side, the tick its offside trap last started: an opposing carrier unpressed and
+    /// facing forward while the side's plan sets the trap. A dead ball clears it.
+    pub(crate) trap_at: [Option<u32>; 2],
+    /// The players (roster bits) who had the pass in flight within reach while it was too fast
+    /// to control: a gain by one of them is a poor touch. Each kick and each dead ball clear it.
+    pub(crate) heavy_mask: u32,
     /// Each player's followed ball point, which his anchor's ball shift reads: in open play
     /// it eases toward the ball, later the farther he is from it (the far-player delay of
     /// the slide); every dead ball and each kick-off placement set it to the ball, so the
@@ -905,6 +919,9 @@ impl Simulation {
             possession_phase: None,
             regained_at: [None; 2],
             lost_at: [None; 2],
+            trigger_at: [[None; 4]; 2],
+            trap_at: [None; 2],
+            heavy_mask: 0,
             slide_ball: [DVec2::ZERO; crate::modules::ROSTER],
             restart_taker: None,
             clearers_tried: 0,
@@ -1332,10 +1349,27 @@ impl Simulation {
         Some(f64::from(self.tick.saturating_sub(at)) * self.config.tuning.dt)
     }
 
+    /// Seconds since press trigger `kind` of the side without the ball fired, for pressing side
+    /// `team`, while the other side has the ball; `None` otherwise.
+    pub fn since_trigger_s(&self, team: usize, kind: usize) -> Option<f64> {
+        let at = self.trigger_at[team][kind].filter(|_| self.possession_phase == Some(1 - team))?;
+        Some(f64::from(self.tick.saturating_sub(at)) * self.config.tuning.dt)
+    }
+
+    /// Seconds since side `team`'s offside trap started, while the other side has the ball;
+    /// `None` otherwise.
+    pub fn since_trap_s(&self, team: usize) -> Option<f64> {
+        let at = self.trap_at[team].filter(|_| self.possession_phase == Some(1 - team))?;
+        Some(f64::from(self.tick.saturating_sub(at)) * self.config.tuning.dt)
+    }
+
     /// Clears both sides' transition ticks: a dead ball ends every transition window.
     pub(crate) fn clear_transitions(&mut self) {
         self.regained_at = [None; 2];
         self.lost_at = [None; 2];
+        self.trigger_at = [[None; 4]; 2];
+        self.trap_at = [None; 2];
+        self.heavy_mask = 0;
     }
 
     /// The team that touched the ball last.
@@ -1680,6 +1714,7 @@ impl Simulation {
         let (dir, speed, loft) = kick.flight();
         let mut shooter = None;
         self.end_shot();
+        self.heavy_mask = 0;
         self.clearers_tried = 0;
         // A kick starts a new flight: each keeper meets its loose ball afresh.
         self.chase_seen = 0;
@@ -1763,13 +1798,27 @@ impl Simulation {
                 self.summary.passes[team] += 1;
                 self.tally(c, tally::Count::Pass);
                 self.pass_in_flight = Some(team);
+                // A pass toward the passer's own goal in open play is the back-pass trigger
+                // of the other side's press.
+                if self.possession_phase == Some(team)
+                    && dir.x * self.teams[team].attack_x < -crate::decision::BACK_PASS_COS
+                {
+                    self.fire_trigger(1 - team, crate::decision::TRIGGER_BACK_PASS);
+                }
                 #[cfg(feature = "sensitivity")]
                 if self.probe.is_some() {
                     self.probe_pass(c, team);
                 }
                 #[cfg(feature = "measures")]
-                if let Some(m) = self.measures.as_deref_mut() {
-                    m.kicked_pass_lofted(c, team, loft);
+                {
+                    let pitch = self.config.pitch();
+                    let share = (self.ball.xy().x * self.teams[team].attack_x
+                        + pitch.half_length())
+                        / pitch.length();
+                    if let Some(m) = self.measures.as_deref_mut() {
+                        m.kicked_pass_lofted(c, team, loft);
+                        m.pass_start(team, share);
+                    }
                 }
             }
             #[cfg(feature = "measures")]

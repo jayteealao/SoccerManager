@@ -36,7 +36,7 @@ pub struct Hook {
 }
 
 /// Every hook, in a fixed order.
-pub const HOOKS: [Hook; 36] = [
+pub const HOOKS: [Hook; 48] = [
     Hook {
         name: "pass.recycle",
         kind: HookKind::OptionWeight,
@@ -59,7 +59,7 @@ pub const HOOKS: [Hook; 36] = [
         name: "shape.block_depth",
         kind: HookKind::ShapeOffset,
         input: "block_depth",
-        site: "team.rs: every anchor out of possession moves up the pitch",
+        site: "team.rs: the back line's anchors out of possession move up the pitch",
     },
     Hook {
         name: "shape.width",
@@ -260,6 +260,86 @@ pub const HOOKS: [Hook; 36] = [
         input: "counter_press_s",
         site: "decision.rs: how many seconds after an open-play loss the counter-press window \
                stays open",
+    },
+    Hook {
+        name: "shape.engage_depth",
+        kind: HookKind::ShapeOffset,
+        input: "engage_depth_m",
+        site: "team.rs: the anchors out of possession in front of the back line move up the pitch",
+    },
+    Hook {
+        name: "press.engage",
+        kind: HookKind::Threshold,
+        input: "engage_line",
+        site: "decision.rs: a player presses the carrier only while the ball is within this \
+               share of the pitch length of the own goal line",
+    },
+    Hook {
+        name: "shape.defensive_width",
+        kind: HookKind::ShapeOffset,
+        input: "defensive_width",
+        site: "team.rs: a scale on every out-of-possession anchor's distance from the centre line",
+    },
+    Hook {
+        name: "press.force",
+        kind: HookKind::ShapeOffset,
+        input: "force",
+        site: "decision.rs: the presser's aim moves toward the near touchline (above 0) or the \
+               centre (below 0), beside the weaker-foot show",
+    },
+    Hook {
+        name: "line.offside_trap",
+        kind: HookKind::Trigger,
+        input: "offside_trap",
+        site: "sim.rs, decision.rs: an unpressed opposing carrier facing forward starts a short \
+               window in which the back line steps up together",
+    },
+    Hook {
+        name: "press.screen_short",
+        kind: HookKind::Trigger,
+        input: "screen_short",
+        site: "rules/restart.rs: at an opponent goal kick the front players stand on the keeper's \
+               short options outside the area",
+    },
+    Hook {
+        name: "tackle.decide",
+        kind: HookKind::Threshold,
+        input: "tackle_willingness",
+        site: "decision.rs: a defender in reach tackles when the win chance, less the danger-weighted \
+               foul cost, plus this willingness is above 0",
+    },
+    Hook {
+        name: "tackle.foul_risk",
+        kind: HookKind::OptionWeight,
+        input: "tackle_risk",
+        site: "decision.rs: a shift of the log-odds of a tackle's foul chance",
+    },
+    Hook {
+        name: "press.trigger.back_pass",
+        kind: HookKind::Trigger,
+        input: "trigger_back_pass",
+        site: "sim.rs: an opponent pass toward its own goal opens the press-trigger window",
+    },
+    Hook {
+        name: "press.trigger.poor_touch",
+        kind: HookKind::Trigger,
+        input: "trigger_poor_touch",
+        site: "sim.rs: an opponent gain after the ball came too fast to control opens the \
+               press-trigger window",
+    },
+    Hook {
+        name: "press.trigger.facing_back",
+        kind: HookKind::Trigger,
+        input: "trigger_facing_back",
+        site: "sim.rs: an opponent receiving a pass facing its own goal opens the press-trigger \
+               window",
+    },
+    Hook {
+        name: "press.trigger.wide",
+        kind: HookKind::Trigger,
+        input: "trigger_wide",
+        site: "sim.rs: an opponent full-back or wide player receiving a pass opens the \
+               press-trigger window",
     },
 ];
 

@@ -415,6 +415,14 @@ impl Team {
             .collect()
     }
 
+    /// `true` when `slot` is in the back line ([`Team::back_line`]).
+    pub fn in_back_line(&self, slot: usize) -> bool {
+        let deepest = (1..PLAYERS_PER_TEAM)
+            .map(|s| self.base_formation[s].0)
+            .fold(f64::INFINITY, f64::min);
+        slot != 0 && self.base_formation[slot].0 <= deepest + BACK_LINE_BAND
+    }
+
     /// The team's lone forward: the single active slot, other than the one keeping goal, in
     /// the front line of the formation as the tactics file gives it. The front line is the
     /// outfield slots less than `BACK_LINE_BAND` metres behind the most advanced one. `None`
@@ -555,14 +563,20 @@ impl Team {
         // anchor's bits.
         let block = if in_possession {
             0.0
+        } else if self.plan.engage_depth_m != 0.0 && !self.in_back_line(slot) {
+            // The line of engagement moves the players in front of the back line.
+            self.plan.block_depth + self.plan.engage_depth_m
         } else {
             self.plan.block_depth
         };
         let depth = (fx + block + plan.depth + offset.x) * sx;
         let side = self.slot_side(slot);
-        // Width spreads the side with the ball only; out of possession every anchor keeps the
-        // formation's width.
-        let width = if in_possession { self.plan.width } else { 1.0 };
+        // Width spreads the side with the ball; defensive width spreads it without the ball.
+        let width = if in_possession {
+            self.plan.width
+        } else {
+            self.plan.defensive_width
+        };
         let base = DVec2::new(
             (depth - self.pitch.half_length()) * self.attack_x,
             (fy * width + side * offset.y) * sy * self.attack_x,

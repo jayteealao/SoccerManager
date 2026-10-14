@@ -67,7 +67,9 @@
 //!   while the ball waits where it left play resumes the same wait.
 //!   Version 17 adds the tactical settings: each team's tactics end with the level or choice
 //!   of each primitive that owns its levels or choices (16 bytes, in the tactics file's
-//!   order, 0 past the last), so a resumed match keeps every setting.
+//!   order, 0 past the last), so a resumed match keeps every setting. Version 18 stores 32
+//!   such bytes, room for the out-of-possession primitives; the layout is otherwise version
+//!   17's.
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -98,7 +100,7 @@ use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
 use crate::team::PLAYERS_PER_TEAM;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 17;
+pub const VERSION: u16 = 18;
 /// The earliest layout version the strict reader still reads: version 8 has no matchday mark.
 const FIRST_READ: u16 = 8;
 /// The released builds from before the snapshot recorded its engine version: the full commit
@@ -1448,7 +1450,7 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 17"),
+                .contains("unknown version 1; this build reads 18"),
             "{err}"
         );
     }

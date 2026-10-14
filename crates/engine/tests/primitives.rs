@@ -48,10 +48,11 @@ fn the_shipped_primitives_are_complete() {
         "{names:?}"
     );
     for p in &t.primitives {
-        assert_ne!(p.kind, PrimitiveKind::OnOff, "{}", p.name);
         let levels = p.level_names(t);
         if p.kind == PrimitiveKind::Graded {
             assert_eq!(levels.len(), GRADED_LEVELS, "{}", p.name);
+        } else if p.kind == PrimitiveKind::OnOff {
+            assert_eq!(levels.len(), 2, "{}", p.name);
         } else {
             assert!(levels.len() >= 2, "{}", p.name);
         }
@@ -388,7 +389,7 @@ fn every_bad_primitive_entry_is_refused_by_name() {
         .filter(|p| p.extension().is_some_and(|e| e == "json"))
         .collect();
     files.sort();
-    assert_eq!(files.len(), 18);
+    assert_eq!(files.len(), 20);
     for file in files {
         let case: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
@@ -403,7 +404,7 @@ fn every_bad_primitive_entry_is_refused_by_name() {
     }
 }
 
-/// The tactics store at most 16 primitives that own their levels or choices: a file with more
+/// The tactics store at most 32 primitives that own their levels or choices: a file with more
 /// is refused, naming the count and the limit.
 #[test]
 fn more_settings_than_the_tactics_store_are_refused() {
@@ -437,7 +438,7 @@ fn more_settings_than_the_tactics_store_are_refused() {
         .unwrap_err();
     assert_eq!(field, "primitives");
     assert!(
-        reason.contains("17 primitives own their levels or choices; the tactics store at most 16"),
+        reason.contains("33 primitives own their levels or choices; the tactics store at most 32"),
         "{reason}"
     );
 }
@@ -689,7 +690,9 @@ fn every_plan_input_a_decision_site_reads_has_a_hook() {
     assert!(fields.contains(&"loss_weight".to_string()));
     let inputs: Vec<&str> = hooks::inputs().collect();
     let mut read = std::collections::BTreeSet::new();
-    for path in decision_sites() {
+    // The anchors' shape offsets are read where the team places its slots.
+    let sites = decision_sites().into_iter().chain([src().join("team.rs")]);
+    for path in sites {
         let source = non_test_source(&path);
         for (at, _) in source.match_indices("plan.") {
             let before = source[..at].chars().next_back();
@@ -713,6 +716,24 @@ fn every_plan_input_a_decision_site_reads_has_a_hook() {
     for input in ["counter", "pace_lift", "counter_press", "counter_press_s"] {
         assert!(read.contains(input), "{input} is read: {read:?}");
     }
+    // So do the out-of-possession primitives.
+    for input in [
+        "press_count",
+        "press_distance",
+        "block_depth",
+        "engage_depth_m",
+        "engage_line",
+        "defensive_width",
+        "force",
+        "offside_trap",
+        "screen_short",
+        "trigger_back_pass",
+        "trigger_poor_touch",
+        "trigger_facing_back",
+        "trigger_wide",
+    ] {
+        assert!(read.contains(input), "{input} is read: {read:?}");
+    }
     let missing: Vec<&String> = read
         .iter()
         .filter(|f| !inputs.contains(&f.as_str()))
@@ -721,5 +742,5 @@ fn every_plan_input_a_decision_site_reads_has_a_hook() {
         missing.is_empty(),
         "plan inputs read with no hook: {missing:?}"
     );
-    assert_eq!(HOOKS.len(), 36);
+    assert_eq!(HOOKS.len(), 48);
 }

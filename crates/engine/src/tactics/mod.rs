@@ -335,8 +335,36 @@ pub struct SlotPlan {
 /// The numbers play reads from a team's tactics.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TeamPlan {
-    /// Metres the whole block moves up out of possession: the line height.
+    /// Metres the back line moves up out of possession: the line height.
     pub block_depth: f64,
+    /// Metres the out-of-possession anchors in front of the back line move up the pitch: the
+    /// line of engagement's shape.
+    pub engage_depth_m: f64,
+    /// The line of engagement's press start: a player presses the carrier only while the ball
+    /// lies within this share of the pitch length of the own goal line; 1 never limits.
+    pub engage_line: f64,
+    /// Defensive width: a scale on every out-of-possession anchor's distance from the centre
+    /// line; 1 moves nothing.
+    pub defensive_width: f64,
+    /// Force the opponent: the presser's aim moves toward the near touchline above 0 and the
+    /// centre below 0, beside the weaker-foot show; 0 moves nothing.
+    pub force: f64,
+    /// Tackling: added to the tackle decision's score; 0 is the neutral form.
+    pub tackle_willingness: f64,
+    /// Tackling: a shift of the log-odds of a tackle's foul chance; 0 moves nothing.
+    pub tackle_risk: f64,
+    /// The offside trap: an unpressed opposing carrier facing forward starts a short window in
+    /// which the back line steps up together.
+    pub offside_trap: bool,
+    /// Stop short goal kicks: at an opponent goal kick the front players stand on the keeper's
+    /// short options outside the area.
+    pub screen_short: bool,
+    /// The press triggers: each opens the press-trigger window, in which the press reach
+    /// grows.
+    pub trigger_back_pass: bool,
+    pub trigger_poor_touch: bool,
+    pub trigger_facing_back: bool,
+    pub trigger_wide: bool,
     /// A scale on every slot's distance from the centre line while the side has the ball.
     pub width: f64,
     /// Width's second input: added to a pass whose target lies in a wide channel of the
@@ -452,6 +480,29 @@ impl TeamPlan {
             }
             "counter_press" => &mut self.counter_press,
             "counter_press_s" => &mut self.counter_press_s,
+            "engage_depth_m" => &mut self.engage_depth_m,
+            "engage_line" => &mut self.engage_line,
+            "defensive_width" => &mut self.defensive_width,
+            "force" => &mut self.force,
+            "tackle_willingness" => &mut self.tackle_willingness,
+            "tackle_risk" => &mut self.tackle_risk,
+            "offside_trap"
+            | "screen_short"
+            | "trigger_back_pass"
+            | "trigger_poor_touch"
+            | "trigger_facing_back"
+            | "trigger_wide" => {
+                let on = v > 0.0;
+                match input {
+                    "offside_trap" => self.offside_trap = on,
+                    "screen_short" => self.screen_short = on,
+                    "trigger_back_pass" => self.trigger_back_pass = on,
+                    "trigger_poor_touch" => self.trigger_poor_touch = on,
+                    "trigger_facing_back" => self.trigger_facing_back = on,
+                    _ => self.trigger_wide = on,
+                }
+                return;
+            }
             _ => return,
         };
         *field = v;
@@ -536,6 +587,18 @@ impl TeamPlan {
     pub fn neutral(t: &Tuning) -> Self {
         Self {
             block_depth: 0.0,
+            engage_depth_m: 0.0,
+            engage_line: 1.0,
+            defensive_width: 1.0,
+            force: 0.0,
+            tackle_willingness: 0.0,
+            tackle_risk: 0.0,
+            offside_trap: false,
+            screen_short: false,
+            trigger_back_pass: false,
+            trigger_poor_touch: false,
+            trigger_facing_back: false,
+            trigger_wide: false,
             width: 1.0,
             wide_target: 0.0,
             press_count: 2,
@@ -607,13 +670,13 @@ mod tests {
         let t = &content.tuning.engine;
         let mut tactics = Tactics::defaults(schema);
         tactics.mentality = schema.mentality_index("attacking").unwrap() as u8;
-        tactics.instructions[PRESSING] = 2;
+        tactics.instructions[PRESSING] = schema.instructions.defaults()[PRESSING] + 1;
         let plan = TeamPlan::from(&tactics, schema, t);
         assert_eq!(
             plan.block_depth, 0.0,
             "the mentality does not move the block"
         );
-        tactics.instructions[LINE_HEIGHT] = 2;
+        tactics.instructions[LINE_HEIGHT] = schema.instructions.defaults()[LINE_HEIGHT] + 1;
         let plan = TeamPlan::from(&tactics, schema, t);
         assert!(plan.block_depth > 0.0);
         let balanced = TeamPlan::from(&Tactics::defaults(schema), schema, t);

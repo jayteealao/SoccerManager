@@ -24,8 +24,11 @@ use crate::team::PLAYERS_PER_TEAM;
 /// file takes them from a copy compiled into the build
 /// ([`crate::data::convert::tactics_v3_to_v4`]). Version 5 names the tempo levels by speed,
 /// very fast to very slow, with the same values; a version 4 file takes the names
-/// ([`crate::data::convert::tactics_v4_to_v5`]).
-pub const TACTICS_VERSION: u32 = 5;
+/// ([`crate::data::convert::tactics_v4_to_v5`]). Version 6 gives pressing and line height five
+/// levels (an outer level each side of the three they had) and adds the out-of-possession
+/// primitives, on/off primitives among them; a version 5 file takes them from a copy compiled
+/// into the build ([`crate::data::convert::tactics_v5_to_v6`]).
+pub const TACTICS_VERSION: u32 = 6;
 
 /// The six team instructions, in the order a [`crate::tactics::Tactics`] stores their levels.
 pub const INSTRUCTIONS: [&str; 6] = [
@@ -744,8 +747,9 @@ mod tests {
             ]
         );
         assert_eq!(t.mentalities.len(), 5);
-        // Width and passing directness have five levels, so their middle level is 2.
-        assert_eq!(t.instructions.defaults(), [1, 2, 2, 1, 2, 0]);
+        // Pressing, width, tempo, line height and passing directness have five levels, so their
+        // middle level is 2.
+        assert_eq!(t.instructions.defaults(), [2, 2, 2, 2, 2, 0]);
         assert_eq!(t.slots(0), crate::team::FORMATION_442);
         assert_eq!(t.duties.len(), 3);
     }

@@ -1,5 +1,5 @@
 {
-  "refusal": "only a graded primitive whose levels are \"own\" lists steps",
+  "refusal": "only a graded or on/off primitive whose levels are \"own\" lists steps",
   "primitive": {
     "name": "planted",
     "kind": "graded",

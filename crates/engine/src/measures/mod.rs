@@ -28,6 +28,7 @@
 //! turnover; a possession with a shot is a shot possession. The carrier's choices count by
 //! kind, once each time his choice changes, not on every tick he holds it.
 
+pub mod defending;
 pub mod runs;
 pub mod shape;
 pub mod transitions;
@@ -316,6 +317,14 @@ pub struct MatchMeasures {
     pub possessing: [Possessing; 2],
     /// The transition counts.
     pub transitions: [transitions::Transitions; 2],
+    /// The out-of-possession counts.
+    pub defending: [defending::Defending; 2],
+    /// Per pressing side, the tick each press trigger of the other side last fired, while
+    /// its possession lasts.
+    trigger_at: [[Option<u32>; 4]; 2],
+    /// The carrier at the last tackle count and the defenders (roster bits) already counted as
+    /// tackling him.
+    tackled: Option<(usize, u32)>,
     /// The tick of the last open-play clock, and each side's view of the ball then: its depth
     /// past halfway toward the attacked goal and its third.
     now: u32,
@@ -363,6 +372,9 @@ impl Default for MatchMeasures {
             choices: [[0; 5]; 2],
             possessing: [Possessing::default(); 2],
             transitions: [transitions::Transitions::default(); 2],
+            defending: [defending::Defending::default(); 2],
+            trigger_at: [[None; 4]; 2],
+            tackled: None,
             now: 0,
             place: [(0.0, 0); 2],
             loss: [None; 2],
@@ -612,6 +624,56 @@ impl MatchMeasures {
         if let Some(l) = self.loss[team].as_mut() {
             l.pressed(n, tick);
         }
+        let window = defending::trigger_window_ticks();
+        for (k, at) in self.trigger_at[team].iter().enumerate() {
+            if at.is_some_and(|at| tick.saturating_sub(at) < window) {
+                self.defending[team].trigger_pressures[k] += n;
+            }
+        }
+    }
+
+    /// Press trigger `kind` of the other side fired for pressing side `def` at `tick`.
+    pub(crate) fn trigger(&mut self, def: usize, kind: usize, tick: u32) {
+        self.defending[def].trigger_events[kind] += 1;
+        self.trigger_at[def][kind] = Some(tick);
+    }
+
+    /// Side `def` started an offside trap.
+    pub(crate) fn trap(&mut self, def: usize) {
+        self.defending[def].traps += 1;
+    }
+
+    /// Defender `i` of `def` tackled carrier `c` at `at` (the share of the pitch length and the
+    /// metres from his own goal line; a defender when `defender`): his first attempt on this
+    /// carrier's spell is a defensive action.
+    pub(crate) fn tackle(
+        &mut self,
+        def: usize,
+        i: usize,
+        c: usize,
+        at: (f64, f64),
+        defender: bool,
+    ) {
+        let seen = match self.tackled {
+            Some((last, seen)) if last == c => seen,
+            _ => 0,
+        };
+        self.tackled = Some((c, seen | (1u32 << i)));
+        if seen & (1u32 << i) == 0 {
+            self.defending[def].action(at.0, at.1, defender);
+        }
+    }
+
+    /// An interception or a foul by a player of `def` at `at` (the share of the pitch length
+    /// and the metres from his own goal line): a defensive action.
+    pub(crate) fn defensive_action(&mut self, def: usize, at: (f64, f64), defender: bool) {
+        self.defending[def].action(at.0, at.1, defender);
+    }
+
+    /// `team` kicked an open-play pass starting at `share` of the pitch length from its own
+    /// goal line.
+    pub(crate) fn pass_start(&mut self, team: usize, share: f64) {
+        self.defending[team].build_passes += u32::from(share < defending::PPDA_BUILD_SHARE);
     }
 
     /// The other side's spell has lasted longer than a short regain: it has the ball.
@@ -682,6 +744,8 @@ impl MatchMeasures {
             }
         }
         self.pressing = None;
+        self.trigger_at = [[None; 4]; 2];
+        self.tackled = None;
     }
 
     /// `team` gained the ball: with no chain open, an open-play chain starts.

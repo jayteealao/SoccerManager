@@ -582,6 +582,17 @@ pub trait DecisionModule: Send + Sync + 'static {
     /// The chance that player `i`, on the side without the ball, lapses in this minute of
     /// play. The loop draws the `Lapse` key against it.
     fn lapse_chance(&self, view: &MatchView<'_>, i: usize) -> f64;
+    /// The tackle decision of `tackler`, in reach of `carrier`: the chances of the tackle it
+    /// makes (the foul chance may differ from `chances`, the fouls module's), or `None` when it
+    /// does not tackle. A declined tackle draws nothing; no tackle happens without this
+    /// decision.
+    fn tackle(
+        &self,
+        view: &MatchView<'_>,
+        tackler: usize,
+        carrier: usize,
+        chances: TackleChances,
+    ) -> Option<TackleChances>;
 }
 
 /// One check of the AI manager: the minute, the changes to queue in order, and the manager's

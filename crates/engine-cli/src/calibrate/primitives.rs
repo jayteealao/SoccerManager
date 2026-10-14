@@ -37,7 +37,7 @@ use super::fixtures::{self, Leagues};
 
 /// The statistics the harness measures, in value order: the signature statistics, then the
 /// side's possessions and shots a match, which every step reports beside them.
-pub const STATS: [&str; 43] = [
+pub const STATS: [&str; 61] = [
     "passes_per_possession",
     "recycle_share",
     "turnovers_per_possession",
@@ -74,6 +74,24 @@ pub const STATS: [&str; 43] = [
     "counterpress_pressures_per_loss",
     "counterpress_regain_share",
     "last_counterpress_s",
+    "ppda",
+    "def_action_height_m",
+    "defender_action_height_m",
+    "oop_width_m",
+    "opp_entries_wide_share",
+    "offsides_caught_per_match",
+    "opp_goal_kick_m",
+    "fouls_per_match",
+    "yellows_per_match",
+    "pressures_after_back_pass",
+    "pressures_after_poor_touch",
+    "pressures_after_facing_back",
+    "pressures_after_wide",
+    "reds_per_match",
+    "traps_per_match",
+    "back_passes_per_match",
+    "poor_touches_per_match",
+    "facing_back_per_match",
     "runs_per_match",
     "crosses",
     "entries",
@@ -106,6 +124,11 @@ pub struct Sinks<'a> {
     pub block: &'a BlockHeightSink,
     pub runs: &'a RunsSink,
     pub goals: [u32; 2],
+    /// Fouls committed, yellow and red cards shown, and offsides called, per side.
+    pub fouls: [u32; 2],
+    pub yellows: [u32; 2],
+    pub reds: [u32; 2],
+    pub offsides: [u32; 2],
     pub nineties: f64,
 }
 
@@ -122,6 +145,12 @@ pub fn side_stats(m: &MatchMeasures, sinks: &Sinks<'_>, team: usize) -> Stats {
     let fullback = f(runs.fullback_runs(team));
     let n = sinks.nineties;
     let x = &m.transitions[team];
+    let other = 1 - team;
+    let d = &m.defending[team];
+    let oe = m.possessing[other].entries;
+    let opp_entries = f(oe.iter().sum::<u32>());
+    let o = &m.possessing[other];
+    let trig = |k: usize| (f(d.trigger_pressures[k]), f(d.trigger_events[k]));
     [
         (passes, possessions),
         (f(m.recycle_passes[team]), f(m.open_play_passes[team])),
@@ -159,6 +188,24 @@ pub fn side_stats(m: &MatchMeasures, sinks: &Sinks<'_>, team: usize) -> Stats {
         (f(x.counterpress_pressures), f(x.losses)),
         (f(x.counterpress_regains), f(x.losses)),
         (x.last_counterpress_s, f(x.last_counterpress)),
+        (f(m.defending[other].build_passes), f(d.ppda_actions)),
+        (d.action_m, f(d.actions)),
+        (d.defender_action_m, f(d.defender_actions)),
+        sinks.block.width[team],
+        (f(oe[0] + oe[2]), opp_entries),
+        (f(sinks.offsides[other]), n),
+        (o.goal_kick_m, f(o.goal_kicks)),
+        (f(sinks.fouls[team]), n),
+        (f(sinks.yellows[team]), n),
+        trig(0),
+        trig(1),
+        trig(2),
+        trig(3),
+        (f(sinks.reds[team]), n),
+        (f(d.traps), n),
+        (f(d.trigger_events[0]), n),
+        (f(d.trigger_events[1]), n),
+        (f(d.trigger_events[2]), n),
         (f(runs.runs[team]), n),
         (f(s.crosses), 1.0),
         (entries, 1.0),
@@ -193,6 +240,10 @@ pub fn play_one(
         block: &block,
         runs: &runs,
         goals: sim.summary().goals,
+        fouls: sim.summary().fouls,
+        yellows: sim.summary().yellow,
+        reds: sim.summary().red,
+        offsides: sim.summary().offsides,
         nineties: f64::from(minutes) / 90.0,
     };
     Ok([side_stats(m, &sinks, 0), side_stats(m, &sinks, 1)])
@@ -507,14 +558,33 @@ pub fn judge(pairs: &[Vec<Stats>], stat: usize, direction: Direction) -> StatVer
 
 /// The monotonic check of `name`: each step of a graded primitive from level `from` (all
 /// steps when `None`) one level up, or each choice of a choice primitive against its default.
+/// The levels `with` (`<primitive>=<level>`) of other primitives are set in the upper arm of
+/// each graded step: a combined step against both at their lower levels.
 pub fn check(
     content: &Content,
     name: &str,
     from: Option<&str>,
+    with: &[String],
     setup: &Setup,
 ) -> anyhow::Result<Vec<StepVerdict>> {
     let content = harness_content(content);
     let p = primitive(&content.tactics, name)?.clone();
+    let mut extra: Vec<(Primitive, usize)> = Vec::new();
+    for w in with {
+        let (other, level) = w
+            .split_once('=')
+            .with_context(|| format!("--with {w}: give <primitive>=<level>"))?;
+        let o = primitive(&content.tactics, other)?.clone();
+        let at = o
+            .level_names(&content.tactics)
+            .iter()
+            .position(|n| *n == level)
+            .with_context(|| format!("{other} has no level {level}"))?;
+        extra.push((o, at));
+    }
+    if !extra.is_empty() && p.kind != PrimitiveKind::Graded {
+        bail!("{name}: --with combines graded steps only");
+    }
     let names: Vec<String> = p
         .level_names(&content.tactics)
         .iter()
@@ -543,8 +613,14 @@ pub fn check(
                     })
                 });
                 let [a, b] = arms;
-                let arms = [a?, b?];
-                let step = format!("{} -> {}", names[l], names[l + 1]);
+                let mut arms = [a?, b?];
+                for (o, at) in &extra {
+                    arms[1].tactics = with_level(arms[1].tactics, &content.tactics, o, *at)?;
+                }
+                let mut step = format!("{} -> {}", names[l], names[l + 1]);
+                for w in with {
+                    step.push_str(&format!(" with {w}"));
+                }
                 let pairs = play_pairs(setup, &content, &arms, &format!("{name}:{step}"))?;
                 let mut stats = Vec::new();
                 for s in p.signature.iter().filter(|s| s.steps.covers_step(l, d)) {
@@ -621,7 +697,36 @@ pub fn check(
             }
         }
         PrimitiveKind::OnOff => {
-            bail!("{name}: the check of an on/off primitive steps off to on; none is declared yet")
+            // Off to on: the primitive owns its two states, off first.
+            if !p.is_setting() {
+                bail!("{name}: an on/off primitive is checked when it owns its two states");
+            }
+            let defaults = Tactics::defaults(&content.tactics);
+            let arms = [
+                Arm {
+                    content: content.clone(),
+                    tactics: with_level(defaults, &content.tactics, &p, 0)?,
+                },
+                Arm {
+                    content: content.clone(),
+                    tactics: with_level(defaults, &content.tactics, &p, 1)?,
+                },
+            ];
+            let step = format!("{} -> {}", names[0], names[1]);
+            let pairs = play_pairs(setup, &content, &arms, &format!("{name}:{step}"))?;
+            let mut stats = Vec::new();
+            for s in &p.signature {
+                stats.push(judge(&pairs, stat_index(&s.stat)?, s.direction));
+            }
+            let pass = stats.first().is_some_and(|s| s.pass);
+            out.push(StepVerdict {
+                primitive: name.into(),
+                step,
+                stats,
+                pass,
+                means: arm_means(&pairs),
+                differences: arm_differences(&pairs),
+            });
         }
     }
     Ok(out)
@@ -1076,6 +1181,7 @@ pub fn run(
         PrimitivesAction::Check {
             primitive,
             step,
+            with,
             pairs,
             seed,
             jobs: j,
@@ -1088,7 +1194,7 @@ pub fn run(
                 minutes: *minutes,
                 jobs: jobs(*j),
             };
-            let verdicts = check(content, primitive, step.as_deref(), &setup)?;
+            let verdicts = check(content, primitive, step.as_deref(), with, &setup)?;
             let pass = verdicts.iter().all(|v| v.pass);
             for v in &verdicts {
                 let failed: Vec<String> = v

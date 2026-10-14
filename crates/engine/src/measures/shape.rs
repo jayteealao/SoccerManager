@@ -641,10 +641,14 @@ impl TickSink for ShapeSink {
 /// from its own goal line, at the same 5 Hz ball-in-play samples as the slide (a side in
 /// possession, 9 or more outfield players). Per side, home first: the sum of the heights in
 /// metres and the samples, so many matches pool exactly. The mentality's signature reads it.
+/// At the same samples, the block's width: the distance across between its widest outfield
+/// players, the out-of-possession width defensive width's signature reads.
 #[derive(Debug, Clone, Default)]
 pub struct BlockHeightSink {
     /// Per side: (sum of heights in metres, samples).
     pub height: [(f64, f64); 2],
+    /// Per side: (sum of widths in metres, samples).
+    pub width: [(f64, f64); 2],
     last_live: u32,
     steps: u32,
 }
@@ -675,12 +679,15 @@ impl TickSink for BlockHeightSink {
         }
         let team = 1 - owner;
         let keeper = sim.keeper(team);
-        let (sum, n) = sim
+        let (sum, n, lo, hi) = sim
             .players()
             .iter()
             .enumerate()
             .filter(|(i, p)| p.team == team && *i != keeper && p.active())
-            .fold((0.0, 0usize), |(s, n), (_, p)| (s + p.pos.x, n + 1));
+            .fold(
+                (0.0, 0usize, f64::INFINITY, f64::NEG_INFINITY),
+                |(s, n, lo, hi), (_, p)| (s + p.pos.x, n + 1, lo.min(p.pos.y), hi.max(p.pos.y)),
+            );
         if n < SLIDE_MIN_PLAYERS {
             return Ok(());
         }
@@ -688,6 +695,8 @@ impl TickSink for BlockHeightSink {
         let x = sum / n as f64 * sim.teams[team].attack_x;
         self.height[team].0 += x + half;
         self.height[team].1 += 1.0;
+        self.width[team].0 += hi - lo;
+        self.width[team].1 += 1.0;
         Ok(())
     }
 }

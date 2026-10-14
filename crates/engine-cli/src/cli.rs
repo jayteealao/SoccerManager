@@ -140,6 +140,11 @@ pub enum PrimitivesAction {
         /// The level to step up from; default every step.
         #[arg(long)]
         step: Option<String>,
+        /// Another primitive's level, `<primitive>=<level>`, set in the upper arm of each
+        /// step beside it: a combined step, read against both primitives at their lower
+        /// level. May be given more than once.
+        #[arg(long = "with", value_name = "PRIMITIVE=LEVEL")]
+        with: Vec<String>,
         /// Pairs of matches per step.
         #[arg(long, default_value_t = 40)]
         pairs: u32,

@@ -67,6 +67,9 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         possession_phase,
         regained_at,
         lost_at,
+        trigger_at,
+        trap_at,
+        heavy_mask,
         slide_ball,
         shot_in_flight,
         shot_on_target,
@@ -159,6 +162,11 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     for at in regained_at.iter().chain(lost_at) {
         w.u32(at.unwrap_or(u32::MAX));
     }
+    w.mark(Bytes, || "trigger_at".into());
+    for at in trigger_at.iter().flatten().chain(trap_at) {
+        w.u32(at.unwrap_or(u32::MAX));
+    }
+    w.u32(*heavy_mask);
     for (i, at) in slide_ball.iter().enumerate() {
         w.mark(Floats, || format!("slide_ball[{i}]"));
         w.v2_at(&|| format!("slide_ball[{i}]"), *at);

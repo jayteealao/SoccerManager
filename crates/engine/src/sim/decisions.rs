@@ -81,6 +81,9 @@ impl Simulation {
                     self.trace_point(Point::Cover, detail);
                 }
                 let c = self.carrier?;
+                if self.teams[def].plan.offside_trap {
+                    self.arm_trap(def, c);
+                }
                 #[cfg(feature = "measures")]
                 if self.measures.is_some() {
                     self.measure_pressure(def, c);
@@ -241,6 +244,35 @@ impl Simulation {
 }
 
 impl Simulation {
+    /// The offside trap of side `def` (hook `line.offside_trap`): with no trap window open, an
+    /// opposing carrier `c` facing forward with no player of `def` within the pressed distance
+    /// starts one.
+    pub(crate) fn arm_trap(&mut self, def: usize, c: usize) {
+        if self
+            .since_trap_s(def)
+            .is_some_and(|s| s < crate::decision::TRAP_WINDOW_S)
+        {
+            return;
+        }
+        let carrier = &self.players[c];
+        let attack_x = self.teams[carrier.team].attack_x;
+        if carrier.facing.x * attack_x <= crate::decision::FACING_BACK_COS {
+            return;
+        }
+        let at = carrier.pos;
+        let pressed = self.players.iter().any(|p| {
+            p.team == def && p.active() && (p.pos - at).length() < crate::contract::PRESSED_M
+        });
+        if pressed {
+            return;
+        }
+        self.trap_at[def] = Some(self.tick);
+        #[cfg(feature = "measures")]
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.trap(def);
+        }
+    }
+
     /// Count site: the players of side `def` within the pressed distance of carrier `c` press
     /// him ([`crate::measures::MatchMeasures::pressure`]).
     #[cfg(feature = "measures")]

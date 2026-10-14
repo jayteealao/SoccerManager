@@ -472,6 +472,10 @@ impl Simulation {
         let fouled_team = self.players[c].team;
         self.summary.fouls[offender.team] += 1;
         #[cfg(feature = "measures")]
+        if self.measures.is_some() {
+            self.measure_action(i);
+        }
+        #[cfg(feature = "measures")]
         if let Some(m) = self.measures.as_deref_mut() {
             m.dead(self.tick);
         }

@@ -563,8 +563,10 @@ impl ManagerModule for AiManagerV1 {
             if usize::from(projected.mentality) + 1 < schema.mentalities.len() {
                 patch.mentality = Some(projected.mentality + 1);
             }
-            let high = (schema.instructions.level_count(PRESSING) - 1) as u8;
-            if projected.instructions[PRESSING] != high {
+            // One level above the default pressing, never lower than the side already presses.
+            let top = (schema.instructions.level_count(PRESSING) - 1) as u8;
+            let high = (schema.instructions.defaults()[PRESSING] + 1).min(top);
+            if projected.instructions[PRESSING] < high {
                 patch.instructions[PRESSING] = Some(high);
             }
             if patch != TacticsPatch::default() {

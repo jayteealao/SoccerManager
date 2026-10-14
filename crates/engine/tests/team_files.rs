@@ -676,6 +676,58 @@ fn a_version_4_tactics_file_converts_to_the_shipped_version_5_file() {
     assert_eq!(names, ["very_fast", "fast", "normal", "slow", "very_slow"]);
 }
 
+/// A version 5 tactics file (three pressing and three line-height levels, none of the
+/// out-of-possession primitives) converts to the shipped version 6 file: pressing and line
+/// height take their outer levels around the three they had, with the same names, values and
+/// defaults, and the file takes every primitive entry version 6 adds, after its own.
+#[test]
+fn a_version_5_tactics_file_converts_to_the_shipped_version_6_file() {
+    let path = common::content_dir().path(engine::data::TACTICS_FILE);
+    let mut v5: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    v5["schema_version"] = 5.into();
+    let added = [
+        "pressing",
+        "line_height",
+        "line_of_engagement",
+        "defensive_width",
+        "force_the_opponent",
+        "tackling",
+        "offside_trap",
+        "stop_short_goal_kicks",
+        "press_on_back_pass",
+        "press_on_poor_touch",
+        "press_on_facing_back",
+        "press_on_wide",
+    ];
+    v5["primitives"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|p| !added.contains(&p["name"].as_str().unwrap()));
+    for block in ["pressing", "line_height"] {
+        let levels = v5["instructions"][block]["levels"].as_array_mut().unwrap();
+        levels.remove(4);
+        levels.remove(0);
+    }
+    let converted =
+        engine::data::load_tactics_bytes(&serde_json::to_vec(&v5).unwrap(), "tactics-v5.json")
+            .unwrap();
+    assert_eq!(converted.converted_from, Some(5));
+    let shipped = common::content().tactics;
+    assert_eq!(converted.value.instructions, shipped.instructions);
+    assert_eq!(converted.value.primitives, shipped.primitives);
+    assert_eq!(converted.value.roles, shipped.roles);
+    assert_eq!(
+        shipped.instructions.level_names(0),
+        ["very_low", "low", "mid", "high", "very_high"]
+    );
+    assert_eq!(
+        shipped.instructions.level_names(3),
+        ["very_deep", "deep", "normal", "high", "very_high"]
+    );
+    assert_eq!(shipped.instructions.defaults()[0], 2);
+    assert_eq!(shipped.instructions.defaults()[3], 2);
+}
+
 #[test]
 fn a_version_1_tactics_file_converts_to_the_shipped_version_3_file() {
     let v1 = fixture_bytes("tactics-v1.json");

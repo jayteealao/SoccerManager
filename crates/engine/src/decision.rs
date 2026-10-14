@@ -38,7 +38,8 @@ use crate::data::rules::StoppageKind;
 use crate::math::{self, DVec2, segment_distance, toward};
 use crate::modules::{
     CarrierPlan, CoverTrace, DecisionModule, MATES, MatchView, ModuleCard, OptionDraft,
-    OptionDraws, ROSTER, RestartPass, Scored, ShotDraws, ShotKind, Targets, TargetsTrace,
+    OptionDraws, ROSTER, RestartPass, Scored, ShotDraws, ShotKind, TackleChances, Targets,
+    TargetsTrace,
 };
 use crate::pace::Job;
 use crate::pitch;
@@ -94,6 +95,71 @@ pub const COUNTERPRESS_LAST_S: f64 = 10.0;
 /// Metres from the defensive line, per unit of the side's on-winning weight, within which an
 /// attack-line player may start a run in behind while the regain window is open.
 pub const COUNTER_RUN_M: f64 = 10.0;
+
+/// The press triggers, in the order of [`crate::sim::Simulation`]'s trigger ticks: a pass
+/// toward the passer's own goal, a gain after the ball came too fast to control, a receiver
+/// facing his own goal, and a pass to a full-back or into a wide channel.
+pub const TRIGGERS: [&str; 4] = ["back_pass", "poor_touch", "facing_back", "ball_wide"];
+pub const TRIGGER_BACK_PASS: usize = 0;
+pub const TRIGGER_POOR_TOUCH: usize = 1;
+pub const TRIGGER_FACING_BACK: usize = 2;
+pub const TRIGGER_WIDE: usize = 3;
+/// A pass is a back pass when its direction's cosine with the passer's attack direction is
+/// below minus this (more than 60 degrees from square, backward).
+pub const BACK_PASS_COS: f64 = 0.5;
+/// A receiver faces his own goal when his facing's cosine with his attack direction is below
+/// minus this.
+pub const FACING_BACK_COS: f64 = 0.5;
+/// The press-trigger window (hooks `press.trigger.*`): for this many seconds after a trigger
+/// the pressing side switches on fires, while the other side keeps the ball, the side's press
+/// reach takes [`TRIGGER_REACH`].
+pub const TRIGGER_WINDOW_S: f64 = 3.0;
+pub const TRIGGER_REACH: f64 = 1.5;
+/// Force the opponent (hook `press.force`): metres per unit of force the presser's aim moves
+/// across, toward the centre to show the carrier wide (force above 0) or toward the near
+/// touchline to show him inside (below 0).
+pub const FORCE_M: f64 = 2.0;
+/// The offside trap (hook `line.offside_trap`): the back line steps up this many metres
+/// together for this many seconds once the trap starts.
+pub const TRAP_STEP_M: f64 = 5.0;
+pub const TRAP_WINDOW_S: f64 = 2.0;
+/// Stop short goal kicks (hook `press.screen_short`) and the goal-kick pick: a team-mate of
+/// the kicker with an opponent within this many metres of him is screened.
+pub const SCREEN_M: f64 = 4.0;
+/// The tackle decision (hook `tackle.decide`): the cost of a foul's chance, in units of the
+/// win chance, at no danger; the danger of a foul doubles it near the own goal.
+pub const TACKLE_FOUL_COST: f64 = 1.0;
+
+/// Press triggers (hooks `press.trigger.*`): the factor on pressing side `team`'s press reach,
+/// [`TRIGGER_REACH`] while the window of a trigger its plan switches on is open, else 1.
+pub(crate) fn trigger_factor(view: &MatchView<'_>, team: usize) -> f64 {
+    let plan = &view.teams()[team].plan;
+    let on = [
+        plan.trigger_back_pass,
+        plan.trigger_poor_touch,
+        plan.trigger_facing_back,
+        plan.trigger_wide,
+    ];
+    let open = on.iter().enumerate().any(|(k, &on)| {
+        on && view
+            .since_trigger_s(team, k)
+            .is_some_and(|s| s < TRIGGER_WINDOW_S)
+    });
+    if open { TRIGGER_REACH } else { 1.0 }
+}
+
+/// The line of engagement's press start (hook `press.engage`): `true` while the ball lies
+/// within side `team`'s engage line, a share of the pitch length from its own goal line; the
+/// default share 1 never limits.
+pub(crate) fn engaged(view: &MatchView<'_>, team: usize, ball: DVec2) -> bool {
+    let share = view.teams()[team].plan.engage_line;
+    if share >= 1.0 {
+        return true;
+    }
+    let pitch = view.pitch();
+    let from_own_line = ball.x * view.teams()[team].attack_x + pitch.half_length();
+    from_own_line < share * pitch.length()
+}
 
 /// On winning the ball (hook `regain.counter`): side `team`'s on-winning weight while its
 /// regain window is open, [`COUNTER_WINDOW_S`] after it won the ball in open play and still
@@ -425,6 +491,16 @@ impl DecisionModule for DecisionV1 {
         lapse_chance(view, i)
     }
 
+    fn tackle(
+        &self,
+        view: &MatchView<'_>,
+        tackler: usize,
+        carrier: usize,
+        chances: TackleChances,
+    ) -> Option<TackleChances> {
+        tackle_decision(view, tackler, carrier, chances)
+    }
+
     fn targets(&self, view: &MatchView<'_>) -> Targets {
         let players = view.players();
         let teams = view.teams();
@@ -446,8 +522,16 @@ impl DecisionModule for DecisionV1 {
                 // player the defending team has lost.
                 // Inside its counter-press window the side's players press from farther, or
                 // from nearer, or not at all.
-                let count = teams[def].pressers().min(MAX_PRESSERS);
-                let reach = teams[def].plan.press_distance * counter_press_factor(view, def);
+                // Beyond the side's line of engagement nobody presses; inside a trigger's
+                // window the press reaches farther.
+                let count = if engaged(view, def, ball_xy) {
+                    teams[def].pressers().min(MAX_PRESSERS)
+                } else {
+                    0
+                };
+                let reach = teams[def].plan.press_distance
+                    * counter_press_factor(view, def)
+                    * trigger_factor(view, def);
                 // While the defending side trails, each presser's determination widens his
                 // reach.
                 let goals = view.goals();
@@ -534,6 +618,7 @@ impl DecisionModule for DecisionV1 {
                             .trait_act(i)
                             .is_some_and(|a| a.kind == TraitKind::PressesRelentlessly)
                 });
+                let force = teams[def].plan.force;
                 let chosen = pressers[..count].iter().map(|&(_, i)| i);
                 for i in chosen.chain(relentless) {
                     if i != usize::MAX {
@@ -547,7 +632,14 @@ impl DecisionModule for DecisionV1 {
                             // move the point he meets the carrier at.
                             let meet = intercept(p.pos, p.max_speed(), ball_xy, run, horizon);
                             let lean = lean_m * view.skills(i).skill(Stage::PRESS_CHOOSE);
-                            view.pitch().clamp(meet + to_goal * lean + show, 0.5)
+                            let aim = meet + to_goal * lean + show;
+                            // Force the opponent moves the aim across, beside the show.
+                            let aim = if force != 0.0 {
+                                aim + DVec2::new(0.0, -players[c].pos.y.signum()) * FORCE_M * force
+                            } else {
+                                aim
+                            };
+                            view.pitch().clamp(aim, 0.5)
                         };
                     }
                 }
@@ -562,6 +654,7 @@ impl DecisionModule for DecisionV1 {
                         || pressers[..count].iter().any(|&(_, k)| k == i)
                 };
                 step_with_line(view, &mut targets, def, skip);
+                trap_step(view, &mut targets, def, skip);
                 hold_lapses(view, &mut targets);
                 let mut jobs = shape_jobs(view, phase, &targets, &shaped);
                 // A run in behind, a run coming short and a run into the box are timed runs
@@ -1614,6 +1707,17 @@ fn trait_anchor(view: &MatchView<'_>, i: usize, anchor: DVec2) -> DVec2 {
     pitch.clamp(at, 0.5)
 }
 
+/// The tackle decision of `tackler`, in reach of `carrier`: every defender in reach tackles,
+/// with the fouls module's chances.
+pub fn tackle_decision(
+    _view: &MatchView<'_>,
+    _tackler: usize,
+    _carrier: usize,
+    chances: TackleChances,
+) -> Option<TackleChances> {
+    Some(chances)
+}
+
 /// The chance per minute of play that player `i` lapses: the tuned chance, growing past
 /// the late minute by `late_growth` per 30 minutes, times `2 · (1 − share)` of his shape
 /// choose stage (concentration), which is 1 at rating 10.
@@ -2183,6 +2287,31 @@ fn step_with_line(
             continue;
         }
         targets[i].x += (p.pos.x - targets[i].x) * late;
+    }
+}
+
+/// The offside trap (hook `line.offside_trap`): while side `def`'s trap window is open, each
+/// active back-line player other than the keeper and those `skip` names steps up
+/// [`TRAP_STEP_M`] toward the halfway line, together.
+fn trap_step(
+    view: &MatchView<'_>,
+    targets: &mut [DVec2; ROSTER],
+    def: usize,
+    skip: impl Fn(usize) -> bool,
+) {
+    if !view.since_trap_s(def).is_some_and(|s| s < TRAP_WINDOW_S) {
+        return;
+    }
+    let side = &view.teams()[def];
+    let first = def * PLAYERS_PER_TEAM;
+    let keeper = view.keeper(def);
+    for slot in side.back_line() {
+        let i = first + slot;
+        if !view.player(i).active() || i == keeper || skip(i) {
+            continue;
+        }
+        targets[i].x += side.attack_x * TRAP_STEP_M;
+        targets[i] = view.pitch().clamp(targets[i], 0.5);
     }
 }
 

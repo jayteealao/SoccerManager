@@ -1,5 +1,5 @@
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "formations": [
     {
       "name": "4-4-2",
@@ -173,9 +173,11 @@
     "pressing": {
       "default": "mid",
       "levels": [
+        { "name": "very_low", "press_count": 1, "press_distance_scale": 0.6 },
         { "name": "low", "press_count": 1, "press_distance_scale": 0.8 },
         { "name": "mid", "press_count": 2, "press_distance_scale": 1.0 },
-        { "name": "high", "press_count": 3, "press_distance_scale": 1.3 }
+        { "name": "high", "press_count": 3, "press_distance_scale": 1.3 },
+        { "name": "very_high", "press_count": 4, "press_distance_scale": 1.6 }
       ]
     },
     "width": {
@@ -201,9 +203,11 @@
     "line_height": {
       "default": "normal",
       "levels": [
+        { "name": "very_deep", "value": -10.0 },
         { "name": "deep", "value": -5.0 },
         { "name": "normal", "value": 0.0 },
-        { "name": "high", "value": 5.0 }
+        { "name": "high", "value": 5.0 },
+        { "name": "very_high", "value": 10.0 }
       ]
     },
     "passing_directness": {
@@ -1696,6 +1700,268 @@
         "competitions": ["1. Bundesliga 2023/2024", "FIFA World Cup 2022", "UEFA Euro 2020", "UEFA Euro 2024"],
         "row": "counter_press_length",
         "deferred": "no effect at the default on losing the ball and not judged or fitted yet; judged and fitted with on losing the ball, pressing intensity and the tackle decision"
+      }
+    },
+    {
+      "name": "pressing",
+      "kind": "graded",
+      "levels": "instructions.pressing",
+      "default": "mid",
+      "inputs": [
+        { "input": "press_distance", "hook": "press.distance" },
+        { "input": "press_count", "hook": "press.count" }
+      ],
+      "signature": [
+        { "stat": "ppda", "direction": "down" }
+      ],
+      "data": {
+        "source": "wyscout_2017_18",
+        "competitions": ["England", "France", "Italy", "Spain"],
+        "row": "pressing",
+        "deferred": "not fitted yet: fitted with the tackle decision"
+      }
+    },
+    {
+      "name": "line_height",
+      "kind": "graded",
+      "levels": "instructions.line_height",
+      "default": "normal",
+      "inputs": [
+        { "input": "block_depth", "hook": "shape.block_depth" }
+      ],
+      "signature": [
+        { "stat": "defender_action_height_m", "direction": "up" }
+      ],
+      "data": {
+        "source": "wyscout_2017_18",
+        "competitions": ["England", "France", "Italy", "Spain"],
+        "row": "line_height",
+        "deferred": "not fitted yet: fitted with the tackle decision"
+      }
+    },
+    {
+      "name": "line_of_engagement",
+      "kind": "graded",
+      "levels": "own",
+      "steps": [
+        { "name": "own_third", "values": { "engage_depth_m": -10.0, "engage_line": 0.4 } },
+        { "name": "low", "values": { "engage_depth_m": -5.0, "engage_line": 0.55 } },
+        { "name": "mid", "values": { "engage_depth_m": 0.0, "engage_line": 1.0 } },
+        { "name": "high", "values": { "engage_depth_m": 5.0, "engage_line": 1.0 } },
+        { "name": "very_high", "values": { "engage_depth_m": 10.0, "engage_line": 1.0 } }
+      ],
+      "default": "mid",
+      "inputs": [
+        { "input": "engage_depth_m", "hook": "shape.engage_depth" },
+        { "input": "engage_line", "hook": "press.engage" }
+      ],
+      "signature": [
+        { "stat": "def_action_height_m", "direction": "up" }
+      ],
+      "data": {
+        "source": "wyscout_2017_18",
+        "competitions": ["England", "France", "Italy", "Spain"],
+        "row": "line_of_engagement",
+        "deferred": "not fitted yet: fitted with the tackle decision"
+      }
+    },
+    {
+      "name": "defensive_width",
+      "kind": "graded",
+      "levels": "own",
+      "steps": [
+        { "name": "very_compact", "values": { "defensive_width": 0.8 } },
+        { "name": "compact", "values": { "defensive_width": 0.9 } },
+        { "name": "normal", "values": { "defensive_width": 1.0 } },
+        { "name": "wide", "values": { "defensive_width": 1.1 } },
+        { "name": "very_wide", "values": { "defensive_width": 1.2 } }
+      ],
+      "default": "normal",
+      "inputs": [
+        { "input": "defensive_width", "hook": "shape.defensive_width" }
+      ],
+      "signature": [
+        { "stat": "oop_width_m", "direction": "up" }
+      ],
+      "data": {
+        "source": "dfl_open",
+        "competitions": ["Bundesliga", "2. Bundesliga"],
+        "row": "defensive_width",
+        "deferred": "not fitted yet: fitted with the tackle decision"
+      }
+    },
+    {
+      "name": "force_the_opponent",
+      "kind": "graded",
+      "levels": "own",
+      "steps": [
+        { "name": "strongly_wide", "values": { "force": 1.0 } },
+        { "name": "wide", "values": { "force": 0.5 } },
+        { "name": "neither", "values": { "force": 0.0 } },
+        { "name": "inside", "values": { "force": -0.5 } },
+        { "name": "strongly_inside", "values": { "force": -1.0 } }
+      ],
+      "default": "neither",
+      "inputs": [
+        { "input": "force", "hook": "press.force" }
+      ],
+      "signature": [
+        { "stat": "opp_entries_wide_share", "direction": "down" }
+      ],
+      "data": {
+        "source": "wyscout_2017_18",
+        "competitions": ["England", "France", "Italy", "Spain"],
+        "row": "force_the_opponent",
+        "deferred": "not fitted yet: fitted with the tackle decision"
+      }
+    },
+    {
+      "name": "tackling",
+      "kind": "graded",
+      "levels": "own",
+      "steps": [
+        { "name": "stay_on_feet", "values": { "tackle_willingness": -0.2, "tackle_risk": -1.0 } },
+        { "name": "careful", "values": { "tackle_willingness": -0.1, "tackle_risk": -0.5 } },
+        { "name": "normal", "values": { "tackle_willingness": 0.0, "tackle_risk": 0.0 } },
+        { "name": "committed", "values": { "tackle_willingness": 0.1, "tackle_risk": 0.5 } },
+        { "name": "get_stuck_in", "values": { "tackle_willingness": 0.2, "tackle_risk": 1.0 } }
+      ],
+      "default": "normal",
+      "inputs": [
+        { "input": "tackle_willingness", "hook": "tackle.decide" },
+        { "input": "tackle_risk", "hook": "tackle.foul_risk" }
+      ],
+      "signature": [
+        { "stat": "fouls_per_match", "direction": "up" },
+        { "stat": "yellows_per_match", "direction": "up" }
+      ],
+      "data": {
+        "source": "wyscout_2017_18",
+        "competitions": ["England", "France", "Italy", "Spain"],
+        "row": "tackling",
+        "deferred": "not fitted yet: fitted with the tackle decision"
+      }
+    },
+    {
+      "name": "offside_trap",
+      "kind": "on_off",
+      "levels": "own",
+      "steps": [
+        { "name": "off", "values": { "offside_trap": 0.0 } },
+        { "name": "on", "values": { "offside_trap": 1.0 } }
+      ],
+      "default": "off",
+      "inputs": [
+        { "input": "offside_trap", "hook": "line.offside_trap" }
+      ],
+      "signature": [
+        { "stat": "offsides_caught_per_match", "direction": "up" }
+      ],
+      "data": {
+        "source": "wyscout_2017_18",
+        "competitions": ["England", "France", "Italy", "Spain"],
+        "row": "offside_trap"
+      }
+    },
+    {
+      "name": "stop_short_goal_kicks",
+      "kind": "on_off",
+      "levels": "own",
+      "steps": [
+        { "name": "off", "values": { "screen_short": 0.0 } },
+        { "name": "on", "values": { "screen_short": 1.0 } }
+      ],
+      "default": "off",
+      "inputs": [
+        { "input": "screen_short", "hook": "press.screen_short" }
+      ],
+      "signature": [
+        { "stat": "opp_goal_kick_m", "direction": "up" }
+      ],
+      "data": {
+        "source": "wyscout_2017_18",
+        "competitions": ["England", "France", "Italy", "Spain"],
+        "row": "stop_short_goal_kicks"
+      }
+    },
+    {
+      "name": "press_on_back_pass",
+      "kind": "on_off",
+      "levels": "own",
+      "steps": [
+        { "name": "off", "values": { "trigger_back_pass": 0.0 } },
+        { "name": "on", "values": { "trigger_back_pass": 1.0 } }
+      ],
+      "default": "off",
+      "inputs": [
+        { "input": "trigger_back_pass", "hook": "press.trigger.back_pass" }
+      ],
+      "signature": [
+        { "stat": "pressures_after_back_pass", "direction": "up" }
+      ],
+      "data": {
+        "source": "skillcorner_open",
+        "competitions": ["A-League"],
+        "row": "press_on_back_pass"
+      }
+    },
+    {
+      "name": "press_on_poor_touch",
+      "kind": "on_off",
+      "levels": "own",
+      "steps": [
+        { "name": "off", "values": { "trigger_poor_touch": 0.0 } },
+        { "name": "on", "values": { "trigger_poor_touch": 1.0 } }
+      ],
+      "default": "off",
+      "inputs": [
+        { "input": "trigger_poor_touch", "hook": "press.trigger.poor_touch" }
+      ],
+      "signature": [
+        { "stat": "pressures_after_poor_touch", "direction": "up" }
+      ],
+      "data": {
+        "none": "no open data marks a poor first touch: the SkillCorner engagements name no touch quality and the event sets record no control outcome"
+      }
+    },
+    {
+      "name": "press_on_facing_back",
+      "kind": "on_off",
+      "levels": "own",
+      "steps": [
+        { "name": "off", "values": { "trigger_facing_back": 0.0 } },
+        { "name": "on", "values": { "trigger_facing_back": 1.0 } }
+      ],
+      "default": "off",
+      "inputs": [
+        { "input": "trigger_facing_back", "hook": "press.trigger.facing_back" }
+      ],
+      "signature": [
+        { "stat": "pressures_after_facing_back", "direction": "up" }
+      ],
+      "data": {
+        "none": "no open data records which way a receiver faces: no event set or tracking summary on this PC carries body orientation"
+      }
+    },
+    {
+      "name": "press_on_wide",
+      "kind": "on_off",
+      "levels": "own",
+      "steps": [
+        { "name": "off", "values": { "trigger_wide": 0.0 } },
+        { "name": "on", "values": { "trigger_wide": 1.0 } }
+      ],
+      "default": "off",
+      "inputs": [
+        { "input": "trigger_wide", "hook": "press.trigger.wide" }
+      ],
+      "signature": [
+        { "stat": "pressures_after_wide", "direction": "up" }
+      ],
+      "data": {
+        "source": "skillcorner_open",
+        "competitions": ["A-League"],
+        "row": "press_on_wide"
       }
     }
   ]

@@ -437,6 +437,15 @@ impl DecisionModule for StandIn<dyn DecisionModule> {
     ) -> RestartPass {
         self.0.restart_pass(view, taker, kind, direct, aim)
     }
+    fn tackle(
+        &self,
+        view: &MatchView<'_>,
+        tackler: usize,
+        carrier: usize,
+        chances: TackleChances,
+    ) -> Option<TackleChances> {
+        self.0.tackle(view, tackler, carrier, chances)
+    }
 }
 
 impl ManagerModule for StandIn<dyn ManagerModule> {

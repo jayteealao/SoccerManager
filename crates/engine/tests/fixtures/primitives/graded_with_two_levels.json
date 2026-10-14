@@ -1,10 +1,10 @@
 {
-  "refusal": "a graded primitive has exactly 5 levels; instructions.pressing has 3",
+  "refusal": "a graded primitive has exactly 5 levels; instructions.time_wasting has 2",
   "primitive": {
     "name": "planted",
     "kind": "graded",
-    "levels": "instructions.pressing",
-    "default": "mid",
+    "levels": "instructions.time_wasting",
+    "default": "off",
     "inputs": [
       {
         "input": "patience",

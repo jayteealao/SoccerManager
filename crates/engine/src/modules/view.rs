@@ -273,6 +273,20 @@ impl<'a> MatchView<'a> {
         self.sim.since_loss_s(team)
     }
 
+    /// Seconds since press trigger `kind` of the side with the ball fired, for pressing side
+    /// `team`, while the other side keeps the ball; `None` otherwise.
+    #[inline]
+    pub fn since_trigger_s(&self, team: usize, kind: usize) -> Option<f64> {
+        self.sim.since_trigger_s(team, kind)
+    }
+
+    /// Seconds since side `team`'s offside trap started, while the other side has the ball;
+    /// `None` otherwise.
+    #[inline]
+    pub fn since_trap_s(&self, team: usize) -> Option<f64> {
+        self.sim.since_trap_s(team)
+    }
+
     /// Player `i`'s followed ball point: the point his anchor's ball shift reads, which
     /// follows the ball later the farther he is from it. The ball itself at a dead ball.
     #[inline]

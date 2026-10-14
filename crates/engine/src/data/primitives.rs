@@ -26,7 +26,7 @@ pub const GRADED_LEVELS: usize = 5;
 
 /// The statistics a primitive can name as its signature. The real-team table
 /// (`signatures.json`) and the engine measure each one by the same definition.
-pub const SIGNATURE_STATS: [&str; 37] = [
+pub const SIGNATURE_STATS: [&str; 49] = [
     "passes_per_possession",
     "recycle_share",
     "turnovers_per_possession",
@@ -64,6 +64,18 @@ pub const SIGNATURE_STATS: [&str; 37] = [
     "counterpress_pressures_per_loss",
     "counterpress_regain_share",
     "last_counterpress_s",
+    "def_action_height_m",
+    "defender_action_height_m",
+    "oop_width_m",
+    "opp_entries_wide_share",
+    "offsides_caught_per_match",
+    "opp_goal_kick_m",
+    "fouls_per_match",
+    "yellows_per_match",
+    "pressures_after_back_pass",
+    "pressures_after_poor_touch",
+    "pressures_after_facing_back",
+    "pressures_after_wide",
 ];
 
 /// The real data sources a fit may read. `pff_wc2022` is national-team data (the 2022 World
@@ -96,12 +108,12 @@ pub const OWN: &str = "own";
 
 /// The most primitives that own their levels or choices: the bytes of
 /// [`crate::tactics::Tactics::settings`].
-pub const SETTINGS_MAX: usize = 16;
+pub const SETTINGS_MAX: usize = 32;
 
 /// Where each plan input of a primitive is written: the block (a level block of the tactics
 /// file, or [`OWN`] for an input the primitive's own steps or choices hold), the field of each
 /// level, and the range the field allows.
-pub const INPUT_FIELDS: [(&str, &str, &str, f64, f64); 24] = [
+pub const INPUT_FIELDS: [(&str, &str, &str, f64, f64); 39] = [
     ("patience", "instructions.tempo", "value", -2.0, 2.0),
     ("loss_weight", "mentalities", "loss_weight", -5.0, 5.0),
     ("rest_defence", "mentalities", "rest_defence", 0.0, 10.0),
@@ -138,6 +150,39 @@ pub const INPUT_FIELDS: [(&str, &str, &str, f64, f64); 24] = [
     ("pace_lift", OWN, "pace_lift", 0.0, 1.0),
     ("counter_press", OWN, "counter_press", -1.0, 3.0),
     ("counter_press_s", OWN, "counter_press_s", 1.0, 12.0),
+    (
+        "press_distance",
+        "instructions.pressing",
+        "press_distance_scale",
+        0.1,
+        3.0,
+    ),
+    (
+        "press_count",
+        "instructions.pressing",
+        "press_count",
+        0.0,
+        4.0,
+    ),
+    (
+        "block_depth",
+        "instructions.line_height",
+        "value",
+        -20.0,
+        20.0,
+    ),
+    ("engage_depth_m", OWN, "engage_depth_m", -20.0, 20.0),
+    ("engage_line", OWN, "engage_line", 0.2, 1.0),
+    ("defensive_width", OWN, "defensive_width", 0.5, 1.5),
+    ("force", OWN, "force", -1.0, 1.0),
+    ("tackle_willingness", OWN, "tackle_willingness", -1.0, 1.0),
+    ("tackle_risk", OWN, "tackle_risk", -2.0, 2.0),
+    ("offside_trap", OWN, "offside_trap", 0.0, 1.0),
+    ("screen_short", OWN, "screen_short", 0.0, 1.0),
+    ("trigger_back_pass", OWN, "trigger_back_pass", 0.0, 1.0),
+    ("trigger_poor_touch", OWN, "trigger_poor_touch", 0.0, 1.0),
+    ("trigger_facing_back", OWN, "trigger_facing_back", 0.0, 1.0),
+    ("trigger_wide", OWN, "trigger_wide", 0.0, 1.0),
 ];
 
 /// The block, field and range of plan input `input`.
@@ -357,10 +402,10 @@ pub struct Primitive {
 impl Primitive {
     /// The names of the primitive's levels, choices or states, in order.
     pub fn level_names<'a>(&'a self, schema: &'a TacticsSchema) -> Vec<&'a str> {
+        if self.owns_levels() {
+            return self.steps.iter().map(|s| s.name.as_str()).collect();
+        }
         match self.kind {
-            PrimitiveKind::Graded if self.owns_levels() => {
-                self.steps.iter().map(|s| s.name.as_str()).collect()
-            }
             PrimitiveKind::Graded => self
                 .levels
                 .as_deref()
@@ -378,13 +423,25 @@ impl Primitive {
             .position(|n| *n == self.default)
     }
 
-    /// `true` for a graded primitive whose levels are its own `steps`.
+    /// `true` for a graded primitive whose levels are its own `steps`, and for an on/off
+    /// primitive whose two states are its own `steps` (off first).
     pub fn owns_levels(&self) -> bool {
-        self.kind == PrimitiveKind::Graded && self.levels.as_deref() == Some(OWN)
+        matches!(self.kind, PrimitiveKind::Graded | PrimitiveKind::OnOff)
+            && self.levels.as_deref() == Some(OWN)
     }
 
-    /// `true` when the tactics store this primitive's level or choice in
-    /// [`crate::tactics::Tactics::settings`]: it owns its levels, or it is a choice.
+    /// The number of steps a primitive that owns its levels lists: five for a graded one, two
+    /// for an on/off one.
+    pub fn step_count(&self) -> usize {
+        if self.kind == PrimitiveKind::OnOff {
+            2
+        } else {
+            GRADED_LEVELS
+        }
+    }
+
+    /// `true` when the tactics store this primitive's level, choice or state in
+    /// [`crate::tactics::Tactics::settings`]: it owns its levels or states, or it is a choice.
     pub fn is_setting(&self) -> bool {
         self.owns_levels() || self.kind == PrimitiveKind::Choice
     }
@@ -446,6 +503,24 @@ pub fn level_value(schema: &TacticsSchema, input: &str, level: usize) -> Option<
             .levels
             .get(level)
             .map(|l| l.value),
+        "press_distance" => schema
+            .instructions
+            .pressing
+            .levels
+            .get(level)
+            .map(|l| l.press_distance_scale),
+        "press_count" => schema
+            .instructions
+            .pressing
+            .levels
+            .get(level)
+            .map(|l| f64::from(l.press_count)),
+        "block_depth" => schema
+            .instructions
+            .line_height
+            .levels
+            .get(level)
+            .map(|l| l.value),
         "loss_weight" => schema.mentalities.get(level).map(|m| m.loss_weight),
         "rest_defence" => schema
             .mentalities
@@ -483,6 +558,28 @@ pub fn set_level_value(schema: &mut TacticsSchema, input: &str, level: usize, va
         "directness" => schema
             .instructions
             .passing_directness
+            .levels
+            .get_mut(level)
+            .map(|l| l.value = value)
+            .is_some(),
+        "press_distance" => schema
+            .instructions
+            .pressing
+            .levels
+            .get_mut(level)
+            .map(|l| l.press_distance_scale = value)
+            .is_some(),
+        // A count: the nearest whole number inside its range.
+        "press_count" => schema
+            .instructions
+            .pressing
+            .levels
+            .get_mut(level)
+            .map(|l| l.press_count = value.round().clamp(0.0, 4.0) as u8)
+            .is_some(),
+        "block_depth" => schema
+            .instructions
+            .line_height
             .levels
             .get_mut(level)
             .map(|l| l.value = value)
@@ -544,19 +641,25 @@ pub fn check(schema: &TacticsSchema) -> Result<(), Refusal> {
     Ok(())
 }
 
-/// The checks of a primitive's own steps: exactly [`GRADED_LEVELS`] of them, each name once,
-/// and each step giving every input of the primitive a value inside the input's range.
+/// The checks of a primitive's own steps: exactly [`GRADED_LEVELS`] of them for a graded
+/// primitive and two for an on/off one, each name once, and each step giving every input of
+/// the primitive a value inside the input's range.
 fn check_steps(p: &Primitive) -> Result<(), Refusal> {
     let n = &p.name;
-    if p.steps.len() != GRADED_LEVELS {
-        return Err(refuse(
-            n,
-            "steps",
+    let want = p.step_count();
+    if p.steps.len() != want {
+        let what = if p.kind == PrimitiveKind::OnOff {
+            format!(
+                "an on/off primitive has exactly two states; it has {}",
+                p.steps.len()
+            )
+        } else {
             format!(
                 "a graded primitive has exactly {GRADED_LEVELS} levels; it has {}",
                 p.steps.len()
-            ),
-        ));
+            )
+        };
+        return Err(refuse(n, "steps", what));
     }
     for (i, s) in p.steps.iter().enumerate() {
         if p.steps[..i].iter().any(|o| o.name == s.name) {
@@ -611,11 +714,11 @@ fn check_one(schema: &TacticsSchema, p: &Primitive) -> Result<(), Refusal> {
         return Err(refuse(
             n,
             "steps",
-            format!("only a graded primitive whose levels are \"{OWN}\" lists steps"),
+            format!("only a graded or on/off primitive whose levels are \"{OWN}\" lists steps"),
         ));
     }
     match p.kind {
-        PrimitiveKind::Graded if p.owns_levels() => check_steps(p)?,
+        PrimitiveKind::Graded | PrimitiveKind::OnOff if p.owns_levels() => check_steps(p)?,
         PrimitiveKind::Graded => {
             let Some(block) = p.levels.as_deref() else {
                 return Err(refuse(
@@ -715,7 +818,7 @@ fn check_one(schema: &TacticsSchema, p: &Primitive) -> Result<(), Refusal> {
                 ),
             ));
         }
-        if p.kind == PrimitiveKind::Graded {
+        if p.kind == PrimitiveKind::Graded || p.owns_levels() {
             let block = p.levels.as_deref().unwrap_or_default();
             if input_field(&ih.input).is_none_or(|(b, ..)| b != block) {
                 return Err(refuse(
@@ -831,9 +934,8 @@ fn check_one(schema: &TacticsSchema, p: &Primitive) -> Result<(), Refusal> {
         };
         for (input, value) in &fit.values {
             let actual = match p.kind {
-                PrimitiveKind::Graded => level_value(schema, input, level),
+                PrimitiveKind::Graded | PrimitiveKind::OnOff => level_value(schema, input, level),
                 PrimitiveKind::Choice => p.choices[level].values.get(input).copied(),
-                PrimitiveKind::OnOff => None,
             };
             if actual.is_none_or(|a| (a - value).abs() > 1e-9) {
                 return Err(refuse(

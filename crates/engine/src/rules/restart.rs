@@ -383,7 +383,10 @@ pub fn target(
             away,
             0.5,
         ),
-        StoppageKind::GoalKick if opponent => out_of_area(pitch, base, end_of(dead.spot)),
+        StoppageKind::GoalKick if opponent => {
+            let at = screen_target(dead, i, players, teams).unwrap_or(base);
+            out_of_area(pitch, at, end_of(dead.spot))
+        }
         StoppageKind::Injury => outside_on_pitch(
             pitch,
             base,
@@ -403,6 +406,58 @@ pub fn target(
         _ => base,
     };
     pitch.clamp(at, 0.5)
+}
+
+/// Stop short goal kicks (hook `press.screen_short`): at the other side's goal kick, each
+/// active outfield player of a side whose plan screens, in front of its back line, takes in
+/// slot order the nearest kicking-side outfield player within the goal kick's short reach not
+/// yet taken, and stands beside him on the taker's side, [`crate::decision::SCREEN_M`] / 2
+/// metres off. `None` for a player who screens nobody.
+fn screen_target(
+    dead: &DeadBall,
+    i: usize,
+    players: &[Player],
+    teams: &[Team; 2],
+) -> Option<DVec2> {
+    let me = &players[i];
+    let side = &teams[me.team];
+    if !side.plan.screen_short || side.in_back_line(me.slot) || me.slot == side.keeper_slot() {
+        return None;
+    }
+    let short = crate::decision::GOAL_KICK_REACH_M;
+    let kicking = &teams[dead.team];
+    let mut taken = 0u32;
+    for (k, p) in players.iter().enumerate() {
+        if p.team != me.team
+            || !p.active()
+            || side.in_back_line(p.slot)
+            || p.slot == side.keeper_slot()
+        {
+            continue;
+        }
+        let mark = players
+            .iter()
+            .enumerate()
+            .filter(|&(j, q)| {
+                q.team == dead.team
+                    && q.active()
+                    && j != dead.taker
+                    && q.slot != kicking.keeper_slot()
+                    && taken & (1u32 << j) == 0
+                    && (q.pos - dead.spot).length() < short
+            })
+            .min_by(|a, b| {
+                (a.1.pos - p.pos)
+                    .length()
+                    .total_cmp(&(b.1.pos - p.pos).length())
+            })?;
+        taken |= 1u32 << mark.0;
+        if k == i {
+            let to_ball = crate::math::toward(mark.1.pos, dead.spot);
+            return Some(mark.1.pos + to_ball * (0.5 * crate::decision::SCREEN_M));
+        }
+    }
+    None
 }
 
 /// Room, in metres, that a player walking round the circle the law keeps him out of leaves

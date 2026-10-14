@@ -1,0 +1,23 @@
+{
+  "refusal": "an on/off primitive has exactly two states; it has 3",
+  "primitive": {
+    "name": "planted",
+    "kind": "on_off",
+    "levels": "own",
+    "steps": [
+      { "name": "off", "values": { "trigger_wide": 0.0 } },
+      { "name": "half", "values": { "trigger_wide": 0.5 } },
+      { "name": "on", "values": { "trigger_wide": 1.0 } }
+    ],
+    "default": "off",
+    "inputs": [
+      { "input": "trigger_wide", "hook": "press.trigger.wide" }
+    ],
+    "signature": [
+      { "stat": "pressures_after_wide", "direction": "up" }
+    ],
+    "data": {
+      "none": "a planted entry"
+    }
+  }
+}

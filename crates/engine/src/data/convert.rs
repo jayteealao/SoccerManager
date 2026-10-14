@@ -63,6 +63,7 @@ pub const TACTICS_V1: u32 = 1;
 pub const TACTICS_V2: u32 = 2;
 pub const TACTICS_V3: u32 = 3;
 pub const TACTICS_V4: u32 = 4;
+pub const TACTICS_V5: u32 = 5;
 /// The attribute file versions the converters read.
 pub const ATTRIBUTES_V1: u32 = 1;
 pub const ATTRIBUTES_V2: u32 = 2;
@@ -1053,10 +1054,7 @@ pub fn tactics_v4_to_v5(mut file: serde_json::Value) -> Result<serde_json::Value
             primitives.push(entry);
         }
     }
-    obj.insert(
-        "schema_version".into(),
-        serde_json::Value::from(crate::data::tactics::TACTICS_VERSION),
-    );
+    obj.insert("schema_version".into(), serde_json::Value::from(TACTICS_V5));
     let tempo = obj
         .get_mut("instructions")
         .and_then(|i| i.get_mut("tempo"))
@@ -1087,6 +1085,59 @@ pub fn tactics_v4_to_v5(mut file: serde_json::Value) -> Result<serde_json::Value
                     }
                 }
             }
+        }
+    }
+    Ok(file)
+}
+
+/// The copy of the version 6 additions compiled into the build: the outer pressing and
+/// line-height levels and the primitive entries version 6 adds (pressing, line height, line of
+/// engagement, defensive width, force the opponent, tackling, the offside trap, stop short goal
+/// kicks and the four press triggers).
+pub const FROZEN_TACTICS_V6: &str = include_str!("frozen-tactics-v6.json");
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenTacticsV6 {
+    outer_levels: BTreeMap<String, [serde_json::Value; 2]>,
+    primitives: Vec<serde_json::Value>,
+}
+
+/// A version 5 tactics file, as JSON, in the version 6 shape: a pressing or line-height block
+/// with three levels takes the frozen lowest level before them and the frozen highest after,
+/// so its levels, their values and its default keep their names and the default plays the
+/// same; and the file takes each frozen primitive entry it does not hold by name. The caller
+/// parses and checks the result as a current file.
+pub fn tactics_v5_to_v6(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let frozen: FrozenTacticsV6 = serde_json::from_str(FROZEN_TACTICS_V6)
+        .expect("the frozen tactics copy parses; a test checks it");
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert(
+        "schema_version".into(),
+        serde_json::Value::from(crate::data::tactics::TACTICS_VERSION),
+    );
+    for (block, [lowest, highest]) in frozen.outer_levels {
+        let levels = obj
+            .get_mut("instructions")
+            .and_then(|i| i.get_mut(block.as_str()))
+            .and_then(|b| b.get_mut("levels"))
+            .and_then(|l| l.as_array_mut())
+            .ok_or_else(|| format!("instructions.{block}.levels is missing"))?;
+        if levels.len() == 3 {
+            levels.insert(0, lowest);
+            levels.push(highest);
+        }
+    }
+    let primitives = obj
+        .entry("primitives")
+        .or_insert_with(|| serde_json::Value::Array(Vec::new()))
+        .as_array_mut()
+        .ok_or_else(|| "primitives is not a list".to_string())?;
+    for entry in frozen.primitives {
+        if !primitives.iter().any(|p| p["name"] == entry["name"]) {
+            primitives.push(entry);
         }
     }
     Ok(file)
