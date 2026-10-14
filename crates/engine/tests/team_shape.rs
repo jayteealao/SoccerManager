@@ -70,11 +70,12 @@ fn mean_depth(config: MatchConfig, slots: &[usize]) -> f64 {
 }
 
 /// Shape AC-3: over the same 20 seeded minutes, an attacking duty takes the left-back at
-/// least 2 m further up on average than a defending one, and a high line takes the home
-/// outfield at least 2 m further up than a deep one. 2 m is a quarter of the 8 m the content
+/// least 2 m further up on average than a defending one, and a high line takes the home back
+/// line at least 2 m further up than a deep one. 2 m is a quarter of the 8 m the content
 /// moves a slot between those duties, and a fifth of the 10 m between those lines, which
-/// move the block only while the other team has the ball. The block is the line height's:
-/// a mentality is the side's appetite for risk and moves no anchor.
+/// move the back line only while the other team has the ball (the line of engagement moves
+/// the players in front of it). A mentality is the side's appetite for risk and moves no
+/// anchor.
 #[test]
 fn a_duty_and_the_line_height_move_the_shape_the_way_they_say() {
     const SMALLEST_SHIFT_M: f64 = 2.0;
@@ -89,17 +90,20 @@ fn a_duty_and_the_line_height_move_the_shape_the_way_they_say() {
         attack - defend >= SMALLEST_SHIFT_M,
         "left-back: defend {defend:.2} m, attack {attack:.2} m"
     );
-    let outfield: Vec<usize> = (1..11).collect();
-    let line = |level: u8| {
-        seeded(20, |t, _| {
-            t.instructions[engine::data::tactics::LINE_HEIGHT] = level;
+    // The back four of the 4-4-2.
+    let back_line: Vec<usize> = (1..5).collect();
+    let line = |name: &str| {
+        seeded(20, |t, schema| {
+            let i = engine::data::tactics::LINE_HEIGHT;
+            let names = schema.instructions.level_names(i);
+            t.instructions[i] = names.iter().position(|n| *n == name).unwrap() as u8;
         })
     };
-    let deep = mean_depth(line(0), &outfield);
-    let high = mean_depth(line(2), &outfield);
+    let deep = mean_depth(line("deep"), &back_line);
+    let high = mean_depth(line("high"), &back_line);
     assert!(
         high - deep >= SMALLEST_SHIFT_M,
-        "home outfield: a deep line {deep:.2} m, a high line {high:.2} m"
+        "home back line: a deep line {deep:.2} m, a high line {high:.2} m"
     );
 }
 

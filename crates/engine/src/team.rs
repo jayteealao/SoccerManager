@@ -536,8 +536,9 @@ impl Team {
         self.attack_x = -self.attack_x;
     }
 
-    /// The formation anchor for `slot` given the ball position: the slot moved up by the
-    /// plan's block depth, the slot's duty, and its stand for the phase (the team has the
+    /// The formation anchor for `slot` given the ball position: the slot moved up out of
+    /// possession by the plan's block depth (the back line) or its engagement depth (the
+    /// players in front of it), the slot's duty, and its stand for the phase (the team has the
     /// ball when `in_possession`), widened by the plan, mirrored for the team's attack
     /// direction as [`Team::slot_base`] is, plus the ball shift. A central slot takes no
     /// sideways stand. In play the shift reads each outfield player's followed ball point
@@ -561,13 +562,14 @@ impl Team {
         };
         // The role's offset comes after the existing sums, so an offset of 0 keeps every
         // anchor's bits.
+        // Out of possession the line height moves the back line and the line of engagement
+        // the players in front of it.
         let block = if in_possession {
             0.0
-        } else if self.plan.engage_depth_m != 0.0 && !self.in_back_line(slot) {
-            // The line of engagement moves the players in front of the back line.
-            self.plan.block_depth + self.plan.engage_depth_m
-        } else {
+        } else if self.in_back_line(slot) {
             self.plan.block_depth
+        } else {
+            self.plan.engage_depth_m
         };
         let depth = (fx + block + plan.depth + offset.x) * sx;
         let side = self.slot_side(slot);
