@@ -66,7 +66,7 @@ const PITCH_M: f64 = 105.0;
 
 /// The table's format version. Version 2 adds the in-possession rows and the thin-sample rows
 /// of the SkillCorner runs; version 3 the transition rows and their checks.
-pub const SIGNATURES_VERSION: u32 = 3;
+pub const SIGNATURES_VERSION: u32 = 4;
 /// The StatsBomb competitions that are held-out sets: never read.
 pub const STATSBOMB_HELD_OUT: [&str; 2] = ["FIFA World Cup 2018", "UEFA Euro 2016"];
 /// The StatsBomb competition of club teams; the others are national-team tournaments.
@@ -388,6 +388,54 @@ struct Season {
     regain_shots: f64,
     regain_shot_s: f64,
     tagged_counters: f64,
+    /// Defensive actions (ground defending duels, sliding tackles, interceptions and fouls)
+    /// anywhere, and the sum of their heights in metres from the own goal line; the same for
+    /// those of defenders (role DF).
+    def_all: f64,
+    def_all_m: f64,
+    def_df: f64,
+    def_df_m: f64,
+    /// Fouls and yellow cards (rows of `wy2_team_matches.csv`), over the matches whose row
+    /// carries them.
+    fouls: f64,
+    yellows: f64,
+    card_matches: f64,
+    /// The matches whose opponent is known: the denominator of the opponents' offsides.
+    opp_matches: f64,
+    /// The opponents' completed entries into the final third by channel, their goal kicks and
+    /// the sum of their lengths, and their offsides: what the team let them do.
+    opp_entries: [f64; 3],
+    opp_goal_kicks: f64,
+    opp_goal_kick_m: f64,
+    offsides_caught: f64,
+}
+
+/// One team's counts in one match that its opponent's season reads.
+#[derive(Debug, Clone, Copy, Default)]
+struct MatchSide {
+    entries: [f64; 3],
+    goal_kicks: f64,
+    goal_kick_m: f64,
+    offsides: f64,
+}
+
+/// A defensive action of a team's season `s`: a ground defending duel, a sliding tackle, an
+/// interception (tag 1401) or a foul, at `x0` percent from its own goal line, by a defender
+/// when `role` is DF.
+fn count_defending(s: &mut Season, ev: &str, sub: &str, role: &str, x0: Option<f64>, tags: &str) {
+    let intercept = tags.split([' ', ';']).any(|t| t == "1401");
+    let action =
+        matches!(sub, "Ground defending duel" | "Sliding tackle") || intercept || ev == "Foul";
+    let Some(x0) = x0.filter(|_| action) else {
+        return;
+    };
+    let m = x0 * PITCH_M / 100.0;
+    s.def_all += 1.0;
+    s.def_all_m += m;
+    if role == "DF" {
+        s.def_df += 1.0;
+        s.def_df_m += m;
+    }
 }
 
 /// The possession in progress.
@@ -556,7 +604,15 @@ fn channel(y: f64) -> usize {
 
 /// The counts of one event of a team's season `s` that the in-possession rows read: `at` is
 /// `x0, y0, x1, y1` in percent, `role` the player's role, `tags` the event's tags.
-fn count_event(s: &mut Season, ev: &str, sub: &str, role: &str, at: [Option<f64>; 4], tags: &str) {
+fn count_event(
+    s: &mut Season,
+    side: &mut MatchSide,
+    ev: &str,
+    sub: &str,
+    role: &str,
+    at: [Option<f64>; 4],
+    tags: &str,
+) {
     let has = |t: &str| tags.split([' ', ';']).any(|x| x == t);
     let [Some(x0), Some(y0)] = [at[0], at[1]] else {
         return;
@@ -593,6 +649,7 @@ fn count_event(s: &mut Season, ev: &str, sub: &str, role: &str, at: [Option<f64>
             }
             if has("1801") && ax < 2.0 * third && bx >= 2.0 * third {
                 s.entries[channel(by)] += 1.0;
+                side.entries[channel(by)] += 1.0;
             }
             if role == "GK" {
                 s.keeper_actions += 1.0;
@@ -612,6 +669,8 @@ fn count_event(s: &mut Season, ev: &str, sub: &str, role: &str, at: [Option<f64>
             if let Some((bx, by)) = end {
                 s.goal_kicks += 1.0;
                 s.goal_kick_m += (bx - ax).hypot(by - ay);
+                side.goal_kicks += 1.0;
+                side.goal_kick_m += (bx - ax).hypot(by - ay);
             }
         }
         ("Others on the ball", "Clearance") if role == "GK" => {
@@ -675,6 +734,11 @@ fn wyscout_seasons(
         column(&header, "opp_build_vs", file)?,
         column(&header, "def_act", file)?,
     );
+    // The out-of-possession columns; a file without them gives no out-of-possession rows.
+    let optional = |n: &str| header.iter().position(|h| h == n);
+    let (opp, fouls, yellows) = (optional("opp"), optional("fouls"), optional("yellows"));
+    // Each team's opponent in each match of the competitions read.
+    let mut opponents: Vec<(String, u64, u64)> = Vec::new();
     for line in it {
         let c = cells(&line?);
         let Some(comp) = comps.get(&c[m]) else {
@@ -687,8 +751,19 @@ fn wyscout_seasons(
         let s = seasons.entry(team).or_default();
         s.opp_build += c[build].parse::<f64>().unwrap_or(0.0);
         s.def_actions += c[def].parse::<f64>().unwrap_or(0.0);
+        let num = |i: Option<usize>| i.and_then(|i| c.get(i)?.parse::<f64>().ok());
+        if let (Some(f), Some(y)) = (num(fouls), num(yellows)) {
+            s.fouls += f;
+            s.yellows += y;
+            s.card_matches += 1.0;
+        }
         s.team_matches += 1.0;
+        if let Some(o) = opp.and_then(|i| c.get(i)?.parse::<u64>().ok()) {
+            s.opp_matches += 1.0;
+            opponents.push((c[m].clone(), team, o));
+        }
     }
+    let mut sides: BTreeMap<(String, u64), MatchSide> = BTreeMap::new();
 
     let file = "wy2_events.csv.gz";
     let mut it = lines(&dir.join(file))?;
@@ -738,6 +813,23 @@ fn wyscout_seasons(
             take_over(&mut open, &mut spell, &mut seasons);
         }
         let (ev, sub) = (c[c_ev].as_str(), c[c_sub].as_str());
+        if let Ok(team) = c[c_team].parse::<u64>() {
+            let x0 = c[c_x0].parse::<f64>().ok().filter(|v| v.is_finite());
+            count_defending(
+                seasons.entry(team).or_default(),
+                ev,
+                sub,
+                &c[c_role],
+                x0,
+                &c[c_tags],
+            );
+            if ev == "Offside" {
+                sides
+                    .entry((c[c_match].clone(), team))
+                    .or_default()
+                    .offsides += 1.0;
+            }
+        }
         if matches!(ev, "Interruption" | "Foul" | "Offside") {
             spell = None;
             close(open.take(), End::Other, &mut seasons);
@@ -748,6 +840,7 @@ fn wyscout_seasons(
         if let Ok(team) = c[c_team].parse::<u64>() {
             count_event(
                 seasons.entry(team).or_default(),
+                sides.entry((c[c_match].clone(), team)).or_default(),
                 ev,
                 sub,
                 &c[c_role],
@@ -804,6 +897,19 @@ fn wyscout_seasons(
         }
     }
     close(open.take(), End::Other, &mut seasons);
+    // What each team's opponents did against it.
+    for (game, team, opp) in opponents {
+        let Some(o) = sides.get(&(game, opp)).copied() else {
+            continue;
+        };
+        let s = seasons.entry(team).or_default();
+        for (a, b) in s.opp_entries.iter_mut().zip(o.entries) {
+            *a += b;
+        }
+        s.opp_goal_kicks += o.goal_kicks;
+        s.opp_goal_kick_m += o.goal_kick_m;
+        s.offsides_caught += o.offsides;
+    }
     seasons.retain(|_, s| s.possessions > 0);
     Ok((seasons, matches.len()))
 }
@@ -1464,6 +1570,188 @@ fn skillcorner_counter_press(dir: &Path) -> anyhow::Result<Option<Check>> {
     ))
 }
 
+/// The DFL out-of-possession shapes, one line per team, half and phase (`idsse_shape.csv`, by
+/// `mine_positions.py`: the width is the distance across between the widest outfield players).
+pub const DFL_SHAPE: &str = "idsse_shape.csv";
+/// The source of the defensive-width row: the DFL open tracking data.
+pub const DFL: &str = "dfl_open";
+
+/// The thin-sample row of defensive width: per club, the frame-weighted mean width of its
+/// outfield players out of possession. None without the file.
+fn dfl_width_row(dir: &Path) -> anyhow::Result<Option<Row>> {
+    let path = dir.join(DFL_SHAPE);
+    if !path.exists() {
+        return Ok(None);
+    }
+    let mut it = lines(&path)?;
+    let header = cells(&it.next().context("an empty idsse_shape.csv")??);
+    let col = |n: &str| column(&header, n, DFL_SHAPE);
+    let (c_team, c_phase, c_frames, c_width, c_match, c_comp) = (
+        col("team")?,
+        col("phase")?,
+        col("frames")?,
+        col("width")?,
+        col("mid")?,
+        col("comp")?,
+    );
+    let mut teams: BTreeMap<String, (f64, f64)> = BTreeMap::new();
+    let mut matches = BTreeSet::new();
+    let mut comps = BTreeSet::new();
+    for line in it {
+        let c = cells(&line?);
+        if c.len() <= c_comp.max(c_width) || c[c_phase] != "out" {
+            continue;
+        }
+        let (Ok(frames), Ok(width)) = (c[c_frames].parse::<f64>(), c[c_width].parse::<f64>())
+        else {
+            continue;
+        };
+        let t = teams.entry(c[c_team].clone()).or_default();
+        t.0 += frames * width;
+        t.1 += frames;
+        matches.insert(c[c_match].clone());
+        comps.insert(c[c_comp].clone());
+    }
+    let values: Vec<f64> = teams
+        .values()
+        .filter(|(_, n)| *n > 0.0)
+        .map(|(s, n)| s / n)
+        .collect();
+    let competitions: Vec<String> = comps.into_iter().collect();
+    Ok(Some(thin(
+        "defensive_width",
+        "oop_width_m",
+        DFL,
+        &competitions,
+        matches.len(),
+        &values,
+    )?))
+}
+
+/// The SkillCorner reference rows of two press triggers: per club, its on-ball engagements on
+/// an opponent's possession that began with a back pass received, per such possession; and
+/// the same for a possession of a full-back or one that began in a wide channel. None without
+/// the file.
+fn skillcorner_trigger_rows(dir: &Path) -> anyhow::Result<Vec<Row>> {
+    let file = "sc_dynamic_events.csv.gz";
+    let path = dir.join(file);
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let mut it = lines(&path)?;
+    let header = cells(&it.next().context("an empty sc_dynamic_events.csv.gz")??);
+    // A file without the possession and engagement columns gives no trigger row.
+    let col = |n: &str| header.iter().position(|h| h == n);
+    let (
+        Some(c_id),
+        Some(c_match),
+        Some(c_team),
+        Some(c_type),
+        Some(c_pos),
+        Some(c_channel),
+        Some(c_dir),
+        Some(c_assoc),
+    ) = (
+        col("event_id"),
+        col("match_id"),
+        col("team_shortname"),
+        col("event_type"),
+        col("player_position"),
+        col("channel_start"),
+        col("pass_direction_received"),
+        col("associated_player_possession_event_id"),
+    )
+    else {
+        return Ok(Vec::new());
+    };
+    let last = [
+        c_id, c_match, c_team, c_type, c_pos, c_channel, c_dir, c_assoc,
+    ]
+    .into_iter()
+    .max()
+    .unwrap_or(0);
+    // Each possession's match, team and kinds; each engagement's team and possession.
+    // Event ids repeat across matches: each is keyed with its match.
+    let mut possessions: BTreeMap<(String, String), (String, String, bool, bool)> = BTreeMap::new();
+    let mut engagements: Vec<(String, (String, String))> = Vec::new();
+    let mut match_teams: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for line in it {
+        let c = cells(&line?);
+        if c.len() <= last {
+            continue;
+        }
+        match_teams
+            .entry(c[c_match].clone())
+            .or_default()
+            .insert(c[c_team].clone());
+        match c[c_type].as_str() {
+            "player_possession" => {
+                let back = c[c_dir] == "backward";
+                let wide = SC_FULL_BACKS.contains(&c[c_pos].as_str())
+                    || matches!(c[c_channel].as_str(), "wide_left" | "wide_right");
+                possessions.insert(
+                    (c[c_match].clone(), c[c_id].clone()),
+                    (c[c_match].clone(), c[c_team].clone(), back, wide),
+                );
+            }
+            "on_ball_engagement" => {
+                engagements.push((c[c_team].clone(), (c[c_match].clone(), c[c_assoc].clone())))
+            }
+            _ => {}
+        }
+    }
+    // Per pressing club: [back-pass possessions faced, engagements on them, wide possessions
+    // faced, engagements on them].
+    let mut clubs: BTreeMap<String, [f64; 4]> = BTreeMap::new();
+    for (game, team, back, wide) in possessions.values() {
+        let Some(pair) = match_teams.get(game) else {
+            continue;
+        };
+        for other in pair.iter().filter(|t| *t != team) {
+            let k = clubs.entry(other.clone()).or_default();
+            k[0] += f64::from(u8::from(*back));
+            k[2] += f64::from(u8::from(*wide));
+        }
+    }
+    for (team, assoc) in &engagements {
+        let Some((_, owner, back, wide)) = possessions.get(assoc) else {
+            continue;
+        };
+        if owner == team {
+            continue;
+        }
+        let k = clubs.entry(team.clone()).or_default();
+        k[1] += f64::from(u8::from(*back));
+        k[3] += f64::from(u8::from(*wide));
+    }
+    let per = |n: usize, d: usize| -> Vec<f64> {
+        clubs
+            .values()
+            .filter(|k| k[d] > 0.0)
+            .map(|k| k[n] / k[d])
+            .collect()
+    };
+    let competitions = [SKILLCORNER_LEAGUE.to_string()];
+    let matches = match_teams.len();
+    let mut rows = Vec::new();
+    for (primitive, stat, values) in [
+        ("press_on_back_pass", "pressures_after_back_pass", per(1, 0)),
+        ("press_on_wide", "pressures_after_wide", per(3, 2)),
+    ] {
+        if values.len() >= 2 {
+            rows.push(thin(
+                primitive,
+                stat,
+                SKILLCORNER,
+                &competitions,
+                matches,
+                &values,
+            )?);
+        }
+    }
+    Ok(rows)
+}
+
 /// The table of the fit data in `dir` for `competitions`.
 pub fn build(dir: &Path, competitions: &[String]) -> anyhow::Result<Table> {
     for c in competitions {
@@ -1608,7 +1896,58 @@ pub fn build(dir: &Path, competitions: &[String]) -> anyhow::Result<Table> {
     for (primitive, stat, values) in stats {
         rows.push(spread(primitive, stat, competitions, matches, &values)?);
     }
+    // The out-of-possession rows: each needs the columns and events it reads, so a file
+    // without them gives none of its rows.
+    let defending: [(&str, &str, Vec<f64>); 7] = [
+        (
+            "line_of_engagement",
+            "def_action_height_m",
+            ratio(&|s| (s.def_all_m, s.def_all)),
+        ),
+        (
+            "line_height",
+            "defender_action_height_m",
+            ratio(&|s| (s.def_df_m, s.def_df)),
+        ),
+        (
+            "force_the_opponent",
+            "opp_entries_wide_share",
+            ratio(&|s| {
+                (
+                    s.opp_entries[0] + s.opp_entries[2],
+                    s.opp_entries.iter().sum::<f64>(),
+                )
+            }),
+        ),
+        (
+            "tackling",
+            "fouls_per_match",
+            ratio(&|s| (s.fouls, s.card_matches)),
+        ),
+        (
+            "tackling",
+            "yellows_per_match",
+            ratio(&|s| (s.yellows, s.card_matches)),
+        ),
+        (
+            "offside_trap",
+            "offsides_caught_per_match",
+            ratio(&|s| (s.offsides_caught, s.opp_matches)),
+        ),
+        (
+            "stop_short_goal_kicks",
+            "opp_goal_kick_m",
+            ratio(&|s| (s.opp_goal_kick_m, s.opp_goal_kicks)),
+        ),
+    ];
+    for (primitive, stat, values) in defending {
+        if values.len() >= 5 {
+            rows.push(spread(primitive, stat, competitions, matches, &values)?);
+        }
+    }
     rows.extend(skillcorner_rows(dir)?);
+    rows.extend(skillcorner_trigger_rows(dir)?);
+    rows.extend(dfl_width_row(dir)?);
     let (tracked, tracked_checks) = tracking_rows(dir)?;
     rows.extend(tracked);
     let mut checks: Vec<Check> = statsbomb_check(dir)?.into_iter().collect();

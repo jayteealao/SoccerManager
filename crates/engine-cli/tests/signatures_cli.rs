@@ -51,6 +51,12 @@ fn fixture(dir: &Path, planted: bool) -> PathBuf {
             600 + i,
             40 + i
         ));
+        // A defender's defending duel 10 i percent up the pitch from his own goal line.
+        events.push_str(&format!(
+            "England,m{i},{},1H,3.5,{i},3,DF,Duel,Ground defending duel,{},50,,,\n",
+            700 + i,
+            10 * i
+        ));
         events.push_str(&format!(
             "England,m{i},{},1H,4.0,{i},1,MD,Interruption,Ball out of the field,40,50,,,\n",
             100 + i
@@ -305,5 +311,49 @@ fn the_runs_rows_are_thin_sample_and_spread_evenly() {
         .expect("a club check of the runs in behind");
     assert_eq!(check["median"], 0.5);
     assert!(row(&table, "ppda").get("thin_sample").is_none());
+    std::fs::remove_dir_all(&data).unwrap();
+}
+
+/// The out-of-possession rows need the fouls and cards of `wy2_team_matches.csv`: a file
+/// without them gives none of those rows, and with them team `i`'s `i` fouls a match and its
+/// defender's action at 10 i percent of the length give the quintiles worked out by hand.
+#[test]
+fn the_out_of_possession_rows_follow_the_shared_definitions() {
+    let data = temp("engine-cli-signatures", "defending");
+    let real = fixture(&data.join("real"), false);
+    let table: serde_json::Value =
+        serde_json::from_str(&run(&data, &real, "plain.json", &[]).unwrap()).unwrap();
+    let stats: Vec<&str> = table["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|r| r["stat"].as_str())
+        .collect();
+    assert!(!stats.contains(&"fouls_per_match"), "{stats:?}");
+    let height = row(&table, "defender_action_height_m");
+    assert_eq!(height["primitive"], "line_height");
+    assert_eq!(
+        height["medians"],
+        serde_json::json!([15.75, 36.75, 57.75, 78.75, 99.75])
+    );
+    assert_eq!(
+        row(&table, "def_action_height_m")["primitive"],
+        "line_of_engagement"
+    );
+    let mut team_matches = String::from("match,team,opp_build_vs,def_act,opp,fouls,yellows\n");
+    for i in 1..=10 {
+        team_matches.push_str(&format!("m{i},{i},{},10,0,{i},1\n", 10 * i));
+    }
+    team_matches.push_str("g1,99,500,1,0,3,1\n");
+    std::fs::write(real.join("wy2_team_matches.csv"), team_matches).unwrap();
+    let table: serde_json::Value =
+        serde_json::from_str(&run(&data, &real, "full.json", &[]).unwrap()).unwrap();
+    let fouls = row(&table, "fouls_per_match");
+    assert_eq!(fouls["primitive"], "tackling");
+    assert_eq!(
+        fouls["medians"],
+        serde_json::json!([1.5, 3.5, 5.5, 7.5, 9.5])
+    );
+    assert_eq!(row(&table, "yellows_per_match")["medians"][2], 1.0);
     std::fs::remove_dir_all(&data).unwrap();
 }
