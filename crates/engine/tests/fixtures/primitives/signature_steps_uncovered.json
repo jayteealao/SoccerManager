@@ -1,0 +1,57 @@
+{
+  "refusal": "no statistic judges the step up from level 0",
+  "primitive": {
+    "name": "planted",
+    "kind": "graded",
+    "levels": "own",
+    "steps": [
+      {
+        "name": "very_low",
+        "values": {
+          "run_start_m": -2.0
+        }
+      },
+      {
+        "name": "low",
+        "values": {
+          "run_start_m": -1.0
+        }
+      },
+      {
+        "name": "mid",
+        "values": {
+          "run_start_m": 0.0
+        }
+      },
+      {
+        "name": "high",
+        "values": {
+          "run_start_m": 1.0
+        }
+      },
+      {
+        "name": "very_high",
+        "values": {
+          "run_start_m": 2.0
+        }
+      }
+    ],
+    "default": "mid",
+    "inputs": [
+      {
+        "input": "run_start_m",
+        "hook": "run.start"
+      }
+    ],
+    "signature": [
+      {
+        "stat": "runs_in_behind_share",
+        "direction": "up",
+        "steps": "above_default"
+      }
+    ],
+    "data": {
+      "none": "a planted entry"
+    }
+  }
+}

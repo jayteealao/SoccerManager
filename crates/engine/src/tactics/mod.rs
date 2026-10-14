@@ -337,8 +337,11 @@ pub struct SlotPlan {
 pub struct TeamPlan {
     /// Metres the whole block moves up out of possession: the line height.
     pub block_depth: f64,
-    /// A scale on every slot's distance from the centre line.
+    /// A scale on every slot's distance from the centre line while the side has the ball.
     pub width: f64,
+    /// Width's second input: added to a pass whose target lies in a wide channel of the
+    /// middle or final third.
+    pub wide_target: f64,
     /// Opponents who press this team's opponents' carrier, and from how far.
     pub press_count: usize,
     pub press_distance: f64,
@@ -349,6 +352,7 @@ pub struct TeamPlan {
     pub organise_back_line: f64,
     /// The patience of the circulation: added to a short pass that does not go forward.
     pub patience: f64,
+    /// The weight of a pass's gain toward goal, per 45 m gained; a back pass gains none.
     pub directness: f64,
     /// A factor on the team's restart delay while it leads.
     pub time_wasting: f64,
@@ -400,9 +404,9 @@ pub struct TeamPlan {
     /// Creative freedom: a factor on the spread of the choice noise around the plan's
     /// preferences.
     pub freedom: f64,
-    /// Forward runs: metres a forward's timed-run target moves toward the onside line, or
-    /// toward his own goal below 0; never past the line.
-    pub run_depth_m: f64,
+    /// Forward runs: how far from the defensive line, in metres, a forward may start a timed
+    /// run: in behind above 0, coming short below 0; none at 0.
+    pub run_start_m: f64,
     /// Full-back runs: -1 the underlap, 1 the overlap goes first in a full-back's menu and
     /// holds wherever the team-mate ahead stands; 0 keeps the role's menu.
     pub fullback_run: f64,
@@ -426,7 +430,7 @@ impl TeamPlan {
             "early_cross" => &mut self.early_cross,
             "cross_loft" => &mut self.cross_loft,
             "freedom" => &mut self.freedom,
-            "run_depth_m" => &mut self.run_depth_m,
+            "run_start_m" => &mut self.run_start_m,
             "fullback_run" => &mut self.fullback_run,
             "fullback_reach" => &mut self.fullback_reach,
             _ => return,
@@ -475,6 +479,7 @@ impl TeamPlan {
         let mut plan = Self {
             block_depth: ins.line_height.levels[level(LINE_HEIGHT)].value,
             width: ins.width.levels[level(WIDTH)].value,
+            wide_target: ins.width.levels[level(WIDTH)].wide_target,
             press_count: usize::from(press.press_count),
             press_distance: t.press_distance * press.press_distance_scale,
             back_line_gap: t.back_line_gap,
@@ -515,6 +520,7 @@ impl TeamPlan {
         Self {
             block_depth: 0.0,
             width: 1.0,
+            wide_target: 0.0,
             press_count: 2,
             press_distance: t.press_distance,
             back_line_gap: t.back_line_gap,
@@ -544,7 +550,7 @@ impl TeamPlan {
             early_cross: 0.0,
             cross_loft: 0.0,
             freedom: 1.0,
-            run_depth_m: 0.0,
+            run_start_m: 0.0,
             fullback_run: 0.0,
             fullback_reach: 1.0,
         }

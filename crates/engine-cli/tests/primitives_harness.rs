@@ -130,6 +130,162 @@ fn every_shipped_tempo_and_mentality_step_moves_its_primary_statistic() {
     std::fs::remove_dir_all(&data).unwrap();
 }
 
+/// `engine-cli primitives check` of a shipped primitive at 1,000 pairs, its JSON result. The
+/// fitted steps of the real spread are small and the engine's runs are rare, so 200 pairs
+/// cannot see every correct step.
+fn shipped_check(data: &Path, primitive: &str) -> Value {
+    let content = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content");
+    let out = data.join(format!("check-{primitive}.json"));
+    let run = primitives(
+        data,
+        &content,
+        &[
+            "check",
+            "--primitive",
+            primitive,
+            "--pairs",
+            "1000",
+            "--out",
+            out.to_str().unwrap(),
+        ],
+    );
+    assert!(
+        matches!(run.status.code(), Some(0 | 2)),
+        "{primitive}: {}",
+        stderr(&run)
+    );
+    serde_json::from_str(&std::fs::read_to_string(&out).unwrap()).unwrap()
+}
+
+/// The step named `step` of a check result.
+fn step<'a>(result: &'a Value, step: &str) -> &'a Value {
+    result["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["step"] == step)
+        .unwrap_or_else(|| panic!("no step {step}: {result}"))
+}
+
+/// The paired difference and noise of statistic `stat` in a step.
+fn moved(step: &Value, stat: &str) -> (f64, f64) {
+    let s = step["stats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["stat"] == stat)
+        .unwrap_or_else(|| panic!("no {stat}: {step}"));
+    (
+        s["difference"].as_f64().unwrap(),
+        s["noise"].as_f64().unwrap(),
+    )
+}
+
+/// The shipped in-possession graded primitives that are fitted or judged: every step one level
+/// up moves the primary statistic in its direction by more than the paired noise of 1,000
+/// pairs (forward runs: the share of runs in behind above the default, of runs coming short
+/// below it); build-up's steps toward going long also lengthen the goal kick and raise the
+/// keeper's long share (the keeper follows build-up). Crossing is deferred and not judged
+/// (verify runs it).
+#[test]
+#[ignore = "plays 64,000 full matches; verify runs it"]
+fn every_in_possession_step_moves_its_primary_statistic() {
+    let data = temp("engine-cli-primitives", "possession-steps");
+    for primitive in [
+        "width",
+        "passing_directness",
+        "build_up",
+        "final_third",
+        "dribbling",
+        "creative_freedom",
+        "forward_runs",
+        "fullback_run_frequency",
+    ] {
+        let result = shipped_check(&data, primitive);
+        for s in result["steps"].as_array().unwrap() {
+            assert_eq!(s["pass"], true, "{primitive}: {s}");
+        }
+        if primitive == "build_up" {
+            for s in result["steps"].as_array().unwrap() {
+                for stat in ["goal_kick_m", "keeper_long_share"] {
+                    let (d, _) = moved(s, stat);
+                    assert!(d > 0.0, "build_up {}: {stat} {d}", s["step"]);
+                }
+            }
+        }
+    }
+    std::fs::remove_dir_all(&data).unwrap();
+}
+
+/// The judged choices raise their own statistic above the default: the left, right and both
+/// wings channels above balanced, and underlap and overlap above staying back. The channel
+/// mirrors: left's rise in the left share and right's rise in the right share differ by no
+/// more than their paired noise. The central channel choices are deferred and not judged
+/// (verify runs it).
+#[test]
+#[ignore = "plays 16,000 full matches; verify runs it"]
+fn the_judged_choices_raise_their_own_share_and_the_wings_mirror() {
+    let data = temp("engine-cli-primitives", "possession-choices");
+    let channel = shipped_check(&data, "attacking_channel");
+    for s in [
+        "balanced -> left",
+        "balanced -> right",
+        "balanced -> both_wings",
+    ] {
+        assert_eq!(step(&channel, s)["pass"], true, "{s}: {channel}");
+    }
+    let (left, nl) = moved(step(&channel, "balanced -> left"), "entries_left_share");
+    let (right, nr) = moved(step(&channel, "balanced -> right"), "entries_right_share");
+    assert!((left - right).abs() <= nl.hypot(nr), "{left} {right}");
+    let fullback = shipped_check(&data, "fullback_runs");
+    for s in fullback["steps"].as_array().unwrap() {
+        assert_eq!(s["pass"], true, "{s}");
+    }
+    std::fs::remove_dir_all(&data).unwrap();
+}
+
+/// One quintile fit (passing directness `direct`) and one thin-sample fit (forward runs
+/// `push_up`) refitted: each lands within the paired noise of its real ratio (verify runs it).
+#[test]
+#[ignore = "plays up to 5,200 full matches; verify runs it"]
+fn a_quintile_fit_and_a_thin_sample_fit_land_within_their_noise() {
+    let data = temp("engine-cli-primitives", "possession-fits");
+    let content = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content");
+    for (primitive, level, source) in [
+        ("passing_directness", "direct", "wyscout_2017_18"),
+        ("forward_runs", "push_up", "pff_wc2022"),
+    ] {
+        let out = data.join(format!("fit-{primitive}.json"));
+        let run = primitives(
+            &data,
+            &content,
+            &[
+                "fit",
+                "--primitive",
+                primitive,
+                "--level",
+                level,
+                "--matches",
+                "200",
+                "--out",
+                out.to_str().unwrap(),
+            ],
+        );
+        assert_eq!(run.status.code(), Some(0), "{}", stderr(&run));
+        let fit: Value = serde_json::from_str(&std::fs::read_to_string(&out).unwrap()).unwrap();
+        let search = &fit["search"];
+        assert_eq!(search["unreachable"], false, "{fit}");
+        let (achieved, noise, target) = (
+            search["achieved"].as_f64().unwrap(),
+            search["noise"].as_f64().unwrap(),
+            fit["target"].as_f64().unwrap(),
+        );
+        assert!((achieved - target).abs() <= noise, "{fit}");
+        assert_eq!(fit["source"], source);
+    }
+    std::fs::remove_dir_all(&data).unwrap();
+}
+
 /// One shipped level refitted: the search lands within the paired noise of the real ratio and
 /// near the value the tactics file holds (verify runs it).
 #[test]

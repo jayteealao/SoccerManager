@@ -32,6 +32,7 @@ pub mod rating;
 pub mod record;
 pub mod rng;
 pub mod rules;
+pub mod run_kind;
 #[cfg(feature = "scenario")]
 pub mod scenario;
 #[cfg(feature = "sensitivity")]

@@ -560,9 +560,12 @@ impl Team {
         };
         let depth = (fx + block + plan.depth + offset.x) * sx;
         let side = self.slot_side(slot);
+        // Width spreads the side with the ball only; out of possession every anchor keeps the
+        // formation's width.
+        let width = if in_possession { self.plan.width } else { 1.0 };
         let base = DVec2::new(
             (depth - self.pitch.half_length()) * self.attack_x,
-            (fy * self.plan.width + side * offset.y) * sy * self.attack_x,
+            (fy * width + side * offset.y) * sy * self.attack_x,
         );
         let shift = DVec2::new(ball.x * t.compactness_x, ball.y * t.compactness_y);
         self.pitch.clamp(base + shift, 0.5)

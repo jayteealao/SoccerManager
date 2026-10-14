@@ -249,7 +249,7 @@ pub struct Possessing {
     pub open_shots: u32,
     pub outside_shots: u32,
     pub open_shot_m: f64,
-    /// Dribble choices begun with an opponent within the pressed distance.
+    /// Take-ons: opponents a dribbling carrier passed within the pressed distance, one each.
     pub takeons: u32,
     /// Carrier choices that were not the top-scored option before the noise.
     pub off_plan: u32,
@@ -302,8 +302,9 @@ pub struct MatchMeasures {
     pub possessing: [Possessing; 2],
     /// The last carrier and his choice.
     last_choice: Option<(usize, usize)>,
-    /// The carrier who was a pressed dribbler at the last decision.
-    taking_on: Option<usize>,
+    /// The carrier at the last decision and the opponents goal-side of him then, within the
+    /// pressed distance.
+    taking_on: Option<(usize, u32)>,
     planned: Option<Planned>,
     /// The cell of the pass in flight.
     in_flight: Option<usize>,
@@ -377,21 +378,8 @@ impl MatchMeasures {
 
     /// Carrier `c` of `team` chose `choice`, an index into [`CHOICES`]: a choice counts when
     /// it differs from the last carrier's last one, and a counted choice `off_plan` (not the
-    /// top-scored option before the noise) counts as one. A take-on begins each time a carrier
-    /// who dribbles is `pressed` and was not, at the last decision, a pressed dribbler.
-    pub(crate) fn chose(
-        &mut self,
-        team: usize,
-        c: usize,
-        choice: usize,
-        pressed: bool,
-        off_plan: bool,
-    ) {
-        let takeon = choice == 2 && pressed;
-        if takeon && self.taking_on != Some(c) {
-            self.possessing[team].takeons += 1;
-        }
-        self.taking_on = takeon.then_some(c);
+    /// top-scored option before the noise) counts as one.
+    pub(crate) fn chose(&mut self, team: usize, c: usize, choice: usize, off_plan: bool) {
         if self.last_choice == Some((c, choice)) {
             return;
         }
@@ -400,6 +388,28 @@ impl MatchMeasures {
         if off_plan {
             self.possessing[team].off_plan += 1;
         }
+    }
+
+    /// Carrier `c` of `team` at a decision: `ahead` and `beside` hold the roster bits of the
+    /// opponents within the pressed distance of him, goal-side of him and level with or behind
+    /// him. While he dribbles (`dribbling`), each opponent who was goal-side of him at his last
+    /// decision and is now level or behind, still within the pressed distance, is a take-on:
+    /// one per opponent he passes.
+    pub(crate) fn carrying(
+        &mut self,
+        team: usize,
+        c: usize,
+        dribbling: bool,
+        ahead: u32,
+        beside: u32,
+    ) {
+        if let Some((last, was_ahead)) = self.taking_on
+            && last == c
+            && dribbling
+        {
+            self.possessing[team].takeons += (was_ahead & beside).count_ones();
+        }
+        self.taking_on = Some((c, ahead));
     }
 
     /// Carrier `c` of `team` kicked an open-play pass: the pass he planned, else an unknown
@@ -863,10 +873,10 @@ mod tests {
         assert_eq!(m.turnovers, [1, 0]);
         assert_eq!(m.shot_possessions, [0, 1]);
         assert_eq!(m.possessions, [1, 1]);
-        m.chose(HOME, 6, 3, false, false);
-        m.chose(HOME, 6, 3, false, false);
-        m.chose(HOME, 6, 0, false, false);
-        m.chose(HOME, 7, 0, false, false);
+        m.chose(HOME, 6, 3, false);
+        m.chose(HOME, 6, 3, false);
+        m.chose(HOME, 6, 0, false);
+        m.chose(HOME, 7, 0, false);
         assert_eq!(
             m.choices[HOME],
             [2, 0, 0, 1, 0],
@@ -1001,8 +1011,9 @@ mod tests {
     }
 
     /// A lofted cross counts high, a driven one low; a possession whose ball reached the final
-    /// third counts once when it ends; a pressed dribble counts one take-on until the carrier
-    /// stops being a pressed dribbler.
+    /// third counts once when it ends; a dribbler counts one take-on for each opponent he
+    /// passes within the pressed distance, and none for an opponent he passes while not
+    /// dribbling or one another carrier left behind.
     #[test]
     fn crosses_final_third_possessions_and_takeons_count_by_their_definitions() {
         let mut m = MatchMeasures::default();
@@ -1028,9 +1039,19 @@ mod tests {
         assert_eq!((s.crosses, s.high_crosses), (2, 1));
         assert!((s.cross_origin_m - 24.0).abs() < 1e-12);
         assert_eq!(s.final_third_possessions, 1);
-        for (pressed, choice) in [(true, 2), (true, 2), (false, 2), (true, 2), (true, 0)] {
-            m.chose(HOME, 9, choice, pressed, false);
+        // Opponents 13 and 14 goal-side, then 13 passed, then 14 passed while holding, then
+        // both goal-side again and both passed at once; a new carrier passes nobody.
+        for (c, dribbling, ahead, beside) in [
+            (9, true, 0b11 << 13, 0),
+            (9, true, 0b10 << 13, 0b01 << 13),
+            (9, false, 0, 0b10 << 13),
+            (9, true, 0b11 << 13, 0),
+            (9, true, 0, 0b11 << 13),
+            (10, true, 0b01 << 13, 0),
+            (11, true, 0, 0b01 << 13),
+        ] {
+            m.carrying(HOME, c, dribbling, ahead, beside);
         }
-        assert_eq!(m.possessing[HOME].takeons, 2);
+        assert_eq!(m.possessing[HOME].takeons, 3);
     }
 }

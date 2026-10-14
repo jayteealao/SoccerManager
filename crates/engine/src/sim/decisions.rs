@@ -240,8 +240,8 @@ impl Simulation {
     /// Count site: carrier `c` chose `choice` (his options `o`, after any override). The
     /// choice is off the plan when it is not the top-scored option before the noise, the
     /// draft scored again with every noise draw at its middle: another kind of option, or a
-    /// pass to another team-mate. A dribble begun with an opponent within the pressed
-    /// distance is a take-on.
+    /// pass to another team-mate. The opponents within the pressed distance of a dribbler,
+    /// goal-side of him or not, count his take-ons ([`crate::measures::MatchMeasures::carrying`]).
     #[cfg(feature = "measures")]
     fn measure_choice(
         &mut self,
@@ -252,7 +252,19 @@ impl Simulation {
     ) {
         use crate::decision::Choice;
         let decision = self.config.modules.decision;
-        let (off_plan, pressed) = {
+        let (team, at) = (self.players[c].team, self.players[c].pos);
+        let attack_x = self.teams[team].attack_x;
+        let (mut ahead, mut beside) = (0u32, 0u32);
+        for (j, p) in self.players.iter().enumerate() {
+            if p.team != team && p.active() && (p.pos - at).length() < crate::contract::PRESSED_M {
+                if (p.pos.x - at.x) * attack_x > 0.0 {
+                    ahead |= 1 << j;
+                } else {
+                    beside |= 1 << j;
+                }
+            }
+        }
+        let off_plan = {
             let view = self.view();
             let draft = decision.options(&view, c);
             let middle = OptionDraws {
@@ -263,9 +275,8 @@ impl Simulation {
             };
             let plain = decision.scored(&draft, &middle).options;
             let (top, top_choice) = decision.choose(&view, c, &plain, offsets);
-            let off_plan = top_choice != choice
-                || (choice == Choice::Pass && top.pass.map(|p| p.1) != o.pass.map(|p| p.1));
-            (off_plan, crate::decision::pressed(&view, c))
+            top_choice != choice
+                || (choice == Choice::Pass && top.pass.map(|p| p.1) != o.pass.map(|p| p.1))
         };
         let k = match choice {
             Choice::Pass => 0,
@@ -274,9 +285,9 @@ impl Simulation {
             Choice::Hold => 3,
             Choice::Clear => 4,
         };
-        let team = self.players[c].team;
         if let Some(m) = self.measures.as_deref_mut() {
-            m.chose(team, c, k, pressed, off_plan);
+            m.chose(team, c, k, off_plan);
+            m.carrying(team, c, choice == Choice::Dribble, ahead, beside);
         }
     }
 

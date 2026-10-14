@@ -462,7 +462,8 @@ impl DecisionModule for DecisionV1 {
                 hold_the_line(view, &mut targets, team, c);
                 let sent_back = back_to_place(view, &mut targets);
                 time_runs(view, &mut targets, team, c);
-                run_depth(view, &mut targets, team, c);
+                let in_behind = forward_runs(view, &mut targets, team, c);
+                let box_runners = box_runs(view, &mut targets, team, c);
                 // Pressers run at the point where they can meet the carrier's run, and go for
                 // the ball once they are close. Short of that, each leans his aim goal-side of
                 // the carrier by his press stage (positioning): a good presser closes the way
@@ -516,6 +517,38 @@ impl DecisionModule for DecisionV1 {
                 step_with_line(view, &mut targets, def, skip);
                 hold_lapses(view, &mut targets);
                 let mut jobs = shape_jobs(view, phase, &targets, &shaped);
+                // A run in behind, a run coming short and a run into the box are timed runs
+                // (urgent), unless a lapse holds the runner.
+                for (i, job) in jobs.iter_mut().enumerate() {
+                    if (in_behind | box_runners) & (1 << i) != 0
+                        && (players[i].pos - targets[i]).length() > 1.0
+                    {
+                        *job = Job::TimedRun;
+                    }
+                }
+                // The side's chosen full-back run (hook `shape.fullback_run`) is a timed run:
+                // a full-back who takes it goes at urgent pace. Staying back leaves every
+                // full-back's option at its own pace.
+                let chosen_run = match teams[team].plan.fullback_run {
+                    r if r > 0.0 => Some(crate::data::tactics::StandOption::Overlap),
+                    r if r < 0.0 => Some(crate::data::tactics::StandOption::Underlap),
+                    _ => None,
+                };
+                if chosen_run.is_some() {
+                    for (i, p) in players.iter().enumerate() {
+                        let fullback = matches!(
+                            teams[team].plan.slots[p.slot].position,
+                            Some(crate::data::team::Position::LB | crate::data::team::Position::RB)
+                        );
+                        if p.team == team
+                            && fullback
+                            && shaped[team].option[p.slot] == chosen_run
+                            && (p.pos - targets[i]).length() > 1.0
+                        {
+                            jobs[i] = Job::TimedRun;
+                        }
+                    }
+                }
                 jobs[c] = Job::Carry;
                 for &(_, i) in &pressers[..count] {
                     if i != usize::MAX {
@@ -593,8 +626,34 @@ impl DecisionModule for DecisionV1 {
                         chasing_keepers[team] = Some(gk);
                     }
                 }
+                // A forward's timed run (hook `run.start`) goes on while his side's open-play
+                // pass travels forward: the runner keeps his target, unless he chases the ball.
+                // A pass back or across resets the attack, and the runners with it. At the
+                // default (no forward runs) every run stops at a pass, as before.
+                let mut runners = 0u32;
+                if let Some(team) = view.pass_in_flight().filter(|&team| {
+                    teams[team].plan.run_start_m != 0.0 && ball.vel.x * teams[team].attack_x > 0.0
+                }) {
+                    for (i, p) in players.iter().enumerate() {
+                        if p.team == team
+                            && p.active()
+                            && attack_line(teams[team].plan.slots[p.slot].position)
+                            && p.pace.job == Job::TimedRun
+                            && !nearest.contains(&i)
+                            && (p.pos - p.target).length() > 1.0
+                        {
+                            targets[i] = p.target;
+                            runners |= 1 << i;
+                        }
+                    }
+                }
                 hold_lapses(view, &mut targets);
                 let mut jobs = shape_jobs(view, phase, &targets, &shaped);
+                for (i, job) in jobs.iter_mut().enumerate() {
+                    if runners & (1 << i) != 0 {
+                        *job = Job::TimedRun;
+                    }
+                }
                 // The chaser who reaches the ball first, at his top speed, goes for a loose
                 // ball; the other team's chaser chases.
                 let time =
@@ -842,10 +901,12 @@ impl DecisionModule for DecisionV1 {
             } else {
                 0.0
             };
+            // Width's second input (hook `shape.width`) weighs a pass to a wide team-mate of
+            // the middle or final third the same way.
             let channel_bias = if mate.pos.x * attack.x >= -half / 3.0 {
                 match channel(mate.pos.y, side.attack_x) {
-                    0 => plan.channel_left,
-                    2 => plan.channel_right,
+                    0 => plan.channel_left + plan.wide_target,
+                    2 => plan.channel_right + plan.wide_target,
                     _ => plan.channel_centre,
                 }
             } else {
@@ -866,7 +927,7 @@ impl DecisionModule for DecisionV1 {
                 + w.lane * (lane / 6.0)
                 + w.space * (receiver_space / 8.0)
                 - w.distance * (d / 45.0)
-                + plan.directness * (d / 45.0)
+                + plan.directness * (gain.max(0.0) / 45.0)
                 + recycle
                 - loss(fail, (carrier.pos + mate.pos) * 0.5)
                 + layoff
@@ -1758,33 +1819,139 @@ pub(crate) fn attack_line(position: Option<crate::data::team::Position>) -> bool
     matches!(position, Some(Position::LW | Position::RW | Position::ST))
 }
 
-/// The side's forward runs (hook `run.depth`) while team `team` has the ball and carrier `c`
-/// is someone else: every active attack-line player's target moves `run_depth_m` up the
-/// pitch (toward the onside line) or, below 0, back toward the ball, never past the onside
-/// line, 0.5 m short of the second-last defender. Nothing moves at the default of 0.
-fn run_depth(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER], team: usize, c: usize) {
+/// The farthest, in metres, a carrier looks for a runner in behind: the longest pass he
+/// considers.
+const RUN_PASS_M: f64 = 45.0;
+
+/// How far beyond the onside line a run in behind aims, in metres.
+const RUN_BEYOND_M: f64 = 6.0;
+/// A run coming short aims this far back from where the forward stands, in metres, and lasts
+/// at most [`COME_SHORT_S`]. Real forwards' coming-short runs take a median of 7.6 m in 1.6 s
+/// (SkillCorner's open data) at speed. An engine forward starts a check from standing in his
+/// place and brakes into its end, so a check of 8 m keeps him at a run's speed (4 m/s) for
+/// under the 1 s a run needs: the engine's run measure read almost none of them. At 12 m the
+/// check is a run by the shared definition.
+const COME_SHORT_M: f64 = 12.0;
+const COME_SHORT_S: f64 = 4.0;
+/// The nearest a run coming short comes to the carrier's depth, in metres.
+const COME_SHORT_TO_M: f64 = 5.0;
+/// A forward within this many metres of his place stands in it.
+const SETTLED_M: f64 = 2.0;
+
+/// The side's forward runs (hook `run.start`) while team `team` has the ball and carrier `c`
+/// is someone else. Nothing moves at the default of 0. The level sets how far from the
+/// defensive line a forward may start a timed run: while a pass is on (the carrier is not
+/// pressed and the runner stands ahead of him within a pass's reach), an active attack-line
+/// player within `|run_start_m|` of the onside line (0.5 m short of the second-last defender)
+/// starts one. Above 0 it is a run in behind: he aims [`RUN_BEYOND_M`] past the onside line,
+/// so a pass played once he is past it is offside. Below 0 he checks short from his place
+/// (within [`SETTLED_M`] of it), pass on or not: he aims [`COME_SHORT_M`] back toward the ball,
+/// never nearer than [`COME_SHORT_TO_M`] ahead of the carrier, keeps that point, and is free
+/// after [`COME_SHORT_S`]; back in his place he may check again. A run under way (the
+/// runner's job is a timed run) goes on until he arrives, and through a pass that travels
+/// forward. The farther from the line a run may start, the more forwards start one, so the
+/// frequency rises with the level. Returns the roster bits of the runners.
+fn forward_runs(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER], team: usize, c: usize) -> u32 {
     let side = &view.teams()[team];
-    let run = side.plan.run_depth_m;
-    if run == 0.0 {
-        return;
+    let start = side.plan.run_start_m;
+    let mut running = 0u32;
+    if start == 0.0 {
+        return running;
     }
     let attack_x = side.attack_x;
     let line = offside::second_last_depth(team, view.players(), attack_x) - ONSIDE_MARGIN;
+    if !line.is_finite() {
+        return running;
+    }
+    let carrier = view.player(c);
+    let carrier_depth = carrier.pos.x * attack_x;
+    let pass_on = !pressed(view, c);
+    let behind = start > 0.0;
     for (i, p) in view.players().iter().enumerate() {
         if p.team != team || i == c || !p.active() || !attack_line(side.plan.slots[p.slot].position)
         {
             continue;
         }
-        let mut at = targets[i];
-        let depth = at.x * attack_x + run;
-        let depth = if line.is_finite() {
-            depth.min(line)
+        let depth = p.pos.x * attack_x;
+        let gap = line - depth;
+        let from_carrier = p.pos - carrier.pos;
+        // In behind he aims past the line, keeping his place across; coming short he aims at
+        // the carrier's feet, `COME_SHORT_TO_M` from him on the line between them.
+        let (aim, to_go) = if behind {
+            let mut at = targets[i];
+            at.x = (line + RUN_BEYOND_M) * attack_x;
+            (at, line + RUN_BEYOND_M - depth)
         } else {
-            depth
+            let to = (depth - COME_SHORT_M).max(carrier_depth + COME_SHORT_TO_M);
+            let mut at = targets[i];
+            at.x = to * attack_x;
+            (at, depth - to)
         };
-        at.x = depth * attack_x;
-        targets[i] = view.pitch().clamp(at, 0.5);
+        if to_go <= 1.0 {
+            continue;
+        }
+        let ahead = depth > carrier_depth && from_carrier.length() <= RUN_PASS_M;
+        // An onside forward starts a run in behind; any forward may come back short.
+        let near = gap <= start.abs() && (!behind || gap >= 0.0);
+        // A forward checks short from his place: one away from it (coming back from a check
+        // or still moving to it) starts no new check.
+        let settled = behind || (p.pos - targets[i]).length() <= SETTLED_M;
+        let starts = (pass_on || !behind) && ahead && near && settled;
+        // A run coming short lasts [`COME_SHORT_S`]: a check toward the ball, then he is free.
+        let short_left = behind
+            || f64::from(view.tick().saturating_sub(p.pace.since))
+                < COME_SHORT_S * f64::from(crate::TICKS_PER_SECOND);
+        let under_way = p.pace.job == Job::TimedRun && short_left;
+        if !(starts || under_way) {
+            continue;
+        }
+        // A check under way keeps the point it set out for; a run in behind follows the line.
+        let aim = if under_way && !starts && !behind {
+            p.target
+        } else {
+            aim
+        };
+        targets[i] = view.pitch().clamp(aim, 0.5);
+        running |= 1 << i;
     }
+    running
+}
+
+/// Box runs (named mechanism) while team `team` has the ball in a wide channel of its final
+/// third, carried by `c`: every other active attack-line player runs into the penalty area,
+/// to the depth of the penalty mark and no wider than the posts' channel
+/// ([`LATE_RUN_DEPTH_M`], [`LATE_RUN_WIDTH_M`]), each keeping his side of the pitch, never past
+/// the onside line. A cross then has a team-mate to find. Returns the roster bits of the
+/// runners.
+fn box_runs(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER], team: usize, c: usize) -> u32 {
+    let side = &view.teams()[team];
+    let attack_x = side.attack_x;
+    let pitch = view.pitch();
+    let half = pitch.half_length();
+    let ball = view.player(c).pos;
+    let mut runners = 0u32;
+    if ball.y.abs() <= contract::CROSS_WIDE_M || ball.x * attack_x <= half / 3.0 {
+        return runners;
+    }
+    let line = offside::second_last_depth(team, view.players(), attack_x) - ONSIDE_MARGIN;
+    let depth = if line.is_finite() {
+        (half - LATE_RUN_DEPTH_M).min(line)
+    } else {
+        half - LATE_RUN_DEPTH_M
+    };
+    for (i, p) in view.players().iter().enumerate() {
+        if p.team != team || i == c || !p.active() || !attack_line(side.plan.slots[p.slot].position)
+        {
+            continue;
+        }
+        let at = DVec2::new(
+            depth * attack_x,
+            targets[i].y.clamp(-LATE_RUN_WIDTH_M, LATE_RUN_WIDTH_M),
+        );
+        targets[i] = pitch.clamp(at, 0.5);
+        runners |= 1 << i;
+    }
+    runners
 }
 
 /// The line hold (named mechanism) of team `team`'s lone forward while his team has the
@@ -2204,6 +2371,217 @@ mod tests {
             risky_drop > safe_drop,
             "risky {risky_drop}, safe {safe_drop}"
         );
+    }
+
+    /// Passing directness weighs a pass by its gain toward goal: the most direct level raises
+    /// a 30 m forward pass above the default and leaves a 30 m back pass where it was.
+    #[test]
+    fn directness_raises_a_forward_pass_and_leaves_a_back_pass() {
+        use crate::data::tactics::DIRECTNESS;
+        let content = crate::data::test_support::shipped_content();
+        let schema = &content.tactics;
+        let pass = |level: u8, mate: DVec2| {
+            let mut tactics = crate::tactics::Tactics::defaults(schema);
+            tactics.instructions[DIRECTNESS] = level;
+            scene(schema, tactics, 0.0, &[(10, mate)], &[])
+                .pass
+                .expect("a team-mate in range")
+                .0
+        };
+        let ahead = DVec2::new(30.0, 2.0);
+        let behind = DVec2::new(-30.0, 2.0);
+        assert!(pass(4, ahead) > pass(2, ahead));
+        assert!((pass(4, behind) - pass(2, behind)).abs() < 1e-12);
+    }
+
+    /// Width's second input weighs a pass to a team-mate in a wide channel of the final third
+    /// by the level's wide-target value, and leaves a pass to a central team-mate alone.
+    #[test]
+    fn width_weighs_a_pass_to_a_wide_team_mate_only() {
+        use crate::data::tactics::WIDTH;
+        let content = crate::data::test_support::shipped_content();
+        let schema = &content.tactics;
+        let pass = |level: u8, mate: DVec2| {
+            let mut tactics = crate::tactics::Tactics::defaults(schema);
+            tactics.instructions[WIDTH] = level;
+            scene(schema, tactics, 25.0, &[(10, mate)], &[])
+                .pass
+                .expect("a team-mate in range")
+                .0
+        };
+        let wide = DVec2::new(40.0, 26.0);
+        let centre = DVec2::new(40.0, 0.0);
+        let levels = &schema.instructions.width.levels;
+        for level in 0..levels.len() as u8 {
+            let target = levels[usize::from(level)].wide_target;
+            assert!((pass(level, wide) - pass(2, wide) - target).abs() < 1e-9);
+            assert!((pass(level, centre) - pass(2, centre)).abs() < 1e-12);
+        }
+    }
+
+    /// The dribble score reads the take-on pressure weight when the carrier is pressed; the
+    /// shot score reads its own weight and does not move.
+    #[test]
+    fn a_pressed_dribble_reads_the_take_on_weight_and_the_shot_its_own() {
+        let options = |takeon: f64| {
+            let mut config = shipped_config(7, 1).unwrap();
+            config.tuning.decision.noise = 0.0;
+            config.tuning.decision.takeon_under_pressure = takeon;
+            let mut sim = Simulation::new(config).unwrap();
+            let striker = 9;
+            sim.players[striker].pos = DVec2::new(35.0, 2.0);
+            let their_keeper = sim.keeper(1);
+            for p in sim
+                .players
+                .iter_mut()
+                .filter(|p| p.team == 1 && p.id != their_keeper)
+            {
+                p.pos = DVec2::new(-40.0, p.pos.y);
+            }
+            sim.players[13].pos = DVec2::new(36.5, 2.0);
+            sim.carrier = Some(striker);
+            sim.tick = 100;
+            sim.options(striker)
+        };
+        let (a, b) = (options(-0.8), options(-1.6));
+        assert_ne!(a.dribble, b.dribble);
+        assert_eq!(a.shot, b.shot);
+    }
+
+    /// Box runs: while a team-mate carries the ball wide in the final third, both home strikers
+    /// aim into the penalty area, at the penalty mark's depth and inside the posts' channel, on
+    /// a timed run; with the carrier central they do not.
+    #[test]
+    fn strikers_run_into_the_box_when_the_ball_is_wide_in_the_final_third() {
+        let targets = |carrier_y: f64| {
+            let mut sim = Simulation::new(shipped_config(7, 1).unwrap()).unwrap();
+            let carrier = 6;
+            sim.players[carrier].pos = DVec2::new(38.0, carrier_y);
+            sim.players[9].pos = DVec2::new(25.0, -8.0);
+            sim.players[10].pos = DVec2::new(25.0, 8.0);
+            let their_keeper = sim.keeper(1);
+            for (k, p) in sim
+                .players
+                .iter_mut()
+                .filter(|p| p.team == 1 && p.id != their_keeper)
+                .enumerate()
+            {
+                p.pos = DVec2::new(49.0, -25.0 + 5.0 * k as f64);
+            }
+            sim.carrier = Some(carrier);
+            sim.tick = 100;
+            let view = sim.view();
+            sim.config.modules.decision.targets(&view)
+        };
+        let half = 52.5;
+        let wide = targets(28.0);
+        for s in [9, 10] {
+            let at = wide.targets[s];
+            assert!(
+                (at.x - (half - LATE_RUN_DEPTH_M)).abs() < 1.0,
+                "striker {s} at {at}"
+            );
+            assert!(at.y.abs() <= LATE_RUN_WIDTH_M + 1e-9, "striker {s} at {at}");
+            assert_eq!(wide.jobs[s], Job::TimedRun, "striker {s}");
+        }
+        let central = targets(0.0);
+        for s in [9, 10] {
+            assert!(
+                (central.targets[s].x - (half - LATE_RUN_DEPTH_M)).abs() >= 1.0
+                    || central.jobs[s] != Job::TimedRun,
+                "striker {s}"
+            );
+        }
+    }
+
+    /// Forward runs (hook `run.start`): at the default no striker runs; above 0 an onside
+    /// striker within the start distance of the line aims past it on a timed run; below 0 a
+    /// striker in his place within the start distance checks short toward the carrier, and one
+    /// out of his place does not start a check.
+    #[test]
+    fn forward_runs_start_by_the_distance_from_the_line() {
+        // The home side carries at the halfway line; every outfield opponent stands on a line
+        // 30 m up, so the onside line is 29.5 m.
+        let plan = |start: f64, striker: Option<DVec2>| {
+            let mut sim = Simulation::new(shipped_config(7, 1).unwrap()).unwrap();
+            let carrier = 6;
+            sim.players[carrier].pos = DVec2::new(0.0, 0.0);
+            let their_keeper = sim.keeper(1);
+            for (k, p) in sim
+                .players
+                .iter_mut()
+                .filter(|p| p.team == 1 && p.id != their_keeper)
+                .enumerate()
+            {
+                p.pos = DVec2::new(30.0, -27.0 + 6.0 * k as f64);
+            }
+            if let Some(at) = striker {
+                sim.players[9].pos = at;
+                sim.players[9].target = at;
+            }
+            sim.teams[0].plan.run_start_m = start;
+            sim.carrier = Some(carrier);
+            sim.tick = 100;
+            let view = sim.view();
+            sim.config.modules.decision.targets(&view)
+        };
+        let line = 29.5;
+        // On the line's near side, 1.5 m short of it.
+        let near = DVec2::new(28.0, -6.0);
+        assert_ne!(plan(0.0, Some(near)).jobs[9], Job::TimedRun, "the default");
+        let behind = plan(3.0, Some(near));
+        assert_eq!(behind.jobs[9], Job::TimedRun);
+        assert!((behind.targets[9].x - (line + RUN_BEYOND_M)).abs() < 1e-9);
+        assert_ne!(
+            plan(1.0, Some(near)).jobs[9],
+            Job::TimedRun,
+            "beyond the start"
+        );
+        // Coming short: the striker stands in his place (his target at the default) within
+        // 25 m of the line.
+        let place = plan(0.0, None).targets[9];
+        assert!(line - place.x <= 25.0 && place.x > 5.0, "place {place}");
+        let check = plan(-25.0, Some(place));
+        assert_eq!(check.jobs[9], Job::TimedRun);
+        let to = (place.x - COME_SHORT_M).max(COME_SHORT_TO_M);
+        assert!(
+            (check.targets[9].x - to).abs() < 1e-9,
+            "{}",
+            check.targets[9]
+        );
+        let away = place + DVec2::new(-2.0 * SETTLED_M, 0.0);
+        assert_ne!(
+            plan(-25.0, Some(away)).jobs[9],
+            Job::TimedRun,
+            "out of place"
+        );
+    }
+
+    /// A forward's timed run goes on while his side's pass travels forward: he keeps his
+    /// target and his job. A pass back ends it, and at the default (no forward runs) every run
+    /// ends at a pass, as before.
+    #[test]
+    fn a_forward_run_goes_on_while_a_pass_travels_forward() {
+        let goal = DVec2::new(40.0, -5.0);
+        let run = |start: f64, ball_vx: f64| {
+            let mut sim = Simulation::new(shipped_config(7, 1).unwrap()).unwrap();
+            sim.players[9].pos = DVec2::new(30.0, -5.0);
+            sim.players[9].target = goal;
+            sim.players[9].pace.job = Job::TimedRun;
+            sim.teams[0].plan.run_start_m = start;
+            sim.carrier = None;
+            sim.pass_in_flight = Some(0);
+            sim.possession_phase = Some(0);
+            sim.ball.pos = crate::math::DVec3::new(-10.0, 20.0, 0.0);
+            sim.ball.vel = crate::math::DVec3::new(ball_vx, 0.0, 0.0);
+            sim.tick = 100;
+            let view = sim.view();
+            let t = sim.config.modules.decision.targets(&view);
+            (t.targets[9], t.jobs[9])
+        };
+        assert_eq!(run(-10.0, 12.0), (goal, Job::TimedRun));
+        assert_ne!(run(-10.0, -12.0).1, Job::TimedRun, "a pass back");
+        assert_ne!(run(0.0, 12.0).1, Job::TimedRun, "the default");
     }
 
     /// The options of the home striker at `(40, 2)` with an open team-mate, noise off, the

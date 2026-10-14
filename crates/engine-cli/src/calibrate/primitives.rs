@@ -23,8 +23,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use anyhow::{Context, bail};
 use engine::data::TeamFile;
 use engine::data::primitives::{
-    Direction, OWN, Primitive, PrimitiveKind, held_out, input_field, level_value, set_level_value,
-    settings,
+    Direction, GRADED_LEVELS, OWN, Primitive, PrimitiveKind, Steps, held_out, input_field,
+    level_value, set_level_value, settings,
 };
 use engine::data::tactics::{INSTRUCTIONS, TacticsSchema};
 use engine::measures::MatchMeasures;
@@ -37,7 +37,7 @@ use super::fixtures::{self, Leagues};
 
 /// The statistics the harness measures, in value order: the signature statistics, then the
 /// side's possessions and shots a match, which every step reports beside them.
-pub const STATS: [&str; 37] = [
+pub const STATS: [&str; 38] = [
     "passes_per_possession",
     "recycle_share",
     "turnovers_per_possession",
@@ -65,6 +65,7 @@ pub const STATS: [&str; 37] = [
     "cross_origin_m",
     "off_plan_share",
     "runs_in_behind_share",
+    "coming_short_share",
     "fullback_runs_per_match",
     "overlaps_per_match",
     "underlaps_per_match",
@@ -143,6 +144,7 @@ pub fn side_stats(m: &MatchMeasures, sinks: &Sinks<'_>, team: usize) -> Stats {
         (s.cross_origin_m, f(s.crosses)),
         (f(s.off_plan), choices),
         (f(runs.behind[team]), f(runs.runs[team])),
+        (f(runs.coming_short[team]), f(runs.runs[team])),
         (fullback, n),
         (f(runs.overlaps[team]), n),
         (f(runs.underlaps[team]), n),
@@ -521,6 +523,7 @@ pub fn check(
                 None => (0..names.len() - 1).collect(),
             };
             let defaults = Tactics::defaults(&content.tactics);
+            let d = p.default_index(&content.tactics).context("a default")?;
             for l in steps {
                 let arms = [l, l + 1].map(|level| -> anyhow::Result<Arm> {
                     Ok(Arm {
@@ -533,11 +536,12 @@ pub fn check(
                 let step = format!("{} -> {}", names[l], names[l + 1]);
                 let pairs = play_pairs(setup, &content, &arms, &format!("{name}:{step}"))?;
                 let mut stats = Vec::new();
-                for s in &p.signature {
+                for s in p.signature.iter().filter(|s| s.steps.covers_step(l, d)) {
                     stats.push(judge(&pairs, stat_index(&s.stat)?, s.direction));
                 }
-                // A graded step is judged on its primary (first) statistic; a secondary
-                // statistic is reported beside it and does not decide the step.
+                // A graded step is judged on its primary statistic, the first that judges the
+                // step (a statistic may judge only the steps below or above the default); a
+                // secondary statistic is reported beside it and does not decide the step.
                 let pass = stats.first().is_some_and(|s| s.pass);
                 out.push(StepVerdict {
                     primitive: name.into(),
@@ -855,13 +859,33 @@ pub fn fit(
     if q == d {
         bail!("{name}: {level} is the default level, the base of every ratio; it keeps its value");
     }
-    let stat = p.signature.first().context("a signature")?.stat.clone();
+    // The level's primary statistic: the first that judges it. A statistic that falls as the
+    // level rises reads the real spread from the other end: the lowest level takes the highest
+    // quintile.
+    let primary = p
+        .signature
+        .iter()
+        .find(|s| s.steps.covers_level(q, d))
+        .context("a signature that judges the level")?;
+    let stat = primary.stat.clone();
+    let at = |level: usize| match primary.direction {
+        Direction::Up => level,
+        Direction::Down => GRADED_LEVELS - 1 - level,
+    };
     let (real, real_default) = (
-        target(table, &row, &stat, q)?,
-        target(table, &row, &stat, d)?,
+        target(table, &row, &stat, at(q))?,
+        target(table, &row, &stat, at(d))?,
     );
     let first = p.inputs.first().context("an input")?.input.clone();
     let (_, _, lo, hi) = input_field(&first).with_context(|| format!("{first} has no range"))?;
+    // A statistic that judges only one side of the default is searched on that side of the
+    // default level's value.
+    let middle = level_value(&content.tactics, &first, d).context("the default's value")?;
+    let (lo, hi) = match primary.steps {
+        Steps::All => (lo, hi),
+        Steps::BelowDefault => (lo, middle),
+        Steps::AboveDefault => (middle, hi),
+    };
     let held: BTreeMap<String, f64> = p
         .inputs
         .iter()
@@ -907,7 +931,11 @@ pub fn fit(
         .1;
     let pooled_of = |pairs: &[Vec<Stats>], s: usize| pooled(&units(pairs, s, &[0])).0;
     let mut secondary = Vec::new();
-    for s in p.signature.iter().skip(1) {
+    for s in p
+        .signature
+        .iter()
+        .filter(|s| s.stat != stat && s.steps.covers_level(q, d))
+    {
         let k = stat_index(&s.stat)?;
         let units: Vec<Vec<(f64, f64)>> = base
             .iter()

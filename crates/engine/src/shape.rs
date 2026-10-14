@@ -236,8 +236,9 @@ fn options(
             .map(|&i| (i, gap));
     }
 
-    // The side's full-back runs: the chosen run goes first in a full-back's menu and drops its
-    // touchline-lane condition (hook `shape.fullback_run`), and the run frequency scales how
+    // The side's full-back runs: the chosen run goes first in a full-back's menu, drops its
+    // touchline-lane condition and also goes when the ball is ahead on his side (hook
+    // `shape.fullback_run`; the full-back then runs at urgent pace), and the run frequency scales how
     // far ahead and how near the ball the team-mate he runs past may be (hook
     // `shape.fullback_reach`). Neither moves anything at its default.
     let plan = &f.side.plan;
@@ -319,12 +320,19 @@ fn options(
                         });
                     ahead.and_then(|j| {
                         let at = players[j].pos;
-                        let near =
-                            Some(j) == carrier || (at - ball).length() <= sizes.near_ball_m * reach;
+                        // The side's chosen full-back run ignores the touchline lane, and goes
+                        // whenever the ball is ahead of him on his side as well as when the
+                        // team-mate he runs past is near it.
+                        let chosen = first == Some(*option);
+                        let ball_ahead = {
+                            let d = f.depth(ball) - my_depth;
+                            (ball.y - centre) * s > 0.0 && d > 0.0 && d <= OVERLAP_DEPTH_M * reach
+                        };
+                        let near = Some(j) == carrier
+                            || (at - ball).length() <= sizes.near_ball_m * reach
+                            || (chosen && ball_ahead);
                         let wide = (at.y - centre) * s >= my_out - OVERLAP_NARROWER_M;
                         let lane = at.y.abs() >= half_width - TOUCHLINE_LANE_M;
-                        // The side's chosen full-back run ignores the touchline lane.
-                        let chosen = first == Some(*option);
                         let forward = DVec2::new(f.ax, 0.0);
                         match option {
                             StandOption::Overlap if near && wide && (!lane || chosen) => Some(

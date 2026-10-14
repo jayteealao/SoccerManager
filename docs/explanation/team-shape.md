@@ -129,6 +129,23 @@ No engine code names a style, and no place where a player decides reads a settin
 
 Tempo used to be added to every pass and taken from every hold and dribble, so a slower tempo made the carrier hold the ball and dribble into pressure. Tempo is now how patiently a side circulates the ball: when the carrier picks his pass, a short pass that does not go forward gains the level's value and a forward pass loses it. It moves which pass he picks, never whether he passes, holds or dribbles. Its signature is passes per possession, with the share of passes made before the first forward pass beside it. No tempo level lifts running pace.
 
+### The in-possession primitives
+
+How a side keeps and moves the ball is set by nine graded primitives and three choices. Each is a bias on an option the carrier or a runner already has, so play with every setting at its default stays the engine's own choice model.
+
+- **Passing directness** weighs a pass by how far it gains toward goal. A pass back or across gains nothing, so a direct side plays forward sooner, not just longer.
+- **Build-up** weighs a long pass out of the side's own third, the keeper's included, and lengthens the goal kick toward going long. The keeper follows the team's build-up; there is no keeper setting.
+- **Attacking width** spreads the shape while the side has the ball, and weighs a pass to a team-mate in a wide channel. Out of possession the shape keeps the formation's width.
+- **The attacking channel** favours passes into the chosen channels of the middle and final thirds: left, right, both wings, centre, centre and left, centre and right, or balanced.
+- **The final third** weighs a shot from outside the box and reaches further out at the higher levels.
+- **Dribbling** weighs the dribble option. A take-on counts once for each opponent the dribbler passes within pressing distance.
+- **Creative freedom** scales the spread of each player's choices around the plan. No real data records which option a player passed over, so its levels are spread by hand and only their direction is checked.
+- **Forward runs** set how far from the defensive line a forward may start a timed run. At the higher levels an onside forward that near the line runs beyond it when the carrier is free and the forward is ahead of him within a pass's reach, so a pass played too late is offside. At the lower levels a forward that near the line checks short toward the ball from his place, then goes back. A run goes on while the pass travels forward, and a pass back or across ends it. At the default no forward starts one, so the farther from the line a run may start, the more runs there are. Only the wingers and strikers make these runs for now; runs chosen by role and duty come with the off-ball work.
+- **Full-back runs** choose underlap or overlap first in a full-back's menu, and their frequency scales how near the ball a full-back must be to go and how far he runs. A run counts as SkillCorner counts it: a run that starts level with or behind the ball and ends level with or ahead of it, outside the ball for an overlap and inside it for an underlap.
+- **Crossing frequency and cross type** sit on the board with seeded values.
+
+When the ball is wide in the final third, the forwards run into the box, at every level, so a cross has a team-mate to find. The engine still plays few open-play crosses: with the stands off, wide players hold their midfield places and rarely carry the ball high and wide. The crossing primitives and the central channel choices are therefore not fitted yet; they wait for the off-ball work that re-seeds the stands.
+
 ### Mentality is an appetite for risk
 
 Mentality used to add a flat bonus to shots and forward passes. It is now only how much the side fears losing the ball: a pass, a dribble or a hold loses the mentality's loss weight times its chance of failing times the danger of losing the ball there. A ball lost near the own goal hands the opponent a chance, and one lost near the other goal gives up the side's own, so the danger is highest at either end. An attacking mentality fears a loss least, and its weight can go below 0, so it seeks risk. The mentality also sets how many players stay behind the ball. Where the block stands belongs to the line height, which moves the block only while the other team has the ball.

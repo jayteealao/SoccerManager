@@ -592,7 +592,7 @@ engine-cli signatures [OPTIONS]
 
 | Flag | Value | Default | Meaning |
 |---|---|---|---|
-| `--real-data` | folder | the main checkout's `.scratch/out`, as `calibrate --real-data` | The measured real data holding `wy2_matches.csv`, `wy2_team_matches.csv` and `wy2_events.csv.gz`, and `sb2_events.csv.gz` for the StatsBomb check. |
+| `--real-data` | folder | the main checkout's `.scratch/out`, as `calibrate --real-data` | The measured real data holding `wy2_matches.csv`, `wy2_team_matches.csv` and `wy2_events.csv.gz`, `sb2_events.csv.gz` for the StatsBomb check, `sc_dynamic_events.csv.gz` for the full-backs' runs and `tracking_runs.csv.gz` (written by `scripts/tracking-runs.py`) for the forwards' runs. A file that is absent leaves out its rows. |
 | `--out` | path | `signatures.json` in the content folder | Where the table goes. |
 | `--competitions` | list | `England,France,Italy,Spain` | The competitions to read, comma separated. |
 

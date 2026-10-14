@@ -440,6 +440,34 @@ target/release/engine-cli --content-dir content primitives fit --primitive tempo
 
 The fit aims at a ratio, not at the real value itself: the ratio of the level's quintile median to the middle median in `signatures.json`, against the ratio of the engine's level to its default level. The engine plays more passes than real teams, so the absolute values differ; the result names both, and the gap belongs to the tuning of pass volume. Copy the fitted `search.value` into the level in `tactics.json` and the record into the primitive's `fits`; the load refuses a fit record whose values differ from the level's.
 
+The fit searches the level's first input in its `inputs` list and keeps the others at their content values. For width, that is the wide-target weight; the shape scale keeps its content value.
+
+### Check a choice
+
+A choice primitive, such as the attacking channel, has no steps. `check` plays each choice against the default choice and judges the choice's own statistic, which must rise beyond the noise:
+
+```bash
+target/release/engine-cli --content-dir content primitives check --primitive attacking_channel --pairs 200 --out runs/channel-check.json
+```
+
+The result holds each choice's means and paired differences for every statistic. To check that the channels mirror, compare the rise of `entries_left_share` under `left` with the rise of `entries_right_share` under `right` in that file: they should differ by no more than their combined noise. A primitive whose `data` names a `deferred` part prints its numbers for that part too, but they judge nothing until the deferral ends.
+
+### Fit a thin-sample primitive
+
+Full-back run frequency fits to the off-ball runs of 13 SkillCorner teams, and forward runs to the runs of the 32 teams of the 2022 World Cup's tracking data: too few, or national teams rather than clubs, for quintiles. Their rows in `signatures.json` carry `thin_sample: true` and five targets spread evenly from the lowest to the highest team; the World Cup rows also carry `national_teams: true`. Run `fit` as for any level; it aims at the ratio of the level's target to the middle target. Full-back runs are rare in the engine, so fit their frequency with `--matches 1000`.
+
+A primitive may judge its lower and upper levels on different statistics: a signature entry with `"steps": "below_default"` or `"above_default"` judges only the steps on that side of the default. Forward runs judge their upper levels on the share of runs in behind and their lower levels on the share of runs coming short. The fit searches each level on its own side of the default, and a statistic that falls as the level rises takes its targets from the other end of the real spread: the lowest level aims at the highest team.
+
+### Make the forwards' run rows
+
+The run rows come from tracking data, not from a provider's run events. `scripts/tracking-runs.py` finds each forward's runs in the frames of the PFF World Cup 2022, SkillCorner, IDSSE and Metrica matches by the engine's own definition (4 m/s or faster for 1 s or more, his side with the ball, not the carrier):
+
+```bash
+python scripts/tracking-runs.py <tracking data folder> <real data folder>/tracking_runs.csv.gz
+```
+
+`engine-cli signatures` then classifies each run as the engine does, makes the rows from the World Cup teams and writes the club sources as checks. The Alfheim matches are not read: they track one team only, with no ball and no opponents, so they have no defensive line and no possession.
+
 ## Build a faster calibrate binary
 
 Measure a faster build before you keep it:

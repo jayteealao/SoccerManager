@@ -289,9 +289,10 @@ pub struct Instructions {
     /// Opponents who press the carrier, and a scale on the tuned press distance.
     #[garde(dive)]
     pub pressing: Instruction<PressLevel>,
-    /// A scale on each slot's distance from the centre line of the pitch.
+    /// A scale on each slot's distance from the centre line of the pitch while the side has
+    /// the ball, and the carrier's preference for a team-mate in a wide channel.
     #[garde(dive)]
-    pub width: Instruction<Level>,
+    pub width: Instruction<WidthLevel>,
     /// The patience of the circulation: added to the score of a short pass that does not go
     /// forward, so a patient side recycles the ball before it plays forward and a direct side
     /// plays forward sooner.
@@ -382,6 +383,31 @@ pub struct Level {
 }
 
 impl Named for Level {
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+/// A width level: the scale on each slot's distance from the centre line while the side has
+/// the ball (`value`), and the weight the carrier gives a pass to a team-mate in a wide channel
+/// of the middle or final third (`wide_target`, 0 by default).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct WidthLevel {
+    #[garde(length(min = 1, max = 32))]
+    pub name: String,
+    #[garde(range(min = -20.0, max = 20.0))]
+    pub value: f64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    #[garde(range(min = -2.0, max = 2.0))]
+    pub wide_target: f64,
+}
+
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
+}
+
+impl Named for WidthLevel {
     fn name(&self) -> &str {
         &self.name
     }
@@ -716,7 +742,8 @@ mod tests {
             ]
         );
         assert_eq!(t.mentalities.len(), 5);
-        assert_eq!(t.instructions.defaults(), [1, 1, 2, 1, 1, 0]);
+        // Width and passing directness have five levels, so their middle level is 2.
+        assert_eq!(t.instructions.defaults(), [1, 2, 2, 1, 2, 0]);
         assert_eq!(t.slots(0), crate::team::FORMATION_442);
         assert_eq!(t.duties.len(), 3);
     }

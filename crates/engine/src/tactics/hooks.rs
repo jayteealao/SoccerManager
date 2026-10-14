@@ -53,7 +53,7 @@ pub const HOOKS: [Hook; 33] = [
         name: "pass.directness",
         kind: HookKind::OptionWeight,
         input: "directness",
-        site: "decision.rs: the pass score in proportion to the pass length",
+        site: "decision.rs: the pass score in proportion to the pass's gain toward goal",
     },
     Hook {
         name: "shape.block_depth",
@@ -65,7 +65,8 @@ pub const HOOKS: [Hook; 33] = [
         name: "shape.width",
         kind: HookKind::ShapeOffset,
         input: "width",
-        site: "team.rs: a scale on every anchor's distance from the centre line",
+        site: "team.rs: a scale on every in-possession anchor's distance from the centre line; \
+               decision.rs: the score of a pass to a team-mate in a wide channel (second input)",
     },
     Hook {
         name: "shape.rest_defence",
@@ -219,10 +220,11 @@ pub const HOOKS: [Hook; 33] = [
         site: "decision.rs: a factor on the noise of every option's score",
     },
     Hook {
-        name: "run.depth",
-        kind: HookKind::ShapeOffset,
-        input: "run_depth_m",
-        site: "decision.rs: an attack-line player's off-ball target up or back, short of the line",
+        name: "run.start",
+        kind: HookKind::Threshold,
+        input: "run_start_m",
+        site: "decision.rs: how far from the defensive line a forward may start a timed run, in \
+               behind above 0 or coming short below 0",
     },
     Hook {
         name: "shape.fullback_run",
@@ -239,8 +241,12 @@ pub const HOOKS: [Hook; 33] = [
 ];
 
 /// Hooks that read a second plan input beside their first: the keeper's chase range reads
-/// both line-height switches.
-pub const SECOND_INPUTS: [(&str, &str); 1] = [("keeper.chase_range", "keeper_stay_off")];
+/// both line-height switches, and width spreads the shape and weighs a pass to a wide
+/// team-mate.
+pub const SECOND_INPUTS: [(&str, &str); 2] = [
+    ("keeper.chase_range", "keeper_stay_off"),
+    ("shape.width", "wide_target"),
+];
 
 /// The hook named `name`.
 pub fn hook(name: &str) -> Option<&'static Hook> {

@@ -1207,54 +1207,6 @@
       "max": 16.839394
     },
     {
-      "primitive": "forward_runs",
-      "stat": "runs_in_behind_share",
-      "source": "skillcorner_open",
-      "competitions": [
-        "A-League"
-      ],
-      "teams": 13,
-      "matches": 20,
-      "quintile_edges": [
-        0.105323,
-        0.127935,
-        0.150548,
-        0.17316
-      ],
-      "quintile_ranges": [
-        [
-          0.082711,
-          0.105323
-        ],
-        [
-          0.105323,
-          0.127935
-        ],
-        [
-          0.127935,
-          0.150548
-        ],
-        [
-          0.150548,
-          0.17316
-        ],
-        [
-          0.17316,
-          0.195772
-        ]
-      ],
-      "medians": [
-        0.094017,
-        0.116629,
-        0.139242,
-        0.161854,
-        0.184466
-      ],
-      "min": 0.094017,
-      "max": 0.184466,
-      "thin_sample": true
-    },
-    {
       "primitive": "fullback_run_frequency",
       "stat": "fullback_runs_per_match",
       "source": "skillcorner_open",
@@ -1397,6 +1349,104 @@
       "min": 0.5,
       "max": 5.0,
       "thin_sample": true
+    },
+    {
+      "primitive": "forward_runs",
+      "stat": "runs_in_behind_share",
+      "source": "pff_wc2022",
+      "competitions": [
+        "FIFA World Cup 2022"
+      ],
+      "teams": 32,
+      "matches": 64,
+      "quintile_edges": [
+        0.132146,
+        0.184316,
+        0.236486,
+        0.288656
+      ],
+      "quintile_ranges": [
+        [
+          0.079976,
+          0.132146
+        ],
+        [
+          0.132146,
+          0.184316
+        ],
+        [
+          0.184316,
+          0.236486
+        ],
+        [
+          0.236486,
+          0.288656
+        ],
+        [
+          0.288656,
+          0.340826
+        ]
+      ],
+      "medians": [
+        0.106061,
+        0.158231,
+        0.210401,
+        0.262571,
+        0.314741
+      ],
+      "min": 0.106061,
+      "max": 0.314741,
+      "thin_sample": true,
+      "national_teams": true
+    },
+    {
+      "primitive": "forward_runs",
+      "stat": "coming_short_share",
+      "source": "pff_wc2022",
+      "competitions": [
+        "FIFA World Cup 2022"
+      ],
+      "teams": 32,
+      "matches": 64,
+      "quintile_edges": [
+        0.05767,
+        0.076546,
+        0.095423,
+        0.114299
+      ],
+      "quintile_ranges": [
+        [
+          0.038793,
+          0.05767
+        ],
+        [
+          0.05767,
+          0.076546
+        ],
+        [
+          0.076546,
+          0.095423
+        ],
+        [
+          0.095423,
+          0.114299
+        ],
+        [
+          0.114299,
+          0.133176
+        ]
+      ],
+      "medians": [
+        0.048232,
+        0.067108,
+        0.085984,
+        0.104861,
+        0.123737
+      ],
+      "min": 0.048232,
+      "max": 0.123737,
+      "thin_sample": true,
+      "national_teams": true
     }
   ],
   "checks": [
@@ -1413,6 +1463,72 @@
       "median": 5.488722,
       "min": 3.458167,
       "max": 10.161804
+    },
+    {
+      "stat": "runs_in_behind_share",
+      "source": "dfl_open",
+      "competitions": [
+        "Bundesliga"
+      ],
+      "teams": 10,
+      "median": 0.219874,
+      "min": 0.172549,
+      "max": 0.2875
+    },
+    {
+      "stat": "coming_short_share",
+      "source": "dfl_open",
+      "competitions": [
+        "Bundesliga"
+      ],
+      "teams": 10,
+      "median": 0.108616,
+      "min": 0.070833,
+      "max": 0.160784
+    },
+    {
+      "stat": "runs_in_behind_share",
+      "source": "metrica_sample",
+      "competitions": [
+        "Metrica sample"
+      ],
+      "teams": 2,
+      "median": 0.280298,
+      "min": 0.271777,
+      "max": 0.28882
+    },
+    {
+      "stat": "coming_short_share",
+      "source": "metrica_sample",
+      "competitions": [
+        "Metrica sample"
+      ],
+      "teams": 2,
+      "median": 0.063589,
+      "min": 0.055749,
+      "max": 0.071429
+    },
+    {
+      "stat": "runs_in_behind_share",
+      "source": "skillcorner_open",
+      "competitions": [
+        "A-League"
+      ],
+      "teams": 13,
+      "median": 0.220588,
+      "min": 0.140625,
+      "max": 0.277545
+    },
+    {
+      "stat": "coming_short_share",
+      "source": "skillcorner_open",
+      "competitions": [
+        "A-League"
+      ],
+      "teams": 13,
+      "median": 0.11913,
+      "min": 0.081281,
+      "max": 0.171569
     }
   ]
 }

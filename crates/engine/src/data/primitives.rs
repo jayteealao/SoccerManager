@@ -26,7 +26,7 @@ pub const GRADED_LEVELS: usize = 5;
 
 /// The statistics a primitive can name as its signature. The real-team table
 /// (`signatures.json`) and the engine measure each one by the same definition.
-pub const SIGNATURE_STATS: [&str; 31] = [
+pub const SIGNATURE_STATS: [&str; 32] = [
     "passes_per_possession",
     "recycle_share",
     "turnovers_per_possession",
@@ -55,17 +55,20 @@ pub const SIGNATURE_STATS: [&str; 31] = [
     "cross_origin_m",
     "off_plan_share",
     "runs_in_behind_share",
+    "coming_short_share",
     "fullback_runs_per_match",
     "overlaps_per_match",
     "underlaps_per_match",
 ];
 
-/// The real data sources a fit may read.
-pub const SOURCES: [&str; 4] = [
+/// The real data sources a fit may read. `pff_wc2022` is national-team data (the 2022 World
+/// Cup's tracking and events), not a held-out set.
+pub const SOURCES: [&str; 5] = [
     "wyscout_2017_18",
     "statsbomb_open",
     "skillcorner_open",
     "dfl_open",
+    "pff_wc2022",
 ];
 
 /// The held-out sets, by source and competition: no fit reads them, and an entry that names
@@ -93,11 +96,18 @@ pub const SETTINGS_MAX: usize = 16;
 /// Where each plan input of a primitive is written: the block (a level block of the tactics
 /// file, or [`OWN`] for an input the primitive's own steps or choices hold), the field of each
 /// level, and the range the field allows.
-pub const INPUT_FIELDS: [(&str, &str, &str, f64, f64); 19] = [
+pub const INPUT_FIELDS: [(&str, &str, &str, f64, f64); 20] = [
     ("patience", "instructions.tempo", "value", -2.0, 2.0),
     ("loss_weight", "mentalities", "loss_weight", -5.0, 5.0),
     ("rest_defence", "mentalities", "rest_defence", 0.0, 10.0),
     ("width", "instructions.width", "value", 0.5, 1.5),
+    (
+        "wide_target",
+        "instructions.width",
+        "wide_target",
+        -2.0,
+        2.0,
+    ),
     (
         "directness",
         "instructions.passing_directness",
@@ -116,7 +126,7 @@ pub const INPUT_FIELDS: [(&str, &str, &str, f64, f64); 19] = [
     ("early_cross", OWN, "early_cross", -2.0, 2.0),
     ("cross_loft", OWN, "cross_loft", -1.0, 1.0),
     ("freedom", OWN, "freedom", 0.0, 3.0),
-    ("run_depth_m", OWN, "run_depth_m", -15.0, 15.0),
+    ("run_start_m", OWN, "run_start_m", -30.0, 30.0),
     ("fullback_run", OWN, "fullback_run", -1.0, 1.0),
     ("fullback_reach", OWN, "fullback_reach", 0.25, 3.0),
 ];
@@ -166,6 +176,43 @@ pub struct InputHook {
     pub hook: String,
 }
 
+/// The steps of a graded primitive a signature statistic judges: every step, or only those
+/// below or above the default level (a primitive whose lower levels do one thing and whose
+/// upper levels another, each with its own statistic).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Steps {
+    #[default]
+    All,
+    BelowDefault,
+    AboveDefault,
+}
+
+impl Steps {
+    fn is_all(&self) -> bool {
+        *self == Steps::All
+    }
+
+    /// `true` when the step from level `from` one level up lies in this scope, the default
+    /// being level `default`.
+    pub fn covers_step(self, from: usize, default: usize) -> bool {
+        match self {
+            Steps::All => true,
+            Steps::BelowDefault => from < default,
+            Steps::AboveDefault => from >= default,
+        }
+    }
+
+    /// `true` when level `level` lies in this scope, the default being level `default`.
+    pub fn covers_level(self, level: usize, default: usize) -> bool {
+        match self {
+            Steps::All => true,
+            Steps::BelowDefault => level < default,
+            Steps::AboveDefault => level > default,
+        }
+    }
+}
+
 /// A signature statistic and its direction.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
@@ -174,6 +221,10 @@ pub struct Signature {
     pub stat: String,
     #[garde(skip)]
     pub direction: Direction,
+    /// The steps this statistic judges; every step when absent.
+    #[serde(default, skip_serializing_if = "Steps::is_all")]
+    #[garde(skip)]
+    pub steps: Steps,
 }
 
 /// One choice of a choice primitive: its name, the value it gives each of the primitive's
@@ -220,6 +271,11 @@ pub struct DataSource {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(skip)]
     pub none: Option<String>,
+    /// What of a primitive with a data source is not fitted or judged yet, and why: its
+    /// levels or choices keep their seeded values, and its checks do not gate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(skip)]
+    pub deferred: Option<String>,
 }
 
 /// The fit of one level: the plan input values it found and what the search measured.
@@ -369,6 +425,12 @@ pub fn level_value(schema: &TacticsSchema, input: &str, level: usize) -> Option<
     match input {
         "patience" => schema.instructions.tempo.levels.get(level).map(|l| l.value),
         "width" => schema.instructions.width.levels.get(level).map(|l| l.value),
+        "wide_target" => schema
+            .instructions
+            .width
+            .levels
+            .get(level)
+            .map(|l| l.wide_target),
         "directness" => schema
             .instructions
             .passing_directness
@@ -401,6 +463,13 @@ pub fn set_level_value(schema: &mut TacticsSchema, input: &str, level: usize, va
             .levels
             .get_mut(level)
             .map(|l| l.value = value)
+            .is_some(),
+        "wide_target" => schema
+            .instructions
+            .width
+            .levels
+            .get_mut(level)
+            .map(|l| l.wide_target = value)
             .is_some(),
         "directness" => schema
             .instructions
@@ -666,6 +735,25 @@ fn check_one(schema: &TacticsSchema, p: &Primitive) -> Result<(), Refusal> {
             format!("{} is not a signature statistic", s.stat),
         ));
     }
+    if p.signature.iter().any(|s| s.steps != Steps::All) {
+        if p.kind != PrimitiveKind::Graded {
+            return Err(refuse(
+                n,
+                "signature",
+                "only a graded primitive judges its steps below and above the default apart".into(),
+            ));
+        }
+        let d = p.default_index(schema).unwrap_or_default();
+        if let Some(step) =
+            (0..GRADED_LEVELS - 1).find(|&l| !p.signature.iter().any(|s| s.steps.covers_step(l, d)))
+        {
+            return Err(refuse(
+                n,
+                "signature",
+                format!("no statistic judges the step up from level {step}"),
+            ));
+        }
+    }
     let d = &p.data;
     match (&d.source, &d.none) {
         (None, None) => {
@@ -700,13 +788,25 @@ fn check_one(schema: &TacticsSchema, p: &Primitive) -> Result<(), Refusal> {
                     "a data source names its row of the signature table".into(),
                 ));
             }
-        }
-        (None, Some(reason)) => {
-            if reason.trim().is_empty() || !p.fits.is_empty() {
+            if d.deferred
+                .as_deref()
+                .is_some_and(|r| r.trim().is_empty() || !p.fits.is_empty())
+            {
                 return Err(refuse(
                     n,
                     "data",
-                    "a primitive with no real data gives its reason and has no fit".into(),
+                    "a deferred primitive gives its reason and has no fit".into(),
+                ));
+            }
+        }
+        (None, Some(reason)) => {
+            if reason.trim().is_empty() || !p.fits.is_empty() || d.deferred.is_some() {
+                return Err(refuse(
+                    n,
+                    "data",
+                    "a primitive with no real data gives its reason, has no fit and defers \
+                     no fit"
+                        .into(),
                 ));
             }
         }

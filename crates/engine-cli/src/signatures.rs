@@ -65,8 +65,7 @@ pub const WIDE_M: f64 = 20.0;
 /// The penalty area: its depth from the goal line and its half width, in metres.
 const BOX_DEPTH_M: f64 = 16.5;
 const BOX_HALF_WIDTH_M: f64 = 20.16;
-/// The SkillCorner positions of the forwards (the attack line) and of the full-backs.
-pub const SC_FORWARDS: [&str; 5] = ["CF", "LF", "RF", "LW", "RW"];
+/// The SkillCorner positions of the full-backs.
 pub const SC_FULL_BACKS: [&str; 4] = ["LB", "RB", "LWB", "RWB"];
 
 /// One row: a primitive's statistic across the real teams.
@@ -92,6 +91,9 @@ pub struct Row {
     /// of its target, and the fit says so.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub thin_sample: bool,
+    /// A row from national teams (a World Cup), not clubs.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub national_teams: bool,
 }
 
 /// A check of a statistic in another source.
@@ -212,6 +214,7 @@ pub fn spread(
         min: round6(v[0]),
         max: round6(v[v.len() - 1]),
         thin_sample: false,
+        national_teams: false,
     })
 }
 
@@ -252,6 +255,7 @@ pub fn thin(
         min: round6(min),
         max: round6(max),
         thin_sample: true,
+        national_teams: false,
     })
 }
 
@@ -710,20 +714,17 @@ fn statsbomb_check(dir: &Path) -> anyhow::Result<Option<Check>> {
     }))
 }
 
-/// One SkillCorner team's runs: its forwards' off-ball runs and the runs in behind among them,
-/// its full-backs' overlaps and underlaps, and its matches.
+/// One SkillCorner team's full-back runs: its full-backs' overlaps and underlaps, and its
+/// matches.
 #[derive(Debug, Clone, Default)]
 struct TeamRuns {
-    forward_runs: f64,
-    behind: f64,
     overlaps: f64,
     underlaps: f64,
     matches: BTreeSet<String>,
 }
 
 /// The thin-sample rows of the SkillCorner open data in `dir` (`sc_dynamic_events.csv.gz`):
-/// per team, the share of its forwards' off-ball runs that go in behind, and its full-backs'
-/// overlaps, underlaps and both per match. None without the file.
+/// per team, its full-backs' overlaps, underlaps and both per match. None without the file.
 fn skillcorner_rows(dir: &Path) -> anyhow::Result<Vec<Row>> {
     let file = "sc_dynamic_events.csv.gz";
     let path = dir.join(file);
@@ -755,12 +756,6 @@ fn skillcorner_rows(dir: &Path) -> anyhow::Result<Vec<Row>> {
         }
         let pos = c[c_pos].as_str();
         let sub = c[c_sub].as_str();
-        if SC_FORWARDS.contains(&pos) {
-            t.forward_runs += 1.0;
-            if sub == "behind" {
-                t.behind += 1.0;
-            }
-        }
         if SC_FULL_BACKS.contains(&pos) {
             match sub {
                 "overlap" => t.overlaps += 1.0,
@@ -777,21 +772,8 @@ fn skillcorner_rows(dir: &Path) -> anyhow::Result<Vec<Row>> {
             .map(|t| f(t) / t.matches.len() as f64)
             .collect()
     };
-    let behind: Vec<f64> = teams
-        .values()
-        .filter(|t| t.forward_runs > 0.0)
-        .map(|t| t.behind / t.forward_runs)
-        .collect();
     let n = matches.len();
     Ok(vec![
-        thin(
-            "forward_runs",
-            "runs_in_behind_share",
-            SKILLCORNER,
-            &competitions,
-            n,
-            &behind,
-        )?,
         thin(
             "fullback_run_frequency",
             "fullback_runs_per_match",
@@ -817,6 +799,133 @@ fn skillcorner_rows(dir: &Path) -> anyhow::Result<Vec<Row>> {
             &per_match(&|t| t.underlaps),
         )?,
     ])
+}
+
+/// The source the forwards' run rows are fitted to: the 2022 World Cup's tracking data.
+pub const PFF: &str = "pff_wc2022";
+/// The forwards' runs from tracking data, one per line, by `tracking_runs.py` (its header
+/// names the columns the reader needs).
+pub const TRACKING_RUNS: &str = "tracking_runs.csv.gz";
+
+/// One team's forwards' runs in the tracking data: all, in behind, coming short; its matches;
+/// and whether it is a national team.
+#[derive(Debug, Clone, Default)]
+struct TeamTrackedRuns {
+    runs: f64,
+    behind: f64,
+    short: f64,
+    matches: BTreeSet<String>,
+    national: bool,
+}
+
+/// The rows and checks of the forwards' runs from tracking data in `dir`
+/// ([`TRACKING_RUNS`]): per team, the share of its forwards' runs that go in behind and the
+/// share that come short, by [`engine::run_kind::RunEnds`]. The PFF World Cup teams give the
+/// thin-sample rows (national teams, marked as such); every other source gives a check. None
+/// without the file.
+fn tracking_rows(dir: &Path) -> anyhow::Result<(Vec<Row>, Vec<Check>)> {
+    let path = dir.join(TRACKING_RUNS);
+    if !path.exists() {
+        return Ok((Vec::new(), Vec::new()));
+    }
+    let mut it = lines(&path)?;
+    let header = cells(
+        &it.next()
+            .with_context(|| format!("an empty {TRACKING_RUNS}"))??,
+    );
+    let col = |n: &str| column(&header, n, TRACKING_RUNS);
+    let (c_src, c_comp, c_nat, c_match, c_team) = (
+        col("source")?,
+        col("competition")?,
+        col("national")?,
+        col("match")?,
+        col("team")?,
+    );
+    let facts: [usize; 8] = [
+        col("depth0")?,
+        col("depth1")?,
+        col("line0")?,
+        col("line1")?,
+        col("ball0")?,
+        col("ball1")?,
+        col("balld0")?,
+        col("balld1")?,
+    ];
+    // (source, competition) -> team -> runs
+    let mut by: BTreeMap<(String, String), BTreeMap<String, TeamTrackedRuns>> = BTreeMap::new();
+    for line in it {
+        let c = cells(&line?);
+        if c.len() < header.len() {
+            continue;
+        }
+        let mut v = [0.0; 8];
+        for (x, &i) in v.iter_mut().zip(&facts) {
+            *x = c[i]
+                .parse()
+                .with_context(|| format!("{TRACKING_RUNS}: a number, not {}", c[i]))?;
+        }
+        let ends = engine::run_kind::RunEnds {
+            depth: [v[0], v[1]],
+            line: [v[2], v[3]],
+            ball: [v[4], v[5]],
+            ball_m: [v[6], v[7]],
+        };
+        let t = by
+            .entry((c[c_src].clone(), c[c_comp].clone()))
+            .or_default()
+            .entry(c[c_team].clone())
+            .or_default();
+        t.runs += 1.0;
+        t.behind += f64::from(u8::from(ends.in_behind()));
+        t.short += f64::from(u8::from(ends.coming_short()));
+        t.matches.insert(c[c_match].clone());
+        t.national = c[c_nat] == "1";
+    }
+    let mut rows = Vec::new();
+    let mut checks = Vec::new();
+    for ((source, competition), teams) in &by {
+        let competitions = [competition.clone()];
+        let national = teams.values().all(|t| t.national);
+        let matches: BTreeSet<&String> = teams.values().flat_map(|t| &t.matches).collect();
+        let share = |f: &dyn Fn(&TeamTrackedRuns) -> f64| -> Vec<f64> {
+            teams
+                .values()
+                .filter(|t| t.runs > 0.0)
+                .map(|t| f(t) / t.runs)
+                .collect()
+        };
+        let stats: [(&str, Vec<f64>); 2] = [
+            ("runs_in_behind_share", share(&|t| t.behind)),
+            ("coming_short_share", share(&|t| t.short)),
+        ];
+        for (stat, values) in stats {
+            if source == PFF {
+                let mut row = thin(
+                    "forward_runs",
+                    stat,
+                    source,
+                    &competitions,
+                    matches.len(),
+                    &values,
+                )?;
+                row.national_teams = national;
+                rows.push(row);
+            } else if !values.is_empty() {
+                let mut v = values.clone();
+                v.sort_by(f64::total_cmp);
+                checks.push(Check {
+                    stat: stat.into(),
+                    source: source.clone(),
+                    competitions: competitions.to_vec(),
+                    teams: v.len(),
+                    median: round6(quantile(&v, 0.5)),
+                    min: round6(v[0]),
+                    max: round6(v[v.len() - 1]),
+                });
+            }
+        }
+    }
+    Ok((rows, checks))
 }
 
 /// The table of the fit data in `dir` for `competitions`.
@@ -959,7 +1068,10 @@ pub fn build(dir: &Path, competitions: &[String]) -> anyhow::Result<Table> {
         rows.push(spread(primitive, stat, competitions, matches, &values)?);
     }
     rows.extend(skillcorner_rows(dir)?);
-    let checks = statsbomb_check(dir)?.into_iter().collect();
+    let (tracked, tracked_checks) = tracking_rows(dir)?;
+    rows.extend(tracked);
+    let mut checks: Vec<Check> = statsbomb_check(dir)?.into_iter().collect();
+    checks.extend(tracked_checks);
     Ok(Table {
         schema_version: SIGNATURES_VERSION,
         held_out: engine::data::primitives::HELD_OUT

@@ -157,8 +157,9 @@ fn a_full_match_on_100_by_64_with_the_second_team_at_home() {
     full_match_on(100.0, 64.0, 1);
 }
 
-/// The 120 by 90 matches play seed 1, the lowest seed whose match brings at least five
-/// throw-ins on this wide ground in both home orders (seed 2 until the AI sides started in
+/// The 120 by 90 matches play seed 2, the lowest seed whose match brings at least five
+/// throw-ins on this wide ground in both home orders (seed 1 until the in-possession settings
+/// came in, when it brought two with the second team at home; seed 2 until the AI sides started in
 /// the style their staff picks, when it brought two with the first team at home; seed 7 until the player as a person
 /// joined the team shape, when it brought four with the first team at home; seed 2 until the
 /// defending stages read their attributes, when it brought three with the first team at home;
@@ -166,7 +167,7 @@ fn a_full_match_on_100_by_64_with_the_second_team_at_home() {
 /// first team at home;
 /// seed 42 until the team stands went off; seed 2 until the player record came in, when it
 /// brought two in each order).
-const WIDE_GROUND_SEED: u64 = 1;
+const WIDE_GROUND_SEED: u64 = 2;
 
 #[test]
 fn a_full_match_on_120_by_90_with_the_first_team_at_home() {

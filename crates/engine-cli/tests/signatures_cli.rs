@@ -216,8 +216,18 @@ fn the_in_possession_rows_follow_the_shared_definitions() {
     std::fs::remove_dir_all(&data).unwrap();
 }
 
-/// The SkillCorner runs of three teams: five targets spread evenly between the lowest and the
-/// highest team, marked thin-sample.
+/// Writes `text` gzipped to `path`.
+fn gzip(path: &std::path::Path, text: &str) {
+    let file = std::fs::File::create(path).unwrap();
+    let mut gz = flate2::write::GzEncoder::new(file, flate2::Compression::default());
+    gz.write_all(text.as_bytes()).unwrap();
+    gz.finish().unwrap();
+}
+
+/// The runs of three teams: five targets spread evenly between the lowest and the highest
+/// team, marked thin-sample. The full-backs' runs come from SkillCorner's run events; the
+/// forwards' runs come from tracking data, classified by the engine's own run kinds: the World
+/// Cup teams give the rows (marked as national teams) and a club source gives a check.
 #[test]
 fn the_runs_rows_are_thin_sample_and_spread_evenly() {
     let data = temp("engine-cli-signatures", "runs");
@@ -228,27 +238,72 @@ fn the_runs_rows_are_thin_sample_and_spread_evenly() {
             sc.push_str(&format!("{m},{team},{kind},{sub},{pos}\n"));
         }
     };
-    // A: 4 forward runs, 1 in behind. B: 2, both in behind. C: 5, none in behind.
-    add("m1", "A", "off_ball_run", "behind", "CF", 1);
-    add("m2", "A", "off_ball_run", "coming_short", "LW", 3);
+    // Full-back runs a match: A 2, B 1, C 3.
     add("m1", "A", "off_ball_run", "overlap", "LB", 2);
-    add("m1", "B", "off_ball_run", "behind", "RW", 2);
     add("m1", "B", "off_ball_run", "underlap", "RWB", 1);
-    add("m2", "C", "off_ball_run", "run_ahead_of_the_ball", "CF", 5);
     add("m2", "C", "off_ball_run", "overlap", "RB", 3);
-    let file = std::fs::File::create(real.join("sc_dynamic_events.csv.gz")).unwrap();
-    let mut gz = flate2::write::GzEncoder::new(file, flate2::Compression::default());
-    gz.write_all(sc.as_bytes()).unwrap();
-    gz.finish().unwrap();
+    gzip(&real.join("sc_dynamic_events.csv.gz"), &sc);
+
+    let mut runs = String::from(
+        "source,competition,national,match,team,player,position,period,t0,t1,depth0,depth1,\
+         line0,line1,ball0,ball1,balld0,balld1\n",
+    );
+    let mut run = |source: &str, national: u8, team: &str, kind: &str, n: usize| {
+        // depth0, depth1, line, ball depth, ball distance at the start and at the end
+        let facts = match kind {
+            "behind" => "10,20,20,20,0,0,10,20",
+            "short" => "20,14,25,25,0,0,20,14",
+            _ => "5,8,30,30,0,0,5,8",
+        };
+        let competition = if national == 1 { "World Cup" } else { "League" };
+        for k in 0..n {
+            runs.push_str(&format!(
+                "{source},{competition},{national},m1,{team},p{k},CF,1,0,1,{facts}\n"
+            ));
+        }
+    };
+    // X: 4 runs, 1 in behind, 1 coming short. Y: 2, both in behind. Z: 5, 1 coming short.
+    run("pff_wc2022", 1, "X", "behind", 1);
+    run("pff_wc2022", 1, "X", "short", 1);
+    run("pff_wc2022", 1, "X", "other", 2);
+    run("pff_wc2022", 1, "Y", "behind", 2);
+    run("pff_wc2022", 1, "Z", "short", 1);
+    run("pff_wc2022", 1, "Z", "other", 4);
+    // A club team of another source: 2 runs, 1 in behind.
+    run("skillcorner_open", 0, "W", "behind", 1);
+    run("skillcorner_open", 0, "W", "other", 1);
+    gzip(&real.join("tracking_runs.csv.gz"), &runs);
+
     let table: serde_json::Value =
-        serde_json::from_str(&run(&data, &real, "table.json", &[]).unwrap()).unwrap();
+        serde_json::from_str(&self::run(&data, &real, "table.json", &[]).unwrap()).unwrap();
     let behind = row(&table, "runs_in_behind_share");
     assert_eq!(behind["thin_sample"], true, "{behind}");
-    assert_eq!(behind["source"], "skillcorner_open");
+    assert_eq!(behind["national_teams"], true, "{behind}");
+    assert_eq!(behind["source"], "pff_wc2022");
+    assert_eq!(behind["teams"], 3);
     assert_eq!(
         behind["medians"],
         serde_json::json!([0.0, 0.25, 0.5, 0.75, 1.0])
     );
+    let short = row(&table, "coming_short_share");
+    assert_eq!(
+        short["medians"],
+        serde_json::json!([0.0, 0.0625, 0.125, 0.1875, 0.25])
+    );
+    let fullback = row(&table, "fullback_runs_per_match");
+    assert_eq!(fullback["source"], "skillcorner_open");
+    assert_eq!(
+        fullback["medians"],
+        serde_json::json!([1.0, 1.5, 2.0, 2.5, 3.0])
+    );
+    assert!(fullback.get("national_teams").is_none(), "{fullback}");
+    let check = table["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["stat"] == "runs_in_behind_share" && c["source"] == "skillcorner_open")
+        .expect("a club check of the runs in behind");
+    assert_eq!(check["median"], 0.5);
     assert!(row(&table, "ppda").get("thin_sample").is_none());
     std::fs::remove_dir_all(&data).unwrap();
 }

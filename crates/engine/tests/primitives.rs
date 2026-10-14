@@ -8,7 +8,7 @@ mod common;
 use std::path::{Path, PathBuf};
 
 use engine::data::primitives::{
-    Direction, GRADED_LEVELS, PrimitiveKind, SIGNATURE_STATS, held_out, level_value,
+    Direction, GRADED_LEVELS, PrimitiveKind, SIGNATURE_STATS, Steps, held_out, level_value,
 };
 use engine::tactics::hooks::{self, HOOKS};
 
@@ -48,16 +48,25 @@ fn the_shipped_primitives_are_complete() {
         "{names:?}"
     );
     for p in &t.primitives {
-        assert_eq!(p.kind, PrimitiveKind::Graded, "{}", p.name);
+        assert_ne!(p.kind, PrimitiveKind::OnOff, "{}", p.name);
         let levels = p.level_names(t);
-        assert_eq!(levels.len(), GRADED_LEVELS, "{}", p.name);
+        if p.kind == PrimitiveKind::Graded {
+            assert_eq!(levels.len(), GRADED_LEVELS, "{}", p.name);
+        } else {
+            assert!(levels.len() >= 2, "{}", p.name);
+        }
         assert!(levels.contains(&p.default.as_str()), "{}", p.name);
         assert!(!p.inputs.is_empty());
         for ih in &p.inputs {
             let hook = hooks::hook(&ih.hook).unwrap_or_else(|| panic!("{}", ih.hook));
-            assert_eq!(hook.input, ih.input, "{}", p.name);
-            for level in 0..GRADED_LEVELS {
-                assert!(level_value(t, &ih.input, level).is_some());
+            let second = hooks::SECOND_INPUTS
+                .iter()
+                .any(|(h, i)| *h == hook.name && *i == ih.input);
+            assert!(hook.input == ih.input || second, "{}", p.name);
+            if p.kind == PrimitiveKind::Graded {
+                for level in 0..GRADED_LEVELS {
+                    assert!(level_value(t, &ih.input, level).is_some());
+                }
             }
         }
         assert!(!p.signature.is_empty());
@@ -66,8 +75,14 @@ fn the_shipped_primitives_are_complete() {
                 .iter()
                 .all(|s| SIGNATURE_STATS.contains(&s.stat.as_str()))
         );
-        let source = p.data.source.as_deref().expect("a real data source");
-        assert!(p.data.competitions.iter().all(|c| !held_out(source, c)));
+        match p.data.source.as_deref() {
+            Some(source) => assert!(p.data.competitions.iter().all(|c| !held_out(source, c))),
+            None => assert!(
+                p.data.none.as_deref().is_some_and(|r| !r.is_empty()) && p.fits.is_empty(),
+                "{}: a primitive with no real data names why",
+                p.name
+            ),
+        }
     }
     let tempo = t.primitives.iter().find(|p| p.name == "tempo").unwrap();
     assert_eq!(
@@ -92,10 +107,17 @@ fn the_shipped_primitives_are_complete() {
         .map(|l| level_value(t, "patience", l).unwrap())
         .collect();
     assert!(patience.windows(2).all(|w| w[0] < w[1]), "{patience:?}");
-    // Each fitted primitive holds a fit record for every level but its default (the base of
-    // every ratio), and each fit landed within its paired noise of the real ratio, or names
-    // the target as out of reach.
+    // Each graded primitive with real data that is not deferred holds a fit record for every
+    // level but its default (the base of every ratio), and each fit landed within its paired
+    // noise of the real ratio, or names the target as out of reach. A choice, a primitive with
+    // no real data and a deferred one hold none.
     for p in &t.primitives {
+        let fitted =
+            p.kind == PrimitiveKind::Graded && p.data.source.is_some() && p.data.deferred.is_none();
+        if !fitted {
+            assert!(p.fits.is_empty(), "{}: no fit records", p.name);
+            continue;
+        }
         let levels = p.level_names(t);
         let fitted: Vec<&str> = p.fits.iter().map(|f| f.level.as_str()).collect();
         let others: Vec<&str> = levels.iter().copied().filter(|l| *l != p.default).collect();
@@ -133,11 +155,144 @@ fn the_shipped_primitives_are_complete() {
     );
 }
 
+/// The in-possession primitives: each is on the shipped list with its kind; width and passing
+/// directness keep their block and gain the outer levels; the crossing primitives are deferred
+/// with their reason and keep seeded values; creative freedom names why no real data fits it;
+/// every fitted input is read at an option weight, a threshold or a shape offset (a decision
+/// weight), never at the one hook that reaches a kick; the keeper follows build-up, and no
+/// in-possession primitive sets a keeper hook; and the dribble score's take-on pressure weight
+/// is the tuning value, beside the shot's own.
+#[test]
+fn the_in_possession_primitives_are_shipped_as_decided() {
+    let content = common::content();
+    let t = &content.tactics;
+    let find = |n: &str| {
+        t.primitives
+            .iter()
+            .find(|p| p.name == n)
+            .unwrap_or_else(|| panic!("{n} is shipped"))
+    };
+    let graded = [
+        "width",
+        "passing_directness",
+        "build_up",
+        "final_third",
+        "dribbling",
+        "crossing",
+        "creative_freedom",
+        "forward_runs",
+        "fullback_run_frequency",
+    ];
+    let choices = ["attacking_channel", "cross_type", "fullback_runs"];
+    for n in graded {
+        assert_eq!(find(n).kind, PrimitiveKind::Graded, "{n}");
+    }
+    for n in choices {
+        assert_eq!(find(n).kind, PrimitiveKind::Choice, "{n}");
+    }
+    assert_eq!(
+        find("width").level_names(t),
+        ["very_narrow", "narrow", "normal", "wide", "very_wide"]
+    );
+    assert_eq!(
+        find("passing_directness").level_names(t),
+        ["very_short", "short", "mixed", "direct", "very_direct"]
+    );
+    assert_eq!(
+        find("attacking_channel").level_names(t),
+        [
+            "left",
+            "right",
+            "both_wings",
+            "centre",
+            "centre_left",
+            "centre_right",
+            "balanced"
+        ]
+    );
+    assert_eq!(
+        find("fullback_runs").level_names(t),
+        ["stay_back", "underlap", "overlap"]
+    );
+    for n in ["crossing", "cross_type", "attacking_channel"] {
+        let p = find(n);
+        assert!(p.data.source.is_some(), "{n}");
+        assert!(
+            p.data.deferred.as_deref().is_some_and(|r| !r.is_empty()),
+            "{n}: deferred with its reason"
+        );
+        assert!(p.fits.is_empty(), "{n}");
+    }
+    let freedom = find("creative_freedom");
+    assert!(freedom.data.source.is_none() && freedom.data.none.is_some());
+    // Forward runs: the upper levels are judged on the share of runs in behind, the lower on
+    // the share of runs coming short, both from the World Cup's tracking data; the start
+    // distance rises with the level and is 0 at the default.
+    let runs = find("forward_runs");
+    let scoped: Vec<(&str, Steps)> = runs
+        .signature
+        .iter()
+        .map(|s| (s.stat.as_str(), s.steps))
+        .collect();
+    assert_eq!(
+        scoped,
+        [
+            ("runs_in_behind_share", Steps::AboveDefault),
+            ("coming_short_share", Steps::BelowDefault)
+        ]
+    );
+    assert_eq!(runs.data.source.as_deref(), Some("pff_wc2022"));
+    let start: Vec<f64> = (0..GRADED_LEVELS)
+        .map(|l| level_value(t, "run_start_m", l).unwrap())
+        .collect();
+    assert!(start.windows(2).all(|w| w[0] < w[1]), "{start:?}");
+    assert_eq!(start[2], 0.0);
+    // Every fitted input is a decision weight: no fit sets ball physics.
+    for p in &t.primitives {
+        for fit in &p.fits {
+            for input in fit.values.keys() {
+                let ih = p.inputs.iter().find(|i| &i.input == input).unwrap();
+                let hook = hooks::hook(&ih.hook).unwrap();
+                assert!(
+                    matches!(
+                        hook.kind,
+                        hooks::HookKind::OptionWeight
+                            | hooks::HookKind::Threshold
+                            | hooks::HookKind::ShapeOffset
+                    ) && hook.name != "cross.trajectory",
+                    "{} {}: {input} at {}",
+                    p.name,
+                    fit.level,
+                    hook.name
+                );
+            }
+        }
+    }
+    // The keeper reads the team's build-up: no separate keeper setting.
+    let build_up = find("build_up");
+    assert_eq!(build_up.inputs.len(), 1);
+    assert_eq!(build_up.inputs[0].hook, "pass.build_up");
+    for n in graded.iter().chain(&choices) {
+        assert!(
+            find(n)
+                .inputs
+                .iter()
+                .all(|i| !i.hook.starts_with("keeper.")),
+            "{n}"
+        );
+    }
+    let w = &content.tuning.engine.decision;
+    assert_eq!(w.shot_under_pressure, -0.8);
+    assert!(w.takeon_under_pressure.is_finite());
+}
+
 /// Each bad entry in `tests/fixtures/primitives/` is refused with its own reason: a graded
 /// primitive with other than 5 levels, a choice primitive with no choices, an on/off
 /// primitive without two states, a default that is not a level, no input, an unknown hook, a
 /// hook that reads another input, an unknown statistic, no signature, neither a source nor a
-/// reason, a held-out competition, and a fit record that differs from its level.
+/// reason, a held-out competition, a fit record that differs from its level, a deferred
+/// primitive that holds a fit, and statistics scoped below or above the default that leave a
+/// step unjudged.
 #[test]
 fn every_bad_primitive_entry_is_refused_by_name() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/primitives");
@@ -147,7 +302,7 @@ fn every_bad_primitive_entry_is_refused_by_name() {
         .filter(|p| p.extension().is_some_and(|e| e == "json"))
         .collect();
     files.sort();
-    assert_eq!(files.len(), 16);
+    assert_eq!(files.len(), 18);
     for file in files {
         let case: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
