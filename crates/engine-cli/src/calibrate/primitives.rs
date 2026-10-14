@@ -37,7 +37,7 @@ use super::fixtures::{self, Leagues};
 
 /// The statistics the harness measures, in value order: the signature statistics, then the
 /// side's possessions and shots a match, which every step reports beside them.
-pub const STATS: [&str; 61] = [
+pub const STATS: [&str; 65] = [
     "passes_per_possession",
     "recycle_share",
     "turnovers_per_possession",
@@ -93,6 +93,10 @@ pub const STATS: [&str; 61] = [
     "poor_touches_per_match",
     "facing_back_per_match",
     "runs_per_match",
+    "free_pass_completion",
+    "pressed_pass_completion",
+    "free_touch_loss",
+    "pressed_touch_loss",
     "crosses",
     "entries",
     "final_third_possessions",
@@ -207,6 +211,10 @@ pub fn side_stats(m: &MatchMeasures, sinks: &Sinks<'_>, team: usize) -> Stats {
         (f(d.trigger_events[1]), n),
         (f(d.trigger_events[2]), n),
         (f(runs.runs[team]), n),
+        (f(s.pressure_completed[0]), f(s.pressure_passes[0])),
+        (f(s.pressure_completed[1]), f(s.pressure_passes[1])),
+        (f(s.touches_lost[0]), f(s.touches[0])),
+        (f(s.touches_lost[1]), f(s.touches[1])),
         (f(s.crosses), 1.0),
         (entries, 1.0),
         (f(s.final_third_possessions), 1.0),

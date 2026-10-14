@@ -225,7 +225,8 @@ struct BallAt {
 /// within `keeper_reach` times his claim factor (and his claim range for a ball above head
 /// height in his own penalty area). The ball must be under `reach_height` times his aerial
 /// factor, and only a keeper reaches a ball faster than `control_speed` times his receive
-/// factor.
+/// factor. An outfield player receiving his side's pass in flight under pressure reaches it
+/// only within `1 - decision.touch_under_pressure` of his reach.
 #[inline]
 fn reach(
     view: &MatchView<'_>,
@@ -253,7 +254,28 @@ fn reach(
         reach_radius * k.intercept
     };
     let d = (p.pos - ball.xy).length();
-    (d < reach).then_some(d)
+    if d >= reach {
+        return None;
+    }
+    // The pressure mechanism: an outfield receiver of his side's pass under pressure reaches
+    // the ball only within the pressed share of his reach.
+    let touch = t.decision.touch_under_pressure;
+    if !keeper
+        && touch > 0.0
+        && view.pass_in_flight() == Some(p.team)
+        && d >= reach * (1.0 - touch)
+        && under_pressure(view, p)
+    {
+        return None;
+    }
+    Some(d)
+}
+
+/// `true` when an active opponent of player `p` stands within the pressed distance.
+fn under_pressure(view: &MatchView<'_>, p: &crate::player::Player) -> bool {
+    view.players().iter().any(|o| {
+        o.team != p.team && o.active() && (o.pos - p.pos).length() < crate::contract::PRESSED_M
+    })
 }
 
 /// The nearest active player within reach of a loose ball (see [`reach`]). A ball faster
@@ -372,6 +394,7 @@ pub const POSSESSION_V1_CARD: ModuleCard = ModuleCard {
         "reach_height",
         "control_speed",
         "control_cooldown_ticks",
+        "decision.touch_under_pressure",
         "tackle_reach",
         "keeper_catch_chance",
         "crossbar_height",

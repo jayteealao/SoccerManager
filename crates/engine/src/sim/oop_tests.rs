@@ -280,3 +280,46 @@ fn a_tackle_happens_only_when_the_decision_chooses_it() {
     assert_eq!(sim.carrier, Some(9));
     assert_eq!(sim.streams.draws(), draws);
 }
+
+/// The pressure mechanism's touch: a slow ball near a home receiver. Receiving his side's
+/// pass free, he reaches it; under pressure (an away player within the pressed distance) he
+/// reaches it only within the pressed share of his reach, so the ball runs on; on the other
+/// side's pass he defends it and keeps his full reach, since the mechanism reads only the
+/// receiving side.
+#[test]
+fn a_pressed_receiver_reaches_his_pass_only_within_the_pressed_share() {
+    use crate::modules::PossessionModule;
+    let r = 9;
+    let d = PLAYERS_PER_TEAM + 9;
+    let place = |touch: f64, gap: f64, passing: usize| {
+        let mut sim = scene();
+        sim.config.tuning.decision.touch_under_pressure = touch;
+        let reach = sim.config.tuning.reach_radius * sim.players[r].derived.knobs.intercept;
+        for i in 0..2 * PLAYERS_PER_TEAM {
+            sim.players[i].pos = DVec2::new(-40.0 + i as f64 * 0.1, 30.0);
+        }
+        sim.players[r].pos = DVec2::new(0.0, 0.0);
+        sim.players[d].pos = DVec2::new(0.0, gap);
+        sim.ball.pos = DVec2::new(0.8 * reach, 0.0).extend(0.0);
+        sim.ball.vel = DVec2::new(1.0, 0.0).extend(0.0);
+        sim.carrier = None;
+        sim.pass_in_flight = Some(passing);
+        sim.possession_phase = Some(passing);
+        crate::possession::PossessionV1
+            .loose_ball(&sim.view())
+            .and_then(|l| l.best)
+            .map(|(_, i)| i)
+    };
+    assert_eq!(place(0.0, 2.0, 0), Some(r), "free of the mechanism");
+    assert_eq!(
+        place(0.5, 6.0, 0),
+        Some(r),
+        "no opponent within the pressed distance"
+    );
+    assert_eq!(place(0.5, 2.0, 0), None, "pressed: the ball runs on");
+    assert_eq!(
+        place(0.5, 2.0, 1),
+        Some(r),
+        "defending the other side's pass"
+    );
+}

@@ -299,6 +299,8 @@ impl Simulation {
                     return;
                 }
                 self.mark_heavy(t);
+                #[cfg(feature = "measures")]
+                self.measure_reception(t);
                 let Some(loose) = possession.loose_ball(&self.view()) else {
                     return;
                 };
@@ -602,6 +604,37 @@ impl Simulation {
             Some(Position::CB | Position::LB | Position::RB)
         );
         (team, (m / pitch.length(), m), defender)
+    }
+
+    /// Count site: while a pass of the side in possession is in flight, the first team-mate of
+    /// the passer (not the passer) who has the ball within his full reach, at a height and a
+    /// speed he can control, receives it, under pressure or free.
+    #[cfg(feature = "measures")]
+    fn measure_reception(&mut self, t: &Tuning) {
+        let Some(team) = self.pass_in_flight else {
+            return;
+        };
+        let speed = self.ball.speed();
+        let xy = self.ball.xy();
+        let z = self.ball.pos.z;
+        let keeper = self.keeper(team);
+        let last = self.last_kicker;
+        let Some(i) = self.players.iter().enumerate().position(|(i, p)| {
+            let k = &p.derived.knobs;
+            p.team == team
+                && p.active()
+                && i != keeper
+                && Some(i) != last
+                && z <= p.derived.reach_m
+                && speed <= t.control_speed * k.receive
+                && (p.pos - xy).length() < t.reach_radius * k.intercept
+        }) else {
+            return;
+        };
+        let pressed = crate::decision::pressed(&self.view(), i);
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.received(team, pressed);
+        }
     }
 
     /// Count site: defender `i` tackled carrier `c`.

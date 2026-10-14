@@ -554,6 +554,20 @@ pub struct DecisionWeights {
     /// raises a pressed dribble, so the carrier takes the defender on.
     #[garde(range(min = -5.0, max = 5.0))]
     pub takeon_under_pressure: f64,
+    /// The pressure mechanism, for every side: a player is under pressure when an active
+    /// opponent stands within the pressed distance ([`crate::contract::PRESSED_M`]), the one
+    /// definition the pressure counts use. Under pressure an outfield pass's aim noise grows by
+    /// the share `pass_under_pressure`, and a receiver of his side's pass reaches the ball only
+    /// within `1 - touch_under_pressure` of his reach, so his first touch more often lets the
+    /// ball run on. Each is sized so that the engine's gap between pressed and free players matches
+    /// the real gap in the StatsBomb open data (pass completion; miscontrols per reception).
+    /// 0 (an older file) leaves play as before.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 20.0))]
+    pub pass_under_pressure: f64,
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 0.9))]
+    pub touch_under_pressure: f64,
     #[garde(range(min = -5.0, max = 5.0))]
     pub first_touch: f64,
     /// A clearance: the base, the bonus under pressure in the own third, and the base for
@@ -699,6 +713,8 @@ impl Default for Tuning {
                 dribble_space: 0.55,
                 shot_under_pressure: -0.8,
                 takeon_under_pressure: -0.8,
+                pass_under_pressure: 8.5,
+                touch_under_pressure: 0.078,
                 first_touch: 0.6,
                 clear: -1.0,
                 clear_pressure: 1.2,

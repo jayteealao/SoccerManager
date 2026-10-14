@@ -75,6 +75,8 @@
       "dribble_space": 0.55,
       "shot_under_pressure": -0.8,
       "takeon_under_pressure": -0.8,
+      "pass_under_pressure": 8.5,
+      "touch_under_pressure": 0.078,
       "first_touch": 0.6,
       "clear": -1.0,
       "clear_pressure": 1.2,

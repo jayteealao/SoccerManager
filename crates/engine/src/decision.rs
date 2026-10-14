@@ -1372,7 +1372,8 @@ impl DecisionModule for DecisionV1 {
     /// A pass's aim noise falls as its execution share rises: the execute stage of its kind
     /// (passing, technique for a chip, crossing, a keeper's throwing or kicking), with the
     /// pressure stage when an opponent is close, and a chip the body cannot pull off loses
-    /// its gate penalty.
+    /// its gate penalty. A pressed outfield passer's aim noise grows by the share
+    /// `decision.pass_under_pressure` (the pressure mechanism).
     fn pass_kick(&self, view: &MatchView<'_>, c: usize, j: usize, aim: f64) -> Kick {
         let t = view.tuning();
         let carrier = view.player(c);
@@ -1397,6 +1398,12 @@ impl DecisionModule for DecisionV1 {
         };
         let skill = execution(view, c, execute, pressure, under, penalty, foot);
         let noise = t.aim_noise * (1.5 - skill);
+        // The pressure mechanism: a pressed outfield passer's aim noise grows.
+        let noise = if under {
+            noise * (1.0 + t.decision.pass_under_pressure)
+        } else {
+            noise
+        };
         let dir = rotate(line, map_range(-noise, noise, aim));
         let lofted = if d > 25.0 { 3.0 + d * 0.08 } else { 0.0 };
         // The cross type (hook `cross.trajectory`): a driven cross stays on the ground, a

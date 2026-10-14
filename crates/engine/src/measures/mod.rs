@@ -270,6 +270,16 @@ pub struct Possessing {
     pub off_plan: u32,
     /// Possessions (the primitives' count) that reached the final third.
     pub final_third_possessions: u32,
+    /// The pressure mechanism's counts, each indexed free (0) and under pressure (1), by the
+    /// pressed distance ([`crate::contract::PRESSED_M`]): outfield open-play passes by the
+    /// passer's state at the kick, and those completed; and receptions, a pass of the side
+    /// reaching a team-mate of the passer within his reach at a speed he can control, by that
+    /// team-mate's state then, and those after which the other side gained the ball or it went
+    /// dead (a touch lost).
+    pub pressure_passes: [u32; 2],
+    pub pressure_completed: [u32; 2],
+    pub touches: [u32; 2],
+    pub touches_lost: [u32; 2],
 }
 
 /// The measures of one match.
@@ -342,6 +352,11 @@ pub struct MatchMeasures {
     planned: Option<Planned>,
     /// The cell of the pass in flight.
     in_flight: Option<usize>,
+    /// The passer's pressed state (0 free, 1 pressed) of the outfield pass in flight.
+    in_flight_pressed: Option<usize>,
+    /// The first reception of the pass in flight: the passing side and the receiver's pressed
+    /// state.
+    touch: Option<(usize, usize)>,
     /// The channel of the pass in flight when it enters the final third from outside.
     entry: Option<usize>,
     chain: Option<Chain>,
@@ -383,6 +398,8 @@ impl Default for MatchMeasures {
             taking_on: None,
             planned: None,
             in_flight: None,
+            in_flight_pressed: None,
+            touch: None,
             entry: None,
             chain: None,
             possession: None,
@@ -468,6 +485,8 @@ impl MatchMeasures {
         let cell = planned.map_or(UNKNOWN_CELL, |p| p.cell);
         self.pass_attempts[team][cell] += 1;
         self.in_flight = Some(cell);
+        self.in_flight_pressed = None;
+        self.touch = None;
         self.entry = None;
         if let Some(p) = planned
             && let Some(f) = p.facts
@@ -535,11 +554,29 @@ impl MatchMeasures {
     pub(crate) fn kicked_other(&mut self) {
         self.planned = None;
         self.in_flight = None;
+        self.in_flight_pressed = None;
+        self.touch = None;
         self.entry = None;
+    }
+
+    /// The outfield passer of `team`'s pass just kicked was under pressure (`pressed`) or free.
+    pub(crate) fn pass_pressed(&mut self, team: usize, pressed: bool) {
+        let k = usize::from(pressed);
+        self.possessing[team].pressure_passes[k] += 1;
+        self.in_flight_pressed = Some(k);
+    }
+
+    /// `team`'s pass in flight reached a team-mate of the passer, under pressure (`pressed`)
+    /// or free: its first reception counts when the flight ends.
+    pub(crate) fn received(&mut self, team: usize, pressed: bool) {
+        self.touch.get_or_insert((team, usize::from(pressed)));
     }
 
     /// The pass in flight reached a team-mate of its passer.
     pub(crate) fn completed(&mut self, team: usize) {
+        if let Some(k) = self.in_flight_pressed.take() {
+            self.possessing[team].pressure_completed[k] += 1;
+        }
         if let Some(cell) = self.in_flight.take() {
             self.pass_completed[team][cell] += 1;
             if let Some(ch) = self.entry.take() {
@@ -750,7 +787,13 @@ impl MatchMeasures {
 
     /// `team` gained the ball: with no chain open, an open-play chain starts.
     pub(crate) fn gained(&mut self, team: usize, tick: u32) {
+        if let Some((side, pressed)) = self.touch.take() {
+            let s = &mut self.possessing[side];
+            s.touches[pressed] += 1;
+            s.touches_lost[pressed] += u32::from(side != team);
+        }
         self.in_flight = None;
+        self.in_flight_pressed = None;
         self.entry = None;
         if self.chain.is_none() {
             self.chain = Some(Chain {
@@ -777,6 +820,12 @@ impl MatchMeasures {
 
     /// The ball went dead: the open chain ends and nothing stays in flight.
     pub(crate) fn dead(&mut self, tick: u32) {
+        // A received pass that goes dead before its side gains it is a touch lost.
+        if let Some((side, pressed)) = self.touch.take() {
+            let s = &mut self.possessing[side];
+            s.touches[pressed] += 1;
+            s.touches_lost[pressed] += 1;
+        }
         self.kicked_other();
         self.end_chain(tick);
         self.possession_stops(tick);
