@@ -7,7 +7,7 @@ use crate::data::rules::StoppageKind;
 use crate::data::test_support::shipped_config;
 use crate::decision::{
     FORCE_M, TRAP_STEP_M, TRIGGER_BACK_PASS, TRIGGER_FACING_BACK, TRIGGER_POOR_TOUCH,
-    TRIGGER_REACH, TRIGGER_WIDE, engaged, trigger_factor,
+    TRIGGER_PRESSERS, TRIGGER_REACH, TRIGGER_WIDE, engaged, trigger_factor, trigger_pressers,
 };
 use crate::math::DVec2;
 use crate::modules::DecisionModule;
@@ -64,9 +64,9 @@ fn a_reception_fires_its_triggers_for_the_other_side() {
     assert_eq!(sim.trigger_at, [[None; 4]; 2]);
 }
 
-/// Inside a trigger's window the press reach takes its factor only for a side whose plan
-/// switches that trigger on, and only while the other side keeps the ball and the window
-/// lasts.
+/// Inside a trigger's window the press reach takes its factor and the press its extra players
+/// only for a side whose plan switches that trigger on, and only while the other side keeps
+/// the ball and the window lasts.
 #[test]
 fn a_side_reads_only_the_triggers_its_plan_switches_on() {
     let mut sim = scene();
@@ -75,10 +75,13 @@ fn a_side_reads_only_the_triggers_its_plan_switches_on() {
     assert_eq!(trigger_factor(&sim.view(), 1), 1.0);
     sim.teams[1].plan.trigger_back_pass = true;
     assert_eq!(trigger_factor(&sim.view(), 1), 1.0);
+    assert_eq!(trigger_pressers(&sim.view(), 1), 0);
     sim.teams[1].plan.trigger_wide = true;
     assert_eq!(trigger_factor(&sim.view(), 1), TRIGGER_REACH);
+    assert_eq!(trigger_pressers(&sim.view(), 1), TRIGGER_PRESSERS);
     sim.tick += 1_000;
     assert_eq!(trigger_factor(&sim.view(), 1), 1.0);
+    assert_eq!(trigger_pressers(&sim.view(), 1), 0);
     sim.tick = 3_000;
     sim.possession_phase = Some(1);
     assert_eq!(trigger_factor(&sim.view(), 1), 1.0);
@@ -141,8 +144,8 @@ fn force_moves_only_the_pressers_aim_across() {
 }
 
 /// The offside trap: a side whose plan sets it starts its window when an opposing carrier
-/// faces forward with nobody of the side near him, and its back line steps up together while
-/// the window lasts; a side without it never starts one.
+/// faces forward with nobody of the side near him, once in his spell on the ball, and its back
+/// line steps up together while the window lasts.
 #[test]
 fn the_offside_trap_steps_the_back_line_up_together() {
     // A home carrier deep in his own half facing up the pitch, every player at his anchor.
@@ -179,6 +182,13 @@ fn the_offside_trap_steps_the_back_line_up_together() {
         stepped += usize::from(step > 0.0);
     }
     assert!(stepped >= 2, "{stepped} stepped up");
+    // Later in the same spell no new trap starts; a new spell on the ball may start one.
+    sim.tick += 200;
+    sim.arm_trap(1, 9);
+    assert_eq!(sim.trap_at[1], Some(3_000));
+    sim.control_since = sim.tick;
+    sim.arm_trap(1, 9);
+    assert_eq!(sim.trap_at[1], Some(3_200));
     // With a player of the side near him the carrier is pressed: no trap starts.
     let mut pressed = scene();
     pressed.players[9].pos = at;

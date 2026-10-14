@@ -112,9 +112,10 @@ pub const BACK_PASS_COS: f64 = 0.5;
 pub const FACING_BACK_COS: f64 = 0.5;
 /// The press-trigger window (hooks `press.trigger.*`): for this many seconds after a trigger
 /// the pressing side switches on fires, while the other side keeps the ball, the side's press
-/// reach takes [`TRIGGER_REACH`].
+/// reach takes [`TRIGGER_REACH`] and [`TRIGGER_PRESSERS`] more players press.
 pub const TRIGGER_WINDOW_S: f64 = 3.0;
 pub const TRIGGER_REACH: f64 = 1.5;
+pub const TRIGGER_PRESSERS: usize = 1;
 /// Force the opponent (hook `press.force`): metres per unit of force the presser's aim moves
 /// across, toward the centre to show the carrier wide (force above 0) or toward the near
 /// touchline to show him inside (below 0).
@@ -138,6 +139,25 @@ pub const TACKLE_FOUL_COST: f64 = 0.1;
 /// Press triggers (hooks `press.trigger.*`): the factor on pressing side `team`'s press reach,
 /// [`TRIGGER_REACH`] while the window of a trigger its plan switches on is open, else 1.
 pub(crate) fn trigger_factor(view: &MatchView<'_>, team: usize) -> f64 {
+    if trigger_open(view, team) {
+        TRIGGER_REACH
+    } else {
+        1.0
+    }
+}
+
+/// Press triggers: the extra pressers of side `team`, [`TRIGGER_PRESSERS`] while the window of
+/// a trigger its plan switches on is open, else 0.
+pub(crate) fn trigger_pressers(view: &MatchView<'_>, team: usize) -> usize {
+    if trigger_open(view, team) {
+        TRIGGER_PRESSERS
+    } else {
+        0
+    }
+}
+
+/// Whether the window of a press trigger side `team`'s plan switches on is open.
+fn trigger_open(view: &MatchView<'_>, team: usize) -> bool {
     let plan = &view.teams()[team].plan;
     let on = [
         plan.trigger_back_pass,
@@ -145,12 +165,11 @@ pub(crate) fn trigger_factor(view: &MatchView<'_>, team: usize) -> f64 {
         plan.trigger_facing_back,
         plan.trigger_wide,
     ];
-    let open = on.iter().enumerate().any(|(k, &on)| {
+    on.iter().enumerate().any(|(k, &on)| {
         on && view
             .since_trigger_s(team, k)
             .is_some_and(|s| s < TRIGGER_WINDOW_S)
-    });
-    if open { TRIGGER_REACH } else { 1.0 }
+    })
 }
 
 /// The line of engagement's press start (hook `press.engage`): `true` while the ball lies
@@ -528,9 +547,9 @@ impl DecisionModule for DecisionV1 {
                 // Inside its counter-press window the side's players press from farther, or
                 // from nearer, or not at all.
                 // Beyond the side's line of engagement nobody presses; inside a trigger's
-                // window the press reaches farther.
+                // window the press reaches farther with more players.
                 let count = if engaged(view, def, ball_xy) {
-                    teams[def].pressers().min(MAX_PRESSERS)
+                    (teams[def].pressers() + trigger_pressers(view, def)).min(MAX_PRESSERS)
                 } else {
                     0
                 };
@@ -1744,8 +1763,10 @@ pub fn tackle_decision(
     let s = (from_own / pitch.length()).clamp(0.0, 1.0);
     let danger = (1.0 - s) * (1.0 - s);
     let cost = TACKLE_FOUL_COST * chances.p_foul * (1.0 + danger);
+    // The log of the win chance over the cost, plus the willingness, is above 0 when the win
+    // chance is above the cost scaled by e to the minus willingness (1 at the default).
     if chances.p_win <= 0.0
-        || (cost > 0.0 && (chances.p_win / cost).ln() + plan.tackle_willingness <= 0.0)
+        || (cost > 0.0 && chances.p_win <= cost * math::exp(-plan.tackle_willingness))
     {
         return None;
     }

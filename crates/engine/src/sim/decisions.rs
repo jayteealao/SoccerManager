@@ -244,14 +244,11 @@ impl Simulation {
 }
 
 impl Simulation {
-    /// The offside trap of side `def` (hook `line.offside_trap`): with no trap window open, an
-    /// opposing carrier `c` facing forward with no player of `def` within the pressed distance
-    /// starts one.
+    /// The offside trap of side `def` (hook `line.offside_trap`): an opposing carrier `c`
+    /// facing forward with no player of `def` within the pressed distance starts one, once in
+    /// his spell on the ball, so the line steps up as he looks to play forward and not before.
     pub(crate) fn arm_trap(&mut self, def: usize, c: usize) {
-        if self
-            .since_trap_s(def)
-            .is_some_and(|s| s < crate::decision::TRAP_WINDOW_S)
-        {
+        if self.trap_at[def].is_some_and(|at| at >= self.control_since) {
             return;
         }
         let carrier = &self.players[c];

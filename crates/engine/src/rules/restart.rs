@@ -408,11 +408,12 @@ pub fn target(
     pitch.clamp(at, 0.5)
 }
 
-/// Stop short goal kicks (hook `press.screen_short`): at the other side's goal kick, each
-/// active outfield player of a side whose plan screens, in front of its back line, takes in
-/// slot order the nearest kicking-side outfield player within the goal kick's short reach not
-/// yet taken, and stands beside him on the taker's side, [`crate::decision::SCREEN_M`] / 2
-/// metres off. `None` for a player who screens nobody.
+/// Stop short goal kicks (hook `press.screen_short`): at the other side's goal kick, a side
+/// whose plan screens covers the kicker's short options nearest the kick first: taking the
+/// kicking side's outfield players within the goal kick's short reach in order of their
+/// distance from the spot, each is screened by the nearest of the side's active outfield
+/// players in front of its back line not yet given one, who stands beside him on the taker's
+/// side, [`crate::decision::SCREEN_M`] / 2 metres off. `None` for a player who screens nobody.
 fn screen_target(
     dead: &DeadBall,
     i: usize,
@@ -426,40 +427,48 @@ fn screen_target(
     }
     let short = crate::decision::GOAL_KICK_REACH_M;
     let kicking = &teams[dead.team];
-    let mut taken = 0u32;
-    for (k, p) in players.iter().enumerate() {
-        if p.team != me.team
-            || !p.active()
-            || side.in_back_line(p.slot)
-            || p.slot == side.keeper_slot()
-        {
-            continue;
-        }
-        let mark = players
-            .iter()
-            .enumerate()
-            .filter(|&(j, q)| {
-                q.team == dead.team
-                    && q.active()
-                    && j != dead.taker
-                    && q.slot != kicking.keeper_slot()
-                    && taken & (1u32 << j) == 0
-                    && (q.pos - dead.spot).length() < short
+    let mut marks: Vec<usize> = (0..players.len())
+        .filter(|&j| {
+            let q = &players[j];
+            q.team == dead.team
+                && q.active()
+                && j != dead.taker
+                && q.slot != kicking.keeper_slot()
+                && (q.pos - dead.spot).length() < short
+        })
+        .collect();
+    marks.sort_by(|&a, &b| {
+        (players[a].pos - dead.spot)
+            .length()
+            .total_cmp(&(players[b].pos - dead.spot).length())
+            .then(a.cmp(&b))
+    });
+    let mut given = 0u32;
+    for m in marks {
+        let mark = players[m].pos;
+        let k = (0..players.len())
+            .filter(|&k| {
+                let p = &players[k];
+                p.team == me.team
+                    && p.active()
+                    && !side.in_back_line(p.slot)
+                    && p.slot != side.keeper_slot()
+                    && given & (1u32 << k) == 0
             })
-            .min_by(|a, b| {
-                (a.1.pos - p.pos)
+            .min_by(|&a, &b| {
+                (players[a].pos - mark)
                     .length()
-                    .total_cmp(&(b.1.pos - p.pos).length())
+                    .total_cmp(&(players[b].pos - mark).length())
+                    .then(a.cmp(&b))
             })?;
-        taken |= 1u32 << mark.0;
+        given |= 1u32 << k;
         if k == i {
-            let to_ball = crate::math::toward(mark.1.pos, dead.spot);
-            return Some(mark.1.pos + to_ball * (0.5 * crate::decision::SCREEN_M));
+            let to_ball = crate::math::toward(mark, dead.spot);
+            return Some(mark + to_ball * (0.5 * crate::decision::SCREEN_M));
         }
     }
     None
 }
-
 /// Room, in metres, that a player walking round the circle the law keeps him out of leaves
 /// outside it.
 const ROUND_MARGIN: f64 = 1.0;
