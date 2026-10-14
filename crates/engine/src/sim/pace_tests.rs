@@ -240,6 +240,46 @@ fn a_player_whose_stand_option_fired_in_possession_offers_and_a_lapse_holds() {
     assert_eq!(sim.players[lapsing].pace.grade, Grade::Calm);
 }
 
+/// On winning the ball (hook `pace.lift`): a side whose on-winning level lifts pace raises its
+/// support jobs one grade while its regain window is open, and only then: not after the
+/// window, not with no regain, and not without the lift, whatever its pressing level.
+#[test]
+fn a_counter_lifts_support_jobs_only_inside_the_regain_window() {
+    let offer_grades = |lift: bool, since_s: Option<f64>| -> Vec<Grade> {
+        let mut sim = scene();
+        hold(&mut sim, 2, DVec2::new(-40.0, -8.0));
+        settle(&mut sim);
+        sim.teams[0].plan.pace_lift = lift;
+        let tick = sim.tick;
+        sim.regained_at[0] = since_s.map(|s| {
+            // A few seconds: the cast is exact.
+            tick - (s * f64::from(crate::TICKS_PER_SECOND)).round() as u32
+        });
+        decide_and_pace(&mut sim);
+        sim.players[..PLAYERS_PER_TEAM]
+            .iter()
+            .filter(|p| p.pace.job == Job::Offer)
+            .map(|p| p.pace.grade)
+            .collect()
+    };
+    let window = crate::decision::COUNTER_WINDOW_S;
+    let inside = offer_grades(true, Some(window / 2.0));
+    assert!(!inside.is_empty(), "a home player offers");
+    assert!(inside.iter().all(|&g| g == Grade::Urgent), "{inside:?}");
+    for (lift, since) in [
+        (true, Some(window + 1.0)),
+        (true, None),
+        (false, Some(window / 2.0)),
+    ] {
+        let grades = offer_grades(lift, since);
+        assert!(!grades.is_empty());
+        assert!(
+            grades.iter().all(|&g| g == Grade::Normal),
+            "{lift} {since:?}: {grades:?}"
+        );
+    }
+}
+
 /// Charter scenario step 4 (proxy): the home team holds the ball in the away half and loses
 /// it; over the next second the nearest home presser sprints (the sprint chance is 1 here),
 /// while the home players behind the ball go to their places at a jog or a run, and at least

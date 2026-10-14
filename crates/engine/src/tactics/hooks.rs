@@ -126,7 +126,8 @@ pub const HOOKS: [Hook; 36] = [
         name: "pace.lift",
         kind: HookKind::Trigger,
         input: "pace_lift",
-        site: "sim/pace.rs: pressing jobs and support jobs rise one urgency grade",
+        site: "sim/pace.rs: while the side's regain window is open, pressing jobs and support \
+               jobs rise one urgency grade",
     },
     Hook {
         name: "trait.conflict",

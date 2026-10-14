@@ -26,8 +26,13 @@ impl Simulation {
             // A team wastes time only while the ball is dead; in open play both teams keep
             // their grades, with or without the ball.
             let wasting = plan.time_wasting > 1.0 && dead;
+            // On winning the ball: a counter sends the side's runners at speed while its
+            // regain window is open (hook `pace.lift`).
+            let countering = self
+                .since_regain_s(team)
+                .is_some_and(|s| s < crate::decision::COUNTER_WINDOW_S);
             TeamPace {
-                lift: plan.pace_lift,
+                lift: plan.pace_lift && countering,
                 trailing_late: late && mine < theirs,
                 wasting_late: late && mine > theirs && wasting,
             }

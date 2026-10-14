@@ -1620,15 +1620,16 @@
       "kind": "graded",
       "levels": "own",
       "steps": [
-        { "name": "always_keep_shape", "values": { "counter": -1.0 } },
-        { "name": "keep_shape", "values": { "counter": -0.5 } },
-        { "name": "mixed", "values": { "counter": 0.0 } },
-        { "name": "counter", "values": { "counter": 0.5 } },
-        { "name": "always_counter", "values": { "counter": 1.0 } }
+        { "name": "always_keep_shape", "values": { "counter": -1.0, "pace_lift": 0.0 } },
+        { "name": "keep_shape", "values": { "counter": -0.5, "pace_lift": 0.0 } },
+        { "name": "mixed", "values": { "counter": 0.0, "pace_lift": 0.0 } },
+        { "name": "counter", "values": { "counter": 0.5, "pace_lift": 1.0 } },
+        { "name": "always_counter", "values": { "counter": 1.0, "pace_lift": 1.0 } }
       ],
       "default": "mixed",
       "inputs": [
-        { "input": "counter", "hook": "regain.counter" }
+        { "input": "counter", "hook": "regain.counter" },
+        { "input": "pace_lift", "hook": "pace.lift" }
       ],
       "signature": [
         { "stat": "counter_attacks_per_match", "direction": "up" },

@@ -356,8 +356,9 @@ pub struct TeamPlan {
     pub directness: f64,
     /// A factor on the team's restart delay while it leads.
     pub time_wasting: f64,
-    /// Pressing above its default level: pressing and support jobs rise one urgency grade
-    /// ([`crate::pace`]). No tempo level lifts running pace.
+    /// On winning the ball above its default level: while the side's regain window is open,
+    /// pressing and support jobs rise one urgency grade ([`crate::pace`]). No tempo or pressing
+    /// level lifts running pace.
     pub pace_lift: bool,
     /// How much a lost ball's danger counts against each option's gain: the mentality's
     /// appetite for risk.
@@ -445,6 +446,10 @@ impl TeamPlan {
             "fullback_run" => &mut self.fullback_run,
             "fullback_reach" => &mut self.fullback_reach,
             "counter" => &mut self.counter,
+            "pace_lift" => {
+                self.pace_lift = v > 0.0;
+                return;
+            }
             "counter_press" => &mut self.counter_press,
             "counter_press_s" => &mut self.counter_press_s,
             _ => return,
@@ -456,7 +461,6 @@ impl TeamPlan {
     pub fn from(tactics: &Tactics, schema: &TacticsSchema, t: &Tuning) -> Self {
         let level = |index: usize| usize::from(tactics.instructions[index]);
         let ins = &schema.instructions;
-        let defaults = ins.defaults();
         let held: [u16; PLAYERS_PER_TEAM] = std::array::from_fn(|slot| tactics.held(slot, schema));
         let press = &ins.pressing.levels[level(PRESSING)];
         let mentality = &schema.mentalities[usize::from(tactics.mentality)];
@@ -501,7 +505,6 @@ impl TeamPlan {
             patience: ins.tempo.levels[level(TEMPO)].value,
             directness: ins.passing_directness.levels[level(DIRECTNESS)].value,
             time_wasting: ins.time_wasting.levels[level(TIME_WASTING)].value,
-            pace_lift: tactics.instructions[PRESSING] > defaults[PRESSING],
             loss_weight: mentality.loss_weight,
             rest_defence: usize::from(mentality.rest_defence),
             sizes: schema.stand_options,
@@ -617,10 +620,7 @@ mod tests {
         assert!(plan.loss_weight < balanced.loss_weight);
         assert_eq!(plan.press_count, 3);
         assert!(plan.press_distance > t.press_distance);
-        assert!(
-            plan.pace_lift,
-            "high pressing lifts the pace of pressing jobs"
-        );
+        assert!(!plan.pace_lift, "pressing lifts no running pace");
     }
 
     #[test]

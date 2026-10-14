@@ -8,31 +8,36 @@
         {
           "name": "always_keep_shape",
           "values": {
-            "counter": -1.0
+            "counter": -1.0,
+            "pace_lift": 0.0
           }
         },
         {
           "name": "keep_shape",
           "values": {
-            "counter": -0.5
+            "counter": -0.5,
+            "pace_lift": 0.0
           }
         },
         {
           "name": "mixed",
           "values": {
-            "counter": 0.0
+            "counter": 0.0,
+            "pace_lift": 0.0
           }
         },
         {
           "name": "counter",
           "values": {
-            "counter": 0.5
+            "counter": 0.5,
+            "pace_lift": 1.0
           }
         },
         {
           "name": "always_counter",
           "values": {
-            "counter": 1.0
+            "counter": 1.0,
+            "pace_lift": 1.0
           }
         }
       ],
@@ -41,6 +46,10 @@
         {
           "input": "counter",
           "hook": "regain.counter"
+        },
+        {
+          "input": "pace_lift",
+          "hook": "pace.lift"
         }
       ],
       "signature": [

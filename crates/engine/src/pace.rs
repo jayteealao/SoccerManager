@@ -4,10 +4,10 @@
 //! at the chosen level's speed.
 //!
 //! - A job is URGENT (may sprint), NORMAL (jog or run) or CALM (stand or walk).
-//! - Pressing raised above its default, or trailing late, lifts pressing and support jobs one
-//!   step; leading late with time wasting drops NORMAL jobs one step while the ball is dead. In
-//!   open play both teams keep their grades. An URGENT job never drops. No tempo level lifts
-//!   running pace.
+//! - A counter (on winning the ball above its default, while the side's regain window is
+//!   open), or trailing late, lifts pressing and support jobs one step; leading late with time
+//!   wasting drops NORMAL jobs one step while the ball is dead. In open play both teams keep
+//!   their grades. An URGENT job never drops. No tempo or pressing level lifts running pace.
 //! - The levels are stand, walk, jog, run, high speed and sprint; each level's speed is its
 //!   upper limit, and a sprint is the player's own top speed.
 //! - Work rate sets how often an URGENT job gets a sprint (one draw when the job starts), never
@@ -187,7 +187,8 @@ pub fn base_grade(job: Job) -> Grade {
 /// The game state and the instructions of the player's team, as the grades read them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct TeamPace {
-    /// Pressing raised above its default level.
+    /// A counter: on winning the ball above its default level, while the side's regain window
+    /// is open.
     pub lift: bool,
     /// Trailing in the late minutes.
     pub trailing_late: bool,
