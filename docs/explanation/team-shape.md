@@ -49,7 +49,7 @@ The player's attributes and state change the choice:
 
 - **Work rate** sets how often an urgent job gets a sprint, not how fast he walks or jogs. Two players with the same job therefore move differently.
 - **Determination and professionalism** set how a tired player saves energy: a player high in both keeps his urgent sprints and slows a step on normal jobs, while a player low in both skips the less urgent sprints first.
-- **Instructions and the game state** move a grade by one step: a high press raises pressing and support jobs, and a team trailing late raises them too. No tempo level lifts running pace: tempo is how patiently a side circulates the ball, not how fast its players run. A team that leads late and wastes time lowers its normal jobs one step, but only while the ball is dead. In open play both teams keep their normal grades, and an urgent job never drops below urgent.
+- **Instructions and the game state** move a grade by one step: a counter raises pressing and support jobs for the seconds after the team wins the ball, and a team trailing late raises them too. No tempo or pressing level lifts running pace: tempo is how patiently a side circulates the ball, not how fast its players run. A team that leads late and wastes time lowers its normal jobs one step, but only while the ball is dead. In open play both teams keep their normal grades, and an urgent job never drops below urgent.
 
 Before the selector, every player ran to every target at full speed. Matches looked frantic, every player moved alike, and players ran out of energy far too early. The selector brings the sprint and high-speed counts per minute of ball in play toward the real figures, and lets a tired side show it.
 
@@ -145,6 +145,20 @@ How a side keeps and moves the ball is set by nine graded primitives and three c
 - **Crossing frequency and cross type** sit on the board with seeded values.
 
 When the ball is wide in the final third, the forwards run into the box, at every level, so a cross has a team-mate to find. The engine still plays few open-play crosses: with the stands off, wide players hold their midfield places and rarely carry the ball high and wide. The crossing primitives and the central channel choices are therefore not fitted yet; they wait for the off-ball work that re-seeds the stands.
+
+### Transitions
+
+Three primitives set what a side does in the seconds after the ball changes side in open play. Each acts only inside a window that opens when the ball changes side and closes at the next dead ball, so a restart opens none.
+
+- **On winning the ball** runs from always keeping shape to always countering. For the seconds a real counter-attack takes to reach the final third, while the side keeps the ball, a counter weighs a forward pass up and holding the ball down, lets the forwards start a run in behind from farther out, and at its two counter levels lifts the pace of the support runs. Keeping shape does the opposite. The window's length and the zone a fast break starts from come from the counter-attacks Wyscout's analysts tagged in real matches, and the levels are fitted to how many fast breaks real teams make a match.
+- **On losing the ball** runs from always regrouping to always counter-pressing: inside the counter-press window, the nearest players start to press from farther away, or from nearer, or not at all.
+- **Counter-press length** sets how long that window stays open, from about 2 to about 8 seconds.
+
+The default levels are neutral, so a side that sets none of them plays as before. The counter-press levels are on the board but not fitted yet: in this engine, more players pressing for longer after a loss do not win the ball back, so the other side simply keeps it longer. They are fitted with pressing intensity and the tackle decision, which change how a press wins the ball.
+
+The running pace no longer rises with a high press. It rises during a counter, where real runners break at speed.
+
+Two style pairings play far more shots than real matches: a high press against itself, and the counter-attack against the gegenpress. A probe of each pairing traced about half of the excess to the attack duty that those styles give their players, which pushes them higher and makes the carrier take more risks, and the rest to the engine's shot volume, which is high even between two default sides. The duty hints belong to the style presets and the shot volume to the tuning work, so neither was changed here.
 
 ### Mentality is an appetite for risk
 

@@ -247,6 +247,15 @@ Read it this way:
 
 A flag on a small run can be noise: read the flags from a run with at least 50 matches per ordered pairing, where every pair of styles has played 100 matches with each side at home 50 times.
 
+To look into one pairing, play only it with `--style-pairing`, the home style first; a style may meet itself. Build with the `measures` feature to get each side's probe:
+
+```bash
+cargo build --release --locked -p engine-cli --features measures
+target/release/engine-cli calibrate --suite styles --style-pairing "counter_attack v gegenpress" --style-pairing "high_press v high_press" --seed 9 --matches 100 --out runs/pairings-9
+```
+
+Each pairing then prints its shots and goals a match, and a `home:` and an `away:` line: per side, its shots, goals, xG per shot and shot distance, its possessions and turnovers, where it loses the ball (its own, the middle or the final third), its fast breaks and the time from a regain to a shot, its pressures and what it does in the 5 to 10 seconds after a loss, its offsides, and where the ball spends its time. The same figures are in `calib.styles.pairings[].probe`. To find what drives a pairing, change one setting of one style in a copy of the content folder (`--content-dir`) and play the pairing again: the other figures stay on the same matches.
+
 Every change run (`--base` or `--base-binary`) also plays a small sample: one match per ordered pairing, 56 matches, on the changed engine only, after its verdict. The same table prints on standard error, the report holds it under `calib.styles`, and `calib.stages.styles` gives its time. With one match per ordered pairing, a style shows a clear loss only when it loses both matches against another, so the sample flags styles as dominant by chance: read it for the pairings' goals and shots and the rule violations, not for the flags. The sample never changes the verdict.
 
 ## Accept a not-sure band
