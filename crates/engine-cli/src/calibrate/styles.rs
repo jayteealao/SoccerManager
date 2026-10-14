@@ -8,6 +8,9 @@
 //! The suite is report only: it feeds no realism band and no verdict. `--suite styles` plays
 //! it alone; a change run plays one match per ordered pairing on the changed engine only and
 //! adds the report beside its verdict. The old engine never plays it.
+//!
+//! `--style-pairing` plays only the named ordered pairings, the same matches as in a full
+//! run; there a style may meet itself. A measures build adds each pairing's probe.
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -36,53 +39,56 @@ pub struct StyleFixture {
 }
 
 /// Every match of the suite: `matches` matches for each ordered pairing of distinct styles,
-/// pairing by pairing (home style, then away style, in file order). Match `j` of a pairing
-/// takes the home club of the equal suite's fixture `j`; each side's formation is drawn from
-/// its style's list by a draw seeded from the fixture's key and the side.
+/// pairing by pairing (home style, then away style, in file order), or for each pairing of
+/// `only` in its order. Match `j` of a pairing takes the home club of the equal suite's
+/// fixture `j`; each side's formation is drawn from its style's list by a draw seeded from
+/// the fixture's key and the side.
 pub fn style_fixtures(
     seed: u64,
     matches: u32,
     styles: &Styles,
     formation_names: &[String],
+    only: Option<&[[usize; 2]]>,
 ) -> Vec<StyleFixture> {
     let equal = fixtures::fixtures(matches);
     let n = styles.styles.len();
+    let all: Vec<[usize; 2]> = (0..n)
+        .flat_map(|h| (0..n).filter(move |&w| w != h).map(move |w| [h, w]))
+        .collect();
     let mut out = Vec::new();
-    for h in 0..n {
-        for w in (0..n).filter(|&w| w != h) {
-            let names = [&styles.styles[h].name, &styles.styles[w].name];
-            for (j, f) in equal.iter().enumerate() {
-                let league = format!("league:{}", seed.wrapping_add(u64::from(f.league)));
-                let club = f.clubs[0].to_string();
-                let (key, engine_seed) = fixtures::key_of(
-                    "styles",
-                    &league,
-                    [&club, &club],
-                    [names[0], names[1]],
-                    j as u64,
-                );
-                let formations = [h, w].map(|s| {
-                    let list = &styles.styles[s].formations;
-                    let side = u64::from(s == w);
-                    let draw = fixtures::reseeded(key.as_u64(), side + 1);
-                    list[(draw % list.len() as u64) as usize]
-                });
-                debug_assert!(
-                    formations
-                        .iter()
-                        .all(|&f| usize::from(f) < formation_names.len())
-                );
-                out.push(StyleFixture {
-                    key,
-                    engine_seed,
-                    fixture: Fixture {
-                        clubs: [f.clubs[0], f.clubs[0]],
-                        ..*f
-                    },
-                    styles: [h, w],
-                    formations,
-                });
-            }
+    for &[h, w] in only.unwrap_or(&all) {
+        let names = [&styles.styles[h].name, &styles.styles[w].name];
+        for (j, f) in equal.iter().enumerate() {
+            let league = format!("league:{}", seed.wrapping_add(u64::from(f.league)));
+            let club = f.clubs[0].to_string();
+            let (key, engine_seed) = fixtures::key_of(
+                "styles",
+                &league,
+                [&club, &club],
+                [names[0], names[1]],
+                j as u64,
+            );
+            // Each side draws its own formation, the away side with the second draw.
+            let formations = [(0u64, h), (1u64, w)].map(|(side, s)| {
+                let list = &styles.styles[s].formations;
+                let draw = fixtures::reseeded(key.as_u64(), side + 1);
+                list[(draw % list.len() as u64) as usize]
+            });
+            debug_assert!(
+                formations
+                    .iter()
+                    .all(|&f| usize::from(f) < formation_names.len())
+            );
+            out.push(StyleFixture {
+                key,
+                engine_seed,
+                fixture: Fixture {
+                    clubs: [f.clubs[0], f.clubs[0]],
+                    ..*f
+                },
+                styles: [h, w],
+                formations,
+            });
         }
     }
     out
@@ -122,6 +128,45 @@ fn identity_stats(s: &MatchStats) -> [[f64; IDENTITY_STATS.len()]; 2] {
     out
 }
 
+/// Each side's probe of a played match from its statistics and its realism measures.
+#[cfg(feature = "measures")]
+fn probe(s: &MatchStats, m: &engine::measures::MatchMeasures) -> [report::ProbeSide; 2] {
+    use crate::report::styles::PROBE;
+    [0, 1].map(|side| {
+        let f = f64::from;
+        let shots = f(m.shot_bins[side].iter().sum::<u32>());
+        let x = &m.transitions[side];
+        let losses = f(x.losses);
+        let ticks = m.third_ticks[side];
+        let live = f(ticks.iter().sum::<u32>());
+        let values: [(f64, f64); PROBE.len()] = [
+            (f(s.tactics.shots[side]), 1.0),
+            (f(s.goals[side]), 1.0),
+            (s.figures.xg[side], 1.0),
+            (s.figures.xg[side], shots),
+            (m.shot_distance_m[side], shots),
+            (f(m.possessions[side]), 1.0),
+            (f(m.turnovers[side]), f(m.possessions[side])),
+            (losses, 1.0),
+            (f(x.losses_by_third[0]), losses),
+            (f(x.losses_by_third[1]), losses),
+            (f(x.losses_by_third[2]), losses),
+            (f(x.regains), 1.0),
+            (f(x.counter_attacks), 1.0),
+            (x.regain_shot_s, f(x.regain_shots)),
+            (f(x.pressures), 1.0),
+            (f(x.counterpress_pressures), losses),
+            (f(x.counterpress_regains), losses),
+            (x.last_counterpress_s, f(x.last_counterpress)),
+            (f(s.laws.offsides[side]), 1.0),
+            (f(ticks[0]), live),
+            (f(ticks[1]), live),
+            (f(ticks[2]), live),
+        ];
+        values
+    })
+}
+
 /// What one run of the suite needs.
 pub struct SuiteInput<'a> {
     pub content: &'a Content,
@@ -132,6 +177,8 @@ pub struct SuiteInput<'a> {
     pub minutes: u32,
     pub jobs: u32,
     pub owner_id: &'a str,
+    /// Only these ordered pairings (home style, away style), when given.
+    pub pairings: Option<&'a [[usize; 2]]>,
 }
 
 /// Plays the suite on `jobs` threads and builds its report; `None` when the content has no
@@ -147,7 +194,7 @@ pub fn play(input: &SuiteInput<'_>) -> anyhow::Result<Option<StylesReport>> {
         .iter()
         .map(|f| f.name.clone())
         .collect();
-    let list = style_fixtures(input.seed, input.matches, styles, &names);
+    let list = style_fixtures(input.seed, input.matches, styles, &names, input.pairings);
     let started = Instant::now();
     let next = AtomicUsize::new(0);
     let results: Mutex<Vec<(usize, StyleMatch, usize)>> = Mutex::new(Vec::new());
@@ -193,6 +240,10 @@ pub fn play(input: &SuiteInput<'_>) -> anyhow::Result<Option<StylesReport>> {
                                 formations: f.formations.map(|x| names[usize::from(x)].clone()),
                                 goals: p.stats.goals,
                                 stats: identity_stats(&p.stats),
+                                #[cfg(feature = "measures")]
+                                probe: p.measures.as_deref().map(|m| probe(&p.stats, m)),
+                                #[cfg(not(feature = "measures"))]
+                                probe: None,
                             };
                             results.lock().unwrap_or_else(|e| e.into_inner()).push((
                                 i,
@@ -259,7 +310,7 @@ mod tests {
             .map(|f| f.name.clone())
             .collect();
         let n = styles.styles.len();
-        let list = style_fixtures(42, 3, styles, &names);
+        let list = style_fixtures(42, 3, styles, &names, None);
         assert_eq!(list.len(), n * (n - 1) * 3);
         let mut pairs = std::collections::BTreeMap::new();
         for f in &list {
@@ -278,11 +329,41 @@ mod tests {
         assert!(pairs.values().all(|&c| c == 3));
         let keys: std::collections::BTreeSet<_> = list.iter().map(|f| f.key).collect();
         assert_eq!(keys.len(), list.len());
-        assert_eq!(list, style_fixtures(42, 3, styles, &names));
+        assert_eq!(list, style_fixtures(42, 3, styles, &names, None));
         // More matches keep the earlier ones.
-        let more = style_fixtures(42, 4, styles, &names);
+        let more = style_fixtures(42, 4, styles, &names, None);
         for f in &list {
             assert!(more.contains(f));
+        }
+    }
+
+    /// `--style-pairing`: only the named ordered pairings, the same matches as in a full run,
+    /// and a style may meet itself, each side drawing its own formation from its list.
+    #[test]
+    fn a_pairing_filter_plays_only_its_pairings_and_a_style_may_meet_itself() {
+        let content = content();
+        let styles = content.styles.as_ref().unwrap();
+        let names: Vec<String> = content
+            .tactics
+            .formations
+            .iter()
+            .map(|f| f.name.clone())
+            .collect();
+        let only = [[0, 1], [2, 2]];
+        let list = style_fixtures(42, 3, styles, &names, Some(&only));
+        assert_eq!(list.len(), 6);
+        let full = style_fixtures(42, 3, styles, &names, None);
+        for f in list.iter().filter(|f| f.styles == [0, 1]) {
+            assert!(full.contains(f));
+        }
+        let mirror: Vec<_> = list.iter().filter(|f| f.styles == [2, 2]).collect();
+        assert_eq!(mirror.len(), 3);
+        for f in mirror {
+            assert!(
+                f.formations
+                    .iter()
+                    .all(|x| styles.styles[2].formations.contains(x))
+            );
         }
     }
 }

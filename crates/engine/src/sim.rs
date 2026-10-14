@@ -21,6 +21,8 @@ mod slide;
 #[cfg(test)]
 mod slide_tests;
 pub mod tally;
+#[cfg(test)]
+mod transition_tests;
 
 use crate::trace::Point;
 use serde_json::json;
@@ -685,6 +687,13 @@ pub struct Simulation {
     /// other team controls it. The kick-off and each restart set it; every dead ball clears
     /// it with `pass_in_flight`, so the snapshot never needs it.
     pub(crate) possession_phase: Option<usize>,
+    /// Per side, the tick it last won the ball from the other side in open play (a gain that
+    /// changed the team in possession), and the tick it last lost it so. The transition
+    /// windows read them: the regain window while the side keeps the ball, the counter-press
+    /// window while the other side has it. Every dead ball clears both, like
+    /// `possession_phase`, so a restart opens no window and the snapshot never needs them.
+    pub(crate) regained_at: [Option<u32>; 2],
+    pub(crate) lost_at: [Option<u32>; 2],
     /// Each player's followed ball point, which his anchor's ball shift reads: in open play
     /// it eases toward the ball, later the farther he is from it (the far-player delay of
     /// the slide); every dead ball and each kick-off placement set it to the ball, so the
@@ -894,6 +903,8 @@ impl Simulation {
             keeper_beaten: false,
             pass_in_flight: None,
             possession_phase: None,
+            regained_at: [None; 2],
+            lost_at: [None; 2],
             slide_ball: [DVec2::ZERO; crate::modules::ROSTER],
             restart_taker: None,
             clearers_tried: 0,
@@ -1307,6 +1318,26 @@ impl Simulation {
         self.possession_phase
     }
 
+    /// Seconds since `team` won the ball from the other side in open play, while it keeps
+    /// the ball; `None` otherwise (the transition primitives' regain window reads it).
+    pub fn since_regain_s(&self, team: usize) -> Option<f64> {
+        let at = self.regained_at[team].filter(|_| self.possession_phase == Some(team))?;
+        Some(f64::from(self.tick.saturating_sub(at)) * self.config.tuning.dt)
+    }
+
+    /// Seconds since `team` lost the ball to the other side in open play, while the other
+    /// side has it; `None` otherwise (the counter-press window reads it).
+    pub fn since_loss_s(&self, team: usize) -> Option<f64> {
+        let at = self.lost_at[team].filter(|_| self.possession_phase == Some(1 - team))?;
+        Some(f64::from(self.tick.saturating_sub(at)) * self.config.tuning.dt)
+    }
+
+    /// Clears both sides' transition ticks: a dead ball ends every transition window.
+    pub(crate) fn clear_transitions(&mut self) {
+        self.regained_at = [None; 2];
+        self.lost_at = [None; 2];
+    }
+
     /// The team that touched the ball last.
     #[cfg(feature = "scenario")]
     pub fn last_touch(&self) -> Option<usize> {
@@ -1495,6 +1526,19 @@ impl Simulation {
             Phase::Live if self.referee.shootout.is_some() => {}
             Phase::Live => {
                 self.summary.live_ticks += 1;
+                #[cfg(feature = "measures")]
+                if self.measures.is_some() {
+                    let length = self.config.pitch().length();
+                    let place = [0, 1].map(|team| {
+                        let attack_x = self.teams[team].attack_x;
+                        let third = crate::measures::third_of(self.ball.pos.x, attack_x, length);
+                        (self.ball.pos.x * attack_x, third)
+                    });
+                    let tick = self.tick;
+                    if let Some(m) = self.measures.as_deref_mut() {
+                        m.clock(tick, place);
+                    }
+                }
                 if let Some(team) = self.last_touch {
                     self.summary.possession_ticks[team] += 1;
                     #[cfg(feature = "measures")]

@@ -74,6 +74,24 @@ pub const LONG_BALL_M: f64 = 32.0;
 pub const BUILD_UP_M: f64 = 45.0;
 pub const GOAL_KICK_REACH_M: f64 = 25.0;
 
+/// The regain window and the fast break's time: for this many seconds after a side wins the
+/// ball in open play, while it keeps it, the side's on-winning terms act (hook
+/// `regain.counter`); and a possession that starts with a regain at or behind
+/// [`COUNTER_START_M`] and reaches the attacked final third within it is a fast break. The
+/// signature command and the measures share it.
+pub const COUNTER_WINDOW_S: f64 = 10.0;
+/// The deepest start of a fast break, in metres past halfway toward the attacked goal (below
+/// 0 inside the side's own half).
+pub const COUNTER_START_M: f64 = 0.0;
+/// The counter-press figures read the losing side's pressures within this many seconds of an
+/// open-play loss, and its regains within the same time.
+pub const COUNTERPRESS_S: f64 = 5.0;
+/// The last counter-press pressure is read up to this many seconds after the loss.
+pub const COUNTERPRESS_LAST_S: f64 = 10.0;
+/// Metres from the defensive line, per unit of the side's on-winning weight, within which an
+/// attack-line player may start a run in behind while the regain window is open.
+pub const COUNTER_RUN_M: f64 = 10.0;
+
 /// The channel of a point `y` across the pitch for a side attacking `attack_x`: 0 the side's
 /// left (where its left-back stands), 1 the centre, 2 its right. A point more than
 /// [`contract::CROSS_WIDE_M`] from the centre line is in a wide channel.

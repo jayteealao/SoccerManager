@@ -36,7 +36,7 @@ pub struct Hook {
 }
 
 /// Every hook, in a fixed order.
-pub const HOOKS: [Hook; 33] = [
+pub const HOOKS: [Hook; 36] = [
     Hook {
         name: "pass.recycle",
         kind: HookKind::OptionWeight,
@@ -237,6 +237,28 @@ pub const HOOKS: [Hook; 33] = [
         kind: HookKind::Threshold,
         input: "fullback_reach",
         site: "shape.rs: how far ahead and how near the ball a full-back's run may start",
+    },
+    Hook {
+        name: "regain.counter",
+        kind: HookKind::OptionWeight,
+        input: "counter",
+        site: "decision.rs: while the side's regain window is open, a pass's gain toward goal \
+               scores more, the hold less, and attack-line runners may start a run in behind \
+               farther from the line",
+    },
+    Hook {
+        name: "loss.counter_press",
+        kind: HookKind::Threshold,
+        input: "counter_press",
+        site: "decision.rs: while the side's counter-press window is open, a factor on how far \
+               from the carrier its nearest players start to press",
+    },
+    Hook {
+        name: "loss.counter_press_window",
+        kind: HookKind::Window,
+        input: "counter_press_s",
+        site: "decision.rs: how many seconds after an open-play loss the counter-press window \
+               stays open",
     },
 ];
 

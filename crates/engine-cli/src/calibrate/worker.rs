@@ -101,6 +101,9 @@ pub struct MatchInput<'a> {
 pub struct Played {
     pub stats: MatchStats,
     pub row: Row,
+    /// The match's realism measures, in a measures build.
+    #[cfg(feature = "measures")]
+    pub measures: Option<Box<engine::measures::MatchMeasures>>,
 }
 
 /// One match to full time, checked by the running rule checker as it plays (every tick
@@ -237,7 +240,12 @@ pub fn play_match(
         script: ScriptFigures::new(sim.plugins()),
         ratings: RatingEntry::of_match(&sim),
     };
-    Ok(Played { stats, row })
+    Ok(Played {
+        stats,
+        row,
+        #[cfg(feature = "measures")]
+        measures: sim.measures().cloned().map(Box::new),
+    })
 }
 
 /// The checker calls timed: one in this many, scaled up, so the clock costs less than the

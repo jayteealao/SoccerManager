@@ -490,6 +490,13 @@ impl Simulation {
             self.summary.possession_changes += 1;
         }
         self.last_touch = Some(team);
+        // A gain from the other side in open play opens the transition windows: the regain
+        // window of the side that won the ball and the counter-press window of the side that
+        // lost it.
+        if self.possession_phase == Some(1 - team) {
+            self.regained_at[team] = Some(self.tick);
+            self.lost_at[1 - team] = Some(self.tick);
+        }
         self.possession_phase = Some(team);
         self.carrier = Some(i);
         self.control_since = self.tick;

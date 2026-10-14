@@ -295,6 +295,7 @@ impl Simulation {
         self.last_pass = None;
         self.pass_in_flight = None;
         self.possession_phase = None;
+        self.clear_transitions();
         self.restart_taker = None;
         self.clearers_tried = 0;
         self.end_shot();
@@ -805,6 +806,7 @@ impl Simulation {
         self.last_pass = None;
         self.pass_in_flight = None;
         self.possession_phase = None;
+        self.clear_transitions();
         self.restart_taker = None;
         self.clearers_tried = 0;
         self.end_shot();
@@ -1333,6 +1335,7 @@ impl Simulation {
         self.last_pass = None;
         self.pass_in_flight = None;
         self.possession_phase = None;
+        self.clear_transitions();
         self.restart_taker = None;
         self.clearers_tried = 0;
         self.end_shot();

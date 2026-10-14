@@ -412,6 +412,17 @@ pub struct TeamPlan {
     pub fullback_run: f64,
     /// Full-back runs: a factor on the reach of a full-back's overlap and underlap.
     pub fullback_reach: f64,
+    /// On winning the ball: while the side's regain window is open, added per 45 m of a
+    /// pass's gain toward goal, taken from the hold, and, above 0, the metres per unit from
+    /// the defensive line within which an attack-line player may start a run in behind
+    /// ([`crate::decision::COUNTER_RUN_M`]); 0 moves nothing.
+    pub counter: f64,
+    /// On losing the ball: while the side's counter-press window is open, its press reach
+    /// takes the factor 1 plus this (0 at -1: nobody presses; past the pitch at the top).
+    pub counter_press: f64,
+    /// Counter-press length: the seconds the counter-press window stays open after an
+    /// open-play loss; 0 opens none.
+    pub counter_press_s: f64,
 }
 
 impl TeamPlan {
@@ -433,6 +444,9 @@ impl TeamPlan {
             "run_start_m" => &mut self.run_start_m,
             "fullback_run" => &mut self.fullback_run,
             "fullback_reach" => &mut self.fullback_reach,
+            "counter" => &mut self.counter,
+            "counter_press" => &mut self.counter_press,
+            "counter_press_s" => &mut self.counter_press_s,
             _ => return,
         };
         *field = v;
@@ -553,6 +567,9 @@ impl TeamPlan {
             run_start_m: 0.0,
             fullback_run: 0.0,
             fullback_reach: 1.0,
+            counter: 0.0,
+            counter_press: 0.0,
+            counter_press_s: 0.0,
         }
     }
 }

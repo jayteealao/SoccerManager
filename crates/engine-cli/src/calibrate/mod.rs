@@ -143,6 +143,9 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         SuiteArg::RedCard => vec![Suite::RedCard],
         SuiteArg::Styles => return styles_alone(&dir, opts, &loaded, &arms[0].1),
     };
+    if !opts.style_pairings.is_empty() {
+        anyhow::bail!("--style-pairing needs --suite styles");
+    }
     let formation_names: Vec<String> = loaded
         .content
         .tactics
@@ -579,6 +582,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
             minutes: opts.minutes,
             jobs,
             owner_id: &owner_id,
+            pairings: None,
         })?;
         if let Some(s) = &sample {
             if !quiet {
@@ -733,12 +737,17 @@ fn styles_alone(
         anyhow::bail!("--suite styles takes no --baseline, --band or --pairing");
     }
     let content = loaded.content.with_flags(states)?;
-    if content.styles.is_none() {
+    let Some(styles_file) = content.styles.as_ref() else {
         anyhow::bail!(
             "--suite styles: the content folder {} has no styles.json",
             dir.root().display()
         );
-    }
+    };
+    let pairings = opts
+        .style_pairings
+        .iter()
+        .map(|name| style_pairing(name, styles_file))
+        .collect::<anyhow::Result<Vec<_>>>()?;
     let data = data_dir();
     let owner_id = load_or_create_owner_id(&data)?;
     let millis = u64::try_from(unix_millis()).unwrap_or(u64::MAX);
@@ -760,6 +769,7 @@ fn styles_alone(
         minutes: opts.minutes,
         jobs,
         owner_id: &owner_id,
+        pairings: (!pairings.is_empty()).then_some(pairings.as_slice()),
     })?
     .context("the content has no styles")?;
     eprint!("{}", crate::report::styles::render(&report));
@@ -790,6 +800,29 @@ fn styles_alone(
         violations = report.violations
     );
     Ok(0)
+}
+
+/// The styles of `--style-pairing` `name`, "<home> v <away>", as indices into the styles
+/// file.
+fn style_pairing(name: &str, styles: &engine::data::styles::Styles) -> anyhow::Result<[usize; 2]> {
+    let index = |s: &str| {
+        styles
+            .styles
+            .iter()
+            .position(|x| x.name == s.trim())
+            .with_context(|| {
+                let all: Vec<&str> = styles.styles.iter().map(|x| x.name.as_str()).collect();
+                format!(
+                    "--style-pairing {name}: no style {}; the styles are {}",
+                    s.trim(),
+                    all.join(", ")
+                )
+            })
+    };
+    let (home, away) = name
+        .split_once(" v ")
+        .with_context(|| format!("--style-pairing {name}: name it as \"<home> v <away>\""))?;
+    Ok([index(home)?, index(away)?])
 }
 
 /// The identity of a run: what decides its results, so a run folder of the same identity

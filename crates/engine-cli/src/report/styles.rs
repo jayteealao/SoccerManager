@@ -10,9 +10,46 @@
 //! [`SHARE_CAP`] of all the points. An identity statistic is flagged when the style's sides
 //! do not move it in the style's direction by more than 1.96 standard errors against the
 //! mean over every side.
+//!
+//! A measures build adds the probe of each ordered pairing: per side, the pooled value of
+//! each statistic in [`PROBE`] over the pairing's matches (sum over sum), from the match's
+//! realism measures. A run may play only some pairings (`--style-pairing`), and a style may
+//! meet itself there.
+
+use std::collections::BTreeMap;
 
 use engine::data::styles::{Direction, IDENTITY_STATS, IdentityEntry};
 use serde::Serialize;
+
+/// The statistics of a pairing's probe, per side and per match unless named as a share, a
+/// mean or a rate.
+pub const PROBE: [&str; 22] = [
+    "shots",
+    "goals",
+    "xg",
+    "xg_per_shot",
+    "shot_distance_m",
+    "possessions",
+    "turnovers_per_possession",
+    "losses",
+    "losses_own_third_share",
+    "losses_middle_third_share",
+    "losses_final_third_share",
+    "regains",
+    "counter_attacks",
+    "regain_to_shot_s",
+    "pressures",
+    "counterpress_pressures_per_loss",
+    "counterpress_regain_share",
+    "last_counterpress_s",
+    "offsides",
+    "ball_own_third_share",
+    "ball_middle_third_share",
+    "ball_final_third_share",
+];
+
+/// One side's probe of one match: each [`PROBE`] statistic as its numerator and denominator.
+pub type ProbeSide = [(f64, f64); PROBE.len()];
 
 /// A style that takes more than this share of all the points is flagged.
 pub const SHARE_CAP: f64 = 0.20;
@@ -31,6 +68,8 @@ pub struct StyleMatch {
     /// Each side's value of every statistic in [`IDENTITY_STATS`] order; `NaN` where a
     /// side has none (the on-target share of a side without a shot).
     pub stats: [[f64; IDENTITY_STATS.len()]; 2],
+    /// Each side's probe, in a measures build.
+    pub probe: Option<[ProbeSide; 2]>,
 }
 
 impl StyleMatch {
@@ -85,6 +124,32 @@ pub struct PairingRow {
     pub away_points_per_match: f64,
     pub goals_per_match: f64,
     pub shots_per_match: f64,
+    /// Each side's probe, home first, when the matches carry one.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub probe: Vec<BTreeMap<String, f64>>,
+}
+
+/// Each side's pooled probe over `matches`, home first; empty when a match has none.
+fn pooled_probe(matches: &[&StyleMatch]) -> Vec<BTreeMap<String, f64>> {
+    if matches.is_empty() || matches.iter().any(|m| m.probe.is_none()) {
+        return Vec::new();
+    }
+    (0..2)
+        .map(|side| {
+            PROBE
+                .iter()
+                .enumerate()
+                .map(|(k, name)| {
+                    let (n, d) = matches
+                        .iter()
+                        .filter_map(|m| m.probe.map(|p| p[side][k]))
+                        .fold((0.0, 0.0), |(n, d), (a, b)| (n + a, d + b));
+                    let v = if d > 0.0 { round(n / d, 4) } else { f64::NAN };
+                    (name.to_string(), v)
+                })
+                .collect()
+        })
+        .collect()
 }
 
 /// The suite's report.
@@ -263,10 +328,11 @@ pub fn build(
     let mut pairings = Vec::new();
     for (h, home) in names.iter().enumerate() {
         for (w, away) in names.iter().enumerate() {
-            if h == w {
+            let these: Vec<&StyleMatch> = matches.iter().filter(|m| m.styles == [h, w]).collect();
+            // A style meets itself only in a run that asks for it.
+            if h == w && these.is_empty() {
                 continue;
             }
-            let these: Vec<&StyleMatch> = matches.iter().filter(|m| m.styles == [h, w]).collect();
             let col = |f: &dyn Fn(&StyleMatch) -> f64| {
                 round(mean(&these.iter().map(|m| f(m)).collect::<Vec<_>>()), 3)
             };
@@ -278,6 +344,7 @@ pub fn build(
                 away_points_per_match: col(&|m| m.points()[1]),
                 goals_per_match: col(&|m| f64::from(m.goals[0] + m.goals[1])),
                 shots_per_match: col(&|m| m.stats[0][shots] + m.stats[1][shots]),
+                probe: pooled_probe(&these),
             });
         }
     }
@@ -336,6 +403,16 @@ pub fn render(r: &StylesReport) -> String {
     };
     out.push_str(&format!("dominant: {}\n", list(&r.dominant)));
     out.push_str(&format!("identity flags: {}\n", list(&r.identity_flags)));
+    for p in r.pairings.iter().filter(|p| !p.probe.is_empty()) {
+        out.push_str(&format!(
+            "{} v {}: {} matches, {:.2} shots and {:.2} goals a match\n",
+            p.home, p.away, p.matches, p.shots_per_match, p.goals_per_match
+        ));
+        for (side, probe) in ["home", "away"].iter().zip(&p.probe) {
+            let line: Vec<String> = probe.iter().map(|(k, v)| format!("{k} {v}")).collect();
+            out.push_str(&format!("  {side}: {}\n", line.join(", ")));
+        }
+    }
     out
 }
 
@@ -351,6 +428,7 @@ mod tests {
             formations: ["4-4-2".into(), "4-4-2".into()],
             goals,
             stats: [[0.0; IDENTITY_STATS.len()]; 2],
+            probe: None,
         }
     }
 

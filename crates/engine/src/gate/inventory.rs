@@ -65,6 +65,8 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         keeper_beaten,
         pass_in_flight,
         possession_phase,
+        regained_at,
+        lost_at,
         slide_ball,
         shot_in_flight,
         shot_on_target,
@@ -153,6 +155,10 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     w.index(*pass_in_flight);
     w.mark(Bytes, || "possession_phase".into());
     w.index(*possession_phase);
+    w.mark(Bytes, || "regained_at".into());
+    for at in regained_at.iter().chain(lost_at) {
+        w.u32(at.unwrap_or(u32::MAX));
+    }
     for (i, at) in slide_ball.iter().enumerate() {
         w.mark(Floats, || format!("slide_ball[{i}]"));
         w.v2_at(&|| format!("slide_ball[{i}]"), *at);

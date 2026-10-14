@@ -81,6 +81,10 @@ impl Simulation {
                     self.trace_point(Point::Cover, detail);
                 }
                 let c = self.carrier?;
+                #[cfg(feature = "measures")]
+                if self.measures.is_some() {
+                    self.measure_pressure(def, c);
+                }
                 self.decide_carrier(c)
             }
             TargetsTrace::Loose {
@@ -237,6 +241,25 @@ impl Simulation {
 }
 
 impl Simulation {
+    /// Count site: the players of side `def` within the pressed distance of carrier `c` press
+    /// him ([`crate::measures::MatchMeasures::pressure`]).
+    #[cfg(feature = "measures")]
+    fn measure_pressure(&mut self, def: usize, c: usize) {
+        let at = self.players[c].pos;
+        let near = self
+            .players
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| {
+                p.team == def && p.active() && (p.pos - at).length() < crate::contract::PRESSED_M
+            })
+            .fold(0u32, |bits, (i, _)| bits | (1 << i));
+        let tick = self.tick;
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.pressure(def, c, near, tick);
+        }
+    }
+
     /// Count site: carrier `c` chose `choice` (his options `o`, after any override). The
     /// choice is off the plan when it is not the top-scored option before the noise, the
     /// draft scored again with every noise draw at its middle: another kind of option, or a

@@ -259,6 +259,20 @@ impl<'a> MatchView<'a> {
         self.sim.possession_phase
     }
 
+    /// Seconds since `team` won the ball from the other side in open play, while it keeps
+    /// the ball; `None` otherwise.
+    #[inline]
+    pub fn since_regain_s(&self, team: usize) -> Option<f64> {
+        self.sim.since_regain_s(team)
+    }
+
+    /// Seconds since `team` lost the ball to the other side in open play, while the other
+    /// side has it; `None` otherwise.
+    #[inline]
+    pub fn since_loss_s(&self, team: usize) -> Option<f64> {
+        self.sim.since_loss_s(team)
+    }
+
     /// Player `i`'s followed ball point: the point his anchor's ball shift reads, which
     /// follows the ball later the farther he is from it. The ball itself at a dead ball.
     #[inline]

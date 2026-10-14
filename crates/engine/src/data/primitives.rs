@@ -26,7 +26,7 @@ pub const GRADED_LEVELS: usize = 5;
 
 /// The statistics a primitive can name as its signature. The real-team table
 /// (`signatures.json`) and the engine measure each one by the same definition.
-pub const SIGNATURE_STATS: [&str; 32] = [
+pub const SIGNATURE_STATS: [&str; 37] = [
     "passes_per_possession",
     "recycle_share",
     "turnovers_per_possession",
@@ -59,6 +59,11 @@ pub const SIGNATURE_STATS: [&str; 32] = [
     "fullback_runs_per_match",
     "overlaps_per_match",
     "underlaps_per_match",
+    "counter_attacks_per_match",
+    "regain_to_shot_s",
+    "counterpress_pressures_per_loss",
+    "counterpress_regain_share",
+    "last_counterpress_s",
 ];
 
 /// The real data sources a fit may read. `pff_wc2022` is national-team data (the 2022 World
@@ -96,7 +101,7 @@ pub const SETTINGS_MAX: usize = 16;
 /// Where each plan input of a primitive is written: the block (a level block of the tactics
 /// file, or [`OWN`] for an input the primitive's own steps or choices hold), the field of each
 /// level, and the range the field allows.
-pub const INPUT_FIELDS: [(&str, &str, &str, f64, f64); 20] = [
+pub const INPUT_FIELDS: [(&str, &str, &str, f64, f64); 24] = [
     ("patience", "instructions.tempo", "value", -2.0, 2.0),
     ("loss_weight", "mentalities", "loss_weight", -5.0, 5.0),
     ("rest_defence", "mentalities", "rest_defence", 0.0, 10.0),
@@ -129,6 +134,10 @@ pub const INPUT_FIELDS: [(&str, &str, &str, f64, f64); 20] = [
     ("run_start_m", OWN, "run_start_m", -30.0, 30.0),
     ("fullback_run", OWN, "fullback_run", -1.0, 1.0),
     ("fullback_reach", OWN, "fullback_reach", 0.25, 3.0),
+    ("counter", OWN, "counter", -2.0, 2.0),
+    ("pace_lift", OWN, "pace_lift", 0.0, 1.0),
+    ("counter_press", OWN, "counter_press", -1.0, 3.0),
+    ("counter_press_s", OWN, "counter_press_s", 1.0, 12.0),
 ];
 
 /// The block, field and range of plan input `input`.

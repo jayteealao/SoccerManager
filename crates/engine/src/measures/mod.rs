@@ -30,6 +30,7 @@
 
 pub mod runs;
 pub mod shape;
+pub mod transitions;
 
 use crate::TICKS_PER_SECOND;
 use crate::data::StoppageKind;
@@ -142,10 +143,18 @@ struct Possession {
     shot: bool,
     /// The ball was in the side's final third during it.
     final_third: bool,
+    /// Its first touch or restart, whether it started with an open-play regain, and the
+    /// ball's depth past halfway toward the attacked goal then.
+    start: u32,
+    regain: bool,
+    start_m: f64,
+    /// The tick it first reached the attacked final third, and its first shot.
+    final_at: Option<u32>,
+    shot_at: Option<u32>,
 }
 
 impl Possession {
-    fn new(team: usize) -> Self {
+    fn new(team: usize, start: u32) -> Self {
         Self {
             team,
             passes: 0,
@@ -154,6 +163,11 @@ impl Possession {
             forward: false,
             shot: false,
             final_third: false,
+            start,
+            regain: false,
+            start_m: 0.0,
+            final_at: None,
+            shot_at: None,
         }
     }
 
@@ -300,6 +314,17 @@ pub struct MatchMeasures {
     pub choices: [[u32; 5]; 2],
     /// The in-possession counts.
     pub possessing: [Possessing; 2],
+    /// The transition counts.
+    pub transitions: [transitions::Transitions; 2],
+    /// The tick of the last open-play clock, and each side's view of the ball then: its depth
+    /// past halfway toward the attacked goal and its third.
+    now: u32,
+    place: [(f64, usize); 2],
+    /// Each side's open-play loss in progress.
+    loss: [Option<transitions::Loss>; 2],
+    /// The carrier at the last pressure count and the opponents (roster bits) already counted
+    /// as pressing him.
+    pressing: Option<(usize, u32)>,
     /// The last carrier and his choice.
     last_choice: Option<(usize, usize)>,
     /// The carrier at the last decision and the opponents goal-side of him then, within the
@@ -337,6 +362,11 @@ impl Default for MatchMeasures {
             shot_possessions: [0; 2],
             choices: [[0; 5]; 2],
             possessing: [Possessing::default(); 2],
+            transitions: [transitions::Transitions::default(); 2],
+            now: 0,
+            place: [(0.0, 0); 2],
+            loss: [None; 2],
+            pressing: None,
             last_choice: None,
             taking_on: None,
             planned: None,
@@ -513,11 +543,14 @@ impl MatchMeasures {
     /// `team` shot from `distance_m` metres from the centre of the goal it attacks.
     pub(crate) fn shot(&mut self, team: usize, distance_m: f64) {
         self.kicked_other();
+        let now = self.now;
         if let Some(s) = self.spell.as_mut().filter(|s| s.poss.team == team) {
             s.poss.shot = true;
+            s.poss.shot_at.get_or_insert(now);
             self.take_over();
         } else if let Some(p) = self.possession.as_mut().filter(|p| p.team == team) {
             p.shot = true;
+            p.shot_at.get_or_insert(now);
         }
         // The float-to-int cast saturates; a distance is never negative.
         let bin = (distance_m.max(0.0) as usize).min(SHOT_BINS - 1);
@@ -532,17 +565,52 @@ impl MatchMeasures {
         }
         self.spell_timeout(tick);
         match self.possession {
-            None => self.possession = Some(Possession::new(team)),
-            // The side with the ball touches it again: a short regain.
-            Some(p) if p.team == team => self.spell = None,
-            Some(_) => {
-                if self.spell.is_none() {
-                    self.spell = Some(Spell {
-                        start: tick,
-                        poss: Possession::new(team),
-                    });
+            None => self.possession = Some(Possession::new(team, tick)),
+            // The side with the ball touches it again: a short regain, and no loss.
+            Some(p) if p.team == team => {
+                if self.spell.take().is_some() {
+                    self.loss[team] = self.loss[team].filter(|l| l.confirmed);
                 }
             }
+            Some(p) => {
+                if self.spell.is_none() {
+                    let mut poss = Possession::new(team, tick);
+                    poss.regain = true;
+                    poss.start_m = self.place[team].0;
+                    self.spell = Some(Spell { start: tick, poss });
+                    // The side with the ball may have lost it: tentative until the spell
+                    // becomes a possession.
+                    if let Some(old) = self.loss[p.team].take() {
+                        old.count(&mut self.transitions[p.team]);
+                    }
+                    self.loss[p.team] = Some(transitions::Loss::new(tick, self.place[p.team].1));
+                }
+            }
+        }
+    }
+
+    /// The open-play clock at `tick`: each side's view of the ball, its depth past halfway
+    /// toward the goal the side attacks and its third counted from the side's own goal line.
+    pub(crate) fn clock(&mut self, tick: u32, place: [(f64, usize); 2]) {
+        self.now = tick;
+        self.place = place;
+    }
+
+    /// The opponents of the carrier `c`, of side `team`, within the pressed distance of him
+    /// at `tick` (roster bits): each one's first entry in this carrier's spell is a pressure.
+    pub(crate) fn pressure(&mut self, team: usize, c: usize, near: u32, tick: u32) {
+        let seen = match self.pressing {
+            Some((last, seen)) if last == c => seen,
+            _ => 0,
+        };
+        self.pressing = Some((c, seen | near));
+        let n = (near & !seen).count_ones();
+        if n == 0 {
+            return;
+        }
+        self.transitions[team].pressures += n;
+        if let Some(l) = self.loss[team].as_mut() {
+            l.pressed(n, tick);
         }
     }
 
@@ -561,6 +629,15 @@ impl MatchMeasures {
     fn take_over(&mut self) {
         if let Some(s) = self.spell.take() {
             self.close_possession(true);
+            let (won, lost) = (s.poss.team, 1 - s.poss.team);
+            if let Some(l) = self.loss[lost].as_mut() {
+                l.confirmed = true;
+            }
+            // The side that won the ball back ends its own loss.
+            if let Some(mut l) = self.loss[won].take() {
+                l.regained_at = Some(s.start);
+                l.count(&mut self.transitions[won]);
+            }
             self.possession = Some(s.poss);
         }
     }
@@ -582,14 +659,29 @@ impl MatchMeasures {
             self.turnovers[t] += 1;
         }
         self.possessing[t].final_third_possessions += u32::from(p.final_third);
+        transitions::possession_ended(
+            &mut self.transitions[t],
+            p.start,
+            p.regain,
+            p.start_m,
+            p.final_at,
+            p.shot_at,
+        );
     }
 
     /// A dead ball, a goal or full time at `tick`: a spell longer than a short regain is the
-    /// other side's possession, any other spell is merged away, and the possession ends.
+    /// other side's possession, any other spell is merged away, and the possession ends. The
+    /// open losses end: a confirmed one counts, a tentative one was none.
     fn possession_stops(&mut self, tick: u32) {
         self.spell_timeout(tick);
         self.spell = None;
         self.close_possession(false);
+        for (team, loss) in self.loss.iter_mut().enumerate() {
+            if let Some(l) = loss.take() {
+                l.count(&mut self.transitions[team]);
+            }
+        }
+        self.pressing = None;
     }
 
     /// `team` gained the ball: with no chain open, an open-play chain starts.
@@ -616,7 +708,7 @@ impl MatchMeasures {
             restart: Some(kind),
         });
         self.possession_stops(tick);
-        self.possession = Some(Possession::new(team));
+        self.possession = Some(Possession::new(team, tick));
     }
 
     /// The ball went dead: the open chain ends and nothing stays in flight.
@@ -642,10 +734,13 @@ impl MatchMeasures {
     pub(crate) fn live_tick(&mut self, team: usize, third: usize) {
         self.third_ticks[team][third] += 1;
         if third == 2 {
+            let now = self.now;
             if let Some(s) = self.spell.as_mut().filter(|s| s.poss.team == team) {
                 s.poss.final_third = true;
+                s.poss.final_at.get_or_insert(now);
             } else if let Some(p) = self.possession.as_mut().filter(|p| p.team == team) {
                 p.final_third = true;
+                p.final_at.get_or_insert(now);
             }
         }
     }
@@ -1053,5 +1148,101 @@ mod tests {
             m.carrying(HOME, c, dribbling, ahead, beside);
         }
         assert_eq!(m.possessing[HOME].takeons, 3);
+    }
+    /// A side that won the ball at `at` (a spell that outlasts a short regain), with the ball
+    /// `depth` metres past halfway for it; the other side had it from a throw-in at `at - S`.
+    fn regain(m: &mut MatchMeasures, side: usize, at: u32, depth: f64) {
+        let other = 1 - side;
+        m.restart_taken(StoppageKind::ThrowIn, other, at - S);
+        m.touched(other, at - S);
+        let mut place = [(0.0, 1); 2];
+        place[side] = (depth, if depth < -17.5 { 0 } else { 1 });
+        place[other] = (-depth, if -depth < -17.5 { 0 } else { 1 });
+        m.clock(at, place);
+        m.touched(side, at);
+        m.touched(side, at + 3 * S);
+    }
+
+    /// An open-play loss: the losing side's two pressures within 5 s count once each (a
+    /// pressing player is counted once in a carrier's spell), a pressure at 6 s is its last
+    /// counter-press pressure, and the loss is in its own third with no regain in 5 s.
+    #[test]
+    fn a_loss_counts_its_pressures_within_five_seconds_and_its_last_within_ten() {
+        let mut m = MatchMeasures::default();
+        m.restart_taken(StoppageKind::ThrowIn, HOME, 0);
+        m.touched(HOME, 0);
+        m.clock(100, [(-30.0, 0), (30.0, 2)]);
+        m.touched(AWAY, 100);
+        m.pressure(HOME, 15, 0b110, 100 + S);
+        m.pressure(HOME, 15, 0b110, 100 + S + 1);
+        m.touched(AWAY, 100 + 3 * S);
+        m.pressure(HOME, 16, 0b10000, 100 + 6 * S);
+        m.dead(100 + 12 * S);
+        let x = m.transitions[HOME];
+        assert_eq!(x.losses, 1);
+        assert_eq!(x.losses_by_third, [1, 0, 0]);
+        assert_eq!(x.counterpress_pressures, 2);
+        assert_eq!(x.counterpress_regains, 0);
+        assert_eq!(x.pressures, 3);
+        assert_eq!(x.last_counterpress, 1);
+        assert!((x.last_counterpress_s - 6.0).abs() < 1e-9);
+        assert_eq!(m.transitions[AWAY].regains, 1);
+        assert_eq!(m.transitions[AWAY].losses, 0);
+    }
+
+    /// A short regain merges the other side's touch away: no loss and no regain; and a side
+    /// that wins the ball back 4 s after its loss regains within the counter-press window.
+    #[test]
+    fn a_merged_short_regain_is_no_loss_and_a_quick_win_back_is_a_counter_press_regain() {
+        let mut m = MatchMeasures::default();
+        m.restart_taken(StoppageKind::ThrowIn, HOME, 0);
+        m.touched(HOME, 0);
+        m.touched(AWAY, 50);
+        m.pressure(HOME, 15, 0b100, 60);
+        m.touched(HOME, 50 + S);
+        m.dead(400);
+        assert_eq!(m.transitions[HOME].losses, 0);
+        assert_eq!(m.transitions[AWAY].regains, 0);
+        m.restart_taken(StoppageKind::ThrowIn, HOME, 1_000);
+        m.touched(HOME, 1_000);
+        m.touched(AWAY, 1_100);
+        m.touched(AWAY, 1_100 + 3 * S);
+        m.touched(HOME, 1_100 + 4 * S);
+        m.touched(HOME, 1_100 + 7 * S);
+        m.dead(1_100 + 20 * S);
+        let x = m.transitions[HOME];
+        assert_eq!((x.losses, x.counterpress_regains), (1, 1));
+        assert_eq!(x.regains, 1);
+    }
+
+    /// A fast break starts with a regain at or behind halfway and reaches the final third
+    /// within the window: a regain beyond halfway, or one that reaches it too late, is none;
+    /// the regain-to-shot time reads the first shot.
+    #[test]
+    fn a_fast_break_starts_in_the_own_half_and_reaches_the_final_third_in_time() {
+        let mut m = MatchMeasures::default();
+        let window = (crate::decision::COUNTER_WINDOW_S as u32) * S;
+        // In time, from the own half, then a shot.
+        regain(&mut m, AWAY, 1_000, -10.0);
+        m.clock(1_000 + window - S, [(0.0, 1), (40.0, 2)]);
+        m.live_tick(AWAY, 2);
+        m.clock(1_000 + window, [(0.0, 1), (40.0, 2)]);
+        m.shot(AWAY, 20.0);
+        m.dead(1_000 + window + S);
+        // Too late.
+        regain(&mut m, AWAY, 3_000, -10.0);
+        m.clock(3_000 + window + S, [(0.0, 1), (40.0, 2)]);
+        m.live_tick(AWAY, 2);
+        m.dead(3_000 + window + 2 * S);
+        // From beyond halfway.
+        regain(&mut m, AWAY, 5_000, 5.0);
+        m.clock(5_000 + S, [(0.0, 1), (40.0, 2)]);
+        m.live_tick(AWAY, 2);
+        m.dead(5_000 + 2 * S);
+        let x = m.transitions[AWAY];
+        assert_eq!(x.regains, 3);
+        assert_eq!(x.counter_attacks, 1);
+        assert_eq!(x.regain_shots, 1);
+        assert!((x.regain_shot_s - f64::from(window / S)).abs() < 1e-9);
     }
 }

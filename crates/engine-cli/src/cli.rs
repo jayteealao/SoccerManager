@@ -993,6 +993,18 @@ pub struct CalibrateOpts {
                      same matches as in a full run."
     )]
     pub pairings: Vec<String>,
+    /// Play only this styles pairing; repeatable.
+    #[arg(
+        long = "style-pairing",
+        value_name = "HOME v AWAY",
+        long_help = "Play only this ordered pairing of the styles suite (--suite\n\
+                     styles); repeatable.\n\n\
+                     Name it as the home style and the away style joined by v,\n\
+                     for example \"counter_attack v gegenpress\". A style may meet\n\
+                     itself. Each pairing plays the same matches as in a full run;\n\
+                     a measures build adds each pairing's probe to the report."
+    )]
+    pub style_pairings: Vec<String>,
     /// Judge only this band; repeatable.
     #[arg(
         long = "band",

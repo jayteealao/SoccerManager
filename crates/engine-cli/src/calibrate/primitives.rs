@@ -37,7 +37,7 @@ use super::fixtures::{self, Leagues};
 
 /// The statistics the harness measures, in value order: the signature statistics, then the
 /// side's possessions and shots a match, which every step reports beside them.
-pub const STATS: [&str; 38] = [
+pub const STATS: [&str; 43] = [
     "passes_per_possession",
     "recycle_share",
     "turnovers_per_possession",
@@ -69,6 +69,11 @@ pub const STATS: [&str; 38] = [
     "fullback_runs_per_match",
     "overlaps_per_match",
     "underlaps_per_match",
+    "counter_attacks_per_match",
+    "regain_to_shot_s",
+    "counterpress_pressures_per_loss",
+    "counterpress_regain_share",
+    "last_counterpress_s",
     "runs_per_match",
     "crosses",
     "entries",
@@ -116,6 +121,7 @@ pub fn side_stats(m: &MatchMeasures, sinks: &Sinks<'_>, team: usize) -> Stats {
     let runs = sinks.runs;
     let fullback = f(runs.fullback_runs(team));
     let n = sinks.nineties;
+    let x = &m.transitions[team];
     [
         (passes, possessions),
         (f(m.recycle_passes[team]), f(m.open_play_passes[team])),
@@ -148,6 +154,11 @@ pub fn side_stats(m: &MatchMeasures, sinks: &Sinks<'_>, team: usize) -> Stats {
         (fullback, n),
         (f(runs.overlaps[team]), n),
         (f(runs.underlaps[team]), n),
+        (f(x.counter_attacks), n),
+        (x.regain_shot_s, f(x.regain_shots)),
+        (f(x.counterpress_pressures), f(x.losses)),
+        (f(x.counterpress_regains), f(x.losses)),
+        (x.last_counterpress_s, f(x.last_counterpress)),
         (f(runs.runs[team]), n),
         (f(s.crosses), 1.0),
         (entries, 1.0),
