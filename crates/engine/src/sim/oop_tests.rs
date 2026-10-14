@@ -230,3 +230,43 @@ fn the_screen_stands_the_front_players_on_the_short_options() {
         assert_eq!(screened[slot], plain[slot], "slot {slot}");
     }
 }
+
+/// The tackle decision: a defender tackles with the fouls module's chances unless his win
+/// chance is far below the danger-weighted cost of a foul; an unwilling side declines more;
+/// a riskier side fouls more in the tackles it makes, never at the cost of a clean win; and a
+/// declined tackle draws nothing, so the carrier keeps the ball.
+#[test]
+fn a_tackle_happens_only_when_the_decision_chooses_it() {
+    use crate::decision::tackle_decision;
+    use crate::modules::TackleChances;
+    let d = PLAYERS_PER_TEAM + 9;
+    let mut sim = press_scene(9, d, DVec2::new(0.0, 0.0), 0.5);
+    let fair = TackleChances {
+        p_win: 0.25,
+        p_foul: 0.1,
+        ball_loss: 0.5,
+    };
+    assert_eq!(tackle_decision(&sim.view(), d, 9, fair), Some(fair));
+    let hopeless = TackleChances {
+        p_win: 0.001,
+        p_foul: 0.3,
+        ball_loss: 0.5,
+    };
+    assert_eq!(tackle_decision(&sim.view(), d, 9, hopeless), None);
+    sim.teams[1].plan.tackle_willingness = -3.0;
+    assert_eq!(tackle_decision(&sim.view(), d, 9, fair), None);
+    sim.teams[1].plan.tackle_willingness = 0.0;
+    sim.teams[1].plan.tackle_risk = 1.0;
+    let risky = tackle_decision(&sim.view(), d, 9, fair).unwrap();
+    assert_eq!(risky.p_win, fair.p_win);
+    assert!(risky.p_foul > fair.p_foul && risky.p_win + risky.p_foul <= 1.0);
+    // A side that declines every tackle: the carrier keeps the ball and no tackle is drawn.
+    let mut sim = press_scene(9, d, DVec2::new(0.0, 0.0), 0.5);
+    sim.teams[1].plan.tackle_willingness = -1e9;
+    sim.control_since = 0;
+    let t = std::sync::Arc::clone(&sim.tuning);
+    let draws = sim.streams.draws();
+    sim.resolve_possession(&t);
+    assert_eq!(sim.carrier, Some(9));
+    assert_eq!(sim.streams.draws(), draws);
+}

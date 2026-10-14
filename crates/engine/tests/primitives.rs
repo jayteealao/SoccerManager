@@ -725,6 +725,8 @@ fn every_plan_input_a_decision_site_reads_has_a_hook() {
         "engage_line",
         "defensive_width",
         "force",
+        "tackle_willingness",
+        "tackle_risk",
         "offside_trap",
         "screen_short",
         "trigger_back_pass",
@@ -743,4 +745,50 @@ fn every_plan_input_a_decision_site_reads_has_a_hook() {
         "plan inputs read with no hook: {missing:?}"
     );
     assert_eq!(HOOKS.len(), 48);
+}
+
+/// The tackle decision replaces the automatic tackle: in the possession pass, each tackle's
+/// draw comes after the decision module's `tackle`, and a declined tackle skips the draw.
+#[test]
+fn a_tackle_draw_follows_the_tackle_decision() {
+    let source = non_test_source(&src().join("sim/possession.rs"));
+    let decision = source
+        .find("decision.tackle(")
+        .expect("the tackle decision is asked");
+    let draw = source
+        .find("Key::player(Action::Tackle, p)")
+        .expect("the tackle draw");
+    assert!(decision < draw, "the decision comes before the draw");
+    let between = &source[decision..draw];
+    assert!(
+        between.contains("continue;"),
+        "a declined tackle skips the draw"
+    );
+    assert_eq!(source.matches("Action::Tackle").count(), 1);
+}
+
+/// Tackling moves fouls and cards only through the tackle decision: the shipped card and foul
+/// values are the ones the automatic tackle had, and no tackling level sets a card value.
+#[test]
+fn tackling_changes_no_card_value() {
+    let content = common::content();
+    let t = &content.tuning.engine;
+    assert_eq!(
+        (
+            t.foul_base,
+            t.yellow_base,
+            t.yellow_aggression_weight,
+            t.red_base
+        ),
+        (0.1, 0.05, 0.15, 0.005)
+    );
+    assert_eq!(t.foul_booked_factor, 0.15);
+    let tackling = content
+        .tactics
+        .primitives
+        .iter()
+        .find(|p| p.name == "tackling")
+        .unwrap();
+    let inputs: Vec<&str> = tackling.inputs.iter().map(|i| i.input.as_str()).collect();
+    assert_eq!(inputs, ["tackle_risk", "tackle_willingness"]);
 }

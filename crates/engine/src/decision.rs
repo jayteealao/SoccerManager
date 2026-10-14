@@ -127,8 +127,11 @@ pub const TRAP_WINDOW_S: f64 = 2.0;
 /// the kicker with an opponent within this many metres of him is screened.
 pub const SCREEN_M: f64 = 4.0;
 /// The tackle decision (hook `tackle.decide`): the cost of a foul's chance, in units of the
-/// win chance, at no danger; the danger of a foul doubles it near the own goal.
-pub const TACKLE_FOUL_COST: f64 = 1.0;
+/// win chance, at no danger; the danger of a foul doubles it near the own goal. Set from the
+/// probe of the default sides: at 0.1 a defender declines only a tackle he is far likelier to
+/// foul in than to win, and the equal suite's goals stay within 0.05 a match of the automatic
+/// tackle's (at 0.25 seed 9 rises 0.29, at 0.5 both seeds about 0.35, over 200 matches).
+pub const TACKLE_FOUL_COST: f64 = 0.1;
 
 /// Press triggers (hooks `press.trigger.*`): the factor on pressing side `team`'s press reach,
 /// [`TRIGGER_REACH`] while the window of a trigger its plan switches on is open, else 1.
@@ -1707,15 +1710,41 @@ fn trait_anchor(view: &MatchView<'_>, i: usize, anchor: DVec2) -> DVec2 {
     pitch.clamp(at, 0.5)
 }
 
-/// The tackle decision of `tackler`, in reach of `carrier`: every defender in reach tackles,
-/// with the fouls module's chances.
+/// The tackle decision of `tackler`, in reach of `carrier` (hooks `tackle.decide` and
+/// `tackle.foul_risk`). He weighs the clean win against the foul, whose cost
+/// [`TACKLE_FOUL_COST`] grows with the danger of a free kick near his own goal: `(1 - s)^2`
+/// for the ball `s` of the pitch length from his own goal line, up to double at the line. He
+/// tackles when the log of the win chance over that cost, plus his side's willingness, is
+/// above 0; otherwise he stays on his feet and nothing is drawn. A tackle he makes takes the
+/// fouls module's chances with the foul chance's log-odds shifted by his side's tackle risk
+/// (taken from the misses, never from the wins).
 pub fn tackle_decision(
-    _view: &MatchView<'_>,
-    _tackler: usize,
+    view: &MatchView<'_>,
+    tackler: usize,
     _carrier: usize,
     chances: TackleChances,
 ) -> Option<TackleChances> {
-    Some(chances)
+    let team = view.player(tackler).team;
+    let side = &view.teams()[team];
+    let plan = &side.plan;
+    let pitch = view.pitch();
+    let from_own = view.ball().xy().x * side.attack_x + pitch.half_length();
+    let s = (from_own / pitch.length()).clamp(0.0, 1.0);
+    let danger = (1.0 - s) * (1.0 - s);
+    let cost = TACKLE_FOUL_COST * chances.p_foul * (1.0 + danger);
+    if chances.p_win <= 0.0
+        || (cost > 0.0 && (chances.p_win / cost).ln() + plan.tackle_willingness <= 0.0)
+    {
+        return None;
+    }
+    if plan.tackle_risk == 0.0 || chances.p_foul <= 0.0 || chances.p_foul >= 1.0 {
+        return Some(chances);
+    }
+    let shifted = contract::logistic(contract::logit(chances.p_foul) + plan.tackle_risk);
+    Some(TackleChances {
+        p_foul: shifted.min(1.0 - chances.p_win).max(0.0),
+        ..chances
+    })
 }
 
 /// The chance per minute of play that player `i` lapses: the tuned chance, growing past

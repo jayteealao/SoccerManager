@@ -284,48 +284,48 @@
         {
           "name": "stay_on_feet",
           "values": {
-            "tackle_willingness": -0.2,
-            "tackle_risk": -1.0
+            "tackle_risk": -0.6,
+            "tackle_willingness": -1.0
           }
         },
         {
           "name": "careful",
           "values": {
-            "tackle_willingness": -0.1,
-            "tackle_risk": -0.5
+            "tackle_risk": -0.3,
+            "tackle_willingness": -0.5
           }
         },
         {
           "name": "normal",
           "values": {
-            "tackle_willingness": 0.0,
-            "tackle_risk": 0.0
+            "tackle_risk": 0.0,
+            "tackle_willingness": 0.0
           }
         },
         {
           "name": "committed",
           "values": {
-            "tackle_willingness": 0.1,
-            "tackle_risk": 0.5
+            "tackle_risk": 0.3,
+            "tackle_willingness": 0.5
           }
         },
         {
           "name": "get_stuck_in",
           "values": {
-            "tackle_willingness": 0.2,
-            "tackle_risk": 1.0
+            "tackle_risk": 0.6,
+            "tackle_willingness": 1.0
           }
         }
       ],
       "default": "normal",
       "inputs": [
         {
-          "input": "tackle_willingness",
-          "hook": "tackle.decide"
-        },
-        {
           "input": "tackle_risk",
           "hook": "tackle.foul_risk"
+        },
+        {
+          "input": "tackle_willingness",
+          "hook": "tackle.decide"
         }
       ],
       "signature": [
