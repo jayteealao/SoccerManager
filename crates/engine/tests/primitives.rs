@@ -280,6 +280,98 @@ fn the_in_possession_primitives_are_shipped_as_decided() {
     assert!(w.takeon_under_pressure.is_finite());
 }
 
+/// The transition primitives: on winning the ball, on losing the ball and counter-press
+/// length are graded with their own five levels. On winning the ball raises its weight level
+/// by level from a neutral default, lifts running pace only above its default, and is fitted
+/// to the Wyscout fast-break row. On losing the ball is neutral at its default (its
+/// counter-press factor is 0, so the press stays the pressing level's), and both counter-press
+/// primitives keep seeded values with their deferred reason and no fit. The five counter-press
+/// lengths rise from about 2 s at the lowest level to about 8 s at the highest.
+#[test]
+fn the_transition_primitives_are_shipped_as_decided() {
+    let content = common::content();
+    let t = &content.tactics;
+    let find = |n: &str| {
+        t.primitives
+            .iter()
+            .find(|p| p.name == n)
+            .unwrap_or_else(|| panic!("{n} is shipped"))
+    };
+    let on_winning = find("on_winning_the_ball");
+    assert_eq!(
+        on_winning.level_names(t),
+        [
+            "always_keep_shape",
+            "keep_shape",
+            "mixed",
+            "counter",
+            "always_counter"
+        ]
+    );
+    assert_eq!(on_winning.default, "mixed");
+    let at = |input: &str| -> Vec<f64> {
+        (0..GRADED_LEVELS)
+            .map(|l| level_value(t, input, l).unwrap())
+            .collect()
+    };
+    let counter = at("counter");
+    assert!(counter.windows(2).all(|w| w[0] < w[1]), "{counter:?}");
+    assert_eq!(counter[2], 0.0, "neutral at the default");
+    assert_eq!(at("pace_lift"), [0.0, 0.0, 0.0, 1.0, 1.0]);
+    assert_eq!(on_winning.data.source.as_deref(), Some("wyscout_2017_18"));
+    assert!(on_winning.data.deferred.is_none());
+    let primary = &on_winning.signature[0];
+    assert_eq!(
+        (primary.stat.as_str(), primary.direction),
+        ("counter_attacks_per_match", Direction::Up)
+    );
+    let table: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(common::content_dir().path("signatures.json")).unwrap(),
+    )
+    .unwrap();
+    for s in &on_winning.signature {
+        assert!(
+            table["rows"].as_array().unwrap().iter().any(|r| {
+                r["primitive"] == "on_winning_the_ball" && r["stat"] == s.stat.as_str()
+            }),
+            "{}: a real row",
+            s.stat
+        );
+    }
+    let on_losing = find("on_losing_the_ball");
+    assert_eq!(
+        on_losing.level_names(t),
+        [
+            "always_regroup",
+            "regroup",
+            "mixed",
+            "counter_press",
+            "always_counter_press"
+        ]
+    );
+    let press = at("counter_press");
+    assert!(press.windows(2).all(|w| w[0] < w[1]), "{press:?}");
+    assert_eq!(press[2], 0.0, "neutral at the default");
+    assert_eq!(
+        press[0], -1.0,
+        "the lowest level presses nobody in its window"
+    );
+    let length = find("counter_press_length");
+    let seconds = at("counter_press_s");
+    assert!(seconds.windows(2).all(|w| w[0] < w[1]), "{seconds:?}");
+    assert!((1.5..=3.0).contains(&seconds[0]), "{seconds:?}");
+    assert!((6.5..=10.0).contains(&seconds[4]), "{seconds:?}");
+    assert_eq!(length.signature[0].stat, "last_counterpress_s");
+    for p in [on_losing, length] {
+        assert!(
+            p.data.deferred.as_deref().is_some_and(|r| !r.is_empty()),
+            "{}: deferred with its reason",
+            p.name
+        );
+        assert!(p.fits.is_empty(), "{}", p.name);
+    }
+}
+
 /// Each bad entry in `tests/fixtures/primitives/` is refused with its own reason: a graded
 /// primitive with other than 5 levels, a choice primitive with no choices, an on/off
 /// primitive without two states, a default that is not a level, no input, an unknown hook, a
@@ -457,8 +549,8 @@ fn decision_sites() -> Vec<PathBuf> {
     out
 }
 
-/// The names a decision site must not spell: every instruction key, every instruction level
-/// and every mentality of the shipped tactics file.
+/// The names a decision site must not spell: every instruction key, every instruction level,
+/// every mentality and every formation of the shipped tactics file.
 fn tactic_names() -> Vec<String> {
     let t = common::content().tactics;
     let mut names: Vec<String> = engine::data::tactics::INSTRUCTIONS
@@ -469,6 +561,7 @@ fn tactic_names() -> Vec<String> {
         names.extend(t.instructions.level_names(i).iter().map(|s| s.to_string()));
     }
     names.extend(t.mentalities.iter().map(|m| m.name.clone()));
+    names.extend(t.formations.iter().map(|f| f.name.clone()));
     names.sort();
     names.dedup();
     names
@@ -549,8 +642,8 @@ fn no_engine_code_names_a_style() {
     assert!(found.is_empty(), "engine code names a style: {found:?}");
 }
 
-/// Shape P2 (b): no decision site reads an instruction, a level or a mentality by its name;
-/// a planted copy of a decision file that spells a level name is caught.
+/// Shape P2 (b): no decision site reads an instruction, a level, a mentality or a formation
+/// by its name; a planted copy of a decision file that spells a level name is caught.
 #[test]
 fn no_decision_site_reads_an_instruction_by_name() {
     let names = tactic_names();
@@ -616,6 +709,10 @@ fn every_plan_input_a_decision_site_reads_has_a_hook() {
         read.contains("patience") && read.contains("loss_weight"),
         "{read:?}"
     );
+    // The transition primitives reach play through their hooks only.
+    for input in ["counter", "pace_lift", "counter_press", "counter_press_s"] {
+        assert!(read.contains(input), "{input} is read: {read:?}");
+    }
     let missing: Vec<&String> = read
         .iter()
         .filter(|f| !inputs.contains(&f.as_str()))

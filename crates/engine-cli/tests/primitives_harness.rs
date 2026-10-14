@@ -286,6 +286,61 @@ fn a_quintile_fit_and_a_thin_sample_fit_land_within_their_noise() {
     std::fs::remove_dir_all(&data).unwrap();
 }
 
+/// On winning the ball: every step one level up raises the fast breaks a match by more than
+/// the paired noise of 1,000 pairs (verify runs it). The counter-press primitives are deferred
+/// and not judged.
+#[test]
+#[ignore = "plays 8,000 full matches; verify runs it"]
+fn every_on_winning_step_raises_the_fast_breaks() {
+    let data = temp("engine-cli-primitives", "transition-steps");
+    let result = shipped_check(&data, "on_winning_the_ball");
+    let steps = result["steps"].as_array().unwrap();
+    assert_eq!(steps.len(), 4);
+    for s in steps {
+        assert_eq!(s["stats"][0]["stat"], "counter_attacks_per_match", "{s}");
+        assert_eq!(s["pass"], true, "{s}");
+    }
+    std::fs::remove_dir_all(&data).unwrap();
+}
+
+/// The on-winning level `counter` refitted: the search lands within the paired noise of the
+/// real ratio of the Wyscout fast-break row (verify runs it).
+#[test]
+#[ignore = "plays up to 2,600 full matches; verify runs it"]
+fn the_fit_of_on_winning_counter_lands_within_its_noise() {
+    let data = temp("engine-cli-primitives", "transition-fit");
+    let content = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content");
+    let out = data.join("fit.json");
+    let run = primitives(
+        &data,
+        &content,
+        &[
+            "fit",
+            "--primitive",
+            "on_winning_the_ball",
+            "--level",
+            "counter",
+            "--matches",
+            "200",
+            "--out",
+            out.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(run.status.code(), Some(0), "{}", stderr(&run));
+    let fit: Value = serde_json::from_str(&std::fs::read_to_string(&out).unwrap()).unwrap();
+    let search = &fit["search"];
+    assert_eq!(search["unreachable"], false, "{fit}");
+    let (achieved, noise, target) = (
+        search["achieved"].as_f64().unwrap(),
+        search["noise"].as_f64().unwrap(),
+        fit["target"].as_f64().unwrap(),
+    );
+    assert!((achieved - target).abs() <= noise, "{fit}");
+    assert_eq!(fit["source"], "wyscout_2017_18");
+    assert_eq!(fit["stat"], "counter_attacks_per_match");
+    std::fs::remove_dir_all(&data).unwrap();
+}
+
 /// One shipped level refitted: the search lands within the paired noise of the real ratio and
 /// near the value the tactics file holds (verify runs it).
 #[test]

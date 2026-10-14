@@ -8,7 +8,7 @@
         {
           "name": "always_keep_shape",
           "values": {
-            "counter": -1.0,
+            "counter": -0.71875,
             "pace_lift": 0.0
           }
         },
@@ -36,7 +36,7 @@
         {
           "name": "always_counter",
           "values": {
-            "counter": 1.0,
+            "counter": 2.0,
             "pace_lift": 1.0
           }
         }
@@ -70,9 +70,54 @@
           "Italy",
           "Spain"
         ],
-        "row": "on_winning_the_ball",
-        "deferred": "the levels keep their seeded values until the fit"
-      }
+        "row": "on_winning_the_ball"
+      },
+      "fits": [
+        {
+          "level": "always_keep_shape",
+          "values": {
+            "counter": -0.71875
+          },
+          "target": 0.762419,
+          "achieved": 0.757683,
+          "noise": 0.027132,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "keep_shape",
+          "values": {
+            "counter": -0.5
+          },
+          "target": 0.885529,
+          "achieved": 0.882854,
+          "noise": 0.026461,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "counter",
+          "values": {
+            "counter": 0.5
+          },
+          "target": 1.066955,
+          "achieved": 1.057643,
+          "noise": 0.027401,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "always_counter",
+          "values": {
+            "counter": 2.0
+          },
+          "target": 1.177106,
+          "achieved": 1.179683,
+          "noise": 0.041773,
+          "matches": 200,
+          "seed": 9
+        }
+      ]
     },
     {
       "name": "on_losing_the_ball",
