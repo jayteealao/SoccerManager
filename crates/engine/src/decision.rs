@@ -394,7 +394,8 @@ impl PassKind {
 /// `true` when player `c` is pressed: his pressure intensity passes the one threshold
 /// ([`crate::pressure::pressed`]).
 pub(crate) fn pressed(view: &MatchView<'_>, c: usize) -> bool {
-    crate::pressure::pressed(view.players(), view.player(c))
+    let p = view.player(c);
+    crate::pressure::pressed(view.players(), p, view.attack_x(p.team))
 }
 
 /// The distance in metres from player `c` to the nearest active opponent; infinite with none.
@@ -1416,7 +1417,12 @@ impl DecisionModule for DecisionV1 {
             Some(ps) => {
                 let stages = view.skills(c);
                 let read = crate::pressure::read(stages);
-                let intensity = crate::pressure::felt(view.players(), carrier, read);
+                let intensity = crate::pressure::felt(
+                    view.players(),
+                    carrier,
+                    read,
+                    view.attack_x(carrier.team),
+                );
                 let resistance = crate::pressure::pass_resistance(stages, execute, ps);
                 let difficulty = crate::pressure::pass_difficulty(d, kind != PassKind::Pass);
                 crate::pressure::penalty(intensity, difficulty, resistance)

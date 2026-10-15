@@ -3,8 +3,10 @@
 //!
 //! - **Intensity** (0 to 1, per player, per moment). Each active opponent adds a share that
 //!   falls with his distance (full at [`NEAR_M`], none from [`FAR_M`], straight between),
-//!   rises with how fast he closes the gap (full at [`CLOSING_MPS`]) and with how far he
-//!   stands from the player's facing (in front counts least, behind most). The shares combine
+//!   rises with how fast he closes the gap (full at [`CLOSING_MPS`]) and is weighed by where
+//!   he stands against the direction the player attacks: in front of him (between him and the
+//!   goal he attacks) 1, level with him [`LEVEL_WEIGHT`], behind him [`BEHIND_WEIGHT`], straight
+//!   between, fitted to the StatsBomb 360 freeze frames ([`position_weight`]). The shares combine
 //!   as independent chances, `1 - Π(1 - share)`, so more opponents press harder and the
 //!   intensity never passes 1.
 //! - **Pressed.** A player is pressed when his intensity passes [`THRESHOLD`], the share of
@@ -31,8 +33,9 @@
 //!     ([`crate::rules::fouls::running_win_chance`]), so a press-resistant dribbler keeps the
 //!     ball against more of the tackles a press brings.
 //! - **Read** of the press (anticipation, through the intercept see stage): a player who reads
-//!   the press sees a presser earlier. It scales the blind-side weight of each presser on him
-//!   ([`from_read`]) and, on a reception, the difficulty of facing his own goal (he sets his
+//!   the press sees a presser earlier. It scales how much a presser on his blind side (behind
+//!   his facing) presses him ([`from_read`], [`READ_WEIGHT`]) and, on a reception, the
+//!   difficulty of facing his own goal (he sets his
 //!   body before the ball arrives); a player rated 10 reads as the observer does. The counts
 //!   (pressed, a pressure) read the observer's intensity, [`intensity`], the way the real data's
 //!   flag is an observer's: one definition, [`from_read`], with the neutral read.
@@ -48,14 +51,31 @@ pub const FAR_M: f64 = 5.0;
 pub const CLOSING_MPS: f64 = 4.0;
 /// The weight of a full closing share, against 1 for the distance alone.
 pub const CLOSING_WEIGHT: f64 = 0.5;
-/// The weight of an opponent straight behind the player, against 1 for the distance alone;
-/// one at his side counts half of it, one in front none.
-pub const BLIND_WEIGHT: f64 = 0.5;
+/// The weight of an opponent level with the player (square to the direction he attacks),
+/// against 1 for one straight in front of him. StatsBomb open data (the four competitions of
+/// [`PASS_DIFFICULTY`]): on open-play outfield passes and receipts with one opponent within
+/// 5 m in the 360 freeze frame, the share the observer flags as under pressure by that
+/// opponent's distance, in front (within 60 degrees of the attacking direction), level or
+/// behind (beyond 120 degrees). Each weight is the one that lays its side's curve on the
+/// front curve through the distance share (least squares, weighted by count): an opponent
+/// level presses a little more than one in front, one behind clearly less.
+pub const LEVEL_WEIGHT: f64 = 1.053;
+/// The weight of an opponent straight behind the player, against 1 for one straight in front;
+/// fitted as [`LEVEL_WEIGHT`].
+pub const BEHIND_WEIGHT: f64 = 0.824;
+/// How much a player's read of the press moves the pressure of an opponent on his blind side
+/// (straight behind his facing): a share x `1 + READ_WEIGHT x (unread - 1)` there, so 1.5
+/// times with no read, half with a full read, as it stands at the neutral read; nothing for
+/// an opponent he faces.
+pub const READ_WEIGHT: f64 = 0.5;
+/// The scale the shares are divided by: one still opponent straight in front adds his
+/// distance share over it. It is the scale they had when an opponent behind the player's
+/// facing counted half again, kept so that a presser in front presses as before.
+pub const SHARE_SCALE: f64 = 2.0;
 
 /// The intensity at which a player is pressed: the share of one still opponent straight in
 /// front of him at [`PRESSED_M`].
-pub const THRESHOLD: f64 =
-    (FAR_M - PRESSED_M) / (FAR_M - NEAR_M) / (1.0 + CLOSING_WEIGHT + BLIND_WEIGHT);
+pub const THRESHOLD: f64 = (FAR_M - PRESSED_M) / (FAR_M - NEAR_M) / SHARE_SCALE;
 
 /// A pass's difficulty by its length, at the middle of each length band (5, 15, 25 and 35 m;
 /// straight between, flat outside): the real loss of completion under pressure in the band,
@@ -93,17 +113,32 @@ fn unread(read: f64) -> f64 {
     2.0 * (1.0 - read.clamp(0.0, 1.0))
 }
 
-/// The pressure opponent `o` puts on player `p`, 0 to 1, as the observer sees it: his distance
-/// share, raised by his closing speed and by his angle from the player's facing.
+/// The weight of an opponent by where he stands: `ahead` is the cosine between the direction
+/// the player attacks and the line to the opponent (1 straight in front, 0 level, -1 straight
+/// behind); 1 in front, [`LEVEL_WEIGHT`] level, [`BEHIND_WEIGHT`] behind, straight between.
 #[inline]
-pub fn from(p: &Player, o: &Player) -> f64 {
-    from_read(p, o, NEUTRAL_READ)
+pub fn position_weight(ahead: f64) -> f64 {
+    let a = ahead.clamp(-1.0, 1.0);
+    if a >= 0.0 {
+        LEVEL_WEIGHT + (1.0 - LEVEL_WEIGHT) * a
+    } else {
+        LEVEL_WEIGHT + (LEVEL_WEIGHT - BEHIND_WEIGHT) * a
+    }
 }
 
-/// [`from`] for a player with read `read`: the blind-side weight scales by how little he
-/// reads the press ([`NEUTRAL_READ`] gives [`from`]).
+/// The pressure opponent `o` puts on player `p`, who attacks along `attack_x`, 0 to 1, as the
+/// observer sees it: his distance share, raised by his closing speed and weighed by where he
+/// stands ([`position_weight`]).
 #[inline]
-pub fn from_read(p: &Player, o: &Player, read: f64) -> f64 {
+pub fn from(p: &Player, o: &Player, attack_x: f64) -> f64 {
+    from_read(p, o, NEUTRAL_READ, attack_x)
+}
+
+/// [`from`] for a player with read `read`: an opponent on his blind side (behind his facing)
+/// presses him more the less he reads the press ([`READ_WEIGHT`]; [`NEUTRAL_READ`] gives
+/// [`from`]).
+#[inline]
+pub fn from_read(p: &Player, o: &Player, read: f64, attack_x: f64) -> f64 {
     let gap = o.pos - p.pos;
     let d = gap.length();
     let near = distance_share(d);
@@ -113,26 +148,25 @@ pub fn from_read(p: &Player, o: &Player, read: f64) -> f64 {
     // The direction from the player to the opponent; at the same spot, straight ahead.
     let toward = if d > 1e-9 { gap / d } else { p.facing };
     let closing = ((p.vel - o.vel).dot(toward) / CLOSING_MPS).clamp(0.0, 1.0);
+    let place = position_weight(toward.x * attack_x);
     let blind = ((1.0 - p.facing.dot(toward)) / 2.0).clamp(0.0, 1.0);
-    let blind_weight = BLIND_WEIGHT * unread(read);
-    (near * (1.0 + CLOSING_WEIGHT * closing + blind_weight * blind)
-        / (1.0 + CLOSING_WEIGHT + BLIND_WEIGHT))
-        .min(1.0)
+    let seen = 1.0 + READ_WEIGHT * blind * (unread(read) - 1.0);
+    (near * place * (1.0 + CLOSING_WEIGHT * closing) * seen / SHARE_SCALE).min(1.0)
 }
 
 /// Player `p`'s pressure intensity, 0 to 1, from the active opponents among `players`, as the
-/// observer sees it (the counts read this).
-pub fn intensity(players: &[Player], p: &Player) -> f64 {
-    felt(players, p, NEUTRAL_READ)
+/// observer sees it (the counts read this); `attack_x` is the direction `p` attacks.
+pub fn intensity(players: &[Player], p: &Player, attack_x: f64) -> f64 {
+    felt(players, p, NEUTRAL_READ, attack_x)
 }
 
 /// The intensity player `p` with read `read` feels, 0 to 1: [`intensity`] with each presser's
 /// share from [`from_read`].
-pub fn felt(players: &[Player], p: &Player, read: f64) -> f64 {
+pub fn felt(players: &[Player], p: &Player, read: f64, attack_x: f64) -> f64 {
     let mut free = 1.0;
     for o in players {
         if o.team != p.team && o.active() {
-            free *= 1.0 - from_read(p, o, read);
+            free *= 1.0 - from_read(p, o, read, attack_x);
         }
     }
     1.0 - free
@@ -178,14 +212,14 @@ pub fn pass_resistance(s: Skills<'_>, execute: Stage, pressure: Stage) -> f64 {
 
 /// `true` when player `p` is pressed: his intensity passes [`THRESHOLD`].
 #[inline]
-pub fn pressed(players: &[Player], p: &Player) -> bool {
-    intensity(players, p) > THRESHOLD
+pub fn pressed(players: &[Player], p: &Player, attack_x: f64) -> bool {
+    intensity(players, p, attack_x) > THRESHOLD
 }
 
 /// `true` when opponent `o` presses player `p` on his own: his share passes [`THRESHOLD`].
 #[inline]
-pub fn presses(p: &Player, o: &Player) -> bool {
-    o.team != p.team && o.active() && from(p, o) > THRESHOLD
+pub fn presses(p: &Player, o: &Player, attack_x: f64) -> bool {
+    o.team != p.team && o.active() && from(p, o, attack_x) > THRESHOLD
 }
 
 /// The difficulty of a pass `length` metres long, `lofted` or along the ground: the length
@@ -254,19 +288,20 @@ mod tests {
     fn one_still_opponent_in_front_at_the_pressed_distance_sits_on_the_threshold() {
         let p = player(0, 0.0, 0.0);
         let o = player(1, PRESSED_M, 0.0);
-        assert!((from(&p, &o) - THRESHOLD).abs() < 1e-12);
+        assert!((from(&p, &o, 1.0) - THRESHOLD).abs() < 1e-12);
         let nearer = player(1, PRESSED_M - 0.1, 0.0);
-        assert!(presses(&p, &nearer));
-        assert!(pressed(&[p, nearer], &p));
+        assert!(presses(&p, &nearer, 1.0));
+        assert!(pressed(&[p, nearer], &p, 1.0));
         let farther = player(1, PRESSED_M + 0.1, 0.0);
-        assert!(!presses(&p, &farther));
-        assert!(!pressed(&[p, farther], &p));
+        assert!(!presses(&p, &farther, 1.0));
+        assert!(!pressed(&[p, farther], &p, 1.0));
     }
 
     #[test]
-    fn closer_more_faster_and_blind_side_opponents_press_harder() {
+    fn closer_more_faster_and_level_opponents_press_harder() {
         let p = player(0, 0.0, 0.0);
         let at = |x: f64, y: f64| player(1, x, y);
+        let intensity = |all: &[Player], p: &Player| intensity(all, p, 1.0);
         // Closer.
         assert!(intensity(&[p, at(1.5, 0.0)], &p) > intensity(&[p, at(3.0, 0.0)], &p));
         assert_eq!(intensity(&[p, at(FAR_M + 1.0, 0.0)], &p), 0.0);
@@ -278,11 +313,17 @@ mod tests {
         let mut closing = at(3.0, 0.0);
         closing.vel = DVec2::new(-4.0, 0.0);
         assert!(intensity(&[p, closing], &p) > intensity(&[p, at(3.0, 0.0)], &p));
-        // Blind side: behind against in front, beside between.
+        // Where he stands, against the direction the player attacks: level presses most, in
+        // front less, behind least, as in the real flags; the same for a player facing back.
         let front = intensity(&[p, at(3.0, 0.0)], &p);
         let side = intensity(&[p, at(0.0, 3.0)], &p);
         let behind = intensity(&[p, at(-3.0, 0.0)], &p);
-        assert!(front < side && side < behind);
+        assert!(behind < front && front < side);
+        let mut back = p;
+        back.facing = DVec2::new(-1.0, 0.0);
+        assert_eq!(intensity(&[back, at(-3.0, 0.0)], &back), behind);
+        // The other way up: for a player attacking -x, the same opponent is in front.
+        assert_eq!(super::intensity(&[p, at(-3.0, 0.0)], &p, -1.0), front);
         // Never above 1.
         let crowd: Vec<Player> = std::iter::once(p)
             .chain((0..8).map(|k| {
@@ -302,12 +343,12 @@ mod tests {
         let front = player(1, 2.0, 0.0);
         let all = [p, behind];
         // The observer and a player rated 10 feel the same.
-        assert_eq!(felt(&all, &p, NEUTRAL_READ), intensity(&all, &p));
-        assert!(felt(&all, &p, 0.9) < felt(&all, &p, NEUTRAL_READ));
-        assert!(felt(&all, &p, 0.1) > felt(&all, &p, NEUTRAL_READ));
+        assert_eq!(felt(&all, &p, NEUTRAL_READ, 1.0), intensity(&all, &p, 1.0));
+        assert!(felt(&all, &p, 0.9, 1.0) < felt(&all, &p, NEUTRAL_READ, 1.0));
+        assert!(felt(&all, &p, 0.1, 1.0) > felt(&all, &p, NEUTRAL_READ, 1.0));
         // A presser straight in front is seen by everyone.
         let ahead = [p, front];
-        assert_eq!(felt(&ahead, &p, 0.9), felt(&ahead, &p, 0.1));
+        assert_eq!(felt(&ahead, &p, 0.9, 1.0), felt(&ahead, &p, 0.1, 1.0));
     }
 
     #[test]

@@ -809,16 +809,17 @@ fn faulty_clock_fails_the_gate_at_a_named_window() {
 }
 
 /// A changed possession module fails the gate: an outfield player who reaches a loose ball from 1 cm further fails
-/// the gate at the first loose ball that centimetre decides (on seed 2, in the second window,
-/// from tick 1,000 to tick 2,000; seed 2 until the player as a person joined the team shape,
-/// then seed 1 until defenders could cut out passes), and the report names the window.
+/// the gate at the first loose ball that centimetre decides (on seed 1, by tick 2,000; seed 2
+/// until the player as a person joined the team shape, then seed 1 until defenders could cut
+/// out passes, then seed 2 until a presser was weighed by where he stands), and the report
+/// names the window.
 #[test]
 fn faulty_possession_fails_the_gate_at_a_named_window() {
     use engine::gate::{self, Fixture, Inputs, Verdict, compare, report_line};
 
     let content = common::content();
     let [a, b] = common::default_teams(&content);
-    let fixture = Fixture::seed(2);
+    let fixture = Fixture::seed(1);
     let play = |content: &engine::Content| {
         gate::play_fixture(
             &fixture,

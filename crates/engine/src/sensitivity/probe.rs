@@ -624,7 +624,8 @@ impl JobProbe {
 impl crate::sim::Simulation {
     /// `true` when player `c` is pressed ([`crate::pressure::pressed`]).
     fn probe_pressed(&self, c: usize) -> bool {
-        crate::pressure::pressed(&self.players, &self.players[c])
+        let p = &self.players[c];
+        crate::pressure::pressed(&self.players, p, self.teams[p.team].attack_x)
     }
 
     /// Count site: the carrier `c` decided `choice` with `plan`.

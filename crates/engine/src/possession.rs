@@ -437,7 +437,7 @@ fn reach(
 pub fn reception_penalty(view: &MatchView<'_>, p: &crate::player::Player, speed_share: f64) -> f64 {
     let stages = view.skills(p.id);
     let read = crate::pressure::read(stages);
-    let intensity = crate::pressure::felt(view.players(), p, read);
+    let intensity = crate::pressure::felt(view.players(), p, read, view.attack_x(p.team));
     if intensity <= 0.0 {
         return 0.0;
     }

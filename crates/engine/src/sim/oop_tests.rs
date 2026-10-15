@@ -342,9 +342,10 @@ fn pass_noise_with(
 
 /// Each factor of the pressure model moves a pass's penalty its way (every scene stays below
 /// the pressed threshold, so only the graded penalty differs): a nearer opponent, a second
-/// one, one closing on the passer, one on his blind side, a shorter pass (the real data's
-/// pressed passes lose most when short) and lower composure each widen the pass; with no
-/// opponent within the far distance the pass is as free.
+/// one, one closing on the passer, one level with him rather than in front (one behind less),
+/// one on the blind side of a passer who does not read the press, a shorter pass (the real
+/// data's pressed passes lose most when short) and lower composure each widen the pass; with
+/// no opponent within the far distance the pass is as free.
 #[test]
 fn each_pressure_factor_moves_a_pass_its_way() {
     let still = DVec2::ZERO;
@@ -376,8 +377,20 @@ fn each_pressure_factor_moves_a_pass_its_way() {
         None,
     );
     assert!(closing > at_3_5, "faster");
+    // Where he stands against the direction the passer attacks: level presses more than in
+    // front, behind less, as in the real flags.
     let behind = pass_noise(12.0, &[front(-3.5)], None, None);
-    assert!(behind > at_3_5, "blind side");
+    let level = pass_noise(12.0, &[(DVec2::new(0.0, 3.5), still)], None, None);
+    assert!(behind < at_3_5 && at_3_5 < level, "where he stands");
+    // On his blind side, a presser presses a passer who does not read the press harder.
+    let read = |s: f64| {
+        pass_noise_with(
+            12.0,
+            &[front(-3.5)],
+            &[(crate::contract::Stage::INTERCEPT_SEE, s)],
+        )
+    };
+    assert!(read(0.1) > read(0.9), "blind side, unread");
     let ratio = |length: f64| {
         pass_noise(length, &[front(3.5)], None, None) / pass_noise(length, &[], None, None)
     };

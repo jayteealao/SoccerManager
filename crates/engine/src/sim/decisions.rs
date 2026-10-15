@@ -257,7 +257,7 @@ impl Simulation {
         if carrier.facing.x * attack_x <= crate::decision::FACING_BACK_COS {
             return;
         }
-        if crate::pressure::pressed(&self.players, carrier) {
+        if crate::pressure::pressed(&self.players, carrier, attack_x) {
             return;
         }
         self.trap_at[def] = Some(self.tick);
@@ -273,11 +273,12 @@ impl Simulation {
     #[cfg(feature = "measures")]
     fn measure_pressure(&mut self, def: usize, c: usize) {
         let carrier = &self.players[c];
+        let attack_x = self.teams[carrier.team].attack_x;
         let near = self
             .players
             .iter()
             .enumerate()
-            .filter(|(_, p)| p.team == def && crate::pressure::presses(carrier, p))
+            .filter(|(_, p)| p.team == def && crate::pressure::presses(carrier, p, attack_x))
             .fold(0u32, |bits, (i, _)| bits | (1 << i));
         let tick = self.tick;
         if let Some(m) = self.measures.as_deref_mut() {
