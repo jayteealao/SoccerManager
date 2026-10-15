@@ -37,7 +37,7 @@ use super::fixtures::{self, Leagues};
 
 /// The statistics the harness measures, in value order: the signature statistics, then the
 /// side's possessions and shots a match, which every step reports beside them.
-pub const STATS: [&str; 79] = [
+pub const STATS: [&str; 88] = [
     "passes_per_possession",
     "recycle_share",
     "turnovers_per_possession",
@@ -111,6 +111,15 @@ pub const STATS: [&str; 79] = [
     "pressed_long_share",
     "free_long_clear_share",
     "pressed_long_clear_share",
+    "free_completion_0_10m",
+    "pressed_completion_0_10m",
+    "free_completion_10_20m",
+    "pressed_completion_10_20m",
+    "free_completion_20_30m",
+    "pressed_completion_20_30m",
+    "free_completion_30m_plus",
+    "pressed_completion_30m_plus",
+    "takeon_success_share",
     "crosses",
     "entries",
     "final_third_possessions",
@@ -253,6 +262,15 @@ pub fn side_stats(m: &MatchMeasures, sinks: &Sinks<'_>, team: usize) -> Stats {
             f(s.pressure_long[1] + s.pressure_clears[1]),
             f(s.pressure_passes[1] + s.pressure_clears[1]),
         ),
+        (f(s.length_completed[0][0]), f(s.length_passes[0][0])),
+        (f(s.length_completed[1][0]), f(s.length_passes[1][0])),
+        (f(s.length_completed[0][1]), f(s.length_passes[0][1])),
+        (f(s.length_completed[1][1]), f(s.length_passes[1][1])),
+        (f(s.length_completed[0][2]), f(s.length_passes[0][2])),
+        (f(s.length_completed[1][2]), f(s.length_passes[1][2])),
+        (f(s.length_completed[0][3]), f(s.length_passes[0][3])),
+        (f(s.length_completed[1][3]), f(s.length_passes[1][3])),
+        (f(s.takeons), f(s.takeons + s.run_lost)),
         (f(s.crosses), 1.0),
         (entries, 1.0),
         (f(s.final_third_possessions), 1.0),
@@ -1266,6 +1284,13 @@ pub fn spread_of(rates: &[(f64, f64, f64)]) -> Spread {
     }
 }
 
+/// The spread of each per-player pressure rate, by name.
+pub type SpreadTable = BTreeMap<&'static str, Spread>;
+/// The pooled mean of each harness statistic, by name.
+pub type MeanTable = BTreeMap<&'static str, f64>;
+/// Each side's players' pressure counts in one match, by squad index.
+type SidePlayers = [BTreeMap<usize, engine::measures::PlayerPressure>; 2];
+
 /// The pressure spread across the engine's players: each player's pressed-against-free pass
 /// completion (ratio), his pressed-minus-free touch loss, and the share of tackles he keeps
 /// the ball against while running with it, over `setup.pairs` matches of the equal suite's
@@ -1274,7 +1299,7 @@ pub fn spread_of(rates: &[(f64, f64, f64)]) -> Spread {
 pub fn pressure_spread(
     content: &Content,
     setup: &Setup,
-) -> anyhow::Result<(BTreeMap<&'static str, Spread>, BTreeMap<&'static str, f64>)> {
+) -> anyhow::Result<(SpreadTable, MeanTable)> {
     use engine::measures::PlayerPressure;
     let content = harness_content(content);
     let list = fixtures::fixtures(setup.pairs);
@@ -1316,54 +1341,53 @@ pub fn pressure_spread(
                         ["pressure:spread", "pressure:spread"],
                         i as u64,
                     );
-                    let run =
-                        || -> anyhow::Result<([BTreeMap<usize, PlayerPressure>; 2], [Stats; 2])> {
-                            let defaults = Tactics::defaults(&content.tactics);
-                            let config =
-                                MatchConfig::new(seed, setup.minutes, content, [&home, &away])?
-                                    .with_ai_tactics(0, defaults)
-                                    .with_ai_tactics(1, defaults);
-                            let mut sim = Simulation::new(config)?;
-                            sim.with_measures();
-                            let note = |sim: &Simulation| {
-                                let mut r = resist.lock().unwrap_or_else(|e| e.into_inner());
-                                for (i, p) in sim.players().iter().enumerate() {
-                                    let k = sim.skills(i);
-                                    r.entry((club.clone(), p.squad)).or_insert([
-                                        engine::pressure::pass_resistance(
-                                            k,
-                                            engine::contract::Stage::PASS_EXECUTE,
-                                            engine::contract::Stage::PASS_PRESSURE,
-                                        ),
-                                        engine::pressure::reception_resistance(k),
-                                        engine::pressure::dribble_resistance(k),
-                                    ]);
-                                }
-                            };
-                            note(&sim);
-                            let mut sinks =
-                                FanoutSink::new(BlockHeightSink::default(), RunsSink::default());
-                            sim.run(&mut sinks)?;
-                            note(&sim);
-                            let (block, runs) = sinks.into_parts();
-                            let m = sim
-                                .measures()
-                                .context("a measures build counts the measures")?;
-                            let sinks = Sinks {
-                                block: &block,
-                                runs: &runs,
-                                goals: sim.summary().goals,
-                                fouls: sim.summary().fouls,
-                                yellows: sim.summary().yellow,
-                                reds: sim.summary().red,
-                                offsides: sim.summary().offsides,
-                                nineties: f64::from(setup.minutes) / 90.0,
-                            };
-                            Ok((
-                                m.players.clone(),
-                                [side_stats(m, &sinks, 0), side_stats(m, &sinks, 1)],
-                            ))
+                    let run = || -> anyhow::Result<(SidePlayers, [Stats; 2])> {
+                        let defaults = Tactics::defaults(&content.tactics);
+                        let config =
+                            MatchConfig::new(seed, setup.minutes, content, [&home, &away])?
+                                .with_ai_tactics(0, defaults)
+                                .with_ai_tactics(1, defaults);
+                        let mut sim = Simulation::new(config)?;
+                        sim.with_measures();
+                        let note = |sim: &Simulation| {
+                            let mut r = resist.lock().unwrap_or_else(|e| e.into_inner());
+                            for (i, p) in sim.players().iter().enumerate() {
+                                let k = sim.skills(i);
+                                r.entry((club.clone(), p.squad)).or_insert([
+                                    engine::pressure::pass_resistance(
+                                        k,
+                                        engine::contract::Stage::PASS_EXECUTE,
+                                        engine::contract::Stage::PASS_PRESSURE,
+                                    ),
+                                    engine::pressure::reception_resistance(k),
+                                    engine::pressure::dribble_resistance(k),
+                                ]);
+                            }
                         };
+                        note(&sim);
+                        let mut sinks =
+                            FanoutSink::new(BlockHeightSink::default(), RunsSink::default());
+                        sim.run(&mut sinks)?;
+                        note(&sim);
+                        let (block, runs) = sinks.into_parts();
+                        let m = sim
+                            .measures()
+                            .context("a measures build counts the measures")?;
+                        let sinks = Sinks {
+                            block: &block,
+                            runs: &runs,
+                            goals: sim.summary().goals,
+                            fouls: sim.summary().fouls,
+                            yellows: sim.summary().yellow,
+                            reds: sim.summary().red,
+                            offsides: sim.summary().offsides,
+                            nineties: f64::from(setup.minutes) / 90.0,
+                        };
+                        Ok((
+                            m.players.clone(),
+                            [side_stats(m, &sinks, 0), side_stats(m, &sinks, 1)],
+                        ))
+                    };
                     match run() {
                         Ok((sides, stats)) => {
                             {

@@ -143,6 +143,13 @@ pub const RECEIVE_WEIGHTS: [f64; 4] = [0.4, 0.3, 0.15, 0.15];
 /// The weights of a pass's resistance: passing, composure, vision, decisions.
 pub const PASS_WEIGHTS: [f64; 4] = [0.35, 0.35, 0.15, 0.15];
 
+/// A dribble's resistance, as the harness reports it beside the running keep share: dribbling,
+/// agility and balance (dribble execute) and composure (dribble pressure), the two stages the
+/// tackle contest on a running carrier reads, in equal parts.
+pub fn dribble_resistance(s: Skills<'_>) -> f64 {
+    0.5 * s.share(Stage::DRIBBLE_EXECUTE) + 0.5 * s.share(Stage::DRIBBLE_PRESSURE)
+}
+
 /// A reception's resistance: first touch (receive execute), composure (dribble pressure),
 /// strength (shield) and balance (stay-up).
 pub fn reception_resistance(s: Skills<'_>) -> f64 {

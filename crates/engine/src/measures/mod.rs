@@ -266,6 +266,9 @@ pub struct Possessing {
     pub open_shot_m: f64,
     /// Take-ons: opponents a dribbling carrier passed within the pressed distance, one each.
     pub takeons: u32,
+    /// Tackles that took the ball from a carrier of the side while he ran with it (a clean
+    /// win or a foul that lost it): the failed take-ons beside [`Self::takeons`].
+    pub run_lost: u32,
     /// Carrier choices that were not the top-scored option before the noise.
     pub off_plan: u32,
     /// Possessions (the primitives' count) that reached the final third.
@@ -291,6 +294,28 @@ pub struct Possessing {
     /// least [`crate::decision::LONG_BALL_M`] and outfield clearances.
     pub pressure_long: [u32; 2],
     pub pressure_clears: [u32; 2],
+    /// The same outfield open-play passes, free (0) and pressed (1), by their planned length's
+    /// band ([`length_band`]: under 10, 20 and 30 m, and from 30 m), as the StatsBomb open data
+    /// reads a pass's length, and those completed.
+    pub length_passes: [[u32; LENGTH_BANDS]; 2],
+    pub length_completed: [[u32; LENGTH_BANDS]; 2],
+}
+
+/// The number of pass length bands ([`length_band`]).
+pub const LENGTH_BANDS: usize = 4;
+
+/// The band of a pass `length_m` metres long: 0 under 10 m, 1 under 20 m, 2 under 30 m, 3 from
+/// 30 m.
+pub fn length_band(length_m: f64) -> usize {
+    if length_m < 10.0 {
+        0
+    } else if length_m < 20.0 {
+        1
+    } else if length_m < 30.0 {
+        2
+    } else {
+        3
+    }
 }
 
 /// One player's pressure counts in a match, each free (0) and pressed (1) by the one threshold:
@@ -379,9 +404,10 @@ pub struct MatchMeasures {
     planned: Option<Planned>,
     /// The cell of the pass in flight.
     in_flight: Option<usize>,
-    /// The passer's pressed state (0 free, 1 pressed), his nearest opponent's band and his
-    /// squad index, of the outfield pass in flight.
-    in_flight_pressed: Option<(usize, usize, usize)>,
+    /// The passer's pressed state (0 free, 1 pressed), his nearest opponent's band, his squad
+    /// index and the pass's length band when it has a planned length, of the outfield pass in
+    /// flight.
+    in_flight_pressed: Option<(usize, usize, usize, Option<usize>)>,
     /// The first reception of the pass in flight: the passing side and the receiver's pressed
     /// state.
     touch: Option<(usize, usize, usize, usize)>,
@@ -592,23 +618,28 @@ impl MatchMeasures {
     }
 
     /// The outfield passer (squad index `squad`) of `team`'s pass just kicked was pressed
-    /// (`pressed`) or free, with his nearest opponent in distance band `band`; the pass is
-    /// `long` when its planned length is at least [`crate::decision::LONG_BALL_M`].
+    /// (`pressed`) or free, with his nearest opponent in distance band `band`; `length_m` is the
+    /// pass's planned length when it has one (long from [`crate::decision::LONG_BALL_M`]).
     pub(crate) fn pass_pressed(
         &mut self,
         team: usize,
         pressed: bool,
         band: usize,
         squad: usize,
-        long: bool,
+        length_m: Option<f64>,
     ) {
         let k = usize::from(pressed);
+        let long = length_m.is_some_and(|l| l >= crate::decision::LONG_BALL_M);
+        let length = length_m.map(length_band);
         let s = &mut self.possessing[team];
         s.pressure_passes[k] += 1;
         s.band_passes[band] += 1;
         s.pressure_long[k] += u32::from(long);
+        if let Some(l) = length {
+            s.length_passes[k][l] += 1;
+        }
         self.players[team].entry(squad).or_default().passes[k] += 1;
-        self.in_flight_pressed = Some((k, band, squad));
+        self.in_flight_pressed = Some((k, band, squad, length));
     }
 
     /// An outfield player of `team` cleared the ball, pressed (`pressed`) or free.
@@ -619,6 +650,7 @@ impl MatchMeasures {
     /// A tackle on the carrier (squad index `squad`) of `team` while he ran with the ball;
     /// `lost` when it took the ball.
     pub(crate) fn run_tackle(&mut self, team: usize, squad: usize, lost: bool) {
+        self.possessing[team].run_lost += u32::from(lost);
         let p = self.players[team].entry(squad).or_default();
         p.run_tackles += 1;
         p.run_lost += u32::from(lost);
@@ -633,9 +665,12 @@ impl MatchMeasures {
 
     /// The pass in flight reached a team-mate of its passer.
     pub(crate) fn completed(&mut self, team: usize) {
-        if let Some((k, band, squad)) = self.in_flight_pressed.take() {
+        if let Some((k, band, squad, length)) = self.in_flight_pressed.take() {
             self.possessing[team].pressure_completed[k] += 1;
             self.possessing[team].band_completed[band] += 1;
+            if let Some(l) = length {
+                self.possessing[team].length_completed[k][l] += 1;
+            }
             self.players[team].entry(squad).or_default().completed[k] += 1;
         }
         if let Some(cell) = self.in_flight.take() {

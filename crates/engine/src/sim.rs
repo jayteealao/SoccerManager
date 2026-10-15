@@ -1824,13 +1824,11 @@ impl Simulation {
                         crate::pressure::band(crate::decision::nearest_opponent_m(&self.view(), c));
                     let squad = self.players[c].squad;
                     if let Some(m) = self.measures.as_deref_mut() {
-                        let long = m
-                            .planned_length(c)
-                            .is_some_and(|l| l >= crate::decision::LONG_BALL_M);
+                        let length = m.planned_length(c);
                         m.kicked_pass_lofted(c, team, loft);
                         m.pass_start(team, share);
                         if outfield {
-                            m.pass_pressed(team, pressed, band, squad, long);
+                            m.pass_pressed(team, pressed, band, squad, length);
                         }
                     }
                 }
