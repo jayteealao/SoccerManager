@@ -101,14 +101,14 @@
           "name": "own_third",
           "values": {
             "engage_depth_m": -10.0,
-            "engage_line": 0.4
+            "engage_line": 1.0
           }
         },
         {
           "name": "low",
           "values": {
             "engage_depth_m": -5.0,
-            "engage_line": 0.55
+            "engage_line": 1.0
           }
         },
         {

@@ -1745,8 +1745,8 @@
       "kind": "graded",
       "levels": "own",
       "steps": [
-        { "name": "own_third", "values": { "engage_depth_m": -10.0, "engage_line": 0.4 } },
-        { "name": "low", "values": { "engage_depth_m": -5.0, "engage_line": 0.55 } },
+        { "name": "own_third", "values": { "engage_depth_m": -10.0, "engage_line": 1.0 } },
+        { "name": "low", "values": { "engage_depth_m": -5.0, "engage_line": 1.0 } },
         { "name": "mid", "values": { "engage_depth_m": 0.0, "engage_line": 1.0 } },
         { "name": "high", "values": { "engage_depth_m": 5.0, "engage_line": 1.0 } },
         { "name": "very_high", "values": { "engage_depth_m": 10.0, "engage_line": 1.0 } }
