@@ -26,7 +26,7 @@ pub const GRADED_LEVELS: usize = 5;
 
 /// The statistics a primitive can name as its signature. The real-team table
 /// (`signatures.json`) and the engine measure each one by the same definition.
-pub const SIGNATURE_STATS: [&str; 49] = [
+pub const SIGNATURE_STATS: [&str; 51] = [
     "passes_per_possession",
     "recycle_share",
     "turnovers_per_possession",
@@ -70,6 +70,8 @@ pub const SIGNATURE_STATS: [&str; 49] = [
     "opp_entries_wide_share",
     "offsides_caught_per_match",
     "opp_goal_kick_m",
+    "opp_short_goal_kick_share",
+    "opp_short_goal_kick_kept_share",
     "fouls_per_match",
     "yellows_per_match",
     "pressures_after_back_pass",

@@ -198,7 +198,20 @@ fn the_in_possession_rows_follow_the_shared_definitions() {
     flat("takeons_per_90", 1.0);
     flat("entries_centre_share", 1.0);
     flat("crosses_per_final_third_possession", 1.0);
-    let r = row(&table, "goal_kick_m");
+    // The fit leagues' goal kicks predate the 2019 law: a check, not a row.
+    assert!(
+        table["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|r| r["stat"] != "goal_kick_m")
+    );
+    let r = table["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["stat"] == "goal_kick_m" && c["source"] == "wyscout_2017_18")
+        .expect("a Wyscout goal-kick check");
     assert!(
         (r["min"].as_f64().unwrap() - 36.0 * 1.05).abs() < 1e-6,
         "{r}"

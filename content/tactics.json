@@ -1877,11 +1877,13 @@
         { "input": "screen_short", "hook": "press.screen_short" }
       ],
       "signature": [
-        { "stat": "opp_goal_kick_m", "direction": "up" }
+        { "stat": "opp_goal_kick_m", "direction": "up" },
+        { "stat": "opp_short_goal_kick_share", "direction": "down" },
+        { "stat": "opp_short_goal_kick_kept_share", "direction": "down" }
       ],
       "data": {
-        "source": "wyscout_2017_18",
-        "competitions": ["England", "France", "Italy", "Spain"],
+        "source": "statsbomb_open",
+        "competitions": ["1. Bundesliga 2023/2024", "FIFA World Cup 2022", "UEFA Euro 2020", "UEFA Euro 2024"],
         "row": "stop_short_goal_kicks"
       }
     },

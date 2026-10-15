@@ -65,7 +65,9 @@ pub const FIT_LEAGUES: [&str; 4] = ["England", "France", "Italy", "Spain"];
 const PITCH_M: f64 = 105.0;
 
 /// The table's format version. Version 2 adds the in-possession rows and the thin-sample rows
-/// of the SkillCorner runs; version 3 the transition rows and their checks.
+/// of the SkillCorner runs; version 3 the transition rows and their checks. Version 4's
+/// goal-kick rows read the StatsBomb open data (played under the 2019 law), with the fit
+/// leagues' older lengths as checks.
 pub const SIGNATURES_VERSION: u32 = 4;
 /// The StatsBomb competitions that are held-out sets: never read.
 pub const STATSBOMB_HELD_OUT: [&str; 2] = ["FIFA World Cup 2018", "UEFA Euro 2016"];
@@ -1422,6 +1424,216 @@ fn statsbomb_teams(path: &Path) -> anyhow::Result<SbTeams> {
     Ok((keys, teams))
 }
 
+/// A goal kick shorter than this, in metres, is short, as the engine's measures read it.
+pub const SHORT_GOAL_KICK_M: f64 = 20.0;
+/// A goal kick's side kept the ball when its StatsBomb possession lasted this long after the
+/// kick, in seconds, or held a shot of the side, as the engine's measures read it.
+pub const KEPT_S: f64 = 10.0;
+/// StatsBomb positions are yards on a 120 by 80 pitch; the engine's pitch is 105 by 68 m.
+const SB_X_M: f64 = 105.0 / 120.0;
+const SB_Y_M: f64 = 68.0 / 80.0;
+
+/// The goal kicks of one StatsBomb team in one competition, and of its opponents: how many,
+/// their summed length, the short ones and the short ones kept.
+#[derive(Debug, Clone, Copy, Default)]
+struct SbKicks {
+    own: [f64; 4],
+    opp: [f64; 4],
+}
+
+/// A goal kick whose possession is still open: the team, the possession, the kick's time,
+/// its length, the possession's last time so far and whether the team shot in it.
+#[derive(Debug, Clone)]
+struct SbKick {
+    team: usize,
+    poss: (String, String, String),
+    at: f64,
+    length: f64,
+    last: f64,
+    shot: bool,
+}
+
+/// The goal-kick rows and checks of the StatsBomb open data in `dir` (`sb2_events.csv.gz`), all
+/// played under the 2019 law that lets a goal kick be taken short inside the area: per team and
+/// competition, the mean length of its goal kicks (`build_up`) and of its opponents'
+/// (`stop_short_goal_kicks`), marked as national teams like the other StatsBomb rows; and as
+/// checks, the opponents' share of short goal kicks ([`SHORT_GOAL_KICK_M`]) and the share of
+/// those the kicking side kept ([`KEPT_S`] in StatsBomb's own possession, or a shot in it).
+/// None without the file; a held-out competition stops the run.
+fn statsbomb_goal_kicks(dir: &Path) -> anyhow::Result<(Vec<Row>, Vec<Check>)> {
+    let path = dir.join("sb2_events.csv.gz");
+    if !path.exists() {
+        return Ok((Vec::new(), Vec::new()));
+    }
+    let file = "sb2_events.csv.gz";
+    let mut it = lines(&path)?;
+    let header = cells(&it.next().context("an empty sb2_events.csv.gz")??);
+    let col = |n: &str| column(&header, n, file);
+    let (c_mid, c_period, c_ts, c_type, c_team, c_poss, c_sub) = (
+        col("mid")?,
+        col("period")?,
+        col("ts")?,
+        col("type")?,
+        col("team")?,
+        col("poss")?,
+        col("sub")?,
+    );
+    let (c_x, c_y, c_ex, c_ey, c_comp, c_season) = (
+        col("x")?,
+        col("y")?,
+        col("ex")?,
+        col("ey")?,
+        col("comp")?,
+        col("season")?,
+    );
+    let mut index: BTreeMap<(String, String), usize> = BTreeMap::new();
+    let mut keys: Vec<(String, String)> = Vec::new();
+    let mut teams: Vec<SbKicks> = Vec::new();
+    let mut matches: BTreeSet<String> = BTreeSet::new();
+    // The match in progress, its teams, and its settled kicks (team, length, kept).
+    let mut current: Option<String> = None;
+    let mut sides: BTreeSet<usize> = BTreeSet::new();
+    let mut settled: Vec<(usize, f64, bool)> = Vec::new();
+    let mut open: Option<SbKick> = None;
+    let settle = |k: SbKick, settled: &mut Vec<(usize, f64, bool)>| {
+        settled.push((k.team, k.length, k.shot || k.last - k.at >= KEPT_S));
+    };
+    // A match ends: each kick counts for its team and for the other team of the match.
+    let close = |sides: &BTreeSet<usize>,
+                 settled: &mut Vec<(usize, f64, bool)>,
+                 teams: &mut Vec<SbKicks>| {
+        for (team, length, kept) in settled.drain(..) {
+            let short = length < SHORT_GOAL_KICK_M;
+            let add = |a: &mut [f64; 4]| {
+                a[0] += 1.0;
+                a[1] += length;
+                if short {
+                    a[2] += 1.0;
+                    a[3] += f64::from(u8::from(kept));
+                }
+            };
+            add(&mut teams[team].own);
+            for &other in sides.iter().filter(|&&s| s != team) {
+                add(&mut teams[other].opp);
+            }
+        }
+    };
+    for line in it {
+        let c = cells(&line?);
+        if c.len() <= c_season {
+            continue;
+        }
+        let comp = format!("{} {}", c[c_comp], c[c_season]);
+        if STATSBOMB_HELD_OUT.contains(&comp.as_str()) {
+            bail!("held-out set: {comp} is never read");
+        }
+        if current.as_deref() != Some(c[c_mid].as_str()) {
+            if let Some(k) = open.take() {
+                settle(k, &mut settled);
+            }
+            close(&sides, &mut settled, &mut teams);
+            sides.clear();
+            current = Some(c[c_mid].clone());
+            matches.insert(c[c_mid].clone());
+        }
+        if c[c_team].is_empty() {
+            continue;
+        }
+        let team = {
+            let k = (comp.clone(), c[c_team].clone());
+            *index.entry(k.clone()).or_insert_with(|| {
+                teams.push(SbKicks::default());
+                keys.push(k);
+                teams.len() - 1
+            })
+        };
+        sides.insert(team);
+        let Some(sec) = sb_seconds(&c[c_ts]) else {
+            continue;
+        };
+        let poss = (c[c_mid].clone(), c[c_period].clone(), c[c_poss].clone());
+        // An event of the kick's possession stretches it; another possession ends it.
+        if let Some(k) = open.as_mut() {
+            if k.poss == poss {
+                k.last = k.last.max(sec);
+                k.shot |= c[c_type] == "Shot" && team == k.team;
+            } else if let Some(k) = open.take() {
+                settle(k, &mut settled);
+            }
+        }
+        if c[c_type] == "Pass" && c[c_sub] == "Goal Kick" {
+            let num = |i: usize| c[i].parse::<f64>().ok();
+            let (Some(x), Some(y), Some(ex), Some(ey)) = (num(c_x), num(c_y), num(c_ex), num(c_ey))
+            else {
+                continue;
+            };
+            let length = ((ex - x) * SB_X_M).hypot((ey - y) * SB_Y_M);
+            if let Some(k) = open.take() {
+                settle(k, &mut settled);
+            }
+            open = Some(SbKick {
+                team,
+                poss,
+                at: sec,
+                length,
+                last: sec,
+                shot: false,
+            });
+        }
+    }
+    if let Some(k) = open.take() {
+        settle(k, &mut settled);
+    }
+    close(&sides, &mut settled, &mut teams);
+    let competitions: Vec<String> = keys
+        .iter()
+        .map(|(comp, _)| comp.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let per = |f: &dyn Fn(&SbKicks) -> (f64, f64)| -> Vec<f64> {
+        teams
+            .iter()
+            .map(f)
+            .filter(|(_, d)| *d > 0.0)
+            .map(|(n, d)| n / d)
+            .collect()
+    };
+    let mut rows = Vec::new();
+    let mut checks = Vec::new();
+    if teams.is_empty() {
+        return Ok((rows, checks));
+    }
+    for (primitive, stat, f) in [
+        (
+            "build_up",
+            "goal_kick_m",
+            &(|t: &SbKicks| (t.own[1], t.own[0])) as &dyn Fn(&SbKicks) -> (f64, f64),
+        ),
+        ("stop_short_goal_kicks", "opp_goal_kick_m", &|t| {
+            (t.opp[1], t.opp[0])
+        }),
+    ] {
+        let mut row = spread(primitive, stat, &competitions, matches.len(), &per(f))?;
+        row.source = STATSBOMB.into();
+        row.national_teams = true;
+        rows.push(row);
+    }
+    checks.extend(Check::of(
+        "opp_short_goal_kick_share",
+        STATSBOMB,
+        &competitions,
+        &per(&|t| (t.opp[2], t.opp[0])),
+    ));
+    checks.extend(Check::of(
+        "opp_short_goal_kick_kept_share",
+        STATSBOMB,
+        &competitions,
+        &per(&|t| (t.opp[3], t.opp[2])),
+    ));
+    Ok((rows, checks))
+}
+
 /// The rows and checks of the StatsBomb open data in `dir` ([`statsbomb_teams`]): per team
 /// and competition, the regain-to-shot time, the counter-press pressures per loss and regains
 /// within [`COUNTERPRESS_S`], and the time to the last pressure within
@@ -1769,7 +1981,7 @@ pub fn build(dir: &Path, competitions: &[String]) -> anyhow::Result<Table> {
     let entries = |s: &Season, share: &dyn Fn(&[f64; 3]) -> f64| {
         (share(&s.entries), s.entries.iter().sum::<f64>())
     };
-    let stats: [(&str, &str, Vec<f64>); 25] = [
+    let stats: [(&str, &str, Vec<f64>); 24] = [
         (
             "tempo",
             "passes_per_possession",
@@ -1805,11 +2017,6 @@ pub fn build(dir: &Path, competitions: &[String]) -> anyhow::Result<Table> {
             "build_up",
             "own_third_long_share",
             ratio(&|s| (s.own_third_long, s.own_third)),
-        ),
-        (
-            "build_up",
-            "goal_kick_m",
-            ratio(&|s| (s.goal_kick_m, s.goal_kicks)),
         ),
         (
             "build_up",
@@ -1898,7 +2105,7 @@ pub fn build(dir: &Path, competitions: &[String]) -> anyhow::Result<Table> {
     }
     // The out-of-possession rows: each needs the columns and events it reads, so a file
     // without them gives none of its rows.
-    let defending: [(&str, &str, Vec<f64>); 7] = [
+    let defending: [(&str, &str, Vec<f64>); 6] = [
         (
             "line_of_engagement",
             "def_action_height_m",
@@ -1934,17 +2141,31 @@ pub fn build(dir: &Path, competitions: &[String]) -> anyhow::Result<Table> {
             "offsides_caught_per_match",
             ratio(&|s| (s.offsides_caught, s.opp_matches)),
         ),
-        (
-            "stop_short_goal_kicks",
-            "opp_goal_kick_m",
-            ratio(&|s| (s.opp_goal_kick_m, s.opp_goal_kicks)),
-        ),
     ];
     for (primitive, stat, values) in defending {
         if values.len() >= 5 {
             rows.push(spread(primitive, stat, competitions, matches, &values)?);
         }
     }
+    // The goal-kick lengths of the fit leagues predate the 2019 law that lets a goal kick be
+    // played inside the area, so they are checks beside the StatsBomb rows, not targets.
+    let mut kick_checks: Vec<Check> = Check::of(
+        "goal_kick_m",
+        WYSCOUT,
+        competitions,
+        &ratio(&|s| (s.goal_kick_m, s.goal_kicks)),
+    )
+    .into_iter()
+    .chain(Check::of(
+        "opp_goal_kick_m",
+        WYSCOUT,
+        competitions,
+        &ratio(&|s| (s.opp_goal_kick_m, s.opp_goal_kicks)),
+    ))
+    .collect();
+    let (kick_rows, sb_kick_checks) = statsbomb_goal_kicks(dir)?;
+    rows.extend(kick_rows);
+    kick_checks.extend(sb_kick_checks);
     rows.extend(skillcorner_rows(dir)?);
     rows.extend(skillcorner_trigger_rows(dir)?);
     rows.extend(dfl_width_row(dir)?);
@@ -1952,6 +2173,7 @@ pub fn build(dir: &Path, competitions: &[String]) -> anyhow::Result<Table> {
     rows.extend(tracked);
     let mut checks: Vec<Check> = statsbomb_check(dir)?.into_iter().collect();
     checks.extend(tracked_checks);
+    checks.extend(kick_checks);
     // The counter-attack tag against the fast-break definition, and the Wyscout
     // regain-to-shot time beside the StatsBomb row.
     let fast = ratio(&|s| (s.fast_breaks, s.team_matches));
@@ -2097,6 +2319,48 @@ mod tests {
         assert_eq!(row.quintile_ranges[0], [1.0, 2.8]);
         assert_eq!(row.quintile_ranges[4], [8.2, 10.0]);
         assert!(spread("p", "ppda", &[], 1, &v[..4]).is_err());
+    }
+
+    /// StatsBomb goal kicks of six teams in three matches: A, C and E kick short (16 yd, 14 m),
+    /// B, D and F long (60 yd, 52.5 m). A keeps the ball 12 s in its possession, C loses it to
+    /// D at 3 s, E shoots at 4 s: two of the three short kicks are kept. The rows hold each
+    /// team's and its opponents' mean length; the checks the opponents' short and kept shares.
+    #[test]
+    fn the_goal_kick_rows_read_the_post_2019_lengths_and_keeping() {
+        let dir = folder("goal-kicks");
+        let mut text = String::from("mid,period,ts,type,team,poss,sub,x,y,ex,ey,comp,season\n");
+        let mut add = |mid: &str, ts: &str, ty: &str, team: &str, poss: u32, sub: &str, ex: f64| {
+            text.push_str(&format!(
+                "{mid},1,00:00:{ts},{ty},{team},{poss},{sub},6,40,{ex},40,UEFA Euro,2024\n"
+            ));
+        };
+        for (mid, short, long, keep) in [("1", "A", "B", 0), ("2", "C", "D", 1), ("3", "E", "F", 2)]
+        {
+            add(mid, "00.000", "Pass", short, 1, "Goal Kick", 22.0);
+            match keep {
+                0 => add(mid, "12.000", "Pass", short, 1, "", 30.0),
+                1 => add(mid, "03.000", "Pass", long, 2, "", 30.0),
+                _ => add(mid, "04.000", "Shot", short, 1, "", 30.0),
+            }
+            add(mid, "20.000", "Pass", long, 3, "Goal Kick", 66.0);
+            add(mid, "25.000", "Pass", short, 4, "", 30.0);
+        }
+        gzip(&dir.join("sb2_events.csv.gz"), &text);
+        let (rows, checks) = statsbomb_goal_kicks(&dir).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(rows.len(), 2);
+        for (row, primitive) in rows.iter().zip(["build_up", "stop_short_goal_kicks"]) {
+            assert_eq!(row.primitive, primitive);
+            assert_eq!(row.source, STATSBOMB);
+            assert!(row.national_teams);
+            assert_eq!((row.teams, row.matches), (6, 3));
+            assert_eq!((row.min, row.max), (14.0, 52.5), "{row:?}");
+        }
+        let check = |stat: &str| checks.iter().find(|c| c.stat == stat).unwrap();
+        let short = check("opp_short_goal_kick_share");
+        assert_eq!((short.min, short.median, short.max), (0.0, 0.5, 1.0));
+        let kept = check("opp_short_goal_kick_kept_share");
+        assert_eq!((kept.teams, kept.min, kept.median), (3, 0.0, 1.0));
     }
 
     /// Writes `text` gzipped to `path`.
