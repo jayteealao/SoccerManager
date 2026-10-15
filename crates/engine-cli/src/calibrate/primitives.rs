@@ -623,29 +623,53 @@ pub fn judge(pairs: &[Vec<Stats>], stat: usize, direction: Direction) -> StatVer
 /// The monotonic check of `name`: each step of a graded primitive from level `from` (all
 /// steps when `None`) one level up, or each choice of a choice primitive against its default.
 /// The levels `with` (`<primitive>=<level>`) of other primitives are set in the upper arm of
-/// each graded step: a combined step against both at their lower levels.
+/// each graded step: a combined step against both at their lower levels. The levels `hold` of
+/// other primitives are set in both arms of every step, so the step is read with them there.
 pub fn check(
     content: &Content,
     name: &str,
     from: Option<&str>,
     with: &[String],
+    hold: &[String],
     setup: &Setup,
 ) -> anyhow::Result<Vec<StepVerdict>> {
     let content = harness_content(content);
     let p = primitive(&content.tactics, name)?.clone();
-    let mut extra: Vec<(Primitive, usize)> = Vec::new();
-    for w in with {
-        let (other, level) = w
-            .split_once('=')
-            .with_context(|| format!("--with {w}: give <primitive>=<level>"))?;
-        let o = primitive(&content.tactics, other)?.clone();
-        let at = o
-            .level_names(&content.tactics)
-            .iter()
-            .position(|n| *n == level)
-            .with_context(|| format!("{other} has no level {level}"))?;
-        extra.push((o, at));
-    }
+    let levels_of = |given: &[String], flag: &str| -> anyhow::Result<Vec<(Primitive, usize)>> {
+        let mut out = Vec::new();
+        for w in given {
+            let (other, level) = w
+                .split_once('=')
+                .with_context(|| format!("--{flag} {w}: give <primitive>=<level>"))?;
+            if other == name {
+                bail!("--{flag} {w}: the checked primitive cannot be set beside itself");
+            }
+            let o = primitive(&content.tactics, other)?.clone();
+            let at = o
+                .level_names(&content.tactics)
+                .iter()
+                .position(|n| *n == level)
+                .with_context(|| format!("{other} has no level {level}"))?;
+            out.push((o, at));
+        }
+        Ok(out)
+    };
+    let extra = levels_of(with, "with")?;
+    let held = levels_of(hold, "hold")?;
+    // Both arms of a step take the held levels.
+    let hold_in = |arms: &mut [Arm]| -> anyhow::Result<()> {
+        for arm in arms.iter_mut() {
+            for (o, at) in &held {
+                arm.tactics = with_level(arm.tactics, &content.tactics, o, *at)?;
+            }
+        }
+        Ok(())
+    };
+    let held_note = |step: &mut String| {
+        for h in hold {
+            step.push_str(&format!(" holding {h}"));
+        }
+    };
     if !extra.is_empty() && p.kind != PrimitiveKind::Graded {
         bail!("{name}: --with combines graded steps only");
     }
@@ -681,10 +705,12 @@ pub fn check(
                 for (o, at) in &extra {
                     arms[1].tactics = with_level(arms[1].tactics, &content.tactics, o, *at)?;
                 }
+                hold_in(&mut arms)?;
                 let mut step = format!("{} -> {}", names[l], names[l + 1]);
                 for w in with {
                     step.push_str(&format!(" with {w}"));
                 }
+                held_note(&mut step);
                 let pairs = play_pairs(setup, &content, &arms, &format!("{name}:{step}"))?;
                 let mut stats = Vec::new();
                 for s in p.signature.iter().filter(|s| s.steps.covers_step(l, d)) {
@@ -736,7 +762,7 @@ pub fn check(
             let (dc, dt) = arm_of(default)?;
             for choice in p.choices.iter().filter(|c| c.name != p.default) {
                 let (cc, ct) = arm_of(choice)?;
-                let arms = [
+                let mut arms = [
                     Arm {
                         content: dc.clone(),
                         tactics: dt,
@@ -746,7 +772,9 @@ pub fn check(
                         tactics: ct,
                     },
                 ];
-                let step = format!("{} -> {}", default.name, choice.name);
+                hold_in(&mut arms)?;
+                let mut step = format!("{} -> {}", default.name, choice.name);
+                held_note(&mut step);
                 let pairs = play_pairs(setup, &content, &arms, &format!("{name}:{step}"))?;
                 let stats = vec![judge(&pairs, stat_index(&choice.stat)?, Direction::Up)];
                 let pass = stats[0].pass;
@@ -766,7 +794,7 @@ pub fn check(
                 bail!("{name}: an on/off primitive is checked when it owns its two states");
             }
             let defaults = Tactics::defaults(&content.tactics);
-            let arms = [
+            let mut arms = [
                 Arm {
                     content: content.clone(),
                     tactics: with_level(defaults, &content.tactics, &p, 0)?,
@@ -776,7 +804,9 @@ pub fn check(
                     tactics: with_level(defaults, &content.tactics, &p, 1)?,
                 },
             ];
-            let step = format!("{} -> {}", names[0], names[1]);
+            hold_in(&mut arms)?;
+            let mut step = format!("{} -> {}", names[0], names[1]);
+            held_note(&mut step);
             let pairs = play_pairs(setup, &content, &arms, &format!("{name}:{step}"))?;
             let mut stats = Vec::new();
             for s in &p.signature {
@@ -1508,6 +1538,7 @@ pub fn run(
             primitive,
             step,
             with,
+            hold,
             pairs,
             seed,
             jobs: j,
@@ -1520,7 +1551,7 @@ pub fn run(
                 minutes: *minutes,
                 jobs: jobs(*j),
             };
-            let verdicts = check(content, primitive, step.as_deref(), with, &setup)?;
+            let verdicts = check(content, primitive, step.as_deref(), with, hold, &setup)?;
             let pass = verdicts.iter().all(|v| v.pass);
             for v in &verdicts {
                 let failed: Vec<String> = v

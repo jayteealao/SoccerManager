@@ -145,6 +145,11 @@ pub enum PrimitivesAction {
         /// level. May be given more than once.
         #[arg(long = "with", value_name = "PRIMITIVE=LEVEL")]
         with: Vec<String>,
+        /// Another primitive's level, `<primitive>=<level>`, held in both arms of each step,
+        /// so the step is read with that primitive at that level on both sides of it. May be
+        /// given more than once.
+        #[arg(long = "hold", value_name = "PRIMITIVE=LEVEL")]
+        hold: Vec<String>,
         /// Pairs of matches per step.
         #[arg(long, default_value_t = 40)]
         pairs: u32,
