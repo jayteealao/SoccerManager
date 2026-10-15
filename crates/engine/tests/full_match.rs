@@ -16,7 +16,7 @@ fn ninety_minutes_play_to_full_time_under_the_laws() {
     let path = common::temp_path("full");
     let content = common::content();
     let [a, b] = common::default_teams(&content);
-    // Seed 17: the lowest seed whose foul, free-kick and shot counts sit inside the sanity band
+    // Seed 23: the lowest seed whose foul, free-kick and shot counts sit inside the sanity band
     // for both sides (seed 1 until the player as a person joined the team shape, when one side
     // committed two fouls; seed 6 until the defending stages read their attributes, when one side
     // committed three fouls; seed 15 until the restart waits shortened the live time, when one
@@ -26,8 +26,8 @@ fn ninety_minutes_play_to_full_time_under_the_laws() {
     // was weighed by where he stands, when one side committed three fouls; seed 1 until a pressed
     // carrier weighed his options by the pressure he feels, when one side took no shot; seed 12 until
     // a player stepped aside from a team-mate walking at him, when one side took no free kick;
-    // seed 8 until an attacker read the offside line late, when one side committed two fouls).
-    let config = engine::MatchConfig::new(17, 90, &content, [&a, &b]).unwrap();
+    // seed 8 until an attacker read the offside line late, when one side committed two fouls; seed 17 until a passer read the offside line, when one side committed three fouls).
+    let config = engine::MatchConfig::new(23, 90, &content, [&a, &b]).unwrap();
     let most = config.max_ticks();
     assert_eq!(most, 360_000);
     let mut sim = Simulation::new(config.clone()).unwrap();

@@ -984,3 +984,57 @@ fn a_runner_who_reads_the_line_late_is_caught_beyond_it() {
     assert!(beyond_the_line(0.6, 2.0) > beyond_the_line(0.6, 0.0));
     assert!((beyond_the_line(1.0, 2.0) - beyond_the_line(1.0, 0.0)).abs() < 1e-9);
 }
+
+/// The score home carrier 9 at the centre gives a pass to team-mate 10 standing 20 m ahead,
+/// with every away outfield player at `line` metres deep (the second-last defender), wide on
+/// either touchline, the away keeper on his goal line, and the passer's vision and decisions
+/// shares at `read`.
+fn pass_score_against_line(line: f64, read: f64) -> f64 {
+    use crate::contract::Stage;
+    let mut sim = scene();
+    clear(&mut sim);
+    let ax = sim.teams[0].attack_x;
+    let keeper = sim.keeper(1);
+    for i in PLAYERS_PER_TEAM..2 * PLAYERS_PER_TEAM {
+        let y = if i % 2 == 0 { 30.0 } else { -30.0 };
+        sim.players[i].pos = if i == keeper {
+            DVec2::new(ax * 52.0, 0.0)
+        } else {
+            DVec2::new(ax * line, y)
+        };
+    }
+    sim.players[10].pos = DVec2::new(ax * 20.0, 0.0);
+    sim.carrier = Some(9);
+    sim.possession_phase = Some(0);
+    sim.stages[9].share[Stage::PASS_SEE.index()] = read;
+    sim.stages[9].share[Stage::PASS_CHOOSE.index()] = read;
+    let draft = crate::decision::DecisionV1.options(&sim.view(), 9);
+    draft.passes[..draft.pass_count]
+        .iter()
+        .find(|&&(j, _)| j == 10)
+        .map(|&(_, s)| s)
+        .expect("a pass to player 10")
+}
+
+/// The passer's misread of the offside line: a passer with lower vision and decisions reads a
+/// receiver just beyond the line as offside less often, so he plays more offside passes, and
+/// reads one just short of it as offside more often; a sharp reader passes up the offside
+/// receiver and plays the onside one. A goal kick's taker reads nothing.
+#[test]
+fn a_passer_who_reads_the_line_badly_plays_more_offside_passes() {
+    use crate::decision::{OFFSIDE_READ_COST, offside_read};
+    // The pass's loss for the read: its score with the line far behind the receiver less its
+    // score with the line `beyond` metres short of him.
+    let cost = |beyond: f64, read: f64| {
+        pass_score_against_line(40.0, read) - pass_score_against_line(20.0 - beyond, read)
+    };
+    let (sharp, weak) = (cost(1.5, 0.95), cost(1.5, 0.2));
+    assert!(sharp > 0.9 * OFFSIDE_READ_COST, "{sharp}");
+    assert!(weak < sharp && weak > 0.0, "{weak} against {sharp}");
+    let (sharp, weak) = (cost(-1.5, 0.95), cost(-1.5, 0.2));
+    assert!(weak > sharp && sharp < 0.1, "{weak} against {sharp}");
+    // The chance itself: at the line it is even, beyond it rises, and a weaker read flattens it.
+    assert!((offside_read(0.0, 0.5) - 0.5).abs() < 1e-12);
+    assert!(offside_read(2.0, 0.9) > offside_read(2.0, 0.3));
+    assert!(offside_read(-2.0, 0.9) < offside_read(-2.0, 0.3));
+}

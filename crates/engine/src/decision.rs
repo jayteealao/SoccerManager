@@ -303,9 +303,30 @@ pub(crate) const ONSIDE_MARGIN: f64 = 0.5;
 /// ago, the whole lag at the lowest off-ball skill and none at the highest (his off-ball run
 /// stage share), for every side, so a line that steps up can catch him beyond it. A modest
 /// size, not fitted to the real offsides a match: the runner's late read is one of the three
-/// causes of an offside (with the passer's misread and a line that steps up), and with
-/// almost no runs in behind at the default no size of it alone reaches the real rate.
+/// causes of an offside (with the passer's misread, [`OFFSIDE_MISREAD_M`], and a line that
+/// steps up), and with almost no runs in behind at the default no size of it alone reaches
+/// the real rate.
 pub const OFFSIDE_LAG_S: f64 = 3.0;
+/// The passer's misread of the offside line: the spread, in metres, of a passer's read of
+/// where a team-mate stands against the second-last defender, at the lowest read (vision and
+/// decisions under the press he feels, both at share 0); none at the highest. A modest size,
+/// not fitted to the real offsides a match, for the same reason as [`OFFSIDE_LAG_S`].
+pub const OFFSIDE_MISREAD_M: f64 = 4.0;
+/// The score a pass loses when its passer reads the receiver as offside.
+pub const OFFSIDE_READ_COST: f64 = 1.0;
+/// The spread of the sharpest read, in metres: even a perfect reader cannot split a level
+/// receiver.
+const OFFSIDE_READ_FLOOR_M: f64 = 0.1;
+
+/// The chance a passer whose read is `read` (0 to 1: the mean of his vision share and his
+/// decisions under the press he feels) reads a team-mate standing `beyond` metres beyond
+/// the second-last defender (below 0 when short of him) as offside: a logistic step at the
+/// line, sharp for a good read and spread over [`OFFSIDE_MISREAD_M`] for the worst, so a weak
+/// reader plays some passes to a receiver beyond the line and passes up some onside ones.
+pub(crate) fn offside_read(beyond: f64, read: f64) -> f64 {
+    let spread = OFFSIDE_MISREAD_M * (1.0 - read.clamp(0.0, 1.0)) + OFFSIDE_READ_FLOOR_M;
+    1.0 / (1.0 + math::exp(-1.7 * beyond / spread))
+}
 
 /// How far player `i`'s read of his side's offside line trails the live one: the line's
 /// speed toward the goal his side attacks (`speed`, below 0 while the line steps up) times
@@ -1032,6 +1053,15 @@ impl DecisionModule for DecisionV1 {
         let noise = w.noise * (1.5 - judgement) * plan.freedom;
         // A lone carrier: an outfield carrier with no active outfield team-mate ahead of him.
         let depth = carrier.pos.x * attack.x;
+        // The passer's read of the offside line (named mechanism): a team-mate in the
+        // opponents' half and beyond the ball is read as offside with the chance
+        // [`offside_read`] gives for how far he stands beyond the second-last defender and
+        // how well the passer reads it (his vision and his decisions under the press he
+        // feels); a pass read as offside loses [`OFFSIDE_READ_COST`]. A goal kick, the one
+        // restart this choice decides, creates no offside, so its taker reads nothing.
+        let offside_line = offside::second_last_depth(team, players, side.attack_x);
+        let reads_offside = offside_line.is_finite() && view.restart_taker() != Some(c);
+        let line_read = 0.5 * (stages.share(Stage::PASS_SEE) + judgement);
         let lone = !keeper
             && !players.iter().enumerate().any(|(j, p)| {
                 p.team == team
@@ -1178,6 +1208,12 @@ impl DecisionModule for DecisionV1 {
                 ),
                 _ => 0.0,
             };
+            let mate_depth = mate.pos.x * attack.x;
+            let offside_cost = if reads_offside && mate_depth > depth.max(0.0) {
+                OFFSIDE_READ_COST * offside_read(mate_depth - offside_line, line_read)
+            } else {
+                0.0
+            };
             let score = (w.progress + role.progress) * progress
                 + skill(Stage::PASS_SEE) * forward
                 + w.teamwork_bonus * stages.skill(kind.choose())
@@ -1195,7 +1231,8 @@ impl DecisionModule for DecisionV1 {
                 + build_up
                 + channel_bias
                 + cross
-                - pressed_cost;
+                - pressed_cost
+                - offside_cost;
             let score = if has_traits {
                 let switch = d > SWITCH_M && (mate.pos.y - carrier.pos.y).abs() >= SWITCH_M;
                 let early = kind == PassKind::Cross
@@ -2618,8 +2655,10 @@ mod tests {
         let striker = 9;
         sim.players[striker].pos = DVec2::new(20.0, 0.0);
         sim.players[10].pos = DVec2::new(30.0, 6.0);
+        // The away side stands deep behind him, so the open team-mate is onside (with the
+        // away side far up the pitch he would be offside, and the striker reads it).
         for p in sim.players.iter_mut().filter(|p| p.team == 1) {
-            p.pos = DVec2::new(-40.0, p.pos.y);
+            p.pos = DVec2::new(48.0, p.pos.y);
         }
         sim.carrier = Some(striker);
         sim.control_since = 0;
