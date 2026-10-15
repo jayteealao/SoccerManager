@@ -32,6 +32,12 @@
 //!     pressure), the two stages the tackle contest on a running carrier reads
 //!     ([`crate::rules::fouls::running_win_chance`]), so a press-resistant dribbler keeps the
 //!     ball against more of the tackles a press brings.
+//! - **Choice** of a pressed carrier ([`crate::decision`]): the intensity he feels grades his
+//!   pressed option terms ([`grade`]), and each option that keeps the ball pays his own penalty
+//!   for it (the pass's difficulty and resistance above; a dribble and a hold their own,
+//!   [`DRIBBLE_DIFFICULTY`], [`HOLD_DIFFICULTY`], [`choice_resistance`]), so a carrier who
+//!   resists the press badly goes long or clears more as it rises. Sized so the rise of the
+//!   long-ball and clearance share under pressure matches the StatsBomb open data's (x1.87).
 //! - **Read** of the press (anticipation, through the intercept see stage): a player who reads
 //!   the press sees a presser earlier. It scales how much a presser on his blind side (behind
 //!   his facing) presses him ([`from_read`], [`READ_WEIGHT`]) and, on a reception, the
@@ -189,6 +195,49 @@ pub const PASS_WEIGHTS: [f64; 4] = [0.35, 0.35, 0.15, 0.15];
 pub fn dribble_resistance(s: Skills<'_>) -> f64 {
     0.5 * s.share(Stage::DRIBBLE_EXECUTE) + 0.5 * s.share(Stage::DRIBBLE_PRESSURE)
 }
+
+/// The weights of holding the ball while standing: strength (shield), balance (stay-up),
+/// composure (dribble pressure).
+pub const HOLD_WEIGHTS: [f64; 3] = [0.4, 0.3, 0.3];
+
+/// Holding the ball while standing: strength (shield), balance (stay-up) and composure
+/// (dribble pressure).
+pub fn hold_resistance(s: Skills<'_>) -> f64 {
+    let [a, b, c] = HOLD_WEIGHTS;
+    a * s.share(Stage::SHIELD_EXECUTE)
+        + b * s.share(Stage::STAY_UP_EXECUTE)
+        + c * s.share(Stage::DRIBBLE_PRESSURE)
+}
+
+/// Where a pressed carrier's graded choice terms start, as a share of [`THRESHOLD`]: they grow
+/// from this share of the threshold intensity, 0, to the threshold itself, 1, so a carrier the
+/// counts call pressed weighs his options as a pressed carrier in full, and one nearly pressed
+/// in part.
+pub const GRADE_START: f64 = 0.5;
+
+/// How far a carrier's intensity `i` has graded his pressed choice terms, 0 to 1
+/// ([`GRADE_START`]).
+#[inline]
+pub fn grade(i: f64) -> f64 {
+    ((i / THRESHOLD - GRADE_START) / (1.0 - GRADE_START)).clamp(0.0, 1.0)
+}
+
+/// The share of decisions (the action's choose stage) in a pressed carrier's resistance when
+/// he weighs a dribble or a hold: finding the way out in time.
+pub const CHOICE_DECISIONS: f64 = 0.25;
+
+/// The resistance a pressed carrier weighs a dribble or a hold by: the action's resistance
+/// (`action`) blended with his decisions (`decisions`, the action's choose stage share).
+#[inline]
+pub fn choice_resistance(action: f64, decisions: f64) -> f64 {
+    (1.0 - CHOICE_DECISIONS) * action + CHOICE_DECISIONS * decisions
+}
+
+/// The difficulty of keeping the ball on a dribble past a presser and of holding it while
+/// standing, on the pass scale ([`PASS_DIFFICULTY`]): a carry at a presser is a hard keep, a
+/// still shield easier.
+pub const DRIBBLE_DIFFICULTY: f64 = 0.8;
+pub const HOLD_DIFFICULTY: f64 = 0.6;
 
 /// A reception's resistance: first touch (receive execute), composure (dribble pressure),
 /// strength (shield) and balance (stay-up).
@@ -367,6 +416,16 @@ mod tests {
         // A receiver who reads the press sets his body: facing back costs him less.
         assert!(reception_difficulty(0.5, 1.0, 0.9) < reception_difficulty(0.5, 1.0, n));
         assert!(reception_difficulty(0.5, 1.0, 0.1) > reception_difficulty(0.5, 1.0, n));
+    }
+
+    #[test]
+    fn the_choice_grades_from_half_the_threshold_to_the_threshold() {
+        assert_eq!(grade(0.0), 0.0);
+        assert_eq!(grade(GRADE_START * THRESHOLD), 0.0);
+        assert!((grade(THRESHOLD) - 1.0).abs() < 1e-12);
+        assert_eq!(grade(2.0 * THRESHOLD), 1.0);
+        let mid = grade((1.0 + GRADE_START) / 2.0 * THRESHOLD);
+        assert!((mid - 0.5).abs() < 1e-12);
     }
 
     #[test]

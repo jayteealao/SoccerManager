@@ -568,6 +568,16 @@ pub struct DecisionWeights {
     #[serde(default)]
     #[garde(range(min = 0.0, max = 5.0))]
     pub touch_under_pressure: f64,
+    /// The pressed carrier's choice ([`crate::pressure`]): each option that keeps the ball (a
+    /// pass, a dribble, a hold) loses `pressure_choice` x his penalty for it (the intensity he
+    /// feels x the option's difficulty x (1 - his resistance for it)) x the danger of losing
+    /// the ball where it would be lost. A clearance keeps no ball, so it pays nothing. Sized so
+    /// that the rise of the long-ball and clearance share under pressure comes as near the
+    /// StatsBomb open data's as the form allows. 0 (an older file) leaves the choice as the
+    /// pressure model's intensity grades it.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 50.0))]
+    pub pressure_choice: f64,
     /// The weight error of a pressed pass: an outfield passer's pass runs too hard or too soft
     /// by up to `pass_weight_under_pressure` times his pressure penalty of its speed (the same
     /// penalty that widens its aim), so pressure spoils both the direction and the weight of a
@@ -740,9 +750,10 @@ impl Default for Tuning {
                 takeon_under_pressure: -0.8,
                 pass_under_pressure: 48.0,
                 touch_under_pressure: 0.88,
+                pressure_choice: 9.0,
                 pass_weight_under_pressure: 1.0,
                 pass_cut: 0.6,
-                take_on_contest: 2.95,
+                take_on_contest: 2.5,
                 first_touch: 0.6,
                 clear: -1.0,
                 clear_pressure: 1.2,

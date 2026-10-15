@@ -667,6 +667,70 @@ fn a_defender_who_reads_the_take_on_wins_more_of_them() {
     assert!((still(0.9) - still(0.5)).abs() < 1e-12);
 }
 
+/// How much more home carrier 9, on the ball in his own third with a free team-mate 10 m away,
+/// rates keeping the ball (his best pass, dribble or hold) than clearing it, with one away
+/// player pressing him from `gap` metres in front (none when `None`); every stage his keep
+/// options' resistance reads (passing, composure, vision, decisions, dribbling, strength,
+/// balance) set to `resistance`.
+fn keep_margin(resistance: f64, gap: Option<f64>) -> f64 {
+    use crate::contract::Stage;
+    let mut sim = scene();
+    clear(&mut sim);
+    let ax = sim.teams[0].attack_x;
+    let at = DVec2::new(-30.0 * ax, 0.0);
+    sim.players[9].pos = at;
+    sim.players[10].pos = at + DVec2::new(8.0 * ax, 6.0);
+    if let Some(g) = gap {
+        sim.players[PLAYERS_PER_TEAM + 9].pos = at + DVec2::new(g * ax, 0.0);
+    }
+    sim.ball.pos = at.extend(0.0);
+    sim.carrier = Some(9);
+    sim.control_since = 0;
+    sim.possession_phase = Some(0);
+    sim.last_touch = Some(0);
+    for stage in [
+        Stage::PASS_EXECUTE,
+        Stage::PASS_PRESSURE,
+        Stage::PASS_SEE,
+        Stage::PASS_CHOOSE,
+        Stage::DRIBBLE_EXECUTE,
+        Stage::DRIBBLE_PRESSURE,
+        Stage::DRIBBLE_CHOOSE,
+        Stage::SHIELD_EXECUTE,
+        Stage::STAY_UP_EXECUTE,
+    ] {
+        sim.stages[9].share[stage.index()] = resistance;
+    }
+    let d = crate::decision::DecisionV1.options(&sim.view(), 9);
+    let pass = d.passes[..d.pass_count]
+        .iter()
+        .map(|&(_, s)| s)
+        .fold(f64::NEG_INFINITY, f64::max);
+    let (dribble, hold) = d.dribble_hold.expect("an outfield carrier");
+    let keep = pass.max(hold).max(dribble.unwrap_or(f64::NEG_INFINITY));
+    keep - d.clear
+}
+
+/// The pressed player's choice: as the press on him rises, a carrier who resists it badly
+/// (low composure and decisions, poor passing and dribbling) rates keeping the ball lower
+/// against a clearance, so he goes long or clears more often; a press-resistant carrier
+/// loses less of it, and keeps the ball.
+#[test]
+fn a_carrier_who_resists_the_press_badly_clears_more_as_it_rises() {
+    let drop = |r: f64, gap: f64| keep_margin(r, None) - keep_margin(r, Some(gap));
+    for gap in [1.0, 2.0, 3.0] {
+        assert!(drop(0.15, gap) > 0.0, "a weak carrier at {gap} m");
+        assert!(
+            drop(0.15, gap) > drop(0.85, gap),
+            "a weak carrier loses more at {gap} m"
+        );
+    }
+    // Closer is harder for the weak carrier.
+    assert!(drop(0.15, 1.0) > drop(0.15, 3.0));
+    // At the closest press the resistant carrier still rates keeping it above the weak one.
+    assert!(keep_margin(0.85, Some(1.0)) > keep_margin(0.15, Some(1.0)));
+}
+
 /// A pass just kicked by home carrier 9 at the centre: the ball `ahead` metres in front of
 /// him, running away at `speed`, team-mate 10 waiting 8 m ahead and away player `d` at `at`
 /// (written for the side attacking +x).

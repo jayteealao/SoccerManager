@@ -924,11 +924,11 @@ impl DecisionModule for DecisionV1 {
         // forward and holds it less; 0 outside it and at the default.
         let counter = counter_weight(view, team);
         let half = view.pitch().half_length();
-        let loss = |fail: f64, at: DVec2| {
+        let danger = |at: DVec2| {
             let s = ((at.x * side.attack_x + half) / (2.0 * half)).clamp(0.0, 1.0);
-            let danger = (1.0 - s) * (1.0 - s) + s * s;
-            plan.loss_weight * fail.clamp(0.0, 1.0) * danger
+            (1.0 - s) * (1.0 - s) + s * s
         };
+        let loss = |fail: f64, at: DVec2| plan.loss_weight * fail.clamp(0.0, 1.0) * danger(at);
 
         // Pressure and space around the carrier.
         let mut nearest_opp = f64::INFINITY;
@@ -948,15 +948,36 @@ impl DecisionModule for DecisionV1 {
                 space_ahead = space_ahead.min(dist);
             }
         }
-        // The carrier's option scores (the carry window, the take-on, the loss terms and the
-        // clear in his own third) read whether his nearest opponent stands within the pressed
-        // distance, the choice rule that predates the pressure model; how well he then carries
-        // out the pass reads the model's graded intensity ([`crate::pressure`]).
-        let pressed = nearest_opp < contract::PRESSED_M;
-        let judgement = if pressed {
-            stages.pressed_share(Stage::PASS_CHOOSE, Stage::PASS_PRESSURE)
-        } else {
-            stages.share(Stage::PASS_CHOOSE)
+        // The pressed carrier's choice reads the pressure model ([`crate::pressure`]): the
+        // intensity he feels, his read of the press included. `pressed` is whether it passes
+        // the one threshold (the carry window, the skill gate and the pressed traits read it);
+        // `near` grades the pressed terms of the scores (the judgement, the take-on, the loss
+        // terms, the clear in his own third) around the threshold ([`crate::pressure::grade`]).
+        // The lone forward's hold-up reads the intensity the observer sees (`seen_pressed`):
+        // a press he feels more than it is, from his blind side, does not make him hold the
+        // ball up.
+        let felt = crate::pressure::felt(
+            players,
+            carrier,
+            crate::pressure::read(stages),
+            side.attack_x,
+        );
+        let seen_pressed = crate::pressure::pressed(players, carrier, side.attack_x);
+        let pressed = felt > crate::pressure::THRESHOLD;
+        let near = crate::pressure::grade(felt);
+        let calm = stages.share(Stage::PASS_CHOOSE);
+        let judgement =
+            calm + near * (stages.pressed_share(Stage::PASS_CHOOSE, Stage::PASS_PRESSURE) - calm);
+        // Each option that keeps the ball (a pass, a dribble, a hold) is scored by his own
+        // chance to carry it out under the pressure he feels: it loses
+        // `decision.pressure_choice` x his penalty for it (intensity x the option's difficulty
+        // x (1 - his resistance for it)) x the danger of losing the ball where it would be
+        // lost, the risk appetite's danger shape. A clearance keeps no ball and pays nothing,
+        // so as the press rises a player who resists it less (composure, decisions and the
+        // action's own attributes) plays long or clears more, and one who resists it more
+        // keeps the ball.
+        let keep_cost = |difficulty: f64, resistance: f64, at: DVec2| {
+            w.pressure_choice * crate::pressure::penalty(felt, difficulty, resistance) * danger(at)
         };
         // Creative freedom (hook `option.noise`) scales the noise: a side given more freedom
         // strays further from the top-scored option.
@@ -1099,6 +1120,16 @@ impl DecisionModule for DecisionV1 {
             // The pass fails as its lane closes and its receiver's space shrinks; the ball
             // is lost about halfway.
             let fail = 0.5 * ((1.0 - lane / 6.0) + (1.0 - receiver_space / 8.0));
+            // His own chance to play it under pressure: an outfield pass kind with a pressure
+            // stage pays its keep cost.
+            let pressed_cost = match kind.execute() {
+                (execute, Some(ps)) if felt > 0.0 => keep_cost(
+                    crate::pressure::pass_difficulty(d, kind != PassKind::Pass),
+                    crate::pressure::pass_resistance(stages, execute, ps),
+                    (carrier.pos + mate.pos) * 0.5,
+                ),
+                _ => 0.0,
+            };
             let score = (w.progress + role.progress) * progress
                 + skill(Stage::PASS_SEE) * forward
                 + w.teamwork_bonus * stages.skill(kind.choose())
@@ -1115,7 +1146,8 @@ impl DecisionModule for DecisionV1 {
                 + mood_risk * forward
                 + build_up
                 + channel_bias
-                + cross;
+                + cross
+                - pressed_cost;
             let score = if has_traits {
                 let switch = d > SWITCH_M && (mate.pos.y - carrier.pos.y).abs() >= SWITCH_M;
                 let early = kind == PassKind::Cross
@@ -1174,41 +1206,56 @@ impl DecisionModule for DecisionV1 {
         let dribble_hold = if keeper {
             None
         } else {
-            let (lone_dribble, lone_hold) = if lone && pressed {
+            let (lone_dribble, lone_hold) = if lone && seen_pressed {
                 (w.lone_dribble, w.lone_hold)
             } else {
                 (0.0, 0.0)
             };
             let dribble = w.dribble_base + w.dribble_space * (space_ahead / 10.0)
-                - if pressed {
-                    w.takeon_under_pressure
-                } else {
-                    0.0
-                }
+                - w.takeon_under_pressure * near
                 + if held < 10 { w.first_touch } else { 0.0 }
                 + skill(Stage::DRIBBLE_CHOOSE)
                 + role.dribble
                 + lone_dribble
-                - loss(
-                    0.5 * (f64::from(u8::from(pressed)) + (1.0 - space_ahead / 10.0)),
-                    carrier.pos,
-                )
+                - loss(0.5 * (near + (1.0 - space_ahead / 10.0)), carrier.pos)
                 // The side's dribbling weight (hook `dribble.weight`), 0 at its default.
-                + plan.dribble;
+                + plan.dribble
+                - keep_cost(
+                    crate::pressure::DRIBBLE_DIFFICULTY,
+                    crate::pressure::choice_resistance(
+                        crate::pressure::dribble_resistance(stages),
+                        stages.share(Stage::DRIBBLE_CHOOSE),
+                    ),
+                    carrier.pos,
+                );
             let hold = w.hold - w.hold_per_s * held_s + lone_hold
                 - mood_risk
                 - counter
-                - loss(0.5 * f64::from(u8::from(pressed)), carrier.pos);
+                - loss(0.5 * near, carrier.pos)
+                - keep_cost(
+                    crate::pressure::HOLD_DIFFICULTY,
+                    crate::pressure::choice_resistance(
+                        crate::pressure::hold_resistance(stages),
+                        stages.share(Stage::PASS_CHOOSE),
+                    ),
+                    carrier.pos,
+                );
             let (dribble, hold, tricks) = if has_traits {
                 let pressed_only = |k: TraitKind| if pressed { tr(k) } else { 0.0 };
+                // Holding the ball up, like the lone forward's hold-up, reads the observer's
+                // intensity.
+                let holds_up = if seen_pressed {
+                    tr(TraitKind::HoldsUpBall)
+                } else {
+                    0.0
+                };
                 let dwell = tr(TraitKind::DwellsOnBall);
                 // A player who dwells on the ball loses less of the hold's score with time.
                 let slower = w.hold_per_s * held_s * dwell / (1.0 + dwell);
                 (
                     dribble + tr(TraitKind::RunsWithBallOften) - tr(TraitKind::RarelyDribbles)
                         + pressed_only(TraitKind::TriesTricks),
-                    hold + dwell + slower - tr(TraitKind::ReleasesBallEarly)
-                        + pressed_only(TraitKind::HoldsUpBall),
+                    hold + dwell + slower - tr(TraitKind::ReleasesBallEarly) + holds_up,
                     gates.take_on_short
                         <= traits.share(TraitKind::TriesTricks, tw) * tw.weights.tries_tricks_gate,
                 )
@@ -1226,8 +1273,8 @@ impl DecisionModule for DecisionV1 {
             w.keeper_clear
         } else {
             w.clear
-                + if pressed && own_third {
-                    w.clear_pressure
+                + if own_third {
+                    w.clear_pressure * near
                 } else {
                     0.0
                 }
