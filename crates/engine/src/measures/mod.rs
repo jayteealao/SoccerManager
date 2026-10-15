@@ -260,6 +260,10 @@ pub struct Possessing {
     /// Goal kicks taken and the sum of their lengths.
     pub goal_kicks: u32,
     pub goal_kick_m: f64,
+    /// Goal kicks shorter than [`SHORT_GOAL_KICK_M`], and those after which the side kept the
+    /// ball [`KEPT_S`] seconds or shot first ([`MatchMeasures::goal_kick`]).
+    pub short_goal_kicks: u32,
+    pub short_goal_kicks_kept: u32,
     /// Open-play shots, those from outside the penalty area, and the sum of their distances.
     pub open_shots: u32,
     pub outside_shots: u32,
@@ -299,6 +303,28 @@ pub struct Possessing {
     /// reads a pass's length, and those completed.
     pub length_passes: [[u32; LENGTH_BANDS]; 2],
     pub length_completed: [[u32; LENGTH_BANDS]; 2],
+}
+
+/// A goal kick shorter than this, in metres, is short, as the StatsBomb goal-kick rows read it.
+pub const SHORT_GOAL_KICK_M: f64 = 20.0;
+/// A short goal kick's side kept the ball when its possession lasted this long, in seconds,
+/// or held its shot, as the StatsBomb rows read it.
+pub const KEPT_S: f64 = 10.0;
+
+/// A short goal kick whose side's keeping is not decided yet: the side, the tick of the kick,
+/// and the tick a dead ball stopped play while the side waits to know who restarts (it keeps
+/// the ball when it takes the restart itself, as a StatsBomb possession goes on).
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct ShortKick {
+    team: usize,
+    start: u32,
+    stopped: Option<u32>,
+}
+
+/// [`KEPT_S`] in ticks.
+fn kept_ticks() -> u32 {
+    // The constant is a few seconds: the cast is exact.
+    (KEPT_S * f64::from(TICKS_PER_SECOND)).round() as u32
 }
 
 /// The number of pass length bands ([`length_band`]).
@@ -416,6 +442,8 @@ pub struct MatchMeasures {
     chain: Option<Chain>,
     possession: Option<Possession>,
     spell: Option<Spell>,
+    /// The short goal kick whose keeping is not decided yet.
+    short_kick: Option<ShortKick>,
 }
 
 impl Default for MatchMeasures {
@@ -462,6 +490,7 @@ impl Default for MatchMeasures {
             chain: None,
             possession: None,
             spell: None,
+            short_kick: None,
         }
     }
 }
@@ -585,11 +614,36 @@ impl MatchMeasures {
         s.keeper_long += 1;
     }
 
-    /// `team` took a goal kick `length_m` metres long.
+    /// `team` took a goal kick `length_m` metres long. A short one ([`SHORT_GOAL_KICK_M`])
+    /// waits to learn whether the side kept the ball ([`MatchMeasures::settle_kick`]).
     pub(crate) fn goal_kick(&mut self, team: usize, length_m: f64) {
         let s = &mut self.possessing[team];
         s.goal_kicks += 1;
         s.goal_kick_m += length_m;
+        if length_m < SHORT_GOAL_KICK_M {
+            s.short_goal_kicks += 1;
+            let start = self
+                .possession
+                .filter(|p| p.team == team)
+                .map_or(self.now, |p| p.start);
+            self.settle_kick(start, false);
+            self.short_kick = Some(ShortKick {
+                team,
+                start,
+                stopped: None,
+            });
+        }
+    }
+
+    /// The short goal kick in progress ends at `end`: its side kept the ball when it shot
+    /// (`shot`) or still had the ball [`KEPT_S`] after the kick, as the StatsBomb goal-kick rows
+    /// read a possession that lasts 10 s or holds a shot.
+    fn settle_kick(&mut self, end: u32, shot: bool) {
+        if let Some(k) = self.short_kick.take()
+            && (shot || end.saturating_sub(k.start) >= kept_ticks())
+        {
+            self.possessing[k.team].short_goal_kicks_kept += 1;
+        }
     }
 
     /// `team` shot in open play from `distance_m` metres from the goal centre, from outside
@@ -689,6 +743,9 @@ impl MatchMeasures {
     pub(crate) fn shot(&mut self, team: usize, distance_m: f64) {
         self.kicked_other();
         let now = self.now;
+        if self.short_kick.is_some_and(|k| k.team == team) {
+            self.settle_kick(now, true);
+        }
         if let Some(s) = self.spell.as_mut().filter(|s| s.poss.team == team) {
             s.poss.shot = true;
             s.poss.shot_at.get_or_insert(now);
@@ -739,6 +796,15 @@ impl MatchMeasures {
     pub(crate) fn clock(&mut self, tick: u32, place: [(f64, usize); 2]) {
         self.now = tick;
         self.place = place;
+        // A short goal kick's side that still has the ball, with no spell of the other side
+        // open, has kept it once the time is up.
+        if self.spell.is_none()
+            && self.short_kick.is_some_and(|k| {
+                k.stopped.is_none() && tick.saturating_sub(k.start) >= kept_ticks()
+            })
+        {
+            self.settle_kick(tick, false);
+        }
     }
 
     /// The opponents of the carrier `c`, of side `team`, within the pressed distance of him
@@ -825,6 +891,10 @@ impl MatchMeasures {
         if let Some(s) = self.spell.take() {
             self.close_possession(true);
             let (won, lost) = (s.poss.team, 1 - s.poss.team);
+            // A short goal kick's side lost the ball at the other side's first touch.
+            if self.short_kick.is_some_and(|k| k.team == lost) {
+                self.settle_kick(s.start, false);
+            }
             if let Some(l) = self.loss[lost].as_mut() {
                 l.confirmed = true;
             }
@@ -908,6 +978,16 @@ impl MatchMeasures {
 
     /// `team` took a restart of `kind`: any open chain ends and the restart's chain starts.
     pub(crate) fn restart_taken(&mut self, kind: StoppageKind, team: usize, tick: u32) {
+        // A short goal kick's side that restarts keeps the ball, as a StatsBomb possession goes
+        // on; the other side's restart ends it when play stopped.
+        if let Some(k) = self.short_kick.as_mut() {
+            if k.team == team {
+                k.stopped = None;
+            } else {
+                let end = k.stopped.unwrap_or(tick);
+                self.settle_kick(end, false);
+            }
+        }
         self.end_chain(tick);
         self.chain = Some(Chain {
             team,
@@ -932,6 +1012,9 @@ impl MatchMeasures {
             p.touches[pressed] += 1;
             p.lost[pressed] += 1;
         }
+        if let Some(k) = self.short_kick.as_mut() {
+            k.stopped.get_or_insert(tick);
+        }
         self.kicked_other();
         self.end_chain(tick);
         self.possession_stops(tick);
@@ -945,6 +1028,8 @@ impl MatchMeasures {
             .filter(|ch| ch.team == team)
             .and_then(|ch| ch.restart);
         self.goals_by_phase[team][phase_of(restart)] += 1;
+        let end = self.short_kick.and_then(|k| k.stopped).unwrap_or(tick);
+        self.settle_kick(end, false);
         self.end_chain(tick);
         self.possession_stops(tick);
     }
@@ -966,6 +1051,8 @@ impl MatchMeasures {
 
     /// Full time: the open chain ends.
     pub(crate) fn finish(&mut self, tick: u32) {
+        let end = self.short_kick.and_then(|k| k.stopped).unwrap_or(tick);
+        self.settle_kick(end, false);
         self.end_chain(tick);
         self.possession_stops(tick);
     }
@@ -1231,6 +1318,60 @@ mod tests {
         assert_eq!(m.possessions, [1, 1]);
         assert_eq!(m.possession_passes, [2, 1]);
         assert_eq!(m.turnovers, [1, 0]);
+    }
+
+    /// A short goal kick is kept when its side still has the ball 10 s on, shoots first, or
+    /// takes the restart after a dead ball; it is lost when the other side takes the ball
+    /// within 10 s or restarts. A long goal kick is not short.
+    #[test]
+    fn a_short_goal_kick_is_kept_for_ten_seconds_or_lost() {
+        let r = regain_ticks();
+        let place = [(0.0, 0); 2];
+        let mut m = MatchMeasures::default();
+        // Kept: home still has the ball 10 s after the kick.
+        m.restart_taken(StoppageKind::GoalKick, HOME, 0);
+        m.goal_kick(HOME, 8.0);
+        m.touched(HOME, S);
+        m.clock(9 * S, place);
+        assert_eq!(m.possessing[HOME].short_goal_kicks_kept, 0);
+        m.clock(10 * S, place);
+        assert_eq!(m.possessing[HOME].short_goal_kicks_kept, 1);
+        // Lost: away takes the ball at 3 s.
+        m.dead(20 * S);
+        m.restart_taken(StoppageKind::GoalKick, HOME, 30 * S);
+        m.goal_kick(HOME, 12.0);
+        m.touched(AWAY, 33 * S);
+        m.touched(AWAY, 33 * S + r + 1);
+        m.clock(45 * S, place);
+        assert_eq!(m.possessing[HOME].short_goal_kicks_kept, 1);
+        // Kept through a dead ball home restarts: out at 4 s, home's throw-in at 12 s.
+        m.dead(60 * S);
+        m.restart_taken(StoppageKind::GoalKick, HOME, 70 * S);
+        m.goal_kick(HOME, 15.0);
+        m.dead(74 * S);
+        m.restart_taken(StoppageKind::ThrowIn, HOME, 82 * S);
+        m.clock(82 * S, place);
+        assert_eq!(m.possessing[HOME].short_goal_kicks_kept, 2);
+        // Lost: out at 4 s, away's throw-in.
+        m.dead(90 * S);
+        m.restart_taken(StoppageKind::GoalKick, HOME, 100 * S);
+        m.goal_kick(HOME, 15.0);
+        m.dead(104 * S);
+        m.restart_taken(StoppageKind::ThrowIn, AWAY, 112 * S);
+        // Kept: a shot at 5 s.
+        m.dead(120 * S);
+        m.restart_taken(StoppageKind::GoalKick, HOME, 130 * S);
+        m.goal_kick(HOME, 6.0);
+        m.clock(135 * S, place);
+        m.shot(HOME, 25.0);
+        // A long goal kick is not short.
+        m.dead(140 * S);
+        m.restart_taken(StoppageKind::GoalKick, HOME, 150 * S);
+        m.goal_kick(HOME, 55.0);
+        m.finish(170 * S);
+        let s = m.possessing[HOME];
+        assert_eq!((s.goal_kicks, s.short_goal_kicks), (6, 5));
+        assert_eq!(s.short_goal_kicks_kept, 3);
     }
 
     #[test]
