@@ -79,7 +79,7 @@
       "touch_under_pressure": 0.88,
       "pass_weight_under_pressure": 1.0,
       "pass_cut": 0.6,
-      "take_on_contest": 3.7,
+      "take_on_contest": 2.95,
       "first_touch": 0.6,
       "clear": -1.0,
       "clear_pressure": 1.2,

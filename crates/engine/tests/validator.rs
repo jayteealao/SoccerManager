@@ -69,8 +69,8 @@ fn engine_events(config: engine::MatchConfig) -> (Vec<engine::EngineEvent>, Stre
 /// injuries, and seed 65, which brings a straight red (the lowest since defenders could cut out
 /// passes; seed 15 from the in-possession settings until then; before them seeds 1 to 5 and 9 to
 /// 28 brought it); a 10-minute match, which adds no time; a
-/// knockout match (seed 4, the lowest whose shoot-out scores; seed 9 until defenders could cut
-/// out passes; seed 1 until the running pace
+/// knockout match (seed 1, the lowest whose shoot-out scores; seed 4 until a defender's read of
+/// a take-on counted; seed 9 until defenders could cut out passes; seed 1 until the running pace
 /// lifted on a counter rather than with the press, seed 4 until opponents walked round the
 /// restart spot, seed 2 until tempo became patience and the mentality an appetite for risk)
 /// played through extra time and a
@@ -98,7 +98,7 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
         });
     let short = engine::MatchConfig::new(1, 10, &content, [&a, &b]).unwrap();
     streams.push(("10 minutes seed 1".into(), engine_events(short)));
-    let knockout = engine::MatchConfig::new(4, 90, &content, [&a, &b])
+    let knockout = engine::MatchConfig::new(1, 90, &content, [&a, &b])
         .unwrap()
         .with_knockout();
     let (events, rules) = engine_events(knockout);
@@ -106,7 +106,7 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
         events.iter().any(|e| e.shootout_scored == Some(true)),
         "the knockout match reached a shoot-out with a scored kick"
     );
-    streams.push(("knockout seed 4".into(), (events, rules)));
+    streams.push(("knockout seed 1".into(), (events, rules)));
     let league = engine::data::generate_league(1, 2, &content);
     let generated = engine::MatchConfig::new(2, 90, &content, [&league[0], &league[1]]).unwrap();
     streams.push(("generated seed 2".into(), engine_events(generated)));

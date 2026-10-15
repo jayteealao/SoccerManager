@@ -587,8 +587,9 @@ pub struct DecisionWeights {
     /// front of a carrier who runs with the ball meets him once as he comes within the
     /// pressed distance, and wins the ball with `take_on_contest` times the running tackle
     /// contest of the two players, scaled by the angle he meets him at, how square he
-    /// stands and the pace the carrier runs at him with. 0 (an older file) leaves only the
-    /// tackles within reach.
+    /// stands and the pace the carrier runs at him with, the last two moved by his read of
+    /// the take-on. Fitted so that take-ons beat their man as often as the StatsBomb open
+    /// data's dribbles (0.529). 0 (an older file) leaves only the tackles within reach.
     #[serde(default)]
     #[garde(range(min = 0.0, max = 5.0))]
     pub take_on_contest: f64,
@@ -741,7 +742,7 @@ impl Default for Tuning {
                 touch_under_pressure: 0.88,
                 pass_weight_under_pressure: 1.0,
                 pass_cut: 0.6,
-                take_on_contest: 3.7,
+                take_on_contest: 2.95,
                 first_touch: 0.6,
                 clear: -1.0,
                 clear_pressure: 1.2,

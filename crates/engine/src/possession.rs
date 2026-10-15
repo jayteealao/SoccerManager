@@ -308,7 +308,11 @@ pub const TAKE_ON_STRETCH: f64 = 2.5;
 /// running straight at him, 0.5 across him, 0 straight away) x how square he stands (`(1 -
 /// cos) / 2` of his facing against that line: 1 facing the carrier, 0 with his back to him) x
 /// the pace (1 when the carrier does not close on him, falling to 0 as he closes at twice the
-/// defender's top speed).
+/// defender's top speed). The defender's read of the take-on ([`take_on_read`]) moves the
+/// last two: a defender who reads it sets himself square before the carrier arrives and meets
+/// him early, so less of his turned stance and of the carrier's closing speed counts against
+/// him; one who reads it badly is caught more turned and later. A defender rated 10 reads it
+/// as the stance and the pace stand.
 fn take_on(view: &MatchView<'_>, c: usize, i: usize) -> Option<f64> {
     let t = view.tuning();
     let scale = t.decision.take_on_contest;
@@ -337,11 +341,27 @@ fn take_on(view: &MatchView<'_>, c: usize, i: usize) -> Option<f64> {
     }
     let line = to / d;
     let angle = (1.0 + (carrier.vel / speed).dot(line)) / 2.0;
-    let square = (1.0 - p.facing.dot(line)) / 2.0;
+    // How much of a bad stance and of the closing speed counts: 1 at the neutral read, none
+    // at a full read, twice at none.
+    let unread = 2.0 * (1.0 - take_on_read(view.skills(i)));
+    let turned = (1.0 + p.facing.dot(line)) / 2.0;
+    let square = (1.0 - turned * unread).clamp(0.0, 1.0);
     let closing = (carrier.vel - p.vel).dot(line).max(0.0);
-    let pace = (1.0 - closing / (2.0 * p.max_speed())).clamp(0.0, 1.0);
+    let pace = (1.0 - unread * closing / (2.0 * p.max_speed())).clamp(0.0, 1.0);
     let contest = 2.0 * running_win_chance(view.skills(i), view.skills(c), t);
     Some((scale * contest * angle * square * pace).clamp(0.0, 1.0))
+}
+
+/// A defender's read of a take-on, 0 to 1 (0.5 for a player rated 10): how early he sees the
+/// carrier come and sets himself to meet him. It reads the attribute contract's two stages of
+/// stepping to a carrier, in equal parts: press choose (positioning leading, anticipation and
+/// decisions supporting) and cover execute (positioning leading, anticipation and
+/// concentration supporting).
+#[inline]
+pub fn take_on_read(s: crate::contract::Skills<'_>) -> f64 {
+    (0.5 * s.share(crate::contract::Stage::PRESS_CHOOSE)
+        + 0.5 * s.share(crate::contract::Stage::COVER_EXECUTE))
+    .clamp(0.0, 1.0)
 }
 
 /// The loose ball as every reach test of one tick reads it: its place on the ground, its

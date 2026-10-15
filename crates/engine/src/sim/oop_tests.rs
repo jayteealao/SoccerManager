@@ -614,6 +614,59 @@ fn a_defender_in_front_contests_a_take_on_by_angle_stance_pace_and_attributes() 
     assert_eq!(sim.carrier, Some(d));
 }
 
+/// At the same place, a defender who reads the take-on better (anticipation, positioning,
+/// decisions and concentration, through the press choose and cover execute stages) wins more
+/// of them: standing half-turned, against a carrier closing fast, his chance rises with
+/// either stage and falls with a poor read; standing square to a carrier who does not close
+/// on him, there is nothing for the read to win back.
+#[test]
+fn a_defender_who_reads_the_take_on_wins_more_of_them() {
+    use crate::contract::Stage;
+    use crate::modules::PossessionModule;
+    let d = PLAYERS_PER_TEAM + 4;
+    let half_turned = DVec2::new(-1.0, 1.0).normalize();
+    let meet = |speed: f64, facing: DVec2, read: Option<(Stage, f64)>| {
+        let mut sim = running_at(speed, d, DVec2::new(2.0, 0.0), facing);
+        if let Some((stage, s)) = read {
+            sim.stages[d].share[stage.index()] = s;
+        }
+        crate::possession::PossessionV1
+            .take_on(&sim.view(), 9, d)
+            .unwrap()
+    };
+    for stage in [Stage::PRESS_CHOOSE, Stage::COVER_EXECUTE] {
+        let neutral = meet(6.0, half_turned, Some((stage, 0.5)));
+        assert!(
+            meet(6.0, half_turned, Some((stage, 0.85))) > neutral,
+            "{stage:?} a better read"
+        );
+        assert!(
+            meet(6.0, half_turned, Some((stage, 0.2))) < neutral,
+            "{stage:?} a poor read"
+        );
+    }
+    let mut both = running_at(6.0, d, DVec2::new(2.0, 0.0), half_turned);
+    both.stages[d].share[Stage::PRESS_CHOOSE.index()] = 1.0;
+    both.stages[d].share[Stage::COVER_EXECUTE.index()] = 1.0;
+    let full = crate::possession::PossessionV1
+        .take_on(&both.view(), 9, d)
+        .unwrap();
+    assert!(
+        full > meet(6.0, half_turned, None),
+        "anticipation and positioning together"
+    );
+    // Square to a carrier who barely closes: the read has nothing to win back.
+    let still = |s: f64| {
+        let mut sim = running_at(3.0, d, DVec2::new(2.0, 0.0), DVec2::new(-1.0, 0.0));
+        sim.players[d].vel = DVec2::new(3.0 * sim.teams[0].attack_x, 0.0);
+        sim.stages[d].share[Stage::COVER_EXECUTE.index()] = s;
+        crate::possession::PossessionV1
+            .take_on(&sim.view(), 9, d)
+            .unwrap()
+    };
+    assert!((still(0.9) - still(0.5)).abs() < 1e-12);
+}
+
 /// A pass just kicked by home carrier 9 at the centre: the ball `ahead` metres in front of
 /// him, running away at `speed`, team-mate 10 waiting 8 m ahead and away player `d` at `at`
 /// (written for the side attacking +x).
