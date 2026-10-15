@@ -173,7 +173,7 @@
     "pressing": {
       "default": "mid",
       "levels": [
-        { "name": "very_low", "press_count": 1, "press_distance_scale": 0.6, "press_willingness": -1.0 },
+        { "name": "very_low", "press_count": 0, "press_distance_scale": 0.6, "press_willingness": -1.0 },
         { "name": "low", "press_count": 1, "press_distance_scale": 0.8, "press_willingness": -0.5 },
         { "name": "mid", "press_count": 2, "press_distance_scale": 1.0, "press_willingness": 0.0 },
         { "name": "high", "press_count": 3, "press_distance_scale": 1.3, "press_willingness": 0.5 },
