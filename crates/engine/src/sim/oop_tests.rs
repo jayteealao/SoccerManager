@@ -1038,3 +1038,45 @@ fn a_passer_who_reads_the_line_badly_plays_more_offside_passes() {
     assert!(offside_read(2.0, 0.9) > offside_read(2.0, 0.3));
     assert!(offside_read(-2.0, 0.9) < offside_read(-2.0, 0.3));
 }
+
+/// The score home carrier 9 at `at` (written for the side attacking +x) gives a pass to
+/// team-mate 10 standing 12 m ahead and 10 m across, with one away player `gap` metres beyond
+/// team-mate 10 across the pitch and everyone else far away.
+fn screened_pass_score(at: DVec2, gap: f64) -> f64 {
+    let mut sim = scene();
+    clear(&mut sim);
+    let ax = sim.teams[0].attack_x;
+    let from = DVec2::new(at.x * ax, at.y);
+    let mate = from + DVec2::new(12.0 * ax, 10.0);
+    sim.players[9].pos = from;
+    sim.players[10].pos = mate;
+    sim.players[PLAYERS_PER_TEAM + 5].pos = mate + DVec2::new(0.0, gap);
+    sim.carrier = Some(9);
+    sim.possession_phase = Some(0);
+    let draft = crate::decision::DecisionV1.options(&sim.view(), 9);
+    draft.passes[..draft.pass_count]
+        .iter()
+        .find(|&&(j, _)| j == 10)
+        .map(|&(_, s)| s)
+        .expect("a pass to player 10")
+}
+
+/// A pass from the passer's own penalty area reads a screened team-mate the way the restart
+/// pick does: one with an opponent within `SCREEN_M` loses `SCREENED_COST`, so he looks past
+/// him; from outside the area the same screen costs only the space term.
+#[test]
+fn a_pass_from_the_own_area_looks_past_a_screened_team_mate() {
+    use crate::decision::{SCREEN_M, SCREENED_COST};
+    let half = scene().config.pitch().half_length();
+    let area = DVec2::new(-(half - 8.0), 0.0);
+    let open = DVec2::new(-10.0, 0.0);
+    let drop = |at: DVec2| {
+        screened_pass_score(at, SCREEN_M + 0.1) - screened_pass_score(at, SCREEN_M - 0.1)
+    };
+    let (inside, outside) = (drop(area), drop(open));
+    assert!(
+        (inside - outside - SCREENED_COST).abs() < 0.05,
+        "{inside} against {outside}"
+    );
+    assert!(outside.abs() < 0.05, "{outside}");
+}

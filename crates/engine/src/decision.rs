@@ -130,6 +130,11 @@ pub const TRAP_WINDOW_S: f64 = 2.0;
 pub const SCREEN_M: f64 = 4.0;
 /// The metres of a goal kick's score a screened team-mate loses.
 pub const SCREENED_M: f64 = 20.0;
+/// The score a pass from the passer's own penalty area to a screened team-mate loses in the
+/// carrier's open-play choice (the keeper's goal kick included): the same read as the
+/// restart pick's [`SCREENED_M`], in the option scores' units, where it marks the pass as
+/// one he expects to lose, as [`OFFSIDE_READ_COST`] does.
+pub const SCREENED_COST: f64 = 1.0;
 /// The tackle decision (hook `tackle.decide`): the cost of a foul's chance, in units of the
 /// win chance, at no danger; the danger of a foul doubles it near the own goal. Set from the
 /// probe of the default sides: at 0.1 a defender declines only a tackle he is far likelier to
@@ -1062,6 +1067,11 @@ impl DecisionModule for DecisionV1 {
         let offside_line = offside::second_last_depth(team, players, side.attack_x);
         let reads_offside = offside_line.is_finite() && view.restart_taker() != Some(c);
         let line_read = 0.5 * (stages.share(Stage::PASS_SEE) + judgement);
+        // A pass from his own penalty area (the keeper's goal kick and every open-play pass
+        // from there) reads a screened team-mate, one with an opponent within [`SCREEN_M`] of
+        // him, the way the restart pick does: it loses [`SCREENED_COST`], so he looks past
+        // him.
+        let from_own_area = view.pitch().in_penalty_area(carrier.pos, -side.attack_x);
         let lone = !keeper
             && !players.iter().enumerate().any(|(j, p)| {
                 p.team == team
@@ -1214,6 +1224,11 @@ impl DecisionModule for DecisionV1 {
             } else {
                 0.0
             };
+            let screened = if from_own_area && receiver_space < SCREEN_M {
+                SCREENED_COST
+            } else {
+                0.0
+            };
             let score = (w.progress + role.progress) * progress
                 + skill(Stage::PASS_SEE) * forward
                 + w.teamwork_bonus * stages.skill(kind.choose())
@@ -1232,7 +1247,8 @@ impl DecisionModule for DecisionV1 {
                 + channel_bias
                 + cross
                 - pressed_cost
-                - offside_cost;
+                - offside_cost
+                - screened;
             let score = if has_traits {
                 let switch = d > SWITCH_M && (mate.pos.y - carrier.pos.y).abs() >= SWITCH_M;
                 let early = kind == PassKind::Cross
