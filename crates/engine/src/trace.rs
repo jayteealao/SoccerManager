@@ -178,9 +178,9 @@ impl Trace {
     }
 }
 
-/// `true` for the 23 actions whose draw is tested against a probability. The other 21 are
-/// value draws: score noise, aims, angles, lofts, the keeper's dive, form, added time and the
-/// restart wait. The list is outside the stream table, so the scheme digest does not change.
+/// `true` for the 24 actions whose draw is tested against a probability. The other 22 are
+/// value draws: score noise, aims, angles, lofts, the keeper's dive, form, added time, the
+/// restart wait and the pass weight. The list is outside the stream table, so the scheme digest does not change.
 pub fn is_chance(action: Action) -> bool {
     match action {
         Action::ClearWide
@@ -205,7 +205,8 @@ pub fn is_chance(action: Action) -> bool {
         | Action::Header
         | Action::PaceSprint
         | Action::QuickRestart
-        | Action::TraitOverride => true,
+        | Action::TraitOverride
+        | Action::PassCut => true,
         Action::FormMatch | Action::FormPeriod => false,
         Action::ShotScore
         | Action::PassScore
@@ -225,7 +226,8 @@ pub fn is_chance(action: Action) -> bool {
         | Action::ExtraTimeAdded
         | Action::AddedTime
         | Action::KeeperDive
-        | Action::RestartWait => false,
+        | Action::RestartWait
+        | Action::PassWeight => false,
     }
 }
 
@@ -280,11 +282,13 @@ pub enum Point {
     /// A strong trait of play met a moment that may override an instruction, and its draw
     /// decided whether it did.
     TraitOverride,
+    /// A defender tried to cut out or block the pass in flight as it passed him.
+    PassCut,
 }
 
 impl Point {
-    /// Every point: 10 decision points, then 29 rule outcomes.
-    pub const ALL: [Point; 39] = [
+    /// Every point: 10 decision points, then 30 rule outcomes.
+    pub const ALL: [Point; 40] = [
         Point::Carrier,
         Point::RestartPass,
         Point::Press,
@@ -324,6 +328,7 @@ impl Point {
         Point::Abandoned,
         Point::Form,
         Point::TraitOverride,
+        Point::PassCut,
     ];
 
     /// The point's name in the trace file.
@@ -368,6 +373,7 @@ impl Point {
             Point::Abandoned => "abandoned",
             Point::Form => "form",
             Point::TraitOverride => "trait_override",
+            Point::PassCut => "pass_cut",
         }
     }
 
@@ -406,7 +412,9 @@ pub fn points_of(action: Action) -> &'static [Point] {
         Action::ShotSide | Action::ShotAim | Action::ShotSpread | Action::ShotLoft => {
             &[Point::Carrier, Point::RestartTaken]
         }
-        Action::Block | Action::BlockDeflect => &[Point::ShotBlock],
+        Action::Block => &[Point::ShotBlock],
+        // A blocked shot, or a pass a defender blocked as it passed him.
+        Action::BlockDeflect => &[Point::ShotBlock, Point::PassCut],
         Action::Save | Action::SaveHold => &[Point::ShotSave],
         Action::ParrySide | Action::ParryAngle | Action::ParryLoft => {
             &[Point::ShotSave, Point::ShootoutSave]
@@ -434,6 +442,9 @@ pub fn points_of(action: Action) -> &'static [Point] {
         // Both are drawn as the ball goes dead.
         Action::RestartWait | Action::QuickRestart => &[Point::DeadBall],
         Action::TraitOverride => &[Point::TraitOverride],
+        Action::PassCut => &[Point::PassCut],
+        // Drawn with the pass's aim.
+        Action::PassWeight => &[Point::Carrier],
     }
 }
 

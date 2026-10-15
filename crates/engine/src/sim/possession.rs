@@ -201,11 +201,68 @@ impl Simulation {
                 self.deflected_by(i);
                 self.pass_in_flight = None;
                 self.clearers_tried = 0;
+                self.cutters_tried = 0;
                 self.keeper_beaten = false;
                 self.summary.clearances[cross.team] += 1;
                 self.tally(i, Count::Clearance);
                 return true;
             }
+        }
+        false
+    }
+
+    /// While a pass is in flight, each defender the possession module names rolls once per
+    /// flight, as the ball passes him, to cut it out: a ball he can control he takes (an
+    /// interception); a faster one he blocks back the way it came, with his side as the last
+    /// touch, and the pass is not completed. Returns `true` when a defender won the ball or
+    /// blocked it.
+    fn try_cut_pass(&mut self, t: &Tuning) -> bool {
+        let Some(passing) = self.pass_in_flight else {
+            return false;
+        };
+        let possession = self.config.modules.possession;
+        for i in 0..self.players.len() {
+            if self.players[i].team == passing {
+                continue;
+            }
+            let Some(cut) = possession.pass_cut(&self.view(), i) else {
+                continue;
+            };
+            let p = crate::streams::PlayerKey::of(&self.players[i]);
+            self.cutters_tried |= 1u32 << i;
+            let won = self
+                .streams
+                .tested(Key::player(Action::PassCut, p), &[cut.chance])
+                < cut.chance;
+            if self.trace_on() {
+                self.trace_point(
+                    Point::PassCut,
+                    json!({"defender": i, "chance": cut.chance, "control": cut.control, "won": won}),
+                );
+            }
+            if !won {
+                continue;
+            }
+            if cut.control {
+                self.gain(i, t);
+            } else {
+                self.tally(i, Count::Block);
+                #[cfg(feature = "measures")]
+                if self.measures.is_some() {
+                    self.measure_action(i);
+                }
+                let angle = self.streams.draw(Key::player(Action::BlockDeflect, p));
+                self.ball.vel =
+                    self.config
+                        .modules
+                        .ball
+                        .deflect(&self.view(), Deflection::Block, angle, 0.0);
+                self.deflected_by(i);
+                self.pass_in_flight = None;
+                self.cutters_tried = 0;
+                self.keeper_beaten = false;
+            }
+            return true;
         }
         false
     }
@@ -296,6 +353,9 @@ impl Simulation {
                     return;
                 }
                 if self.try_clear_cross() {
+                    return;
+                }
+                if self.try_cut_pass(t) {
                     return;
                 }
                 self.mark_heavy(t);
@@ -511,6 +571,7 @@ impl Simulation {
             self.last_pass = None;
         }
         self.clearers_tried = 0;
+        self.cutters_tried = 0;
         if self.restart_taker != Some(i) {
             self.restart_taker = None;
         }

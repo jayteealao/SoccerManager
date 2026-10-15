@@ -355,6 +355,14 @@ pub struct Contest {
     pub chance: f64,
 }
 
+/// A defender's try to cut out the pass in flight as it passes him: his chance, and whether he
+/// controls the ball (an interception) or only blocks it (a deflection).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PassCut {
+    pub chance: f64,
+    pub control: bool,
+}
+
 /// A fast pass in the penalty area that the defending side may clear.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CrossContest {
@@ -398,6 +406,9 @@ pub trait PossessionModule: Send + Sync + 'static {
     fn loose_ball(&self, view: &MatchView<'_>) -> Option<LooseBall>;
     /// The opponents who may tackle carrier `c`, or `None` inside the control cooldown.
     fn tacklers(&self, view: &MatchView<'_>, c: usize) -> Option<u32>;
+    /// Defender `i`'s try to cut out the pass in flight as it passes him, or `None` when he
+    /// may not try on this tick.
+    fn pass_cut(&self, view: &MatchView<'_>, i: usize) -> Option<PassCut>;
 }
 
 /// What the goal-side cover found, for the debug trace.
@@ -554,7 +565,7 @@ pub trait DecisionModule: Send + Sync + 'static {
         choice: Choice,
     ) -> CarrierPlan;
     /// Carrier `c`'s pass to `j`, given the aim draw.
-    fn pass_kick(&self, view: &MatchView<'_>, c: usize, j: usize, aim: f64) -> Kick;
+    fn pass_kick(&self, view: &MatchView<'_>, c: usize, j: usize, aim: f64, weight: f64) -> Kick;
     /// Carrier `c`'s clearance, wide or not, given the aim draw.
     fn clear_kick(&self, view: &MatchView<'_>, c: usize, wide: bool, aim: f64) -> Kick;
     /// `true` when a shot at a goal `keeper` defends draws its side.

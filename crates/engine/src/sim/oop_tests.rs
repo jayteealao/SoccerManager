@@ -333,7 +333,7 @@ fn pass_noise_with(
     for &(stage, s) in stages {
         sim.stages[9].share[stage.index()] = s;
     }
-    let kick = crate::decision::DecisionV1.pass_kick(&sim.view(), 9, 10, 1.0);
+    let kick = crate::decision::DecisionV1.pass_kick(&sim.view(), 9, 10, 1.0, 0.5);
     let crate::decision::Kick::Pass { dir, .. } = kick else {
         panic!("a pass");
     };
@@ -512,6 +512,134 @@ fn a_press_resistant_dribbler_loses_fewer_running_tackles() {
         assert!(chance(1.5) < chance(1.0), "{stage:?}");
         assert!(chance(1.0) < chance(0.6), "{stage:?}");
     }
+}
+
+/// A pass just kicked by home carrier 9 at the centre: the ball `ahead` metres in front of
+/// him, running away at `speed`, team-mate 10 waiting 8 m ahead and away player `d` at `at`
+/// (written for the side attacking +x).
+fn pass_on_its_way(ahead: f64, speed: f64, d: usize, at: DVec2) -> Simulation {
+    let mut sim = scene();
+    clear(&mut sim);
+    let ax = sim.teams[0].attack_x;
+    sim.players[10].pos = DVec2::new(8.0 * ax, 0.0);
+    sim.players[d].pos = DVec2::new(at.x * ax, at.y);
+    sim.ball.pos = DVec2::new(ahead * ax, 0.0).extend(0.0);
+    sim.ball.vel = DVec2::new(speed * ax, 0.0).extend(0.0);
+    sim.carrier = None;
+    sim.last_kicker = Some(9);
+    sim.pass_in_flight = Some(0);
+    sim.possession_phase = Some(0);
+    sim
+}
+
+/// The kicker neither plays nor chases his own pass on its way: right after home carrier 9's
+/// short pass the ball is within his reach but running away from him, so he cannot touch it
+/// and his side's chaser is another player; once it has slowed to a pass's arrival speed, or
+/// comes back toward him, it is his again.
+#[test]
+fn a_passer_does_not_play_his_own_pass_on_its_way() {
+    use crate::modules::PossessionModule;
+    let far = PLAYERS_PER_TEAM + 9;
+    let best = |sim: &Simulation| {
+        crate::possession::PossessionV1
+            .loose_ball(&sim.view())
+            .and_then(|l| l.best)
+            .map(|(_, i)| i)
+    };
+    let sim = pass_on_its_way(0.4, 9.0, far, DVec2::new(-30.0, 20.0));
+    assert_eq!(best(&sim), None, "his own pass on its way");
+    let chasers = match crate::decision::DecisionV1.targets(&sim.view()).trace {
+        crate::modules::TargetsTrace::Loose { nearest, .. } => nearest,
+        _ => panic!("a loose ball"),
+    };
+    assert_ne!(chasers[0], 9, "he does not chase it");
+    let slow = pass_on_its_way(0.4, 2.0, far, DVec2::new(-30.0, 20.0));
+    assert_eq!(best(&slow), Some(9), "slowed to the arrival speed");
+    let back = pass_on_its_way(0.4, -9.0, far, DVec2::new(-30.0, 20.0));
+    assert_eq!(best(&back), Some(9), "coming back to him");
+}
+
+/// A defender in or near the lane of a short pass can cut it out as it passes him: his chance
+/// falls as the ball passes farther from him and as it runs faster; a ball beyond his reach,
+/// or faster than he can control, he can only block (a leg out); beyond his stretch he has no
+/// try. Every chance grows with his read of the pass (intercept see: anticipation leading) or
+/// his block (positioning leading). With the scale raised so the chance is certain, the
+/// defender in the lane wins the ball in play.
+#[test]
+fn a_defender_in_the_lane_can_cut_out_a_short_pass() {
+    use crate::contract::Stage;
+    use crate::modules::PossessionModule;
+    let d = PLAYERS_PER_TEAM + 9;
+    let cut = |off: f64, speed: f64, stage: Option<(Stage, f64)>| {
+        let mut sim = pass_on_its_way(3.05, speed, d, DVec2::new(3.0, off));
+        if let Some((stage, s)) = stage {
+            sim.stages[d].share[stage.index()] = s;
+        }
+        crate::possession::PossessionV1.pass_cut(&sim.view(), d)
+    };
+    let near = cut(0.2, 8.0, None).expect("in the lane");
+    assert!(near.control && near.chance > 0.0);
+    assert!(cut(0.6, 8.0, None).unwrap().chance < near.chance, "farther");
+    let fast = cut(0.2, 20.0, None).expect("a fast ball");
+    assert!(
+        !fast.control && fast.chance < near.chance,
+        "faster: a block"
+    );
+    let stretch = cut(1.5, 8.0, None).expect("within his stretch");
+    assert!(
+        !stretch.control && stretch.chance < near.chance,
+        "beyond his reach: a block"
+    );
+    assert!(cut(2.5, 8.0, None).is_none(), "beyond his stretch");
+    let read = |s: f64| {
+        cut(0.2, 8.0, Some((Stage::INTERCEPT_SEE, s)))
+            .unwrap()
+            .chance
+    };
+    assert!(read(0.8) > read(0.3), "reads the pass");
+    let block = |s: f64| {
+        cut(0.2, 20.0, Some((Stage::BLOCK_EXECUTE, s)))
+            .unwrap()
+            .chance
+    };
+    assert!(block(0.8) > block(0.3), "blocks it");
+    // In play: a certain cut wins the ball for the defender.
+    let mut sim = pass_on_its_way(3.05, 8.0, d, DVec2::new(3.0, 0.0));
+    sim.config.tuning.decision.pass_cut = 5.0;
+    let t = std::sync::Arc::clone(&sim.tuning);
+    sim.resolve_possession(&t);
+    assert_eq!(sim.carrier, Some(d));
+}
+
+/// The pressure on the passer spoils the weight of his pass as well as its direction: at the
+/// same pressure the pass of a passer with low resistance runs farther from its planned speed,
+/// for the same weight draw, than one with high resistance; free, the draw does not move it.
+#[test]
+fn a_pressed_pass_runs_too_hard_or_too_soft_by_the_passers_resistance() {
+    use crate::contract::Stage;
+    let speed = |opp: bool, s: f64, weight: f64| {
+        let mut sim = scene();
+        clear(&mut sim);
+        let ax = sim.teams[0].attack_x;
+        sim.players[10].pos = DVec2::new(12.0 * ax, 0.0);
+        if opp {
+            sim.players[PLAYERS_PER_TEAM + 2].pos = DVec2::new(2.0 * ax, 0.0);
+        }
+        for stage in [Stage::PASS_EXECUTE, Stage::PASS_PRESSURE] {
+            sim.stages[9].share[stage.index()] = s;
+        }
+        let crate::decision::Kick::Pass { speed, .. } =
+            crate::decision::DecisionV1.pass_kick(&sim.view(), 9, 10, 0.5, weight)
+        else {
+            panic!("a pass");
+        };
+        speed
+    };
+    assert_eq!(speed(false, 0.5, 1.0), speed(false, 0.5, 0.5), "free");
+    let error = |s: f64| (speed(true, s, 1.0) - speed(true, s, 0.5)).abs();
+    assert!(error(0.5) > 0.0);
+    assert!(error(0.3) > error(0.8), "lower resistance");
+    assert!(speed(true, 0.5, 0.0) < speed(true, 0.5, 0.5), "too soft");
 }
 
 /// The pressure model's touch: a slow ball near a home receiver. Receiving his side's pass

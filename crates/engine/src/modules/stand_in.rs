@@ -20,9 +20,10 @@ use super::{
     AiPlan, BallModule, CarrierPlan, ChangesModule, ClockModule, CommentaryHookModule, Contest,
     CrossContest, Crossing, DecisionHookModule, DecisionModule, Deflection, DisciplineModule,
     FatigueModule, FoulsModule, InjuriesModule, LooseBall, ManagerModule, MatchView, OffsideModule,
-    OptionDraft, OptionDraws, ParrySide, PeriodEnd, PossessionModule, PreMatchModule, Proposal,
-    ROSTER, RestartPass, RestartsModule, RuleHookModule, RulesModule, Scored, ShootoutLineup,
-    ShotDraws, ShotKind, ShotModule, SteeringModule, SubEntry, SubRequest, TackleChances, Targets,
+    OptionDraft, OptionDraws, ParrySide, PassCut, PeriodEnd, PossessionModule, PreMatchModule,
+    Proposal, ROSTER, RestartPass, RestartsModule, RuleHookModule, RulesModule, Scored,
+    ShootoutLineup, ShotDraws, ShotKind, ShotModule, SteeringModule, SubEntry, SubRequest,
+    TackleChances, Targets,
 };
 use crate::ai::Setup;
 use crate::ball::Ball;
@@ -374,6 +375,9 @@ impl PossessionModule for StandIn<dyn PossessionModule> {
     fn tacklers(&self, view: &MatchView<'_>, c: usize) -> Option<u32> {
         self.0.tacklers(view, c)
     }
+    fn pass_cut(&self, view: &MatchView<'_>, i: usize) -> Option<PassCut> {
+        self.0.pass_cut(view, i)
+    }
 }
 
 impl DecisionModule for StandIn<dyn DecisionModule> {
@@ -407,8 +411,8 @@ impl DecisionModule for StandIn<dyn DecisionModule> {
     ) -> CarrierPlan {
         self.0.plan(view, c, options, choice)
     }
-    fn pass_kick(&self, view: &MatchView<'_>, c: usize, j: usize, aim: f64) -> Kick {
-        self.0.pass_kick(view, c, j, aim)
+    fn pass_kick(&self, view: &MatchView<'_>, c: usize, j: usize, aim: f64, weight: f64) -> Kick {
+        self.0.pass_kick(view, c, j, aim, weight)
     }
     fn clear_kick(&self, view: &MatchView<'_>, c: usize, wide: bool, aim: f64) -> Kick {
         self.0.clear_kick(view, c, wide, aim)

@@ -84,6 +84,7 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         chase_seen,
         restart_taker,
         clearers_tried,
+        cutters_tried,
         // Read by no play: it marks a half's walk-on due between the step that places the
         // kick-off and the driver that takes the walk-on before the record.
         walk_on_due: _,
@@ -201,6 +202,8 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     w.u32(*chase_seen);
     w.mark(Bytes, || "clearers_tried".into());
     w.u32(*clearers_tried);
+    w.mark(Bytes, || "cutters_tried".into());
+    w.u32(*cutters_tried);
     w.mark(Bytes, || "restart_taker".into());
     w.index(*restart_taker);
 

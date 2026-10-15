@@ -74,7 +74,11 @@ fn pass_cost(sim: &Simulation) -> f64 {
 fn pass_miss(sim: &Simulation) -> f64 {
     let (c, j) = (carrier(), index(0, 7));
     let view = sim.view();
-    let kick = sim.config().modules.decision.pass_kick(&view, c, j, 1.0);
+    let kick = sim
+        .config()
+        .modules
+        .decision
+        .pass_kick(&view, c, j, 1.0, 0.5);
     let line = engine::math::toward(view.player(c).pos, view.player(j).pos);
     angle(kick.flight().0, line)
 }

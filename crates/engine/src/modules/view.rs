@@ -337,6 +337,13 @@ impl<'a> MatchView<'a> {
         self.sim.clearers_tried
     }
 
+    /// The defenders (one bit per roster index) who already tried to cut out the pass in
+    /// flight.
+    #[inline]
+    pub fn cutters_tried(&self) -> u32 {
+        self.sim.cutters_tried
+    }
+
     /// The restart taker until his first kick.
     #[inline]
     pub fn restart_taker(&self) -> Option<usize> {

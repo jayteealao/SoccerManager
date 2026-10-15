@@ -568,6 +568,21 @@ pub struct DecisionWeights {
     #[serde(default)]
     #[garde(range(min = 0.0, max = 5.0))]
     pub touch_under_pressure: f64,
+    /// The weight error of a pressed pass: an outfield passer's pass runs too hard or too soft
+    /// by up to `pass_weight_under_pressure` times his pressure penalty of its speed (the same
+    /// penalty that widens its aim), so pressure spoils both the direction and the weight of a
+    /// pass. 0 (an older file) leaves every pass at its planned speed.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub pass_weight_under_pressure: f64,
+    /// The size of a defender's chance to cut out or block a pass in flight as it passes him
+    /// ([`crate::possession`]): his chance is `pass_cut` times his read of the pass (or his
+    /// block, for a ball too fast to control) times how close it passes him and how slow it is.
+    /// While a pass is in flight an opponent wins it only this way. 0 (an older file) keeps the
+    /// old rule: the nearest player within reach of a ball he can control wins it.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub pass_cut: f64,
     #[garde(range(min = -5.0, max = 5.0))]
     pub first_touch: f64,
     /// A clearance: the base, the bonus under pressure in the own third, and the base for
@@ -713,8 +728,10 @@ impl Default for Tuning {
                 dribble_space: 0.55,
                 shot_under_pressure: -0.8,
                 takeon_under_pressure: -0.8,
-                pass_under_pressure: 76.0,
+                pass_under_pressure: 33.0,
                 touch_under_pressure: 0.72,
+                pass_weight_under_pressure: 1.0,
+                pass_cut: 0.6,
                 first_touch: 0.6,
                 clear: -1.0,
                 clear_pressure: 1.2,

@@ -51,6 +51,8 @@ pub const MOVED_KEYS: &[Action] = &[
     Action::RestartWait,
     Action::QuickRestart,
     Action::TraitOverride,
+    Action::PassCut,
+    Action::PassWeight,
 ];
 
 /// What one module is.

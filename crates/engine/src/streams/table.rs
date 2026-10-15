@@ -19,7 +19,7 @@ pub const SQUAD_MAX: usize = crate::data::team::MAX_SQUAD;
 /// Player slots per action in the dense key index: two squads, then the match key.
 pub(crate) const SLOTS_PER_ACTION: usize = 2 * SQUAD_MAX + 1;
 
-/// Every possible key: 44 actions times 81 player slots.
+/// Every possible key: 46 actions times 81 player slots.
 pub const KEY_COUNT: usize = Action::ALL.len() * SLOTS_PER_ACTION;
 
 /// The part of the engine a draw belongs to; the number is its stream-id code.
@@ -124,11 +124,17 @@ pub enum Action {
     /// Whether a strong trait of play overrides an instruction at a moment that meets the
     /// override's conditions.
     TraitOverride,
+    /// Whether a defender cuts out (or blocks) the pass in flight as it passes him: one draw
+    /// per defender per flight.
+    PassCut,
+    /// The weight error of a pass: one draw with each pass's aim; a pressed passer's pass runs
+    /// too hard or too soft by it.
+    PassWeight,
 }
 
 impl Action {
     /// Every action in table order.
-    pub const ALL: [Action; 44] = [
+    pub const ALL: [Action; 46] = [
         Action::ShotScore,
         Action::PassScore,
         Action::DribbleScore,
@@ -173,6 +179,8 @@ impl Action {
         Action::RestartWait,
         Action::QuickRestart,
         Action::TraitOverride,
+        Action::PassCut,
+        Action::PassWeight,
     ];
 
     /// The action's table row.
@@ -216,7 +224,7 @@ use PlayerKind::{Actor, Match};
 use Subsystem::{Ball, Decision, Fatigue, Kick, Laws, Shootout};
 
 /// The stream-id table, one row per draw call in match play, in [`Action`] order.
-pub const TABLE: [Row; 44] = [
+pub const TABLE: [Row; 46] = [
     row(
         Action::ShotScore,
         Decision,
@@ -422,6 +430,15 @@ pub const TABLE: [Row; 44] = [
         Actor,
         Unscripted,
     ),
+    row(Action::PassCut, Ball, 14, "pass_cut", Actor, Unscripted),
+    row(
+        Action::PassWeight,
+        Kick,
+        8,
+        "pass_weight",
+        Actor,
+        Unscripted,
+    ),
 ];
 
 /// Who a key names: `team << 8 | squad index`, or [`PlayerKey::MATCH`].
@@ -569,7 +586,7 @@ const ACTION_SHIFT: u32 = 32;
 /// keeps the scheme id and updates its digest.
 pub const SCHEME_DIGESTS: [(u8, &str); 1] = [(
     1,
-    "229aa56bbc70f062a025e39b3ed1f0747ccec1634ff1f9d4bc447471f59121df",
+    "87d8d0a2f0ef24d273e48131a7d3973004353bfcd94be8cb10ab21b77000f3c6",
 )];
 
 /// The SHA-256, as lowercase hex, of what fixes `scheme`: the scheme id, every row (the
@@ -665,8 +682,8 @@ mod tests {
         assert_eq!(count(Class::Referee), 15);
         assert_eq!(count(Class::Injury), 2);
         // The restart wait and the quick restart are unscripted draws (25 before them, with the
-        // pace sprint and the trait override).
-        assert_eq!(count(Class::Unscripted), 27);
+        // pace sprint and the trait override), as are the pass cut and the pass weight.
+        assert_eq!(count(Class::Unscripted), 29);
         let mut codes: Vec<(u8, u8)> = TABLE.iter().map(|r| (r.subsystem as u8, r.code)).collect();
         codes.sort_unstable();
         codes.dedup();

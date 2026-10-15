@@ -285,6 +285,8 @@ fn a_team_keeps_its_phase_until_the_other_team_controls_the_ball() {
         }
     }
     sim.players[taker].pos = DVec2::new(8.0, -5.0);
+    // The passer does not chase his own pass: a home midfielder just behind it does.
+    sim.players[9].pos = DVec2::new(-8.0, -8.0);
     let t = std::sync::Arc::clone(&sim.tuning);
     // The home centre-back whose target the check reads stands at his place, behind the
     // pass: a player stranded far from play and from both his places heads for the nearer.

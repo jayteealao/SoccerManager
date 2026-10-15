@@ -224,7 +224,8 @@ impl Simulation {
             }
             CarrierPlan::Pass { j } => {
                 let aim = self.streams.draw(Key::player(Action::PassAim, carrier));
-                Some(decision.pass_kick(&self.view(), c, j, aim))
+                let weight = self.streams.draw(Key::player(Action::PassWeight, carrier));
+                Some(decision.pass_kick(&self.view(), c, j, aim, weight))
             }
             CarrierPlan::Clear { wide_chance } => {
                 let wide = wide_chance.is_some_and(|p| {

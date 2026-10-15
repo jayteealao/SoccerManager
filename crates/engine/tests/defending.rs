@@ -176,17 +176,22 @@ fn the_public_send_off_before_kick_off_plays_as_the_scene_one_and_validates() {
     };
     for seed in 1..=3 {
         for i in [11, 13, 21] {
+            // A scene treats the kick-off as open play, so the public call is compared on a
+            // scene too; the plain match below is the one the experiment plays.
             let mut scene = Scene::new(cards_off(seed)).sent_off(i).build();
             scene.run(&mut NullSink).unwrap();
+            let mut public = Scene::new(cards_off(seed)).build();
+            public.send_off_before_kickoff(i);
+            public.run(&mut NullSink).unwrap();
+            assert_eq!(
+                scene.summary().goals,
+                public.summary().goals,
+                "seed {seed}, player {i}"
+            );
             let mut sim = Simulation::new(cards_off(seed)).unwrap();
             sim.send_off_before_kickoff(i);
             let mut sink = VecSink::default();
             sim.run(&mut sink).unwrap();
-            assert_eq!(
-                scene.summary().goals,
-                sim.summary().goals,
-                "seed {seed}, player {i}"
-            );
             let events = sim.take_events();
             let validator =
                 Validator::for_match(sim.tuning().clone(), sim.team_timeline(), &events);

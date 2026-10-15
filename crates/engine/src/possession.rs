@@ -6,7 +6,7 @@
 use crate::contract::{ActionKind, HEAD_HEIGHT_M, Stage, curve};
 use crate::math::{DVec2, toward};
 use crate::modules::{
-    Contest, CrossContest, LooseBall, MatchView, ModuleCard, ParrySide, PossessionModule,
+    Contest, CrossContest, LooseBall, MatchView, ModuleCard, ParrySide, PassCut, PossessionModule,
 };
 use crate::sim::{WIDE_SPREAD, wide_of_goal};
 use crate::streams::Action;
@@ -53,6 +53,10 @@ impl PossessionModule for PossessionV1 {
 
     fn tacklers(&self, view: &MatchView<'_>, c: usize) -> Option<u32> {
         tacklers(view, c)
+    }
+
+    fn pass_cut(&self, view: &MatchView<'_>, i: usize) -> Option<PassCut> {
+        pass_cut(view, i)
     }
 }
 
@@ -211,6 +215,79 @@ fn clearance_line(view: &MatchView<'_>, i: usize, wide: bool) -> (DVec2, f64) {
     }
 }
 
+/// `true` while player `p` of the side without the ball wins a pass in flight only by cutting
+/// it out ([`pass_cut`]): the cut is on (`decision.pass_cut` above 0), the pass of the other
+/// side is in flight and the ball still runs faster than a pass reaches its receiver
+/// (`pass_arrival_speed`): past that the pass has run out, the ball is loose for both sides and
+/// the nearest player within reach takes it. A keeper claims as before.
+#[inline]
+fn cut_only(view: &MatchView<'_>, p: &crate::player::Player, keeper: bool, speed: f64) -> bool {
+    !keeper
+        && view.tuning().decision.pass_cut > 0.0
+        && view.pass_in_flight().is_some_and(|team| team != p.team)
+        && speed > view.tuning().pass_arrival_speed
+}
+
+/// How far a defender stretches to block a pass, as a multiple of his reach for a ball he
+/// controls (`reach_radius` times his intercept factor): a leg out, not a touch he keeps.
+pub const BLOCK_STRETCH: f64 = 2.0;
+
+/// Defender `i`'s try to cut out the pass in flight, as it passes him. He tries once per
+/// flight, on the first tick the ball is within his stretch ([`BLOCK_STRETCH`] times his reach
+/// for a ball he controls: `reach_radius` times his intercept factor), under his reach height,
+/// still running faster than a pass's arrival speed and no longer coming closer to him. His chance is
+/// `decision.pass_cut` x twice his stage share (1 for a player rated 10) x how close it passes
+/// him (1 at his feet, 0 at the edge of his stretch) x its pace against what he can control
+/// (1 up to `control_speed` times his receive factor, then the square of that speed over the
+/// ball's). A ball within his reach that he can control he reads and takes (the intercept see
+/// stage: anticipation leading; above head height, the header stage), an interception; any
+/// other he can only block (the block execute stage: positioning leading), a deflection.
+fn pass_cut(view: &MatchView<'_>, i: usize) -> Option<PassCut> {
+    let t = view.tuning();
+    let scale = t.decision.pass_cut;
+    let passing = view.pass_in_flight()?;
+    let p = view.player(i);
+    if scale <= 0.0
+        || p.team == passing
+        || !p.active()
+        || i == view.keeper(p.team)
+        || view.cutters_tried() & (1u32 << i) != 0
+    {
+        return None;
+    }
+    let ball = view.ball();
+    let speed = ball.speed();
+    if ball.pos.z > p.derived.reach_m || speed <= t.pass_arrival_speed {
+        return None;
+    }
+    let xy = ball.xy();
+    let k = &p.derived.knobs;
+    let reach = t.reach_radius * k.intercept;
+    let stretch = reach * BLOCK_STRETCH;
+    let d = (p.pos - xy).length();
+    if d >= stretch || DVec2::new(ball.vel.x, ball.vel.y).dot(p.pos - xy) > 0.0 {
+        return None;
+    }
+    let controls = t.control_speed * k.receive;
+    let control = d < reach && speed <= controls;
+    let s = view.skills(i);
+    let stage = if !control {
+        Stage::BLOCK_EXECUTE
+    } else if ball.pos.z > HEAD_HEIGHT_M {
+        Stage::HEADER_EXECUTE
+    } else {
+        Stage::INTERCEPT_SEE
+    };
+    let share = s.share(stage);
+    let ratio = (controls / speed).min(1.0);
+    let pace = ratio * ratio;
+    let close = 1.0 - d / stretch;
+    Some(PassCut {
+        chance: (scale * 2.0 * share * close * pace).clamp(0.0, 1.0),
+        control,
+    })
+}
+
 /// The loose ball as every reach test of one tick reads it: its place on the ground, its
 /// height and its speed, each worked out once.
 #[derive(Clone, Copy)]
@@ -218,6 +295,25 @@ struct BallAt {
     xy: DVec2,
     z: f64,
     speed: f64,
+    /// The ball's velocity along the ground.
+    vel: DVec2,
+}
+
+/// `true` while the ball at `ball_xy` moving at `ball_vel` along the ground is still on its way
+/// from player `p`, who kicked it last: it is faster than a pass reaches its receiver
+/// (`pass_arrival_speed`) and not coming back toward him. A kicker neither plays nor chases his
+/// own kick on its way; once it has slowed to a pass's arrival speed, or comes back to him (a
+/// rebound), he may.
+#[inline]
+pub(crate) fn leaving_kicker(
+    view: &MatchView<'_>,
+    p: &crate::player::Player,
+    ball_xy: DVec2,
+    ball_vel: DVec2,
+) -> bool {
+    view.last_kicker() == Some(p.id)
+        && ball_vel.length() > view.tuning().pass_arrival_speed
+        && ball_vel.dot(p.pos - ball_xy) <= 0.0
 }
 
 /// How far player `p` reaches a ball at `ball.xy` and height `ball.z`, or `None` when he
@@ -244,6 +340,9 @@ fn reach(
     if !keeper && ball.speed > t.control_speed * k.receive {
         return None;
     }
+    if cut_only(view, p, keeper, ball.speed) {
+        return None;
+    }
     let reach = if keeper {
         let lofted = ball.z > HEAD_HEIGHT_M
             && view
@@ -255,7 +354,7 @@ fn reach(
         reach_radius * k.intercept
     };
     let d = (p.pos - ball.xy).length();
-    if d >= reach {
+    if d >= reach || leaving_kicker(view, p, ball.xy, ball.vel) {
         return None;
     }
     // The pressure model: an outfield receiver of his side's pass reaches the ball only within
@@ -304,6 +403,7 @@ fn loose_ball(view: &MatchView<'_>, reach_radius: f64) -> Option<LooseBall> {
         xy: ball.xy(),
         z: ball.pos.z,
         speed: ball.speed(),
+        vel: DVec2::new(ball.vel.x, ball.vel.y),
     };
     let fast = at.speed > t.control_speed;
     let keepers = [view.keeper(0), view.keeper(1)];
@@ -409,6 +509,7 @@ pub const POSSESSION_V1_CARD: ModuleCard = ModuleCard {
         "control_speed",
         "control_cooldown_ticks",
         "decision.touch_under_pressure",
+        "decision.pass_cut",
         "tackle_reach",
         "keeper_catch_chance",
         "crossbar_height",
@@ -433,6 +534,7 @@ const POSSESSION_KEYS: &[Action] = &[
     Action::CrossWide,
     Action::KeeperCatch,
     Action::Header,
+    Action::PassCut,
 ];
 
 /// A faulty possession module for the gate tests: an outfield player reaches a loose ball
@@ -480,6 +582,10 @@ impl PossessionModule for PossessionFaulty {
 
     fn tacklers(&self, view: &MatchView<'_>, c: usize) -> Option<u32> {
         tacklers(view, c)
+    }
+
+    fn pass_cut(&self, view: &MatchView<'_>, i: usize) -> Option<PassCut> {
+        pass_cut(view, i)
     }
 }
 

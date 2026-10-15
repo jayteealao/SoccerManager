@@ -92,9 +92,9 @@ fn sequences(keys: &[Key], skip: Option<Key>, extra: usize) -> Vec<Vec<u64>> {
 #[test]
 fn extra_draws_on_one_key_leave_every_other_key_unchanged() {
     let keys = sample_keys();
-    // 5 match rows and 39 player rows (the restart wait and the quick restart added two, the
-    // trait override one).
-    assert_eq!(keys.len(), 5 + 2 * 39);
+    // 5 match rows and 41 player rows (the restart wait and the quick restart added two, the
+    // trait override one, the pass cut and the pass weight two).
+    assert_eq!(keys.len(), 5 + 2 * 41);
     let control = sequences(&keys, None, 0);
     for (x, &key) in keys.iter().enumerate() {
         let disturbed = sequences(&keys, Some(key), 100);
@@ -267,16 +267,17 @@ fn the_golden_file_records_the_scheme_this_build_plays() {
 }
 
 /// The fixtures that reach every subsystem: seed 42, and a knockout match without a script
-/// pack that goes to extra time and a shoot-out (seed 9, the lowest that does; seed 1 until
+/// pack that goes to extra time and a shoot-out (seed 4, the lowest that does; seed 1 until
 /// the running pace lifted on a counter rather than with the press, seed 4 until opponents
 /// walked round the restart spot, seed 2 until tempo became patience and the mentality an
-/// appetite for risk, seed 8 until the AI sides started in the style their staff picks).
+/// appetite for risk, seed 8 until the AI sides started in the style their staff picks, seed 9
+/// until defenders could cut out passes).
 fn counter_fixtures() -> [Fixture; 2] {
     [
         Fixture::seed(42),
         Fixture {
             pack: None,
-            ..Fixture::knockout(9)
+            ..Fixture::knockout(4)
         },
     ]
 }

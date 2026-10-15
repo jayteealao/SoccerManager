@@ -188,15 +188,15 @@ fn every_action_and_event_kind_maps_to_a_point() {
     for kind in EngineEventKind::ALL {
         assert!(!trace::points_of_event(kind).is_empty(), "{kind:?}");
     }
-    assert_eq!(Point::ALL.len(), 39);
+    assert_eq!(Point::ALL.len(), 40);
     assert_eq!(Point::ALL.iter().filter(|p| p.is_decision()).count(), 10);
     let names: std::collections::BTreeSet<_> = Point::ALL.iter().map(|p| p.name()).collect();
-    assert_eq!(names.len(), 39, "every point has its own name");
+    assert_eq!(names.len(), 40, "every point has its own name");
     assert_eq!(
         Action::ALL.iter().filter(|a| trace::is_chance(**a)).count(),
-        // The quick restart and the trait override are chances; the restart wait is a drawn
-        // length, not one.
-        23
+        // The quick restart, the trait override and the pass cut are chances; the restart
+        // wait and the pass weight are drawn values, not chances.
+        24
     );
 }
 

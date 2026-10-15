@@ -764,7 +764,15 @@ impl DecisionModule for DecisionV1 {
                         lagged(p, anchors[i])
                     };
                     let d = (p.pos - ball_xy).length();
-                    if i != keepers[p.team] && d < nearest_dist[p.team] {
+                    // The kicker does not chase his own kick while it leaves him: his side's
+                    // next nearest player goes for it.
+                    let leaving = crate::possession::leaving_kicker(
+                        view,
+                        p,
+                        ball_xy,
+                        DVec2::new(ball.vel.x, ball.vel.y),
+                    );
+                    if i != keepers[p.team] && !leaving && d < nearest_dist[p.team] {
                         nearest_dist[p.team] = d;
                         nearest[p.team] = i;
                     }
@@ -1378,7 +1386,7 @@ impl DecisionModule for DecisionV1 {
     /// noise grows by `decision.pass_under_pressure` times his penalty, the pressure intensity
     /// he feels (his read of the press) x the pass's difficulty (length, loft) x (1 - his pass
     /// resistance: passing, composure, vision and decisions).
-    fn pass_kick(&self, view: &MatchView<'_>, c: usize, j: usize, aim: f64) -> Kick {
+    fn pass_kick(&self, view: &MatchView<'_>, c: usize, j: usize, aim: f64, weight: f64) -> Kick {
         let t = view.tuning();
         let carrier = view.player(c);
         let mate_pos = view.player(j).pos;
@@ -1402,19 +1410,22 @@ impl DecisionModule for DecisionV1 {
         };
         let skill = execution(view, c, execute, pressure, under, penalty, foot);
         let noise = t.aim_noise * (1.5 - skill);
-        // The pressure model: an outfield passer's aim noise grows with his penalty.
-        let noise = match pressure {
+        // The pressure model: an outfield passer's penalty widens his aim noise and spoils the
+        // weight of his pass.
+        let penalty = match pressure {
             Some(ps) => {
                 let stages = view.skills(c);
                 let read = crate::pressure::read(stages);
                 let intensity = crate::pressure::felt(view.players(), carrier, read);
                 let resistance = crate::pressure::pass_resistance(stages, execute, ps);
                 let difficulty = crate::pressure::pass_difficulty(d, kind != PassKind::Pass);
-                let penalty = crate::pressure::penalty(intensity, difficulty, resistance);
-                noise * (1.0 + t.decision.pass_under_pressure * penalty)
+                crate::pressure::penalty(intensity, difficulty, resistance)
             }
-            None => noise,
+            None => 0.0,
         };
+        let noise = noise * (1.0 + t.decision.pass_under_pressure * penalty);
+        // Too hard or too soft by up to the weight scale times the penalty.
+        let weight = 1.0 + t.decision.pass_weight_under_pressure * penalty * (2.0 * weight - 1.0);
         let dir = rotate(line, map_range(-noise, noise, aim));
         let lofted = if d > 25.0 { 3.0 + d * 0.08 } else { 0.0 };
         // The cross type (hook `cross.trajectory`): a driven cross stays on the ground, a
@@ -1427,7 +1438,7 @@ impl DecisionModule for DecisionV1 {
         } else {
             3.0 + d * 0.08
         };
-        let speed = kick_speed(d, loft, t);
+        let speed = (kick_speed(d, loft, t) * weight.max(0.0)).min(t.pass_max_speed);
         Kick::Pass { dir, speed, loft }
     }
 
@@ -2449,6 +2460,7 @@ pub const DECISION_V1_CARD: ModuleCard = ModuleCard {
         Action::Lapse,
         Action::PaceSprint,
         Action::TraitOverride,
+        Action::PassWeight,
     ],
 };
 
