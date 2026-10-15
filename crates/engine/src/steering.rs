@@ -110,6 +110,26 @@ fn separations(players: &[Player], t: &Tuning) -> [DVec2; ROSTER] {
     push
 }
 
+/// The step aside of a player going `way` while the separation push `push` holds him back: the
+/// part of the push straight against his way, turned to his right. Separation alone pushes
+/// only along the line between two players, so two players walking at each other on one line
+/// (along a touchline, where both are clamped to the same line) would stop face to face for
+/// good; each stepping to his own right, they pass. Nothing when the push does not hold him
+/// back or he has nowhere to go.
+#[inline(always)]
+fn sidestep(way: DVec2, push: DVec2) -> DVec2 {
+    let speed = way.length();
+    if speed < 1e-9 {
+        return DVec2::ZERO;
+    }
+    let dir = way / speed;
+    let against = -push.dot(dir);
+    if against <= 0.0 {
+        return DVec2::ZERO;
+    }
+    DVec2::new(dir.y, -dir.x) * against
+}
+
 /// The velocity of player `i` after one tick of steering toward its target.
 pub fn next_velocity(players: &[Player], i: usize, t: &Tuning) -> DVec2 {
     steer(&players[i], separation(players, i, t), t)
@@ -125,7 +145,8 @@ fn steer(p: &Player, push: DVec2, t: &Tuning) -> DVec2 {
     let max_accel = p.max_accel();
     let max_decel = p.max_decel();
     // Arriving brakes over the distance his braking needs.
-    let desired = arrive(p.pos, p.target, max_speed, max_decel, t.arrive_radius) + push;
+    let way = arrive(p.pos, p.target, max_speed, max_decel, t.arrive_radius);
+    let desired = way + push + sidestep(way, push);
     let raw = desired - p.vel;
     // A change against his run is braking, which his agility sets; any other change is
     // acceleration. With both equal this is the one clamp it always was.
@@ -366,6 +387,41 @@ mod tests {
             high < low,
             "agility 18 stops in {high:.3} m, agility 5 in {low:.3} m"
         );
+    }
+
+    /// Two players walking at each other along the touchline, each to a place beyond the
+    /// other, step aside and pass: both reach their places. Without the step aside the
+    /// separation push holds them face to face on the line (the stall a substitute walking on
+    /// at halfway met a team-mate walking the other way during a dead ball).
+    #[test]
+    fn two_players_walking_at_each_other_on_the_touchline_pass() {
+        let t = Tuning::default();
+        let line = -Pitch::DEFAULT.half_width() + 0.5;
+        let mut a = player(0, DVec2::new(1.3, line), DVec2::new(18.9, line));
+        let mut b = player(1, DVec2::new(2.5, line), DVec2::new(0.9, line));
+        for p in [&mut a, &mut b] {
+            p.pace.speed = 2.0;
+        }
+        let mut players = vec![a, b];
+        let mut scratch = Vec::new();
+        for _ in 0..1_500 {
+            step_all(&mut players, &mut scratch, &t, &Pitch::DEFAULT);
+            resolve_overlaps(&mut players, &t, &Pitch::DEFAULT);
+        }
+        for p in &players {
+            assert!(
+                (p.pos - p.target).length() < 1.0,
+                "player {} stopped at {:?}, his place {:?}",
+                p.id,
+                p.pos,
+                p.target
+            );
+        }
+        // The step aside is to his right and only against a push that holds him back.
+        let way = DVec2::new(2.0, 0.0);
+        assert_eq!(sidestep(way, DVec2::new(-0.5, 0.0)), DVec2::new(0.0, -0.5));
+        assert_eq!(sidestep(way, DVec2::new(0.5, 0.3)), DVec2::ZERO);
+        assert_eq!(sidestep(DVec2::ZERO, DVec2::new(-0.5, 0.0)), DVec2::ZERO);
     }
 
     #[test]
