@@ -276,16 +276,19 @@ fn reach(
 }
 
 /// The pressure model's penalty of player `p`'s reception of a ball at `speed_share` of the
-/// fastest he controls: his intensity x the reception's difficulty (the ball's speed, facing
-/// his own goal) x (1 - his reception stage share, first touch leading).
+/// fastest he controls: the intensity he feels (his read of the press, anticipation leading)
+/// x the reception's difficulty (the ball's speed, facing his own goal, eased by his read) x
+/// (1 - his reception resistance: first touch, composure, strength and balance).
 pub fn reception_penalty(view: &MatchView<'_>, p: &crate::player::Player, speed_share: f64) -> f64 {
-    let intensity = crate::pressure::intensity(view.players(), p);
+    let stages = view.skills(p.id);
+    let read = crate::pressure::read(stages);
+    let intensity = crate::pressure::felt(view.players(), p, read);
     if intensity <= 0.0 {
         return 0.0;
     }
     let facing_back = (1.0 - p.facing.x * view.attack_x(p.team)) / 2.0;
-    let difficulty = crate::pressure::reception_difficulty(speed_share, facing_back);
-    let resistance = view.skills(p.id).share(Stage::RECEIVE_EXECUTE);
+    let difficulty = crate::pressure::reception_difficulty(speed_share, facing_back, read);
+    let resistance = crate::pressure::reception_resistance(stages);
     crate::pressure::penalty(intensity, difficulty, resistance)
 }
 

@@ -1787,10 +1787,13 @@ impl Simulation {
                 #[cfg(feature = "measures")]
                 {
                     let keeper = c == self.keeper(team);
+                    let pressed = !keeper && crate::decision::pressed(&self.view(), c);
                     if let Some(m) = self.measures.as_deref_mut() {
                         m.kicked_other();
                         if keeper {
                             m.keeper_cleared(team);
+                        } else {
+                            m.cleared(team, pressed);
                         }
                     }
                 }
@@ -1819,11 +1822,15 @@ impl Simulation {
                     let pressed = outfield && crate::decision::pressed(&self.view(), c);
                     let band =
                         crate::pressure::band(crate::decision::nearest_opponent_m(&self.view(), c));
+                    let squad = self.players[c].squad;
                     if let Some(m) = self.measures.as_deref_mut() {
+                        let long = m
+                            .planned_length(c)
+                            .is_some_and(|l| l >= crate::decision::LONG_BALL_M);
                         m.kicked_pass_lofted(c, team, loft);
                         m.pass_start(team, share);
                         if outfield {
-                            m.pass_pressed(team, pressed, band);
+                            m.pass_pressed(team, pressed, band, squad, long);
                         }
                     }
                 }

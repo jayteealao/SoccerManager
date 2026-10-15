@@ -201,6 +201,22 @@ pub enum PrimitivesAction {
         #[arg(long, value_name = "FILE")]
         out: Option<PathBuf>,
     },
+    /// Measure the spread of pressure resistance across the engine's players: pressed-against-
+    /// free pass completion, pressed-minus-free touch loss and the ball kept against tackles
+    /// while running, per player, at the default tactics.
+    Spread {
+        /// Matches to play (each club against its copy).
+        #[arg(long, default_value_t = 200)]
+        matches: u32,
+        #[arg(long, default_value_t = 9)]
+        seed: u64,
+        #[arg(long)]
+        jobs: Option<u32>,
+        #[arg(long, default_value_t = 90)]
+        minutes: u32,
+        #[arg(long, value_name = "FILE")]
+        out: Option<PathBuf>,
+    },
 }
 
 /// The hidden timing run of a matchday.

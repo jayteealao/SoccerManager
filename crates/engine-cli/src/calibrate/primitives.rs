@@ -37,7 +37,7 @@ use super::fixtures::{self, Leagues};
 
 /// The statistics the harness measures, in value order: the signature statistics, then the
 /// side's possessions and shots a match, which every step reports beside them.
-pub const STATS: [&str; 75] = [
+pub const STATS: [&str; 79] = [
     "passes_per_possession",
     "recycle_share",
     "turnovers_per_possession",
@@ -107,6 +107,10 @@ pub const STATS: [&str; 75] = [
     "touch_loss_2_3m",
     "touch_loss_3_5m",
     "touch_loss_5m_plus",
+    "free_long_share",
+    "pressed_long_share",
+    "free_long_clear_share",
+    "pressed_long_clear_share",
     "crosses",
     "entries",
     "final_third_possessions",
@@ -126,6 +130,10 @@ pub fn stat_index(name: &str) -> anyhow::Result<usize> {
         .iter()
         .position(|s| *s == name)
         .with_context(|| format!("the harness does not measure {name}"))
+}
+
+fn ratio_of(n: f64, d: f64) -> f64 {
+    ratio(n, d)
 }
 
 fn ratio(n: f64, d: f64) -> f64 {
@@ -235,6 +243,16 @@ pub fn side_stats(m: &MatchMeasures, sinks: &Sinks<'_>, team: usize) -> Stats {
         (f(s.band_lost[2]), f(s.band_touches[2])),
         (f(s.band_lost[3]), f(s.band_touches[3])),
         (f(s.band_lost[4]), f(s.band_touches[4])),
+        (f(s.pressure_long[0]), f(s.pressure_passes[0])),
+        (f(s.pressure_long[1]), f(s.pressure_passes[1])),
+        (
+            f(s.pressure_long[0] + s.pressure_clears[0]),
+            f(s.pressure_passes[0] + s.pressure_clears[0]),
+        ),
+        (
+            f(s.pressure_long[1] + s.pressure_clears[1]),
+            f(s.pressure_passes[1] + s.pressure_clears[1]),
+        ),
         (f(s.crosses), 1.0),
         (entries, 1.0),
         (f(s.final_third_possessions), 1.0),
@@ -1179,6 +1197,262 @@ pub fn reach(
     Ok(out)
 }
 
+/// The fewest actions a player needs in each state before his rates enter the spread, the
+/// thresholds of the real rows: pressed and free passes, pressed and free receptions, and
+/// tackles faced while running.
+pub const SPREAD_MIN: [u32; 5] = [40, 150, 30, 150, 15];
+
+/// The spread of one per-player rate across players: its quantiles (10, 25, 50, 75 and 90
+/// percent), its mean, its observed standard deviation, the mean sampling noise, and the
+/// spread left when the noise is taken out (method of moments), over `players` players.
+#[derive(Debug, Clone, Serialize)]
+pub struct Spread {
+    pub players: usize,
+    pub quantiles: [f64; 5],
+    pub mean: f64,
+    pub sd_observed: f64,
+    pub sd_noise: f64,
+    pub sd_true: f64,
+    /// The rate's least-squares slope on the player's resistance for the action, the spread
+    /// of that resistance across the players, and their product: the part of the rate's
+    /// spread the resistance carries.
+    pub resistance_slope: f64,
+    pub resistance_sd: f64,
+    pub resistance_part: f64,
+}
+
+/// The spread of `rates`, each a rate with its sampling variance and the player's resistance
+/// for the action.
+pub fn spread_of(rates: &[(f64, f64, f64)]) -> Spread {
+    let n = rates.len();
+    let rm = rates.iter().map(|r| r.2).sum::<f64>() / n.max(1) as f64;
+    let ym = rates.iter().map(|r| r.0).sum::<f64>() / n.max(1) as f64;
+    let sxx: f64 = rates.iter().map(|r| (r.2 - rm).powi(2)).sum();
+    let sxy: f64 = rates.iter().map(|r| (r.2 - rm) * (r.0 - ym)).sum();
+    let slope = if sxx > 0.0 { sxy / sxx } else { 0.0 };
+    let rsd = if n > 1 {
+        (sxx / (n - 1) as f64).sqrt()
+    } else {
+        0.0
+    };
+    let mut xs: Vec<f64> = rates.iter().map(|r| r.0).collect();
+    xs.sort_by(f64::total_cmp);
+    let q = |p: f64| {
+        if xs.is_empty() {
+            return f64::NAN;
+        }
+        let k = (xs.len() - 1) as f64 * p;
+        let lo = k.floor() as usize;
+        let hi = (lo + 1).min(xs.len() - 1);
+        xs[lo] + (xs[hi] - xs[lo]) * (k - lo as f64)
+    };
+    let mean = xs.iter().sum::<f64>() / n.max(1) as f64;
+    let obs = if n > 1 {
+        xs.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (n - 1) as f64
+    } else {
+        0.0
+    };
+    let noise = rates.iter().map(|r| r.1).sum::<f64>() / n.max(1) as f64;
+    Spread {
+        players: n,
+        quantiles: [q(0.1), q(0.25), q(0.5), q(0.75), q(0.9)],
+        mean,
+        sd_observed: obs.sqrt(),
+        sd_noise: noise.sqrt(),
+        sd_true: (obs - noise).max(0.0).sqrt(),
+        resistance_slope: slope,
+        resistance_sd: rsd,
+        resistance_part: slope * rsd,
+    }
+}
+
+/// The pressure spread across the engine's players: each player's pressed-against-free pass
+/// completion (ratio), his pressed-minus-free touch loss, and the share of tackles he keeps
+/// the ball against while running with it, over `setup.pairs` matches of the equal suite's
+/// clubs at the default tactics (each club against its copy), players pooled by club and
+/// squad place, with the real rows' action thresholds ([`SPREAD_MIN`]).
+pub fn pressure_spread(
+    content: &Content,
+    setup: &Setup,
+) -> anyhow::Result<(BTreeMap<&'static str, Spread>, BTreeMap<&'static str, f64>)> {
+    use engine::measures::PlayerPressure;
+    let content = harness_content(content);
+    let list = fixtures::fixtures(setup.pairs);
+    let next = AtomicUsize::new(0);
+    let pooled_players: Mutex<BTreeMap<(String, usize), PlayerPressure>> =
+        Mutex::new(BTreeMap::new());
+    // Each player's resistance for a pass, a reception and a dribble.
+    let resist: Mutex<BTreeMap<(String, usize), [f64; 3]>> = Mutex::new(BTreeMap::new());
+    let totals: Mutex<Stats> = Mutex::new([(0.0, 0.0); STATS.len()]);
+    let first_error: Mutex<Option<anyhow::Error>> = Mutex::new(None);
+    let threads = usize::try_from(setup.jobs.max(1))
+        .unwrap_or(1)
+        .min(list.len().max(1));
+    std::thread::scope(|scope| {
+        for _ in 0..threads {
+            let (list, next, pooled_players, first_error, content, totals, resist) = (
+                &list,
+                &next,
+                &pooled_players,
+                &first_error,
+                &content,
+                &totals,
+                &resist,
+            );
+            scope.spawn(move || {
+                let mut leagues = Leagues::new(setup.seed, content);
+                loop {
+                    let i = next.fetch_add(1, Ordering::Relaxed);
+                    let Some(f) = list.get(i) else { break };
+                    let [home, _] = leagues.teams(f);
+                    let club = home.club.id.clone();
+                    let mut away = home.clone();
+                    away.club.id = format!("{club}-b");
+                    let league = format!("league:{}", setup.seed.wrapping_add(u64::from(f.league)));
+                    let (_, seed) = fixtures::key_of(
+                        "primitives",
+                        &league,
+                        [&club, &club],
+                        ["pressure:spread", "pressure:spread"],
+                        i as u64,
+                    );
+                    let run =
+                        || -> anyhow::Result<([BTreeMap<usize, PlayerPressure>; 2], [Stats; 2])> {
+                            let defaults = Tactics::defaults(&content.tactics);
+                            let config =
+                                MatchConfig::new(seed, setup.minutes, content, [&home, &away])?
+                                    .with_ai_tactics(0, defaults)
+                                    .with_ai_tactics(1, defaults);
+                            let mut sim = Simulation::new(config)?;
+                            sim.with_measures();
+                            let note = |sim: &Simulation| {
+                                let mut r = resist.lock().unwrap_or_else(|e| e.into_inner());
+                                for (i, p) in sim.players().iter().enumerate() {
+                                    let k = sim.skills(i);
+                                    r.entry((club.clone(), p.squad)).or_insert([
+                                        engine::pressure::pass_resistance(
+                                            k,
+                                            engine::contract::Stage::PASS_EXECUTE,
+                                            engine::contract::Stage::PASS_PRESSURE,
+                                        ),
+                                        engine::pressure::reception_resistance(k),
+                                        engine::pressure::dribble_resistance(k),
+                                    ]);
+                                }
+                            };
+                            note(&sim);
+                            let mut sinks =
+                                FanoutSink::new(BlockHeightSink::default(), RunsSink::default());
+                            sim.run(&mut sinks)?;
+                            note(&sim);
+                            let (block, runs) = sinks.into_parts();
+                            let m = sim
+                                .measures()
+                                .context("a measures build counts the measures")?;
+                            let sinks = Sinks {
+                                block: &block,
+                                runs: &runs,
+                                goals: sim.summary().goals,
+                                fouls: sim.summary().fouls,
+                                yellows: sim.summary().yellow,
+                                reds: sim.summary().red,
+                                offsides: sim.summary().offsides,
+                                nineties: f64::from(setup.minutes) / 90.0,
+                            };
+                            Ok((
+                                m.players.clone(),
+                                [side_stats(m, &sinks, 0), side_stats(m, &sinks, 1)],
+                            ))
+                        };
+                    match run() {
+                        Ok((sides, stats)) => {
+                            {
+                                let mut t = totals.lock().unwrap_or_else(|e| e.into_inner());
+                                for side in stats {
+                                    for (acc, (n, d)) in t.iter_mut().zip(side) {
+                                        if n.is_finite() && d.is_finite() {
+                                            acc.0 += n;
+                                            acc.1 += d;
+                                        }
+                                    }
+                                }
+                            }
+                            let mut all = pooled_players.lock().unwrap_or_else(|e| e.into_inner());
+                            for side in sides {
+                                for (squad, p) in side {
+                                    let e = all.entry((club.clone(), squad)).or_default();
+                                    for k in 0..2 {
+                                        e.passes[k] += p.passes[k];
+                                        e.completed[k] += p.completed[k];
+                                        e.touches[k] += p.touches[k];
+                                        e.lost[k] += p.lost[k];
+                                    }
+                                    e.run_tackles += p.run_tackles;
+                                    e.run_lost += p.run_lost;
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            first_error
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .get_or_insert(e);
+                        }
+                    }
+                }
+            });
+        }
+    });
+    if let Some(e) = first_error.into_inner().unwrap_or_else(|e| e.into_inner()) {
+        return Err(e);
+    }
+    let all = pooled_players
+        .into_inner()
+        .unwrap_or_else(|e| e.into_inner());
+    let resist = resist.into_inner().unwrap_or_else(|e| e.into_inner());
+    let f = f64::from;
+    let (mut ratio, mut gap, mut keep) = (Vec::new(), Vec::new(), Vec::new());
+    for (key, p) in &all {
+        let Some(&[rp, rr, rd]) = resist.get(key) else {
+            continue;
+        };
+        let [np, nf] = [p.passes[1], p.passes[0]];
+        if np >= SPREAD_MIN[0] && nf >= SPREAD_MIN[1] {
+            let cp = f(p.completed[1]) / f(np);
+            let cf = f(p.completed[0]) / f(nf);
+            if cp > 0.0 && cf > 0.0 {
+                let r = cp / cf;
+                let var = r * r * ((1.0 - cp) / (f(np) * cp) + (1.0 - cf) / (f(nf) * cf));
+                ratio.push((r, var, rp));
+            }
+        }
+        let [tp, tf] = [p.touches[1], p.touches[0]];
+        if tp >= SPREAD_MIN[2] && tf >= SPREAD_MIN[3] {
+            let a = f(p.lost[1]) / f(tp);
+            let b = f(p.lost[0]) / f(tf);
+            gap.push((a - b, a * (1.0 - a) / f(tp) + b * (1.0 - b) / f(tf), rr));
+        }
+        if p.run_tackles >= SPREAD_MIN[4] {
+            let k = 1.0 - f(p.run_lost) / f(p.run_tackles);
+            keep.push((k, k * (1.0 - k) / f(p.run_tackles), rd));
+        }
+    }
+    let t = totals.into_inner().unwrap_or_else(|e| e.into_inner());
+    let means = STATS
+        .iter()
+        .zip(t)
+        .map(|(name, (n, d))| (*name, ratio_of(n, d)))
+        .collect();
+    Ok((
+        BTreeMap::from([
+            ("pressed_completion_ratio", spread_of(&ratio)),
+            ("touch_loss_gap", spread_of(&gap)),
+            ("run_tackle_keep_share", spread_of(&keep)),
+        ]),
+        means,
+    ))
+}
+
 /// The jobs of a run: the number given, else the logical cores.
 fn jobs(given: Option<u32>) -> u32 {
     given.unwrap_or_else(|| {
@@ -1314,6 +1588,26 @@ pub fn run(
             let ends = reach(content, primitive, &setup)?;
             emit(
                 &serde_json::json!({"kind": "primitives-reach", "primitive": primitive, "ends": ends}),
+                out.as_deref(),
+            )?;
+            Ok(0)
+        }
+        PrimitivesAction::Spread {
+            matches,
+            seed,
+            jobs: j,
+            minutes,
+            out,
+        } => {
+            let setup = Setup {
+                seed: *seed,
+                pairs: *matches,
+                minutes: *minutes,
+                jobs: jobs(*j),
+            };
+            let (spread, means) = pressure_spread(content, &setup)?;
+            emit(
+                &serde_json::json!({"kind": "pressure-spread", "matches": matches, "seed": seed, "spread": spread, "means": means}),
                 out.as_deref(),
             )?;
             Ok(0)

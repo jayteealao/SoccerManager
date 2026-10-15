@@ -15,12 +15,28 @@
 //! - **Penalty** of a pressed action = intensity x action difficulty x (1 - player
 //!   resistance). The difficulty of a pass grows with its length and when it is lofted; of a
 //!   reception, with the ball's speed against what the receiver can control and when he faces
-//!   his own goal. The resistance is the player's own stage share: passing and composure for
-//!   a pass, the reception stage (first touch leading) for a reception. The tuning's
-//!   `decision.pass_under_pressure` and `decision.touch_under_pressure` size the penalty so
-//!   that the engine's pressed-against-free gaps match the StatsBomb open data.
+//!   his own goal. The tuning's `decision.pass_under_pressure` and
+//!   `decision.touch_under_pressure` size the penalty so that the engine's pressed-against-free
+//!   gaps match the StatsBomb open data.
+//! - **Resistance** (0 to 1, 0.5 for a player rated 10 throughout) comes from the player's
+//!   attributes through the stages of the attribute contract, several stages per action, each
+//!   read where its main attribute leads it:
+//!   - receiving: first touch (receive execute), composure (dribble pressure: keeping the ball
+//!     with an opponent close), strength (shield execute) and balance (stay-up execute);
+//!   - passing: passing (the pass kind's execute stage), composure (its pressure stage),
+//!     vision (pass see) and decisions (pass choose: finding the safe option in time);
+//!   - dribbling: dribbling, agility and balance (dribble execute) and composure (dribble
+//!     pressure), the two stages the tackle contest on a running carrier reads
+//!     ([`crate::rules::fouls::running_win_chance`]), so a press-resistant dribbler keeps the
+//!     ball against more of the tackles a press brings.
+//! - **Read** of the press (anticipation, through the intercept see stage): a player who reads
+//!   the press sees a presser earlier. It scales the blind-side weight of each presser on him
+//!   ([`from_read`]) and, on a reception, the difficulty of facing his own goal (he sets his
+//!   body before the ball arrives); a player rated 10 reads as the observer does. The counts
+//!   (pressed, a pressure) read the observer's intensity, [`intensity`], the way the real data's
+//!   flag is an observer's: one definition, [`from_read`], with the neutral read.
 
-use crate::contract::PRESSED_M;
+use crate::contract::{PRESSED_M, Skills, Stage};
 use crate::player::Player;
 
 /// The distance, in metres, within which an opponent's distance share is full.
@@ -60,10 +76,28 @@ pub fn distance_share(d: f64) -> f64 {
     ((FAR_M - d) / (FAR_M - NEAR_M)).clamp(0.0, 1.0)
 }
 
-/// The pressure opponent `o` puts on player `p`, 0 to 1: his distance share, raised by his
-/// closing speed and by his angle from the player's facing.
+/// The read of a player rated 10, and of the observer the counts use: the blind-side weight
+/// and the facing difficulty as they stand.
+pub const NEUTRAL_READ: f64 = 0.5;
+
+/// How much of a weight a player with read `read` (0 to 1) feels: 1 at the neutral read,
+/// none at a full read, twice at none.
+#[inline]
+fn unread(read: f64) -> f64 {
+    2.0 * (1.0 - read.clamp(0.0, 1.0))
+}
+
+/// The pressure opponent `o` puts on player `p`, 0 to 1, as the observer sees it: his distance
+/// share, raised by his closing speed and by his angle from the player's facing.
 #[inline]
 pub fn from(p: &Player, o: &Player) -> f64 {
+    from_read(p, o, NEUTRAL_READ)
+}
+
+/// [`from`] for a player with read `read`: the blind-side weight scales by how little he
+/// reads the press ([`NEUTRAL_READ`] gives [`from`]).
+#[inline]
+pub fn from_read(p: &Player, o: &Player, read: f64) -> f64 {
     let gap = o.pos - p.pos;
     let d = gap.length();
     let near = distance_share(d);
@@ -74,19 +108,59 @@ pub fn from(p: &Player, o: &Player) -> f64 {
     let toward = if d > 1e-9 { gap / d } else { p.facing };
     let closing = ((p.vel - o.vel).dot(toward) / CLOSING_MPS).clamp(0.0, 1.0);
     let blind = ((1.0 - p.facing.dot(toward)) / 2.0).clamp(0.0, 1.0);
-    near * (1.0 + CLOSING_WEIGHT * closing + BLIND_WEIGHT * blind)
-        / (1.0 + CLOSING_WEIGHT + BLIND_WEIGHT)
+    let blind_weight = BLIND_WEIGHT * unread(read);
+    (near * (1.0 + CLOSING_WEIGHT * closing + blind_weight * blind)
+        / (1.0 + CLOSING_WEIGHT + BLIND_WEIGHT))
+        .min(1.0)
 }
 
-/// Player `p`'s pressure intensity, 0 to 1, from the active opponents among `players`.
+/// Player `p`'s pressure intensity, 0 to 1, from the active opponents among `players`, as the
+/// observer sees it (the counts read this).
 pub fn intensity(players: &[Player], p: &Player) -> f64 {
+    felt(players, p, NEUTRAL_READ)
+}
+
+/// The intensity player `p` with read `read` feels, 0 to 1: [`intensity`] with each presser's
+/// share from [`from_read`].
+pub fn felt(players: &[Player], p: &Player, read: f64) -> f64 {
     let mut free = 1.0;
     for o in players {
         if o.team != p.team && o.active() {
-            free *= 1.0 - from(p, o);
+            free *= 1.0 - from_read(p, o, read);
         }
     }
     1.0 - free
+}
+
+/// A player's read of the press: his intercept see stage share (anticipation leading).
+#[inline]
+pub fn read(s: Skills<'_>) -> f64 {
+    s.share(Stage::INTERCEPT_SEE)
+}
+
+/// The weights of a reception's resistance: first touch, composure, strength, balance.
+pub const RECEIVE_WEIGHTS: [f64; 4] = [0.4, 0.3, 0.15, 0.15];
+/// The weights of a pass's resistance: passing, composure, vision, decisions.
+pub const PASS_WEIGHTS: [f64; 4] = [0.35, 0.35, 0.15, 0.15];
+
+/// A reception's resistance: first touch (receive execute), composure (dribble pressure),
+/// strength (shield) and balance (stay-up).
+pub fn reception_resistance(s: Skills<'_>) -> f64 {
+    let [a, b, c, d] = RECEIVE_WEIGHTS;
+    a * s.share(Stage::RECEIVE_EXECUTE)
+        + b * s.share(Stage::DRIBBLE_PRESSURE)
+        + c * s.share(Stage::SHIELD_EXECUTE)
+        + d * s.share(Stage::STAY_UP_EXECUTE)
+}
+
+/// A pass's resistance: passing (the kind's `execute` stage), composure (its `pressure`
+/// stage), vision (pass see) and decisions (pass choose).
+pub fn pass_resistance(s: Skills<'_>, execute: Stage, pressure: Stage) -> f64 {
+    let [a, b, c, d] = PASS_WEIGHTS;
+    a * s.share(execute)
+        + b * s.share(pressure)
+        + c * s.share(Stage::PASS_SEE)
+        + d * s.share(Stage::PASS_CHOOSE)
 }
 
 /// `true` when player `p` is pressed: his intensity passes [`THRESHOLD`].
@@ -110,12 +184,13 @@ pub fn pass_difficulty(length: f64, lofted: bool) -> f64 {
 
 /// The difficulty of a reception: `speed_share` is the ball's speed over the fastest the
 /// receiver controls (0 to 1); `facing_back` is 0 facing the goal he attacks and 1 facing
-/// his own.
+/// his own; `read` is the receiver's read of the press, which sets his body before the ball
+/// arrives and so scales the facing term ([`NEUTRAL_READ`] leaves it as it stands).
 #[inline]
-pub fn reception_difficulty(speed_share: f64, facing_back: f64) -> f64 {
+pub fn reception_difficulty(speed_share: f64, facing_back: f64, read: f64) -> f64 {
     (RECEIVE_EASE
         + SPEED_DIFFICULTY * speed_share.clamp(0.0, 1.0)
-        + BACK_DIFFICULTY * facing_back.clamp(0.0, 1.0))
+        + BACK_DIFFICULTY * facing_back.clamp(0.0, 1.0) * unread(read))
     .min(1.0)
 }
 
@@ -201,12 +276,31 @@ mod tests {
     }
 
     #[test]
+    fn a_player_who_reads_the_press_feels_a_blind_side_presser_less() {
+        let p = player(0, 0.0, 0.0);
+        let behind = player(1, -2.0, 0.0);
+        let front = player(1, 2.0, 0.0);
+        let all = [p, behind];
+        // The observer and a player rated 10 feel the same.
+        assert_eq!(felt(&all, &p, NEUTRAL_READ), intensity(&all, &p));
+        assert!(felt(&all, &p, 0.9) < felt(&all, &p, NEUTRAL_READ));
+        assert!(felt(&all, &p, 0.1) > felt(&all, &p, NEUTRAL_READ));
+        // A presser straight in front is seen by everyone.
+        let ahead = [p, front];
+        assert_eq!(felt(&ahead, &p, 0.9), felt(&ahead, &p, 0.1));
+    }
+
+    #[test]
     fn longer_lofted_passes_and_fast_balls_to_a_turned_receiver_are_harder() {
         assert!(pass_difficulty(30.0, false) > pass_difficulty(8.0, false));
         assert!(pass_difficulty(20.0, true) > pass_difficulty(20.0, false));
         assert!(pass_difficulty(80.0, true) <= 1.0);
-        assert!(reception_difficulty(0.9, 0.0) > reception_difficulty(0.2, 0.0));
-        assert!(reception_difficulty(0.5, 1.0) > reception_difficulty(0.5, 0.0));
+        let n = NEUTRAL_READ;
+        assert!(reception_difficulty(0.9, 0.0, n) > reception_difficulty(0.2, 0.0, n));
+        assert!(reception_difficulty(0.5, 1.0, n) > reception_difficulty(0.5, 0.0, n));
+        // A receiver who reads the press sets his body: facing back costs him less.
+        assert!(reception_difficulty(0.5, 1.0, 0.9) < reception_difficulty(0.5, 1.0, n));
+        assert!(reception_difficulty(0.5, 1.0, 0.1) > reception_difficulty(0.5, 1.0, n));
     }
 
     #[test]

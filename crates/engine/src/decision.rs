@@ -1375,9 +1375,9 @@ impl DecisionModule for DecisionV1 {
     /// (passing, technique for a chip, crossing, a keeper's throwing or kicking), with the
     /// pressure stage when an opponent is close, and a chip the body cannot pull off loses
     /// its gate penalty. The pressure model ([`crate::pressure`]): an outfield passer's aim
-    /// noise grows by `decision.pass_under_pressure` times his penalty, his pressure
-    /// intensity x the pass's difficulty (length, loft) x (1 - his resistance, the mean of
-    /// the pass's execute and pressure stage shares).
+    /// noise grows by `decision.pass_under_pressure` times his penalty, the pressure intensity
+    /// he feels (his read of the press) x the pass's difficulty (length, loft) x (1 - his pass
+    /// resistance: passing, composure, vision and decisions).
     fn pass_kick(&self, view: &MatchView<'_>, c: usize, j: usize, aim: f64) -> Kick {
         let t = view.tuning();
         let carrier = view.player(c);
@@ -1405,9 +1405,10 @@ impl DecisionModule for DecisionV1 {
         // The pressure model: an outfield passer's aim noise grows with his penalty.
         let noise = match pressure {
             Some(ps) => {
-                let intensity = crate::pressure::intensity(view.players(), carrier);
                 let stages = view.skills(c);
-                let resistance = (stages.share(execute) + stages.share(ps)) / 2.0;
+                let read = crate::pressure::read(stages);
+                let intensity = crate::pressure::felt(view.players(), carrier, read);
+                let resistance = crate::pressure::pass_resistance(stages, execute, ps);
                 let difficulty = crate::pressure::pass_difficulty(d, kind != PassKind::Pass);
                 let penalty = crate::pressure::penalty(intensity, difficulty, resistance);
                 noise * (1.0 + t.decision.pass_under_pressure * penalty)

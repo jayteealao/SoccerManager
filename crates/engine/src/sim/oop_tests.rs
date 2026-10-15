@@ -305,6 +305,22 @@ fn pass_noise(
     composure: Option<f64>,
 ) -> f64 {
     use crate::contract::Stage;
+    let mut stages = Vec::new();
+    if let Some(s) = passing {
+        stages.push((Stage::PASS_EXECUTE, s));
+    }
+    if let Some(s) = composure {
+        stages.push((Stage::PASS_PRESSURE, s));
+    }
+    pass_noise_with(length, opps, &stages)
+}
+
+/// [`pass_noise`] with any of the passer's stage shares set.
+fn pass_noise_with(
+    length: f64,
+    opps: &[(DVec2, DVec2)],
+    stages: &[(crate::contract::Stage, f64)],
+) -> f64 {
     let mut sim = scene();
     clear(&mut sim);
     let ax = sim.teams[0].attack_x;
@@ -314,11 +330,8 @@ fn pass_noise(
         sim.players[o].pos = DVec2::new(at.x * ax, at.y);
         sim.players[o].vel = DVec2::new(vel.x * ax, vel.y);
     }
-    if let Some(s) = passing {
-        sim.stages[9].share[Stage::PASS_EXECUTE.index()] = s;
-    }
-    if let Some(s) = composure {
-        sim.stages[9].share[Stage::PASS_PRESSURE.index()] = s;
+    for &(stage, s) in stages {
+        sim.stages[9].share[stage.index()] = s;
     }
     let kick = crate::decision::DecisionV1.pass_kick(&sim.view(), 9, 10, 1.0);
     let crate::decision::Kick::Pass { dir, .. } = kick else {
@@ -407,6 +420,96 @@ fn each_reception_factor_moves_the_touch_its_way() {
         "better first touch"
     );
     assert!(penalty(0.3, false, None, 1.0) > base, "closer");
+}
+
+/// Each attribute of a pass's resistance narrows a pressed pass against the same pass free,
+/// at the same pressure: passing (the pass execute stage), composure (its pressure stage),
+/// vision (pass see) and decisions (pass choose). Anticipation (intercept see) lets the
+/// passer feel a presser on his blind side less, and changes nothing with the presser in
+/// front of him.
+#[test]
+fn each_resistance_attribute_narrows_a_pressed_pass() {
+    use crate::contract::Stage;
+    let still = DVec2::ZERO;
+    let ratio = |opp: (DVec2, DVec2), stage: Stage, s: f64| {
+        pass_noise_with(12.0, &[opp], &[(stage, s)]) / pass_noise_with(12.0, &[], &[(stage, s)])
+    };
+    let front = (DVec2::new(3.5, 0.0), still);
+    for stage in [
+        Stage::PASS_EXECUTE,
+        Stage::PASS_PRESSURE,
+        Stage::PASS_SEE,
+        Stage::PASS_CHOOSE,
+    ] {
+        assert!(
+            ratio(front, stage, 0.8) < ratio(front, stage, 0.3),
+            "{stage:?}"
+        );
+    }
+    let behind = (DVec2::new(-3.5, 0.0), still);
+    assert!(
+        ratio(behind, Stage::INTERCEPT_SEE, 0.8) < ratio(behind, Stage::INTERCEPT_SEE, 0.3),
+        "reads the blind side"
+    );
+    assert_eq!(
+        ratio(front, Stage::INTERCEPT_SEE, 0.8),
+        ratio(front, Stage::INTERCEPT_SEE, 0.3),
+        "nothing to read in front"
+    );
+}
+
+/// Each attribute of a reception's resistance lowers a pressed touch's penalty at the same
+/// pressure: first touch (receive execute), composure (dribble pressure), strength (shield)
+/// and balance (stay-up). Anticipation (intercept see) lowers it for a receiver facing his
+/// own goal with the opponent at his side: he feels the presser less and sets his body.
+#[test]
+fn each_resistance_attribute_lowers_a_pressed_touch() {
+    use crate::contract::Stage;
+    let penalty = |back: bool, stage: Stage, s: f64| {
+        let mut sim = scene();
+        clear(&mut sim);
+        let ax = sim.teams[0].attack_x;
+        if back {
+            sim.players[9].facing = DVec2::new(-ax, 0.0);
+        }
+        sim.players[PLAYERS_PER_TEAM + 9].pos = DVec2::new(0.0, 2.0);
+        sim.stages[9].share[stage.index()] = s;
+        crate::possession::reception_penalty(&sim.view(), &sim.players[9], 0.3)
+    };
+    for stage in [
+        Stage::RECEIVE_EXECUTE,
+        Stage::DRIBBLE_PRESSURE,
+        Stage::SHIELD_EXECUTE,
+        Stage::STAY_UP_EXECUTE,
+    ] {
+        assert!(
+            penalty(false, stage, 0.8) < penalty(false, stage, 0.3),
+            "{stage:?}"
+        );
+    }
+    assert!(
+        penalty(true, Stage::INTERCEPT_SEE, 0.8) < penalty(true, Stage::INTERCEPT_SEE, 0.3),
+        "reads the press"
+    );
+}
+
+/// A pressed carrier who dribbles out of the press loses fewer of the tackles it brings: a
+/// higher dribble execute stage (dribbling, agility, balance) or dribble pressure stage
+/// (composure) lowers the running tackle's win chance against him.
+#[test]
+fn a_press_resistant_dribbler_loses_fewer_running_tackles() {
+    use crate::contract::Stage;
+    let d = PLAYERS_PER_TEAM + 9;
+    for stage in [Stage::DRIBBLE_EXECUTE, Stage::DRIBBLE_PRESSURE] {
+        let chance = |raise: f64| {
+            let mut sim = scene();
+            sim.stages[9].f[stage.index()] *= raise;
+            let t = std::sync::Arc::clone(&sim.tuning);
+            crate::rules::fouls::running_win_chance(sim.skills(d), sim.skills(9), &t)
+        };
+        assert!(chance(1.5) < chance(1.0), "{stage:?}");
+        assert!(chance(1.0) < chance(0.6), "{stage:?}");
+    }
 }
 
 /// The pressure model's touch: a slow ball near a home receiver. Receiving his side's pass

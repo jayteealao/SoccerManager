@@ -397,6 +397,18 @@ impl Simulation {
                         .streams
                         .tested(Key::player(Action::Tackle, p), &[p_win, p_win + p_foul]);
                     let outcome = fouls.tackle_outcome(&chances, draw);
+                    #[cfg(feature = "measures")]
+                    {
+                        let carrier = &self.players[c];
+                        if carrier.vel.length() > crate::rules::fouls::RUNNING_SPEED {
+                            let lost =
+                                matches!(outcome, Tackle::Win | Tackle::Foul { ball_lost: true });
+                            let (team, squad) = (carrier.team, carrier.squad);
+                            if let Some(m) = self.measures.as_deref_mut() {
+                                m.run_tackle(team, squad, lost);
+                            }
+                        }
+                    }
                     #[cfg(feature = "sensitivity")]
                     if self.probe.is_some() {
                         self.probe_tackle(i, c, outcome);
@@ -633,8 +645,9 @@ impl Simulation {
         };
         let pressed = crate::decision::pressed(&self.view(), i);
         let band = crate::pressure::band(crate::decision::nearest_opponent_m(&self.view(), i));
+        let squad = self.players[i].squad;
         if let Some(m) = self.measures.as_deref_mut() {
-            m.received(team, pressed, band);
+            m.received(team, pressed, band, squad);
         }
     }
 
