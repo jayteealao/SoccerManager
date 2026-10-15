@@ -113,7 +113,7 @@ pub const SETTINGS_MAX: usize = 32;
 /// Where each plan input of a primitive is written: the block (a level block of the tactics
 /// file, or [`OWN`] for an input the primitive's own steps or choices hold), the field of each
 /// level, and the range the field allows.
-pub const INPUT_FIELDS: [(&str, &str, &str, f64, f64); 39] = [
+pub const INPUT_FIELDS: [(&str, &str, &str, f64, f64); 40] = [
     ("patience", "instructions.tempo", "value", -2.0, 2.0),
     ("loss_weight", "mentalities", "loss_weight", -5.0, 5.0),
     ("rest_defence", "mentalities", "rest_defence", 0.0, 10.0),
@@ -163,6 +163,13 @@ pub const INPUT_FIELDS: [(&str, &str, &str, f64, f64); 39] = [
         "press_count",
         0.0,
         4.0,
+    ),
+    (
+        "press_willingness",
+        "instructions.pressing",
+        "press_willingness",
+        -2.0,
+        2.0,
     ),
     (
         "block_depth",
@@ -515,6 +522,12 @@ pub fn level_value(schema: &TacticsSchema, input: &str, level: usize) -> Option<
             .levels
             .get(level)
             .map(|l| f64::from(l.press_count)),
+        "press_willingness" => schema
+            .instructions
+            .pressing
+            .levels
+            .get(level)
+            .map(|l| l.press_willingness),
         "block_depth" => schema
             .instructions
             .line_height
@@ -576,6 +589,13 @@ pub fn set_level_value(schema: &mut TacticsSchema, input: &str, level: usize, va
             .levels
             .get_mut(level)
             .map(|l| l.press_count = value.round().clamp(0.0, 4.0) as u8)
+            .is_some(),
+        "press_willingness" => schema
+            .instructions
+            .pressing
+            .levels
+            .get_mut(level)
+            .map(|l| l.press_willingness = value)
             .is_some(),
         "block_depth" => schema
             .instructions

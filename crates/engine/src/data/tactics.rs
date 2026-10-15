@@ -428,6 +428,11 @@ pub struct PressLevel {
     pub press_count: u8,
     #[garde(range(min = 0.1, max = 3.0))]
     pub press_distance_scale: f64,
+    /// The willingness a presser of this level adds to his tackle decision (hook
+    /// `tackle.decide`, its second input); 0 when absent.
+    #[serde(default)]
+    #[garde(range(min = -2.0, max = 2.0))]
+    pub press_willingness: f64,
 }
 
 impl Named for PressLevel {

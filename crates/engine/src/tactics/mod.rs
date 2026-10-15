@@ -373,6 +373,9 @@ pub struct TeamPlan {
     /// Opponents who press this team's opponents' carrier, and from how far.
     pub press_count: usize,
     pub press_distance: f64,
+    /// Pressing's third input: the willingness a presser (a player on a press job) adds to
+    /// his tackle decision; 0 at the default level.
+    pub press_willingness: f64,
     /// The widest gap between two neighbours in the back line, from the tuning.
     pub back_line_gap: f64,
     /// The back line's own share of the line's organisation beside the keeper's, from the
@@ -551,6 +554,7 @@ impl TeamPlan {
             wide_target: ins.width.levels[level(WIDTH)].wide_target,
             press_count: usize::from(press.press_count),
             press_distance: t.press_distance * press.press_distance_scale,
+            press_willingness: press.press_willingness,
             back_line_gap: t.back_line_gap,
             organise_back_line: t.contract.hooks().organise_back_line,
             patience: ins.tempo.levels[level(TEMPO)].value,
@@ -603,6 +607,7 @@ impl TeamPlan {
             wide_target: 0.0,
             press_count: 2,
             press_distance: t.press_distance,
+            press_willingness: 0.0,
             back_line_gap: t.back_line_gap,
             organise_back_line: t.contract.hooks().organise_back_line,
             patience: 0.0,

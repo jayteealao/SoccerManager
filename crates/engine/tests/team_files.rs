@@ -748,6 +748,11 @@ fn a_version_1_tactics_file_converts_to_the_shipped_version_3_file() {
     }
     // The out-of-position margin of the AI lineup is optional too: 0 when absent.
     shipped.ai.out_of_position_margin = 0.0;
+    // So is a pressing level's presser willingness: the three levels the file holds take 0,
+    // and the two outer levels version 6 adds take theirs.
+    for level in &mut shipped.instructions.pressing.levels[1..4] {
+        level.press_willingness = 0.0;
+    }
     assert_eq!(converted.value, shipped);
 }
 

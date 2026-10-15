@@ -173,11 +173,11 @@
     "pressing": {
       "default": "mid",
       "levels": [
-        { "name": "very_low", "press_count": 1, "press_distance_scale": 0.6 },
-        { "name": "low", "press_count": 1, "press_distance_scale": 0.8 },
-        { "name": "mid", "press_count": 2, "press_distance_scale": 1.0 },
-        { "name": "high", "press_count": 3, "press_distance_scale": 1.3 },
-        { "name": "very_high", "press_count": 4, "press_distance_scale": 1.6 }
+        { "name": "very_low", "press_count": 1, "press_distance_scale": 0.6, "press_willingness": -1.0 },
+        { "name": "low", "press_count": 1, "press_distance_scale": 0.8, "press_willingness": -0.5 },
+        { "name": "mid", "press_count": 2, "press_distance_scale": 1.0, "press_willingness": 0.0 },
+        { "name": "high", "press_count": 3, "press_distance_scale": 1.3, "press_willingness": 0.5 },
+        { "name": "very_high", "press_count": 4, "press_distance_scale": 1.6, "press_willingness": 1.0 }
       ]
     },
     "width": {
@@ -1709,7 +1709,8 @@
       "default": "mid",
       "inputs": [
         { "input": "press_distance", "hook": "press.distance" },
-        { "input": "press_count", "hook": "press.count" }
+        { "input": "press_count", "hook": "press.count" },
+        { "input": "press_willingness", "hook": "tackle.decide" }
       ],
       "signature": [
         { "stat": "ppda", "direction": "down" }

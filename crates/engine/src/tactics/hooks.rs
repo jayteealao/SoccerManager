@@ -306,7 +306,8 @@ pub const HOOKS: [Hook; 48] = [
         kind: HookKind::Threshold,
         input: "tackle_willingness",
         site: "decision.rs: a defender in reach tackles when the win chance, less the danger-weighted \
-               foul cost, plus this willingness is above 0",
+               foul cost, plus this willingness is above 0; a presser adds his pressing level's \
+               willingness (second input)",
     },
     Hook {
         name: "tackle.foul_risk",
@@ -344,11 +345,12 @@ pub const HOOKS: [Hook; 48] = [
 ];
 
 /// Hooks that read a second plan input beside their first: the keeper's chase range reads
-/// both line-height switches, and width spreads the shape and weighs a pass to a wide
-/// team-mate.
-pub const SECOND_INPUTS: [(&str, &str); 2] = [
+/// both line-height switches, width spreads the shape and weighs a pass to a wide team-mate,
+/// and the tackle decision of a presser adds his pressing level's willingness.
+pub const SECOND_INPUTS: [(&str, &str); 3] = [
     ("keeper.chase_range", "keeper_stay_off"),
     ("shape.width", "wide_target"),
+    ("tackle.decide", "press_willingness"),
 ];
 
 /// The hook named `name`.

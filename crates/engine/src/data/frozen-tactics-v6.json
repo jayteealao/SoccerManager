@@ -4,12 +4,14 @@
       {
         "name": "very_low",
         "press_count": 1,
-        "press_distance_scale": 0.6
+        "press_distance_scale": 0.6,
+        "press_willingness": -1.0
       },
       {
         "name": "very_high",
         "press_count": 4,
-        "press_distance_scale": 1.6
+        "press_distance_scale": 1.6,
+        "press_willingness": 1.0
       }
     ],
     "line_height": [
@@ -37,6 +39,10 @@
         {
           "input": "press_count",
           "hook": "press.count"
+        },
+        {
+          "input": "press_willingness",
+          "hook": "tackle.decide"
         }
       ],
       "signature": [

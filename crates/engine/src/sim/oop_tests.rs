@@ -1080,3 +1080,35 @@ fn a_pass_from_the_own_area_looks_past_a_screened_team_mate() {
     );
     assert!(outside.abs() < 0.05, "{outside}");
 }
+
+/// Pressing's presser willingness: a defender on a press job adds his pressing level's
+/// willingness to his tackle decision, so a lower pressing level's presser declines more of
+/// the tackles a side's default would take and a higher level's takes more; a defender who is
+/// not pressing reads his side's tackling willingness alone.
+#[test]
+fn a_presser_tackles_with_his_pressing_levels_willingness() {
+    use crate::decision::tackle_decision;
+    use crate::modules::TackleChances;
+    use crate::pace::Job;
+    let d = PLAYERS_PER_TEAM + 9;
+    let mut sim = press_scene(9, d, DVec2::new(0.0, 0.0), 0.5);
+    // A tackle the default side just takes: its win chance a little above the foul's cost.
+    let close = TackleChances {
+        p_win: 0.016,
+        p_foul: 0.1,
+        ball_loss: 0.5,
+    };
+    let edge = TackleChances {
+        p_win: 0.010,
+        ..close
+    };
+    assert_eq!(tackle_decision(&sim.view(), d, 9, close), Some(close));
+    assert_eq!(tackle_decision(&sim.view(), d, 9, edge), None);
+    sim.teams[1].plan.press_willingness = -1.0;
+    sim.players[d].pace.job = Job::Press;
+    assert_eq!(tackle_decision(&sim.view(), d, 9, close), None);
+    sim.teams[1].plan.press_willingness = 1.0;
+    assert_eq!(tackle_decision(&sim.view(), d, 9, edge), Some(edge));
+    sim.players[d].pace.job = Job::Follow;
+    assert_eq!(tackle_decision(&sim.view(), d, 9, edge), None);
+}

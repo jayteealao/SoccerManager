@@ -1946,11 +1946,17 @@ pub fn tackle_decision(
     let s = (from_own / pitch.length()).clamp(0.0, 1.0);
     let danger = (1.0 - s) * (1.0 - s);
     let cost = TACKLE_FOUL_COST * chances.p_foul * (1.0 + danger);
+    // A presser (a player on a press job) adds his pressing level's willingness to his side's
+    // tackling willingness (hook `tackle.decide`, its second input; 0 at the default level).
+    let willingness = plan.tackle_willingness
+        + if view.player(tackler).pace.job == crate::pace::Job::Press {
+            plan.press_willingness
+        } else {
+            0.0
+        };
     // The log of the win chance over the cost, plus the willingness, is above 0 when the win
     // chance is above the cost scaled by e to the minus willingness (1 at the default).
-    if chances.p_win <= 0.0
-        || (cost > 0.0 && chances.p_win <= cost * math::exp(-plan.tackle_willingness))
-    {
+    if chances.p_win <= 0.0 || (cost > 0.0 && chances.p_win <= cost * math::exp(-willingness)) {
         return None;
     }
     if plan.tackle_risk == 0.0 || chances.p_foul <= 0.0 || chances.p_foul >= 1.0 {
