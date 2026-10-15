@@ -342,8 +342,9 @@ fn pass_noise_with(
 
 /// Each factor of the pressure model moves a pass's penalty its way (every scene stays below
 /// the pressed threshold, so only the graded penalty differs): a nearer opponent, a second
-/// one, one closing on the passer, one on his blind side, a longer pass and lower composure
-/// each widen the pass; with no opponent within the far distance the pass is as free.
+/// one, one closing on the passer, one on his blind side, a shorter pass (the real data's
+/// pressed passes lose most when short) and lower composure each widen the pass; with no
+/// opponent within the far distance the pass is as free.
 #[test]
 fn each_pressure_factor_moves_a_pass_its_way() {
     let still = DVec2::ZERO;
@@ -380,7 +381,8 @@ fn each_pressure_factor_moves_a_pass_its_way() {
     let ratio = |length: f64| {
         pass_noise(length, &[front(3.5)], None, None) / pass_noise(length, &[], None, None)
     };
-    assert!(ratio(24.0) > ratio(8.0), "longer pass");
+    assert!(ratio(8.0) > ratio(24.0), "shorter pass");
+    assert!(ratio(8.0) > ratio(36.0), "shorter pass than a long ball");
     let composed = |s: f64| {
         pass_noise(12.0, &[front(3.5)], None, Some(s)) / pass_noise(12.0, &[], None, Some(s))
     };

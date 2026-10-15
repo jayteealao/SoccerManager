@@ -13,9 +13,10 @@
 //!   it. The pressure counts, the press triggers' counts and the counter-press counts read
 //!   this one rule.
 //! - **Penalty** of a pressed action = intensity x action difficulty x (1 - player
-//!   resistance). The difficulty of a pass grows with its length and when it is lofted; of a
-//!   reception, with the ball's speed against what the receiver can control and when he faces
-//!   his own goal. The tuning's `decision.pass_under_pressure` and
+//!   resistance). The difficulty of a pass follows the real pressed-against-free completion
+//!   ratio by its length ([`PASS_DIFFICULTY`]: a short pass under pressure suffers most, a long
+//!   ball least) and grows when it is lofted; of a reception, with the ball's speed against
+//!   what the receiver can control and when he faces his own goal. The tuning's `decision.pass_under_pressure` and
 //!   `decision.touch_under_pressure` size the penalty so that the engine's pressed-against-free
 //!   gaps match the StatsBomb open data.
 //! - **Resistance** (0 to 1, 0.5 for a player rated 10 throughout) comes from the player's
@@ -56,10 +57,15 @@ pub const BLIND_WEIGHT: f64 = 0.5;
 pub const THRESHOLD: f64 =
     (FAR_M - PRESSED_M) / (FAR_M - NEAR_M) / (1.0 + CLOSING_WEIGHT + BLIND_WEIGHT);
 
-/// A pass's difficulty: [`PASS_EASE`] for a pass at the feet, growing straight to 1 at
-/// [`LONG_PASS_M`]; a lofted pass (a chip or a cross) adds [`LOFT_DIFFICULTY`]; at most 1.
-pub const PASS_EASE: f64 = 0.4;
-pub const LONG_PASS_M: f64 = 40.0;
+/// A pass's difficulty by its length, at the middle of each length band (5, 15, 25 and 35 m;
+/// straight between, flat outside): the real loss of completion under pressure in the band,
+/// `1 - pressed / free`, over the loss in the shortest band. StatsBomb open data (World Cup
+/// 2022, Euro 2020, Euro 2024, Bundesliga 2023/24; outfield open-play passes by
+/// `under_pressure`): ratios 0.810 (under 10 m), 0.890 (10 to 20 m), 0.856 (20 to 30 m) and
+/// 0.904 (from 30 m), so a short pressed pass is the hardest and a long ball the easiest.
+pub const PASS_DIFFICULTY: [f64; 4] = [1.0, 0.577, 0.759, 0.507];
+/// The extra difficulty of a lofted pass (a chip or a cross) over one along the ground of the
+/// same length; the difficulty is at most 1.
 pub const LOFT_DIFFICULTY: f64 = 0.2;
 
 /// A reception's difficulty: [`RECEIVE_EASE`] for a slow ball to a receiver facing play,
@@ -182,11 +188,18 @@ pub fn presses(p: &Player, o: &Player) -> bool {
     o.team != p.team && o.active() && from(p, o) > THRESHOLD
 }
 
-/// The difficulty of a pass `length` metres long, `lofted` or along the ground.
+/// The difficulty of a pass `length` metres long, `lofted` or along the ground: the length
+/// bands' [`PASS_DIFFICULTY`] between their middles, plus [`LOFT_DIFFICULTY`] when lofted.
 #[inline]
 pub fn pass_difficulty(length: f64, lofted: bool) -> f64 {
     let loft = if lofted { LOFT_DIFFICULTY } else { 0.0 };
-    (PASS_EASE + (1.0 - PASS_EASE) * (length / LONG_PASS_M).clamp(0.0, 1.0) + loft).min(1.0)
+    let t = PASS_DIFFICULTY;
+    // The position among the band middles, 0 at 5 m to 3 at 35 m.
+    let x = ((length - 5.0) / 10.0).clamp(0.0, 3.0);
+    // The float-to-int cast truncates a value from 0 to 3.
+    let i = (x as usize).min(2);
+    let f = x - i as f64;
+    (t[i] + (t[i + 1] - t[i]) * f + loft).min(1.0)
 }
 
 /// The difficulty of a reception: `speed_share` is the ball's speed over the fastest the
@@ -298,8 +311,13 @@ mod tests {
     }
 
     #[test]
-    fn longer_lofted_passes_and_fast_balls_to_a_turned_receiver_are_harder() {
-        assert!(pass_difficulty(30.0, false) > pass_difficulty(8.0, false));
+    fn short_and_lofted_passes_and_fast_balls_to_a_turned_receiver_are_harder() {
+        // A short pass under pressure is the hardest, a long ball the easiest, as in the data.
+        assert!(pass_difficulty(6.0, false) > pass_difficulty(15.0, false));
+        assert!(pass_difficulty(6.0, false) > pass_difficulty(40.0, false));
+        assert!(pass_difficulty(25.0, false) > pass_difficulty(40.0, false));
+        assert_eq!(pass_difficulty(2.0, false), PASS_DIFFICULTY[0]);
+        assert_eq!(pass_difficulty(60.0, false), PASS_DIFFICULTY[3]);
         assert!(pass_difficulty(20.0, true) > pass_difficulty(20.0, false));
         assert!(pass_difficulty(80.0, true) <= 1.0);
         let n = NEUTRAL_READ;
