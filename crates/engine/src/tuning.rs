@@ -583,6 +583,15 @@ pub struct DecisionWeights {
     #[serde(default)]
     #[garde(range(min = 0.0, max = 5.0))]
     pub pass_cut: f64,
+    /// The size of a defender's contest of a take-on ([`crate::possession`]): a defender in
+    /// front of a carrier who runs with the ball meets him once as he comes within the
+    /// pressed distance, and wins the ball with `take_on_contest` times the running tackle
+    /// contest of the two players, scaled by the angle he meets him at, how square he
+    /// stands and the pace the carrier runs at him with. 0 (an older file) leaves only the
+    /// tackles within reach.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub take_on_contest: f64,
     #[garde(range(min = -5.0, max = 5.0))]
     pub first_touch: f64,
     /// A clearance: the base, the bonus under pressure in the own third, and the base for
@@ -732,6 +741,7 @@ impl Default for Tuning {
                 touch_under_pressure: 0.72,
                 pass_weight_under_pressure: 1.0,
                 pass_cut: 0.6,
+                take_on_contest: 3.7,
                 first_touch: 0.6,
                 clear: -1.0,
                 clear_pressure: 1.2,

@@ -53,6 +53,7 @@ pub const MOVED_KEYS: &[Action] = &[
     Action::TraitOverride,
     Action::PassCut,
     Action::PassWeight,
+    Action::TakeOn,
 ];
 
 /// What one module is.

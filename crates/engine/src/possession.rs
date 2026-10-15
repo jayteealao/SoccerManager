@@ -8,6 +8,7 @@ use crate::math::{DVec2, toward};
 use crate::modules::{
     Contest, CrossContest, LooseBall, MatchView, ModuleCard, ParrySide, PassCut, PossessionModule,
 };
+use crate::rules::fouls::{RUNNING_SPEED, running_win_chance};
 use crate::sim::{WIDE_SPREAD, wide_of_goal};
 use crate::streams::Action;
 
@@ -57,6 +58,10 @@ impl PossessionModule for PossessionV1 {
 
     fn pass_cut(&self, view: &MatchView<'_>, i: usize) -> Option<PassCut> {
         pass_cut(view, i)
+    }
+
+    fn take_on(&self, view: &MatchView<'_>, c: usize, i: usize) -> Option<f64> {
+        take_on(view, c, i)
     }
 }
 
@@ -288,6 +293,57 @@ fn pass_cut(view: &MatchView<'_>, i: usize) -> Option<PassCut> {
     })
 }
 
+/// How far, as a multiple of `tackle_reach`, a defender goal-side of a running carrier meets
+/// him in a take-on: the pressed distance at the default reach.
+pub const TAKE_ON_STRETCH: f64 = 2.5;
+
+/// Defender `i`'s contest of a take-on by carrier `c`, who runs with the ball. He meets him
+/// once, on the first tick that he stands goal-side of him within [`TAKE_ON_STRETCH`] times
+/// `tackle_reach`, and not again until he has left that distance; the keeper does not, nor a
+/// defender a foul still holds back. These are the opponents a take-on beats when it passes
+/// them. His chance is `decision.take_on_contest` x twice the running tackle contest of the
+/// two (his tackle stage against the carrier's dribble side, anchored on the even tackle: 0.5
+/// between two players rated 10 at the default `tackle_win_base`) x the angle the carrier
+/// comes at him (`(1 + cos) / 2` of the angle between his run and the line to the defender: 1
+/// running straight at him, 0.5 across him, 0 straight away) x how square he stands (`(1 -
+/// cos) / 2` of his facing against that line: 1 facing the carrier, 0 with his back to him) x
+/// the pace (1 when the carrier does not close on him, falling to 0 as he closes at twice the
+/// defender's top speed).
+fn take_on(view: &MatchView<'_>, c: usize, i: usize) -> Option<f64> {
+    let t = view.tuning();
+    let scale = t.decision.take_on_contest;
+    if scale <= 0.0 {
+        return None;
+    }
+    let carrier = view.player(c);
+    let speed = carrier.vel.length();
+    let p = view.player(i);
+    if speed <= RUNNING_SPEED
+        || !p.active()
+        || p.team == carrier.team
+        || i == view.keeper(p.team)
+        || view.tick() < p.foul_ready
+        || view.duelled() & (1u32 << i) != 0
+    {
+        return None;
+    }
+    let to = p.pos - carrier.pos;
+    let d = to.length();
+    if d <= 0.0
+        || d >= t.tackle_reach * TAKE_ON_STRETCH
+        || to.x * view.attack_x(carrier.team) <= 0.0
+    {
+        return None;
+    }
+    let line = to / d;
+    let angle = (1.0 + (carrier.vel / speed).dot(line)) / 2.0;
+    let square = (1.0 - p.facing.dot(line)) / 2.0;
+    let closing = (carrier.vel - p.vel).dot(line).max(0.0);
+    let pace = (1.0 - closing / (2.0 * p.max_speed())).clamp(0.0, 1.0);
+    let contest = 2.0 * running_win_chance(view.skills(i), view.skills(c), t);
+    Some((scale * contest * angle * square * pace).clamp(0.0, 1.0))
+}
+
 /// The loose ball as every reach test of one tick reads it: its place on the ground, its
 /// height and its speed, each worked out once.
 #[derive(Clone, Copy)]
@@ -510,6 +566,7 @@ pub const POSSESSION_V1_CARD: ModuleCard = ModuleCard {
         "control_cooldown_ticks",
         "decision.touch_under_pressure",
         "decision.pass_cut",
+        "decision.take_on_contest",
         "tackle_reach",
         "keeper_catch_chance",
         "crossbar_height",
@@ -535,6 +592,7 @@ const POSSESSION_KEYS: &[Action] = &[
     Action::KeeperCatch,
     Action::Header,
     Action::PassCut,
+    Action::TakeOn,
 ];
 
 /// A faulty possession module for the gate tests: an outfield player reaches a loose ball
@@ -586,6 +644,10 @@ impl PossessionModule for PossessionFaulty {
 
     fn pass_cut(&self, view: &MatchView<'_>, i: usize) -> Option<PassCut> {
         pass_cut(view, i)
+    }
+
+    fn take_on(&self, view: &MatchView<'_>, c: usize, i: usize) -> Option<f64> {
+        take_on(view, c, i)
     }
 }
 

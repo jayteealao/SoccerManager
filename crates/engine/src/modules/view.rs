@@ -344,6 +344,13 @@ impl<'a> MatchView<'a> {
         self.sim.cutters_tried
     }
 
+    /// The defenders (one bit per roster index) who already met the carrier in a take-on and
+    /// have not left the pressed distance of him since.
+    #[inline]
+    pub fn duelled(&self) -> u32 {
+        self.sim.duelled
+    }
+
     /// The restart taker until his first kick.
     #[inline]
     pub fn restart_taker(&self) -> Option<usize> {

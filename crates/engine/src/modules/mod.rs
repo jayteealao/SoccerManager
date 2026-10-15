@@ -409,6 +409,9 @@ pub trait PossessionModule: Send + Sync + 'static {
     /// Defender `i`'s try to cut out the pass in flight as it passes him, or `None` when he
     /// may not try on this tick.
     fn pass_cut(&self, view: &MatchView<'_>, i: usize) -> Option<PassCut>;
+    /// Defender `i`'s chance to win the ball from carrier `c` as he takes him on, or `None`
+    /// when he does not meet him on this tick.
+    fn take_on(&self, view: &MatchView<'_>, c: usize, i: usize) -> Option<f64>;
 }
 
 /// What the goal-side cover found, for the debug trace.

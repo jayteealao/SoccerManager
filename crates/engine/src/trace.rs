@@ -178,7 +178,7 @@ impl Trace {
     }
 }
 
-/// `true` for the 24 actions whose draw is tested against a probability. The other 22 are
+/// `true` for the 25 actions whose draw is tested against a probability. The other 22 are
 /// value draws: score noise, aims, angles, lofts, the keeper's dive, form, added time, the
 /// restart wait and the pass weight. The list is outside the stream table, so the scheme digest does not change.
 pub fn is_chance(action: Action) -> bool {
@@ -206,7 +206,8 @@ pub fn is_chance(action: Action) -> bool {
         | Action::PaceSprint
         | Action::QuickRestart
         | Action::TraitOverride
-        | Action::PassCut => true,
+        | Action::PassCut
+        | Action::TakeOn => true,
         Action::FormMatch | Action::FormPeriod => false,
         Action::ShotScore
         | Action::PassScore
@@ -284,11 +285,13 @@ pub enum Point {
     TraitOverride,
     /// A defender tried to cut out or block the pass in flight as it passed him.
     PassCut,
+    /// A defender met a running carrier in a take-on.
+    TakeOn,
 }
 
 impl Point {
-    /// Every point: 10 decision points, then 30 rule outcomes.
-    pub const ALL: [Point; 40] = [
+    /// Every point: 10 decision points, then 31 rule outcomes.
+    pub const ALL: [Point; 41] = [
         Point::Carrier,
         Point::RestartPass,
         Point::Press,
@@ -329,6 +332,7 @@ impl Point {
         Point::Form,
         Point::TraitOverride,
         Point::PassCut,
+        Point::TakeOn,
     ];
 
     /// The point's name in the trace file.
@@ -374,6 +378,7 @@ impl Point {
             Point::Form => "form",
             Point::TraitOverride => "trait_override",
             Point::PassCut => "pass_cut",
+            Point::TakeOn => "take_on",
         }
     }
 
@@ -443,6 +448,7 @@ pub fn points_of(action: Action) -> &'static [Point] {
         Action::RestartWait | Action::QuickRestart => &[Point::DeadBall],
         Action::TraitOverride => &[Point::TraitOverride],
         Action::PassCut => &[Point::PassCut],
+        Action::TakeOn => &[Point::TakeOn],
         // Drawn with the pass's aim.
         Action::PassWeight => &[Point::Carrier],
     }

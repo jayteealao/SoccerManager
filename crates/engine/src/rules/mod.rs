@@ -299,6 +299,7 @@ impl Simulation {
         self.restart_taker = None;
         self.clearers_tried = 0;
         self.cutters_tried = 0;
+        self.duelled = 0;
         self.end_shot();
         let restarts = self.config.modules.restarts;
         for i in 0..self.players.len() {
@@ -815,6 +816,7 @@ impl Simulation {
         self.restart_taker = None;
         self.clearers_tried = 0;
         self.cutters_tried = 0;
+        self.duelled = 0;
         self.end_shot();
         let since = self.tick + 1;
         let restarts = self.config.modules.restarts;
@@ -1345,6 +1347,7 @@ impl Simulation {
         self.restart_taker = None;
         self.clearers_tried = 0;
         self.cutters_tried = 0;
+        self.duelled = 0;
         self.end_shot();
         let since = self.tick + 1;
         let delay = self

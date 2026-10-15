@@ -202,6 +202,7 @@ impl Simulation {
                 self.pass_in_flight = None;
                 self.clearers_tried = 0;
                 self.cutters_tried = 0;
+                self.duelled = 0;
                 self.keeper_beaten = false;
                 self.summary.clearances[cross.team] += 1;
                 self.tally(i, Count::Clearance);
@@ -260,9 +261,61 @@ impl Simulation {
                 self.deflected_by(i);
                 self.pass_in_flight = None;
                 self.cutters_tried = 0;
+                self.duelled = 0;
                 self.keeper_beaten = false;
             }
             return true;
+        }
+        false
+    }
+
+    /// Each defender the possession module names meets running carrier `c` in a take-on: one
+    /// draw per meeting, and a defender who wins takes the ball (a tackle won). A defender
+    /// who has left the pressed distance of the carrier may meet him again. Returns `true`
+    /// when a defender won the ball.
+    fn try_take_on(&mut self, c: usize, t: &Tuning) -> bool {
+        let possession = self.config.modules.possession;
+        let reach = t.tackle_reach * crate::possession::TAKE_ON_STRETCH;
+        for i in 0..self.players.len() {
+            if self.duelled & (1u32 << i) != 0
+                && (self.players[i].pos - self.players[c].pos).length() >= reach
+            {
+                self.duelled &= !(1u32 << i);
+            }
+            let Some(chance) = possession.take_on(&self.view(), c, i) else {
+                continue;
+            };
+            self.duelled |= 1u32 << i;
+            let p = crate::streams::PlayerKey::of(&self.players[i]);
+            let won = self
+                .streams
+                .tested(Key::player(Action::TakeOn, p), &[chance])
+                < chance;
+            #[cfg(feature = "measures")]
+            {
+                self.measure_tackle(i, c);
+                let (team, squad) = (self.players[c].team, self.players[c].squad);
+                if let Some(m) = self.measures.as_deref_mut() {
+                    m.run_tackle(team, squad, won);
+                }
+            }
+            #[cfg(feature = "sensitivity")]
+            if self.probe.is_some() {
+                self.probe_tackle(i, c, if won { Tackle::Win } else { Tackle::Miss });
+            }
+            if self.trace_on() {
+                self.trace_point(
+                    Point::TakeOn,
+                    json!({"defender": i, "carrier": c, "chance": chance, "won": won}),
+                );
+            }
+            if won {
+                self.tally(i, Count::TackleWon);
+                self.mood_event(i, crate::sim::mood::MoodEvent::DuelWon);
+                self.mood_event(c, crate::sim::mood::MoodEvent::DuelLost);
+                self.gain(i, t);
+                return true;
+            }
         }
         false
     }
@@ -436,6 +489,9 @@ impl Simulation {
                 }
             }
             Some(c) => {
+                if self.try_take_on(c, t) {
+                    return;
+                }
                 let Some(mut mask) = possession.tacklers(&self.view(), c) else {
                     return;
                 };
@@ -572,6 +628,7 @@ impl Simulation {
         }
         self.clearers_tried = 0;
         self.cutters_tried = 0;
+        self.duelled = 0;
         if self.restart_taker != Some(i) {
             self.restart_taker = None;
         }

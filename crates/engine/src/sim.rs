@@ -748,6 +748,9 @@ pub struct Simulation {
     /// The defenders (one bit per roster index) who have already tried to cut out the pass in
     /// flight. Cleared with a kick, a gain and with `pass_in_flight`.
     pub(crate) cutters_tried: u32,
+    /// The defenders (one bit per roster index) who met the carrier in a take-on and have not
+    /// left the pressed distance of him since. Cleared when the ball changes feet.
+    pub(crate) duelled: u32,
     /// `true` from the placement of a half's kick-off until the walk-on to it is taken
     /// ([`Simulation::take_walk_on`]): the walk-on is shown before the half's first record and
     /// is not match time. No play reads it, and a snapshot is written after it is taken.
@@ -929,6 +932,7 @@ impl Simulation {
             restart_taker: None,
             clearers_tried: 0,
             cutters_tried: 0,
+            duelled: 0,
             shot_in_flight: None,
             shot_on_target: false,
             shot_quality: 0.0,
@@ -1721,6 +1725,7 @@ impl Simulation {
         self.heavy_mask = 0;
         self.clearers_tried = 0;
         self.cutters_tried = 0;
+        self.duelled = 0;
         // A kick starts a new flight: each keeper meets its loose ball afresh.
         self.chase_seen = 0;
         if let Some(c) = self.carrier {

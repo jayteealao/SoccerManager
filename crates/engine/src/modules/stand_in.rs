@@ -378,6 +378,9 @@ impl PossessionModule for StandIn<dyn PossessionModule> {
     fn pass_cut(&self, view: &MatchView<'_>, i: usize) -> Option<PassCut> {
         self.0.pass_cut(view, i)
     }
+    fn take_on(&self, view: &MatchView<'_>, c: usize, i: usize) -> Option<f64> {
+        self.0.take_on(view, c, i)
+    }
 }
 
 impl DecisionModule for StandIn<dyn DecisionModule> {

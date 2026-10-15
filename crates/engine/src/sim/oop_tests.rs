@@ -514,6 +514,93 @@ fn a_press_resistant_dribbler_loses_fewer_running_tackles() {
     }
 }
 
+/// Home carrier 9 at the centre running at `speed` toward the goal he attacks, the ball at his
+/// feet, and away player `d` at `at` facing `facing` (both written for the side attacking +x);
+/// everyone else far away.
+fn running_at(speed: f64, d: usize, at: DVec2, facing: DVec2) -> Simulation {
+    let mut sim = scene();
+    clear(&mut sim);
+    let ax = sim.teams[0].attack_x;
+    sim.carrier = Some(9);
+    sim.control_since = 0;
+    sim.possession_phase = Some(0);
+    sim.last_touch = Some(0);
+    sim.players[9].vel = DVec2::new(speed * ax, 0.0);
+    sim.ball.pos = DVec2::new(0.3 * ax, 0.0).extend(0.0);
+    sim.ball.vel = DVec2::new(speed * ax, 0.0).extend(0.0);
+    sim.players[d].pos = DVec2::new(at.x * ax, at.y);
+    sim.players[d].facing = DVec2::new(facing.x * ax, facing.y);
+    sim
+}
+
+/// A defender in front of a carrier who runs with the ball meets him in a take-on once he is
+/// within the pressed distance: his chance is highest straight in the carrier's path, standing
+/// square to him, against a carrier who does not run at him fast; it falls at an angle, with
+/// his back turned and as the carrier closes faster; level with or behind the carrier, beyond
+/// the pressed distance, against a walking carrier, or once already met, there is no contest.
+/// The tackler's tackle stage raises it and the carrier's dribble stage lowers it. With the
+/// scale raised so the chance is certain, the defender takes the ball in play.
+#[test]
+fn a_defender_in_front_contests_a_take_on_by_angle_stance_pace_and_attributes() {
+    use crate::contract::Stage;
+    use crate::modules::PossessionModule;
+    let d = PLAYERS_PER_TEAM + 4;
+    let facing = DVec2::new(-1.0, 0.0);
+    let meet = |sim: &Simulation| crate::possession::PossessionV1.take_on(&sim.view(), 9, d);
+    let square = meet(&running_at(3.0, d, DVec2::new(2.0, 0.0), facing)).expect("in his path");
+    assert!(square > 0.0);
+    let angled = meet(&running_at(3.0, d, DVec2::new(1.4, 1.4), facing)).expect("at an angle");
+    assert!(angled < square, "at an angle");
+    assert!(
+        meet(&running_at(3.0, d, DVec2::new(0.0, 2.0), facing)).is_none(),
+        "level with him"
+    );
+    assert!(
+        meet(&running_at(3.0, d, DVec2::new(-2.0, 0.0), facing)).is_none(),
+        "behind him"
+    );
+    assert!(
+        meet(&running_at(3.0, d, DVec2::new(3.0, 0.0), facing)).is_none(),
+        "beyond the pressed distance"
+    );
+    assert!(
+        meet(&running_at(1.0, d, DVec2::new(2.0, 0.0), facing)).is_none(),
+        "a walking carrier"
+    );
+    let side_on = meet(&running_at(
+        3.0,
+        d,
+        DVec2::new(2.0, 0.0),
+        DVec2::new(0.0, 1.0),
+    ))
+    .unwrap();
+    assert!(side_on < square, "standing side-on");
+    let fast = meet(&running_at(7.0, d, DVec2::new(2.0, 0.0), facing)).unwrap();
+    assert!(fast < square, "a carrier closing faster");
+    let mut met = running_at(3.0, d, DVec2::new(2.0, 0.0), facing);
+    met.duelled = 1 << d;
+    assert!(meet(&met).is_none(), "already met");
+    let with = |who: usize, stage: Stage, raise: f64| {
+        let mut sim = running_at(3.0, d, DVec2::new(2.0, 0.0), facing);
+        sim.stages[who].f[stage.index()] *= raise;
+        meet(&sim).unwrap()
+    };
+    assert!(
+        with(d, Stage::TACKLE_EXECUTE, 1.3) > square,
+        "a better tackler"
+    );
+    assert!(
+        with(9, Stage::DRIBBLE_EXECUTE, 1.3) < square,
+        "a better dribbler"
+    );
+    // In play: a certain contest takes the ball for the defender.
+    let mut sim = running_at(3.0, d, DVec2::new(2.0, 0.0), facing);
+    sim.config.tuning.decision.take_on_contest = 5.0;
+    let t = std::sync::Arc::clone(&sim.tuning);
+    sim.resolve_possession(&t);
+    assert_eq!(sim.carrier, Some(d));
+}
+
 /// A pass just kicked by home carrier 9 at the centre: the ball `ahead` metres in front of
 /// him, running away at `speed`, team-mate 10 waiting 8 m ahead and away player `d` at `at`
 /// (written for the side attacking +x).
