@@ -37,6 +37,21 @@ impl Simulation {
                 wasting_late: late && mine > theirs && wasting,
             }
         });
+        // A press trigger: inside the window of a trigger its plan switches on, a side's
+        // nearest presser sprints at the carrier (hooks `press.trigger.*`).
+        let triggered: [Option<usize>; 2] = std::array::from_fn(|team| {
+            if dead || !crate::decision::trigger_open(&self.view(), team) {
+                return None;
+            }
+            let ball = self.ball.xy();
+            self.players
+                .iter()
+                .enumerate()
+                .filter(|(_, p)| p.team == team && p.active() && p.pace.job == pace::Job::Press)
+                .map(|(i, p)| ((p.pos - ball).length(), i))
+                .min_by(|a, b| a.0.total_cmp(&b.0))
+                .map(|(_, i)| i)
+        });
         for i in 0..self.players.len() {
             let p = &self.players[i];
             if !p.active() {
@@ -47,7 +62,9 @@ impl Simulation {
             let grade = pace::adjust(pace::base_grade(job), job, ctx[p.team], Floor::Keep);
             let starts =
                 grade == Grade::Urgent && (p.pace.since == tick || p.pace.grade != Grade::Urgent);
-            let sprint = if starts {
+            let sprint = if triggered[p.team] == Some(i) {
+                true
+            } else if starts {
                 // A recovery run's sprint reads the recovery-run stage (work rate leading,
                 // pace and acceleration supporting); every other urgent job reads work rate.
                 let share = if job == pace::Job::Recover {

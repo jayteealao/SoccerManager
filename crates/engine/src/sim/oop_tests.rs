@@ -899,3 +899,23 @@ fn a_pressed_receiver_reaches_his_pass_only_within_the_cut_share() {
         "defending the other side's pass"
     );
 }
+
+/// A press trigger's urgent press job: inside the window of a trigger the side switches on,
+/// its nearest outfield player goes for the carrier even from beyond his reach; with the
+/// trigger off he keeps his place.
+#[test]
+fn inside_a_trigger_window_the_nearest_player_goes_for_the_carrier() {
+    let d = PLAYERS_PER_TEAM + 9;
+    let at = DVec2::new(0.0, 12.0);
+    let gap = |sim: &Simulation| {
+        let t = crate::decision::DecisionV1.targets(&sim.view());
+        (t.targets[d] - at).length()
+    };
+    let mut off = press_scene(9, d, at, 25.0);
+    off.trigger_at[1][TRIGGER_WIDE] = Some(3_000);
+    let mut on = press_scene(9, d, at, 25.0);
+    on.trigger_at[1][TRIGGER_WIDE] = Some(3_000);
+    on.teams[1].plan.trigger_wide = true;
+    assert!(gap(&off) > 10.0, "{}", gap(&off));
+    assert!(gap(&on) < 3.0, "{}", gap(&on));
+}

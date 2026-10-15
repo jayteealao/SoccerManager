@@ -112,7 +112,8 @@ pub const BACK_PASS_COS: f64 = 0.5;
 pub const FACING_BACK_COS: f64 = 0.5;
 /// The press-trigger window (hooks `press.trigger.*`): for this many seconds after a trigger
 /// the pressing side switches on fires, while the other side keeps the ball, the side's press
-/// reach takes [`TRIGGER_REACH`] and [`TRIGGER_PRESSERS`] more players press.
+/// reach takes [`TRIGGER_REACH`] and [`TRIGGER_PRESSERS`] more players press, and its nearest
+/// outfield player presses whatever his reach, at a sprint (an urgent press job).
 pub const TRIGGER_WINDOW_S: f64 = 3.0;
 pub const TRIGGER_REACH: f64 = 1.5;
 pub const TRIGGER_PRESSERS: usize = 1;
@@ -156,8 +157,24 @@ pub(crate) fn trigger_pressers(view: &MatchView<'_>, team: usize) -> usize {
     }
 }
 
+/// The active outfield player of side `team` (not its keeper `keeper`) nearest `at`, with his
+/// distance.
+fn nearest_outfield(
+    view: &MatchView<'_>,
+    team: usize,
+    keeper: usize,
+    at: DVec2,
+) -> Option<(f64, usize)> {
+    view.players()
+        .iter()
+        .enumerate()
+        .filter(|&(i, p)| p.team == team && p.active() && i != keeper)
+        .map(|(i, p)| ((p.pos - at).length(), i))
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+}
+
 /// Whether the window of a press trigger side `team`'s plan switches on is open.
-fn trigger_open(view: &MatchView<'_>, team: usize) -> bool {
+pub(crate) fn trigger_open(view: &MatchView<'_>, team: usize) -> bool {
     let plan = &view.teams()[team].plan;
     let on = [
         plan.trigger_back_pass,
@@ -609,6 +626,18 @@ impl DecisionModule for DecisionV1 {
                             pressers[k] = (d, i);
                         }
                     }
+                }
+                // Inside a press trigger's window the side's nearest outfield player presses
+                // whatever his reach; the pace pass sends him at a sprint.
+                if count > 0
+                    && trigger_open(view, def)
+                    && let Some((d, i)) = nearest_outfield(view, def, keepers[def], ball_xy)
+                    && !pressers[..count].iter().any(|&(_, k)| k == i)
+                {
+                    for k in (1..count).rev() {
+                        pressers[k] = pressers[k - 1];
+                    }
+                    pressers[0] = (d, i);
                 }
                 // Stand options from the role menus and the rest-defence guard; pressing,
                 // the line hold and cover then take their players from there.
