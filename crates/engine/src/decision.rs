@@ -299,6 +299,25 @@ impl Choice {
 /// Metres short of the second-last defender at which a lone forward holds the line, so he
 /// stays onside.
 pub(crate) const ONSIDE_MARGIN: f64 = 0.5;
+/// The offside lag: an attacker reads the offside line as it stood up to this many seconds
+/// ago, the whole lag at the lowest off-ball skill and none at the highest (his off-ball run
+/// stage share), for every side, so a line that steps up can catch him beyond it. A modest
+/// size, not fitted to the real offsides a match: the runner's late read is one of the three
+/// causes of an offside (with the passer's misread and a line that steps up), and with
+/// almost no runs in behind at the default no size of it alone reaches the real rate.
+pub const OFFSIDE_LAG_S: f64 = 3.0;
+
+/// How far player `i`'s read of his side's offside line trails the live one: the line's
+/// speed toward the goal his side attacks (`speed`, below 0 while the line steps up) times
+/// his lag ([`OFFSIDE_LAG_S`]). Added to the live line, it keeps him beyond a line that has
+/// just stepped up.
+pub(crate) fn line_lag(view: &MatchView<'_>, i: usize, speed: f64) -> f64 {
+    let share = view
+        .skills(i)
+        .share(Stage::OFF_BALL_RUN_EXECUTE)
+        .clamp(0.0, 1.0);
+    -speed * OFFSIDE_LAG_S * (1.0 - share)
+}
 
 /// The most opponents a pressing instruction can send at the carrier.
 pub const MAX_PRESSERS: usize = 4;
@@ -2112,6 +2131,7 @@ fn time_runs(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER], team: usize, c
     let side = &view.teams()[team];
     let attack_x = side.attack_x;
     let line = offside::second_last_depth(team, view.players(), attack_x) - ONSIDE_MARGIN;
+    let speed = offside::second_last_speed(team, view.players(), attack_x);
     let keeper = view.keeper(team);
     for (i, p) in view.players().iter().enumerate() {
         if p.team != team || i == c || i == keeper || !p.active() {
@@ -2121,6 +2141,7 @@ fn time_runs(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER], team: usize, c
         if s <= 0.0 {
             continue;
         }
+        let line = line + line_lag(view, i, speed);
         let mut at = targets[i];
         let depth = at.x * attack_x;
         if line.is_finite() && depth > line {
@@ -2205,6 +2226,7 @@ fn forward_runs(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER], team: usize
     if !line.is_finite() {
         return running;
     }
+    let speed = offside::second_last_speed(team, view.players(), attack_x);
     let carrier = view.player(c);
     let carrier_depth = carrier.pos.x * attack_x;
     let pass_on = !pressed(view, c);
@@ -2214,6 +2236,7 @@ fn forward_runs(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER], team: usize
         {
             continue;
         }
+        let line = line + line_lag(view, i, speed);
         let depth = p.pos.x * attack_x;
         let gap = line - depth;
         let from_carrier = p.pos - carrier.pos;
@@ -2276,16 +2299,17 @@ fn box_runs(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER], team: usize, c:
         return runners;
     }
     let line = offside::second_last_depth(team, view.players(), attack_x) - ONSIDE_MARGIN;
-    let depth = if line.is_finite() {
-        (half - LATE_RUN_DEPTH_M).min(line)
-    } else {
-        half - LATE_RUN_DEPTH_M
-    };
+    let speed = offside::second_last_speed(team, view.players(), attack_x);
     for (i, p) in view.players().iter().enumerate() {
         if p.team != team || i == c || !p.active() || !attack_line(side.plan.slots[p.slot].position)
         {
             continue;
         }
+        let depth = if line.is_finite() {
+            (half - LATE_RUN_DEPTH_M).min(line + line_lag(view, i, speed))
+        } else {
+            half - LATE_RUN_DEPTH_M
+        };
         let at = DVec2::new(
             depth * attack_x,
             targets[i].y.clamp(-LATE_RUN_WIDTH_M, LATE_RUN_WIDTH_M),
@@ -2318,6 +2342,12 @@ fn hold_the_line(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER], team: usiz
     if !line.is_finite() {
         return;
     }
+    let line = line
+        + line_lag(
+            view,
+            i,
+            offside::second_last_speed(team, view.players(), attack_x),
+        );
     let anchor = targets[i];
     let depth = anchor.x * attack_x;
     let held = (depth + share * (line - depth)).min(line);

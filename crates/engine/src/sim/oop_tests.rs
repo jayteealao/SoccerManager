@@ -919,3 +919,68 @@ fn inside_a_trigger_window_the_nearest_player_goes_for_the_carrier() {
     assert!(gap(&off) > 10.0, "{}", gap(&off));
     assert!(gap(&on) < 3.0, "{}", gap(&on));
 }
+
+/// Home carrier 6 on the ball at the centre spot, every away outfield player standing at
+/// 8 m deep in the home side's attacking direction and moving toward the halfway line at
+/// `step` m/s (a line that steps up), home player 10's off-ball run stage share at `share`;
+/// returns how far beyond the live onside line home player 10's target lies.
+fn beyond_the_line(share: f64, step: f64) -> f64 {
+    use crate::contract::Stage;
+    let mut sim = scene();
+    let ax = sim.teams[0].attack_x;
+    let line = 8.0;
+    let keeper = sim.keeper(1);
+    for i in PLAYERS_PER_TEAM..2 * PLAYERS_PER_TEAM {
+        if i == keeper {
+            continue;
+        }
+        sim.players[i].pos = DVec2::new(ax * line, -25.0 + (i - PLAYERS_PER_TEAM) as f64 * 5.0);
+        sim.players[i].vel = DVec2::new(-ax * step, 0.0);
+    }
+    sim.players[6].pos = DVec2::ZERO;
+    sim.players[6].vel = DVec2::ZERO;
+    sim.ball.pos = DVec2::ZERO.extend(0.0);
+    sim.ball.vel = DVec2::ZERO.extend(0.0);
+    sim.carrier = Some(6);
+    sim.possession_phase = Some(0);
+    sim.last_touch = Some(0);
+    sim.stages[10].share[Stage::OFF_BALL_RUN_EXECUTE.index()] = share;
+    let t = crate::decision::DecisionV1.targets(&sim.view());
+    t.targets[10].x * ax - (line - crate::decision::ONSIDE_MARGIN)
+}
+
+/// The runner's late read of the line: while the line steps up, an attacker who times his
+/// runs less well (a lower off-ball run share) reads the line where it stood up to
+/// `OFFSIDE_LAG_S` seconds ago, so his read trails the live line farther and he stands
+/// farther beyond it: he is caught offside more. One at the highest share reads it live; a
+/// line that drops back is read late the other way.
+#[test]
+fn a_runner_who_reads_the_line_late_is_caught_beyond_it() {
+    use crate::contract::Stage;
+    use crate::decision::{OFFSIDE_LAG_S, line_lag};
+    let mut sim = scene();
+    let read = |sim: &mut Simulation, share: f64, speed: f64| {
+        sim.stages[10].share[Stage::OFF_BALL_RUN_EXECUTE.index()] = share;
+        line_lag(&sim.view(), 10, speed)
+    };
+    let (low, mid, high) = (
+        read(&mut sim, 0.6, -2.0),
+        read(&mut sim, 0.8, -2.0),
+        read(&mut sim, 1.0, -2.0),
+    );
+    assert!(low > mid && mid > high, "{low} {mid} {high}");
+    assert!((read(&mut sim, 0.0, -2.0) - 2.0 * OFFSIDE_LAG_S).abs() < 1e-9);
+    assert!(high.abs() < 1e-9, "{high}");
+    assert!(read(&mut sim, 0.6, 2.0) < 0.0);
+    assert_eq!(read(&mut sim, 0.6, 0.0), 0.0);
+    // In play, on a line that steps up: the lower his share, the farther beyond the live
+    // onside line his target; at the highest share the step changes nothing.
+    let (low, mid, high) = (
+        beyond_the_line(0.6, 2.0),
+        beyond_the_line(0.8, 2.0),
+        beyond_the_line(1.0, 2.0),
+    );
+    assert!(low > mid && mid > high, "{low} {mid} {high}");
+    assert!(beyond_the_line(0.6, 2.0) > beyond_the_line(0.6, 0.0));
+    assert!((beyond_the_line(1.0, 2.0) - beyond_the_line(1.0, 0.0)).abs() < 1e-9);
+}

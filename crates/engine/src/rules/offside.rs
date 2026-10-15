@@ -52,6 +52,27 @@ pub fn second_last_depth(team: usize, players: &[Player], attack_x: f64) -> f64 
     second
 }
 
+/// The speed, in metres per second along `attack_x`, of the second-last active opponent of
+/// `team`: how fast `team`'s offside line moves toward the goal it attacks (below 0 while the
+/// line steps up). 0 when fewer than two opponents are active.
+pub fn second_last_speed(team: usize, players: &[Player], attack_x: f64) -> f64 {
+    let mut last: Option<(f64, f64)> = None;
+    let mut second: Option<(f64, f64)> = None;
+    for p in players {
+        if p.team == team || !p.active() {
+            continue;
+        }
+        let at = (p.pos.x * attack_x, p.vel.x * attack_x);
+        if last.is_none_or(|l| at.0 > l.0) {
+            second = last;
+            last = Some(at);
+        } else if second.is_none_or(|s| at.0 > s.0) {
+            second = Some(at);
+        }
+    }
+    second.map_or(0.0, |s| s.1)
+}
+
 /// `true` when `toucher` was in the offside position set when the ball was played.
 pub fn is_offence(set: OffsideSet, toucher: usize) -> bool {
     set & (1 << toucher) != 0
