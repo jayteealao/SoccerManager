@@ -153,8 +153,11 @@ fn decide(sim: &Simulation) -> Vec<(Change, AiCode)> {
     AiManagerV1.check(&sim.view(), 0, true).changes
 }
 
+/// A planted state of a scene.
+type Plant = Box<dyn Fn(Scene) -> Scene>;
+
 /// The four planted inputs: each loads one need term of the slot's player.
-fn plants() -> Vec<(&'static str, AiCode, Box<dyn Fn(Scene) -> Scene>)> {
+fn plants() -> Vec<(&'static str, AiCode, Plant)> {
     let i = common::index(0, SLOT);
     vec![
         (

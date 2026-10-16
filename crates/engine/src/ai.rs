@@ -715,7 +715,7 @@ impl Check<'_, '_> {
         let slots = &schema.formations[usize::from(side.tactics.formation)].slots;
         let keeper_slot = side.keeper_slot();
         let mut best: Option<(f64, usize, usize, AiCode)> = None;
-        for slot in 0..PLAYERS_PER_TEAM {
+        for (slot, at) in slots.iter().enumerate().take(PLAYERS_PER_TEAM) {
             let i = self.team * PLAYERS_PER_TEAM + slot;
             let p = &self.view.players()[i];
             let off = side.lineup[slot];
@@ -725,7 +725,7 @@ impl Check<'_, '_> {
             let Some(on) = self.substitute_for(slot) else {
                 continue;
             };
-            let position = slots[slot].position;
+            let position = at.position;
             let quality = slot_value(&side.squad[on], position, margin)
                 - slot_value(&side.squad[off], position, margin);
             let need = need_of(self.view, i);

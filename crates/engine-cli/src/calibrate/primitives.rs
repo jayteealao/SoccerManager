@@ -733,7 +733,7 @@ pub fn check(
                     step.push_str(&format!(" with {w}"));
                 }
                 held_note(&mut step);
-                let pairs = play_pairs(setup, &content, &arms, &format!("{name}:{step}"))?;
+                let pairs = play_pairs(setup, content, &arms, &format!("{name}:{step}"))?;
                 let mut stats = Vec::new();
                 for s in p.signature.iter().filter(|s| s.steps.covers_step(l, d)) {
                     stats.push(judge(&pairs, stat_index(&s.stat)?, s.direction));
@@ -778,7 +778,7 @@ pub fn check(
                             with_level(defaults, &content.tactics, &p, k)?,
                         ))
                     } else {
-                        with_values(&content, &choice.values)
+                        with_values(content, &choice.values)
                     }
                 };
             let (dc, dt) = arm_of(default)?;
@@ -797,7 +797,7 @@ pub fn check(
                 hold_in(&mut arms)?;
                 let mut step = format!("{} -> {}", default.name, choice.name);
                 held_note(&mut step);
-                let pairs = play_pairs(setup, &content, &arms, &format!("{name}:{step}"))?;
+                let pairs = play_pairs(setup, content, &arms, &format!("{name}:{step}"))?;
                 let stats = vec![judge(&pairs, stat_index(&choice.stat)?, Direction::Up)];
                 let pass = stats[0].pass;
                 out.push(StepVerdict {
@@ -826,7 +826,7 @@ pub fn check(
             hold_in(&mut arms)?;
             let mut step = format!("{} -> {}", names[0], names[1]);
             held_note(&mut step);
-            let pairs = play_pairs(setup, &content, &arms, &format!("{name}:{step}"))?;
+            let pairs = play_pairs(setup, content, &arms, &format!("{name}:{step}"))?;
             let mut stats = Vec::new();
             for s in &p.signature {
                 stats.push(judge(&pairs, stat_index(&s.stat)?, s.direction));
@@ -1089,13 +1089,13 @@ pub fn check_player(
         let step = format!("{} -> {}", names[d], names[level]);
         let pairs = play_pairs_by(
             setup,
-            &content,
+            content,
             2,
             &format!("{name}:player {slot}:{step}"),
             |a, teams, tested, seed| {
                 let tactics = [defaults; 2];
                 play_one_player(
-                    &content,
+                    content,
                     teams,
                     tactics,
                     &states[a],
@@ -1509,7 +1509,7 @@ pub fn fit(
     let salt = format!("{name}:fit");
     let base = play_pairs(
         setup,
-        &content,
+        content,
         &[Arm {
             content: content.clone(),
             tactics: defaults,
@@ -1525,7 +1525,7 @@ pub fn fit(
             content: c,
             tactics: tested,
         };
-        let cand = play_pairs(setup, &content, &[arm], &salt)?;
+        let cand = play_pairs(setup, content, &[arm], &salt)?;
         let units: Vec<Vec<(f64, f64)>> = base
             .iter()
             .zip(&cand)
@@ -1627,17 +1627,12 @@ pub fn reach(
             })
             .collect();
         values.insert(first.clone(), x);
-        let (c, t) = with_values(&content, &values)?;
+        let (c, t) = with_values(content, &values)?;
         let arms = [Arm {
             content: c,
             tactics: t,
         }];
-        ends.push(play_pairs(
-            setup,
-            &content,
-            &arms,
-            &format!("{name}:reach"),
-        )?);
+        ends.push(play_pairs(setup, content, &arms, &format!("{name}:reach"))?);
     }
     for s in &p.signature {
         let si = stat_index(&s.stat)?;
