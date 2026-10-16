@@ -1181,11 +1181,13 @@ pub const FROZEN_TACTICS_V8: &str = include_str!("frozen-tactics-v8.json");
 #[serde(deny_unknown_fields)]
 struct FrozenTacticsV8 {
     ai_substitutions: serde_json::Value,
+    time_wasting_primitive: serde_json::Value,
 }
 
 /// A version 7 tactics file, as JSON, in the version 8 shape: the AI block loses the fields
 /// version 8 drops ([`TACTICS_V8_DROPPED_AI`]) and takes the frozen substitution block when it
-/// holds none. No level or value changes. The caller parses and checks the result as a current
+/// holds none, and the primitives take the frozen time-wasting entry when they list none. No
+/// level or value changes. The caller parses and checks the result as a current
 /// file.
 pub fn tactics_v7_to_v8(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
     let frozen: FrozenTacticsV8 = serde_json::from_str(FROZEN_TACTICS_V8)
@@ -1205,5 +1207,11 @@ pub fn tactics_v7_to_v8(mut file: serde_json::Value) -> Result<serde_json::Value
         ai.remove(field);
     }
     ai.entry("substitutions").or_insert(frozen.ai_substitutions);
+    // Time wasting becomes a primitive over its instruction's two levels, last in the list.
+    if let Some(list) = obj.get_mut("primitives").and_then(|p| p.as_array_mut())
+        && !list.iter().any(|p| p["name"] == "time_wasting")
+    {
+        list.push(frozen.time_wasting_primitive);
+    }
     Ok(file)
 }

@@ -2,9 +2,8 @@
 //! tactical primitive, from played matches.
 //!
 //! A pair is two matches with identical squads (the equal suite's home club on both sides),
-//! the same engine seed, the opponent in the tactics file's defaults, and AI in-match tactic
-//! changes off (the run's content copy moves their minutes past full time; substitutions go
-//! on as usual). Only the tested side's setting differs between the two matches, and the
+//! the same engine seed, and the opponent in the tactics file's defaults (the AI manager makes
+//! substitutions as usual and no tactical change of its own). Only the tested side's setting differs between the two matches, and the
 //! tested side alternates home and away from pair to pair, so home advantage cancels. The
 //! harness reads each signature statistic of the tested side from the match's measures.
 //!
@@ -40,7 +39,7 @@ use super::fixtures::{self, Leagues};
 
 /// The statistics the harness measures, in value order: the signature statistics, then the
 /// side's possessions and shots a match, which every step reports beside them.
-pub const STATS: [&str; 90] = [
+pub const STATS: [&str; 91] = [
     "passes_per_possession",
     "recycle_share",
     "turnovers_per_possession",
@@ -90,6 +89,7 @@ pub const STATS: [&str; 90] = [
     "pressures_after_poor_touch",
     "pressures_after_facing_back",
     "pressures_after_wide",
+    "restart_wait_leading_late_s",
     "reds_per_match",
     "traps_per_match",
     "back_passes_per_match",
@@ -237,6 +237,7 @@ pub fn side_stats(m: &MatchMeasures, sinks: &Sinks<'_>, team: usize) -> Stats {
         trig(1),
         trig(2),
         trig(3),
+        (s.late_lead_wait_s, f(s.late_lead_restarts)),
         (f(sinks.reds[team]), n),
         (f(d.traps), n),
         (f(d.trigger_events[0]), n),
@@ -810,10 +811,7 @@ pub fn check(
             }
         }
         PrimitiveKind::OnOff => {
-            // Off to on: the primitive owns its two states, off first.
-            if !p.is_setting() {
-                bail!("{name}: an on/off primitive is checked when it owns its two states");
-            }
+            // Off to on: its own two states, or its level block's two levels, off first.
             let defaults = Tactics::defaults(&content.tactics);
             let mut arms = [
                 Arm {

@@ -420,9 +420,58 @@ fn the_transition_primitives_are_shipped_as_decided() {
     }
 }
 
+/// Time wasting is an on/off primitive over its instruction's two levels (not a setting), with
+/// the restart wait of a side leading late as its signature; a rule that sets it on raises the
+/// side's plan input to the instruction's `on` value in the match.
+#[test]
+fn time_wasting_is_an_on_off_primitive_a_rule_can_set() {
+    let content = common::content();
+    let t = &content.tactics;
+    let p = t
+        .primitives
+        .iter()
+        .find(|p| p.name == "time_wasting")
+        .expect("the time_wasting primitive");
+    assert_eq!(p.kind, PrimitiveKind::OnOff);
+    assert_eq!(p.levels.as_deref(), Some("instructions.time_wasting"));
+    assert!(!p.is_setting());
+    assert_eq!(p.level_names(t), ["off", "on"]);
+    assert_eq!(p.default, "off");
+    assert_eq!(p.inputs.len(), 1);
+    assert_eq!(p.inputs[0].input, "time_wasting");
+    assert_eq!(p.inputs[0].hook, "restart.time_wasting");
+    assert_eq!(p.signature[0].stat, "restart_wait_leading_late_s");
+    assert_eq!(p.signature[0].direction, Direction::Up);
+    assert!(p.data.none.is_some() && p.fits.is_empty());
+    assert_eq!(level_value(t, "time_wasting", 0), Some(1.0));
+    assert_eq!(level_value(t, "time_wasting", 1), Some(1.5));
+
+    let [a, b] = common::default_teams(&content);
+    let mut config = engine::MatchConfig::new(1, 90, &content, [&a, &b])
+        .unwrap()
+        .with_manager(0, engine::Manager::Human);
+    config.tactics.game_state.as_mut().unwrap().take_up_s = 1.0;
+    let file = engine::data::game_state::parse(
+        br#"{ "rules": [{ "when": [{ "kind": "score", "state": "level" }], "set": [{ "primitive": "time_wasting", "level": "on" }] }] }"#,
+    )
+    .unwrap();
+    let formation = config.teams[0].tactics.formation;
+    let state = engine::data::game_state::resolve(&file, &config.tactics, &[formation]).unwrap();
+    let mut sim = engine::Simulation::new(config.with_game_state(0, state)).unwrap();
+    assert_eq!(sim.teams()[0].plan.time_wasting, 1.0);
+    // The rule fires on the first tick and the side takes it up within its second.
+    for _ in 0..100 {
+        sim.step();
+    }
+    assert_eq!(sim.summary().goals, [0, 0]);
+    assert_eq!(sim.teams()[0].plan.time_wasting, 1.5);
+    assert_eq!(sim.teams()[1].plan.time_wasting, 1.0);
+}
+
 /// Each bad entry in `tests/fixtures/primitives/` is refused with its own reason: a graded
 /// primitive with other than 5 levels, a choice primitive with no choices, an on/off
-/// primitive without two states, a default that is not a level, no input, an unknown hook, a
+/// primitive without two states or over a level block whose levels are not its states, a
+/// default that is not a level, no input, an unknown hook, a
 /// hook that reads another input, an unknown statistic, no signature, neither a source nor a
 /// reason, a held-out competition, a fit record that differs from its level, a deferred
 /// primitive that holds a fit, and statistics scoped below or above the default that leave a
@@ -436,7 +485,7 @@ fn every_bad_primitive_entry_is_refused_by_name() {
         .filter(|p| p.extension().is_some_and(|e| e == "json"))
         .collect();
     files.sort();
-    assert_eq!(files.len(), 20);
+    assert_eq!(files.len(), 21);
     for file in files {
         let case: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();

@@ -26,7 +26,7 @@ pub const GRADED_LEVELS: usize = 5;
 
 /// The statistics a primitive can name as its signature. The real-team table
 /// (`signatures.json`) and the engine measure each one by the same definition.
-pub const SIGNATURE_STATS: [&str; 51] = [
+pub const SIGNATURE_STATS: [&str; 52] = [
     "passes_per_possession",
     "recycle_share",
     "turnovers_per_possession",
@@ -78,6 +78,7 @@ pub const SIGNATURE_STATS: [&str; 51] = [
     "pressures_after_poor_touch",
     "pressures_after_facing_back",
     "pressures_after_wide",
+    "restart_wait_leading_late_s",
 ];
 
 /// The real data sources a fit may read. `pff_wc2022` is national-team data (the 2022 World
@@ -115,7 +116,7 @@ pub const SETTINGS_MAX: usize = 32;
 /// Where each plan input of a primitive is written: the block (a level block of the tactics
 /// file, or [`OWN`] for an input the primitive's own steps or choices hold), the field of each
 /// level, and the range the field allows.
-pub const INPUT_FIELDS: [(&str, &str, &str, f64, f64); 40] = [
+pub const INPUT_FIELDS: [(&str, &str, &str, f64, f64); 41] = [
     ("patience", "instructions.tempo", "value", -2.0, 2.0),
     ("loss_weight", "mentalities", "loss_weight", -5.0, 5.0),
     ("rest_defence", "mentalities", "rest_defence", 0.0, 10.0),
@@ -192,6 +193,13 @@ pub const INPUT_FIELDS: [(&str, &str, &str, f64, f64); 40] = [
     ("trigger_poor_touch", OWN, "trigger_poor_touch", 0.0, 1.0),
     ("trigger_facing_back", OWN, "trigger_facing_back", 0.0, 1.0),
     ("trigger_wide", OWN, "trigger_wide", 0.0, 1.0),
+    (
+        "time_wasting",
+        "instructions.time_wasting",
+        "value",
+        1.0,
+        3.0,
+    ),
 ];
 
 /// The block, field and range of plan input `input`.
@@ -575,6 +583,12 @@ pub fn level_value(schema: &TacticsSchema, input: &str, level: usize) -> Option<
             .levels
             .get(level)
             .map(|l| l.value),
+        "time_wasting" => schema
+            .instructions
+            .time_wasting
+            .levels
+            .get(level)
+            .map(|l| l.value),
         "loss_weight" => schema.mentalities.get(level).map(|m| m.loss_weight),
         "rest_defence" => schema
             .mentalities
@@ -641,6 +655,13 @@ pub fn set_level_value(schema: &mut TacticsSchema, input: &str, level: usize, va
         "block_depth" => schema
             .instructions
             .line_height
+            .levels
+            .get_mut(level)
+            .map(|l| l.value = value)
+            .is_some(),
+        "time_wasting" => schema
+            .instructions
+            .time_wasting
             .levels
             .get_mut(level)
             .map(|l| l.value = value)
@@ -840,6 +861,24 @@ fn check_one(schema: &TacticsSchema, p: &Primitive) -> Result<(), Refusal> {
                     ),
                 ));
             }
+            // An on/off primitive over a level block: the block's two levels are its states.
+            if let Some(block) = p.levels.as_deref() {
+                let names = block_names(schema, block);
+                if names.is_empty() {
+                    return Err(refuse(
+                        n,
+                        "levels",
+                        format!("{block} is not a level block of the tactics file"),
+                    ));
+                }
+                if names != p.states.iter().map(String::as_str).collect::<Vec<_>>() {
+                    return Err(refuse(
+                        n,
+                        "states",
+                        format!("the states are the levels of {block}: {}", names.join(", ")),
+                    ));
+                }
+            }
         }
     }
     if p.default_index(schema).is_none() {
@@ -879,7 +918,7 @@ fn check_one(schema: &TacticsSchema, p: &Primitive) -> Result<(), Refusal> {
                 ),
             ));
         }
-        if p.kind == PrimitiveKind::Graded || p.owns_levels() {
+        if p.kind != PrimitiveKind::Choice && p.levels.is_some() {
             let block = p.levels.as_deref().unwrap_or_default();
             if input_field(&ih.input).is_none_or(|(b, ..)| b != block) {
                 return Err(refuse(

@@ -304,6 +304,10 @@ pub struct Possessing {
     /// reads a pass's length, and those completed.
     pub length_passes: [[u32; LENGTH_BANDS]; 2],
     pub length_completed: [[u32; LENGTH_BANDS]; 2],
+    /// The side's restarts drawn while it leads in the late window of regulation, and the sum
+    /// of their drawn waits in seconds (a quick restart waits 0).
+    pub late_lead_restarts: u32,
+    pub late_lead_wait_s: f64,
 }
 
 /// A goal kick shorter than this, in metres, is short, as the StatsBomb goal-kick rows read it.
@@ -1032,6 +1036,13 @@ impl MatchMeasures {
                 restart: None,
             });
         }
+    }
+
+    /// `team`, leading late, drew a restart wait of `wait_s` seconds (0 for a quick restart).
+    pub(crate) fn late_lead_restart(&mut self, team: usize, wait_s: f64) {
+        let s = &mut self.possessing[team];
+        s.late_lead_restarts += 1;
+        s.late_lead_wait_s += wait_s;
     }
 
     /// `team` took a restart of `kind`: any open chain ends and the restart's chain starts.

@@ -1997,6 +1997,22 @@
         "competitions": ["A-League"],
         "row": "press_on_wide"
       }
+    },
+    {
+      "name": "time_wasting",
+      "kind": "on_off",
+      "levels": "instructions.time_wasting",
+      "states": ["off", "on"],
+      "default": "off",
+      "inputs": [
+        { "input": "time_wasting", "hook": "restart.time_wasting" }
+      ],
+      "signature": [
+        { "stat": "restart_wait_leading_late_s", "direction": "up" }
+      ],
+      "data": {
+        "none": "direction only; the two values are the instruction's own (1.0, 1.5) from the restart-waits research"
+      }
     }
   ],
   "game_state": {

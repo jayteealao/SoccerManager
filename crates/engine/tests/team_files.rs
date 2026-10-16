@@ -702,7 +702,8 @@ fn a_version_5_tactics_file_converts_to_the_shipped_version_6_file() {
     v5["primitives"]
         .as_array_mut()
         .unwrap()
-        .retain(|p| !added.contains(&p["name"].as_str().unwrap()));
+        // Time wasting became a primitive in version 8, after the version 6 entries.
+        .retain(|p| !added.contains(&p["name"].as_str().unwrap()) && p["name"] != "time_wasting");
     for block in ["pressing", "line_height"] {
         let levels = v5["instructions"][block]["levels"].as_array_mut().unwrap();
         levels.remove(4);

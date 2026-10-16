@@ -675,7 +675,7 @@ pub fn steps_done(dead: &DeadBall, players: &[Player], teams: &[Team; 2], t: &Tu
 
 /// `true` when `team` leads in the late window of regulation: the last `late_minutes` of the
 /// pace tuning, the same late the pace selector reads.
-fn leads_late(view: &MatchView<'_>, team: usize) -> bool {
+pub(crate) fn leads_late(view: &MatchView<'_>, team: usize) -> bool {
     let goals = view.goals();
     let minute = view.referee().clock.minute(view.tick()).0;
     goals[team] > goals[1 - team]

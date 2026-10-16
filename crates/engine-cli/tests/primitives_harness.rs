@@ -390,6 +390,27 @@ fn every_on_winning_step_raises_the_fast_breaks() {
     std::fs::remove_dir_all(&data).unwrap();
 }
 
+/// Time wasting, off to on: a side leading late waits longer over its restarts, by more than
+/// twice the paired noise of 1,000 pairs (verify runs it).
+#[test]
+#[ignore = "plays 2,000 full matches; verify runs it"]
+fn time_wasting_on_lengthens_the_restart_wait_of_a_side_leading_late() {
+    let data = temp("engine-cli-primitives", "time-wasting");
+    let result = shipped_check(&data, "time_wasting");
+    let steps = result["steps"].as_array().unwrap();
+    assert_eq!(steps.len(), 1);
+    let s = &steps[0];
+    assert_eq!(s["step"], "off -> on", "{s}");
+    let stat = &s["stats"][0];
+    assert_eq!(stat["stat"], "restart_wait_leading_late_s", "{s}");
+    let (difference, noise) = (
+        stat["difference"].as_f64().unwrap(),
+        stat["noise"].as_f64().unwrap(),
+    );
+    assert!(difference > 2.0 * noise, "{s}");
+    std::fs::remove_dir_all(&data).unwrap();
+}
+
 /// The on-winning level `counter` refitted: the search lands within the paired noise of the
 /// real ratio of the Wyscout fast-break row (verify runs it).
 #[test]

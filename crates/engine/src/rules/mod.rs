@@ -931,6 +931,13 @@ impl Simulation {
             };
             dead.extra = restarts.extra_ticks(&self.view(), kind, team, u);
         }
+        #[cfg(feature = "measures")]
+        if restart::leads_late(&self.view(), team) {
+            let wait_s = f64::from(dead.extra) * self.config.tuning.dt;
+            if let Some(m) = self.measures.as_deref_mut() {
+                m.late_lead_restart(team, wait_s);
+            }
+        }
         // The limit is 10 to 300 s, so the cast fits.
         let limit = (limit_s / self.config.tuning.dt).round() as u32;
         dead.appear_at = since + dead.extra;
