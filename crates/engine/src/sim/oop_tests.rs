@@ -1081,6 +1081,27 @@ fn a_pass_from_the_own_area_looks_past_a_screened_team_mate() {
     assert!(outside.abs() < 0.05, "{outside}");
 }
 
+/// The receiver's press on arrival: a team-mate whom a legal presser 6.5 m away (outside the
+/// screened radius) reaches before the ball is under control costs the pass more than an
+/// unpressed one, beyond what his smaller space alone costs; the same holds from the own area,
+/// where a goal kick is played.
+#[test]
+fn a_receiver_a_presser_reaches_before_his_touch_costs_the_pass() {
+    use crate::decision::SCREEN_M;
+    let half = scene().config.pitch().half_length();
+    let space_w = scene().config.tuning.decision.space;
+    for at in [DVec2::new(-(half - 8.0), 0.0), DVec2::new(-10.0, 0.0)] {
+        let free = screened_pass_score(at, 30.0);
+        let pressed = screened_pass_score(at, 6.5);
+        const { assert!(6.5 > SCREEN_M) };
+        let space_only = space_w * (8.0 - 6.5) / 8.0;
+        assert!(
+            free - pressed > space_only + 0.05,
+            "{free} against {pressed} (space alone {space_only})"
+        );
+    }
+}
+
 /// Pressing's presser willingness: a defender on a press job adds his pressing level's
 /// willingness to his tackle decision, so a lower pressing level's presser declines more of
 /// the tackles a side's default would take and a higher level's takes more; a defender who is

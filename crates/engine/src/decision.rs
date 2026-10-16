@@ -555,6 +555,13 @@ pub(crate) fn kick_speed(d: f64, loft: f64, t: &Tuning) -> f64 {
     speed.min(t.pass_max_speed)
 }
 
+/// How long a pass along the ground to a team-mate `d` metres away takes to reach him, in
+/// seconds: the distance over the mean of its kick speed ([`kick_speed`]) and its arrival
+/// speed.
+pub(crate) fn pass_time(d: f64, t: &Tuning) -> f64 {
+    2.0 * d / (kick_speed(d, 0.0, t) + t.pass_arrival_speed)
+}
+
 /// The decision hook's offsets as trace detail.
 pub(crate) fn offsets_json(f: &OptionOffsets) -> serde_json::Value {
     json!({"shoot": f.shoot, "pass": f.pass, "dribble": f.dribble, "clear": f.clear, "hold": f.hold})
@@ -1067,6 +1074,9 @@ impl DecisionModule for DecisionV1 {
         let offside_line = offside::second_last_depth(team, players, side.attack_x);
         let reads_offside = offside_line.is_finite() && view.restart_taker() != Some(c);
         let line_read = 0.5 * (stages.share(Stage::PASS_SEE) + judgement);
+        // His read of the press each receiver will be under ([`crate::pressure::passer_read`]).
+        let press_read =
+            crate::pressure::passer_read(stages.share(Stage::PASS_SEE), judgement, felt);
         // A pass from his own penalty area (the keeper's goal kick and every open-play pass
         // from there) reads a screened team-mate, one with an opponent within [`SCREEN_M`] of
         // him, the way the restart pick does: it loses [`SCREENED_COST`], so he looks past
@@ -1205,9 +1215,46 @@ impl DecisionModule for DecisionV1 {
             } else {
                 0.0
             };
-            // The pass fails as its lane closes and its receiver's space shrinks; the ball
-            // is lost about halfway.
-            let fail = 0.5 * ((1.0 - lane / 6.0) + (1.0 - receiver_space / 8.0));
+            // The receiver's press on arrival (named mechanism): the pressure he will be under
+            // once the ball is his, each opponent's reaction and run against the ball's flight
+            // and his control time, as the passer reads it ([`crate::pressure::arrival_read`]:
+            // a weak or pressed reader pictures a moving opponent late). It costs the pass the
+            // receiver's own chance to keep the ball under that pressure (his reception's
+            // difficulty and resistance, as a pressed touch reads them) at the danger of
+            // losing it there, and it is the receiver's part of the pass's failure: a team-mate
+            // a presser reaches before the ball is controlled is as good as marked, however far
+            // the presser stood when the pass was chosen.
+            let arrives = crate::pressure::arrival_read(
+                players,
+                carrier,
+                press_read,
+                mate,
+                mate.pos,
+                pass_time(d, t),
+                side.attack_x,
+            );
+            let received_cost = if arrives > 0.0 {
+                let mate_stages = view.skills(j);
+                let facing_back = (1.0 - mate.facing.x * side.attack_x) / 2.0;
+                let speed_share =
+                    t.pass_arrival_speed / (t.control_speed * mate.derived.knobs.receive);
+                w.pressure_choice
+                    * crate::pressure::penalty(
+                        arrives,
+                        crate::pressure::reception_difficulty(
+                            speed_share,
+                            facing_back,
+                            crate::pressure::read(mate_stages),
+                        ),
+                        crate::pressure::reception_resistance(mate_stages),
+                    )
+                    * danger(mate.pos)
+            } else {
+                0.0
+            };
+            // The pass fails as its lane closes and as its receiver will be pressed when the
+            // ball reaches him; the ball is lost about halfway.
+            let fail = 0.5 * ((1.0 - lane / 6.0) + (arrives / crate::pressure::THRESHOLD).min(1.0));
             // His own chance to play it under pressure: an outfield pass kind with a pressure
             // stage pays its keep cost.
             let pressed_cost = match kind.execute() {
@@ -1247,6 +1294,7 @@ impl DecisionModule for DecisionV1 {
                 + channel_bias
                 + cross
                 - pressed_cost
+                - received_cost
                 - offside_cost
                 - screened;
             let score = if has_traits {

@@ -297,6 +297,124 @@ pub fn reception_difficulty(speed_share: f64, facing_back: f64, read: f64) -> f6
     .min(1.0)
 }
 
+/// How long an opponent takes to start his run at a pass's receiver, in seconds: the
+/// reaction before he moves.
+pub const ARRIVAL_REACTION_S: f64 = 0.3;
+/// How long a receiver takes to bring the ball under control once it reaches him, in
+/// seconds: an opponent who gets to him within this time presses his touch.
+pub const CONTROL_S: f64 = 0.5;
+
+/// How far a player who starts still runs in `time` seconds at acceleration `accel` up to
+/// top speed `speed`, in metres.
+#[inline]
+pub fn run_distance(time: f64, speed: f64, accel: f64) -> f64 {
+    if time <= 0.0 || speed <= 0.0 || accel <= 0.0 {
+        return 0.0;
+    }
+    let to_top = speed / accel;
+    if time <= to_top {
+        0.5 * accel * time * time
+    } else {
+        0.5 * speed * to_top + speed * (time - to_top)
+    }
+}
+
+/// The pressure on `receiver`, who attacks along `attack_x`, when he has the ball at `point`
+/// under control, a pass `ball_s` seconds in flight from now: each active opponent reacts
+/// ([`ARRIVAL_REACTION_S`]) and runs at his own acceleration and top speed for the ball's
+/// flight and the control time ([`CONTROL_S`]), and the gap he leaves to the receiving point
+/// gives his share as a gap of that size does on the observer's scale ([`distance_share`],
+/// weighed by where he stands, [`position_weight`]). The shares combine as in [`intensity`]. A
+/// presser who reaches the receiver before the ball is controlled presses the touch in full,
+/// however far he stood when the pass was chosen.
+pub fn arrival(
+    players: &[Player],
+    receiver: &Player,
+    point: crate::math::DVec2,
+    ball_s: f64,
+    attack_x: f64,
+) -> f64 {
+    arrival_seen(players, receiver, point, ball_s, attack_x, |o| o.pos)
+}
+
+/// The longest a passer's picture of an opponent trails play, in seconds: at the weakest read
+/// he places each opponent where he stood this long ago; at the best read, where he stands. A
+/// modest design value, not fitted to a rate: the read stands in for the scans a passer makes
+/// before he plays, which the engine does not model yet.
+pub const READ_LAG_S: f64 = 0.6;
+/// How much more an opponent behind the passer's facing trails his picture: the lag x `1 +
+/// BLIND_LAG` for one straight behind him, none extra for one he faces.
+pub const BLIND_LAG: f64 = 1.0;
+/// How much the press a passer feels spoils his read: the read x `1 - FELT_READ x` his felt
+/// intensity, as a player under close pressure scans less.
+pub const FELT_READ: f64 = 0.5;
+
+/// A passer's read of the play around his receivers, 0 to 1: the mean of his pass see stage
+/// share (`see`: vision, with anticipation and teamwork) and his decisions under the press he
+/// feels (`judgement`), lowered by that press (`felt`, [`FELT_READ`]). It is the read the
+/// scans of the off-ball picture will replace.
+#[inline]
+pub fn passer_read(see: f64, judgement: f64, felt: f64) -> f64 {
+    (0.5 * (see + judgement) * (1.0 - FELT_READ * felt.clamp(0.0, 1.0))).clamp(0.0, 1.0)
+}
+
+/// The passer's estimate of the pressure on `receiver` when the ball is his ([`arrival`]): the
+/// passer at `passer` with read `read` ([`passer_read`]) pictures each opponent where he stood
+/// [`READ_LAG_S`] x (1 - read) x (1 + [`BLIND_LAG`] x his blind share) seconds ago, so a weak
+/// reader misjudges an opponent on the move, more so one away from his facing, and a strong
+/// reader is near the true value. The one place the pass choice reads the receiver's press:
+/// a scanned picture replaces it without touching the choice.
+pub fn arrival_read(
+    players: &[Player],
+    passer: &Player,
+    read: f64,
+    receiver: &Player,
+    point: crate::math::DVec2,
+    ball_s: f64,
+    attack_x: f64,
+) -> f64 {
+    let late = READ_LAG_S * (1.0 - read.clamp(0.0, 1.0));
+    arrival_seen(players, receiver, point, ball_s, attack_x, |o| {
+        let gap = o.pos - passer.pos;
+        let d = gap.length();
+        let blind = if d > 1e-9 {
+            ((1.0 - passer.facing.dot(gap / d)) / 2.0).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        o.pos - o.vel * (late * (1.0 + BLIND_LAG * blind))
+    })
+}
+
+/// [`arrival`] with each opponent placed at `seen(opponent)`.
+fn arrival_seen(
+    players: &[Player],
+    receiver: &Player,
+    point: crate::math::DVec2,
+    ball_s: f64,
+    attack_x: f64,
+    seen: impl Fn(&Player) -> crate::math::DVec2,
+) -> f64 {
+    let time = ball_s + CONTROL_S - ARRIVAL_REACTION_S;
+    let mut free = 1.0;
+    for o in players {
+        if o.team == receiver.team || !o.active() {
+            continue;
+        }
+        let gap = seen(o) - point;
+        let d = gap.length();
+        let left = (d - run_distance(time, o.derived.max_speed, o.derived.max_accel)).max(0.0);
+        let near = distance_share(left);
+        if near <= 0.0 {
+            continue;
+        }
+        let toward = if d > 1e-9 { gap / d } else { receiver.facing };
+        let place = position_weight(toward.x * attack_x);
+        free *= 1.0 - (near * place / SHARE_SCALE).min(1.0);
+    }
+    1.0 - free
+}
+
 /// The penalty of a pressed action: intensity x difficulty x (1 - resistance), 0 to 1.
 #[inline]
 pub fn penalty(intensity: f64, difficulty: f64, resistance: f64) -> f64 {
@@ -426,6 +544,67 @@ mod tests {
         assert_eq!(grade(2.0 * THRESHOLD), 1.0);
         let mid = grade((1.0 + GRADE_START) / 2.0 * THRESHOLD);
         assert!((mid - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn a_presser_who_reaches_the_receiver_before_his_touch_presses_it() {
+        let receiver = player(0, 0.0, 0.0);
+        let at = |x: f64| player(1, x, 0.0);
+        let point = receiver.pos;
+        // A presser 6.5 m away reaches a receiver whose ball arrives in a second and a half
+        // (a 10 to 15 m pass); one 30 m away does not; the receiver of a ball already at his
+        // feet feels only who is near now.
+        let near = at(6.5);
+        let i = arrival(&[receiver, near], &receiver, point, 1.5, 1.0);
+        assert!(i > THRESHOLD, "{i}");
+        assert_eq!(
+            arrival(&[receiver, at(30.0)], &receiver, point, 1.5, 1.0),
+            0.0
+        );
+        assert!(arrival(&[receiver, near], &receiver, point, 0.0, 1.0) < i);
+        // A longer flight gives a presser farther away the time to arrive.
+        let far = at(12.0);
+        assert!(
+            arrival(&[receiver, far], &receiver, point, 2.0, 1.0)
+                > arrival(&[receiver, far], &receiver, point, 0.5, 1.0)
+        );
+        assert!((run_distance(1.0, 8.0, 4.0) - 2.0).abs() < 1e-12);
+        assert!((run_distance(3.0, 8.0, 4.0) - 16.0).abs() < 1e-12);
+    }
+
+    /// At the same true pressure on a receiver (a presser closing on him at 6 m/s), a passer
+    /// with a weak read (low vision and decisions) misjudges it more than one with a strong
+    /// read; a pressed passer reads worse than a free one; a presser behind the passer's facing
+    /// is misjudged more than one he faces; a perfect read is the true value.
+    #[test]
+    fn a_weak_or_pressed_read_misjudges_the_receivers_press_on_arrival() {
+        let passer = player(0, -20.0, 0.0);
+        let receiver = player(0, 0.0, 0.0);
+        let mut presser = player(1, 7.0, 0.0);
+        presser.vel = DVec2::new(-6.0, 0.0);
+        let players = [passer, receiver, presser];
+        let truth = arrival(&players, &receiver, receiver.pos, 1.2, 1.0);
+        let error = |read: f64, from: &Player| {
+            (arrival_read(&players, from, read, &receiver, receiver.pos, 1.2, 1.0) - truth).abs()
+        };
+        assert!(truth > 0.0);
+        assert!(error(1.0, &passer) < 1e-12, "a perfect read sees the truth");
+        let weak = passer_read(0.2, 0.2, 0.0);
+        let strong = passer_read(0.8, 0.8, 0.0);
+        assert!(error(weak, &passer) > error(strong, &passer) + 1e-6);
+        let pressed = passer_read(0.5, 0.5, 1.0);
+        let free = passer_read(0.5, 0.5, 0.0);
+        assert!(pressed < free);
+        assert!(error(pressed, &passer) > error(free, &passer) + 1e-6);
+        // The same passer facing away from the presser pictures him later.
+        let mut turned = passer;
+        turned.facing = DVec2::new(-1.0, 0.0);
+        assert!(error(free, &turned) > error(free, &passer) + 1e-6);
+        // A still presser is read where he stands, whatever the read.
+        let still = [passer, receiver, player(1, 7.0, 0.0)];
+        let s = arrival(&still, &receiver, receiver.pos, 1.2, 1.0);
+        let r = arrival_read(&still, &passer, weak, &receiver, receiver.pos, 1.2, 1.0);
+        assert!((s - r).abs() < 1e-12);
     }
 
     #[test]
