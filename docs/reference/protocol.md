@@ -88,6 +88,12 @@ ball appears at its restart spot, which can come seconds after the restart event
 is fetched. No field was removed and the tick frames are unchanged, so a protocol 7 replay still
 reads; it has no walk-on.
 
+Version 8 also carries game-state rules and player instructions without a new version. The
+`hello` gained one optional field, `game_state`, written only when a side has a rule or an
+instruction, so every hello of a match without them is unchanged. A replay record's `settings`
+gained the same optional field, and its change log the `rule` source and change. No field was
+removed and none changed meaning, and the tick frames are unchanged.
+
 A test in `crates/protocol/tests/document.rs` holds this document to the code: every message
 the implementation names must appear below with every one of its fields.
 
@@ -141,6 +147,7 @@ keyframe. A delta carries no tick number: it is the tick after the frame before 
 | `knockout` | boolean | `true` for a knockout match: level after regulation time, it plays extra time and then a penalty shoot-out. Left out when `false`; a hello without it reads as `false` |
 | `ground.length` | number | the length of the home team's ground, where the match is played, in metres (90 to 120). Left out when it is 105; a hello without it reads as 105 |
 | `ground.width` | number | the width of the home team's ground in metres (45 to 90). Left out when it is 68; a hello without it reads as 68 |
+| `game_state` | array | each side's game-state rules and player instructions, home first: `{ "rules", "instructions" }` in the form of the tactics file's game-state section (see the data files reference), by name, or null for a side with neither. Left out when neither side has any; a hello without it reads as none on either side |
 
 `substitutions`:
 
@@ -867,24 +874,27 @@ The inputs are never cut to save space.
 | Field | Contents |
 |---|---|
 | `engine` | `commit` (the full git commit, or `unknown`), `dirty` (the working tree held changes at build time), `crate_version`, `scheme` (the random-stream scheme), `maths` (the maths library and its version), `executable_sha256` (the SHA-256 of the executable file), and `build` (the short build hash the hello names) |
-| `settings` | `seed` (a decimal string), `minutes`, `knockout`, and `managers` (`ai` or `human`, home first) |
+| `settings` | `seed` (a decimal string), `minutes`, `knockout`, `managers` (`ai` or `human`, home first), and `game_state` (each side's rules and instructions as the hello carries them; optional, left out when neither side has any) |
 | `inputs` | one entry per input entry, in file order: `role`, `name`, `bytes`, and `sha256` |
 | `inputs_bytes` | the total size of the input files |
 | `changes` | the applied-change log |
 | `watchdog` | `slow_calls` (script calls past the wall-clock limit) and `invalid` (`slow script`, or null) |
 
 Each entry of the change log holds `order` (from 0), `team`, `source` (`manager` for a team
-managed by hand, `ai` for the computer manager), `queued_tick` and `queue_number` (the change's
-queue identifier), `tick` (the tick it applied on), `stoppage` (the stoppage it applied at), and
-`change`: `{ "substitution": { "off", "on" } }` with squad indexes, or `{ "tactics": {
-"formation", "mentality", "instructions", "roles": [{ "squad", "role", "duty" }] } }`, where a
-null leaves that setting as it is. Only applied changes are in the log. A rejected change's
+managed by hand, `ai` for the computer manager, `rule` for a side's game-state rules),
+`queued_tick` and `queue_number` (the change's queue identifier), `tick` (the tick it applied
+on), `stoppage` (the stoppage it applied at, or `none` for a rule change that applied whole on
+its own tick), and `change`: `{ "substitution": { "off", "on" } }` with squad indexes, `{
+"tactics": { "formation", "mentality", "instructions", "roles": [{ "squad", "role", "duty" }] }
+}`, where a null leaves that setting as it is, or `{ "rule": { "active" } }`, the rules that
+hold after the change (bit `k` for the side's rule `k`). Only applied changes are in the log. A rejected change's
 verdict stays in the text frames.
 
 ### Re-simulation
 
-Re-simulation builds the match from the stored inputs, queues each `manager` entry of the log
-again at its `queued_tick`, and lets the computer manager make its own changes again. It
+Re-simulation builds the match from the stored inputs, gives each side the rules and
+instructions of `settings.game_state`, queues each `manager` entry of the log again at its
+`queued_tick`, and lets the computer manager and the rules make their own changes again. It
 compares every regenerated tick frame with the stored one, byte for byte, and after full time
 it compares the applied changes with the log, entry by entry. Text frames are not re-simulated:
 they carry the recording's match stamp and owner, and the verdict rows of rejected changes,
@@ -900,7 +910,8 @@ the frames do not match, a header seed that differs from the record's, input ent
 names, sizes, or SHA-256 values differ from the record's list, a total of input sizes that
 differs from the record's, an unknown entry kind, or a hash that does not match the bytes. Each refusal names its check. A missing record field is
 never filled with a default: a field that may be null, such as `watchdog.invalid`, must still
-be present.
+be present. The one exception is `settings.game_state`, which a record of a match without rules
+leaves out.
 
 ### Migration
 

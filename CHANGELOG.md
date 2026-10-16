@@ -18,6 +18,9 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 - The Touchline shows each player's mood as a word with an up or down mark, and names a player who plays away from his natural position.
 - The match feed shows a line when a player's strong trait of play beats an instruction, with the player, what he did, the instruction and why (under pressure or in a low mood). After the match his panel counts these.
 - The launcher keeps a season record per player (starts, minutes, goals, assists, clean sheets, ratings and red cards) and a season goal, and his form and progress set his mood at kick-off in the next match.
+- Game-state rules and player instructions. A tactic holds up to six rules in priority order, each "when all these conditions hold, set these primitives, the mentality or the formation". The conditions are the score, the time left, red cards for either side, the run of play (expected goals for less against over the last 15 minutes) and the team's mean energy. A rule fires through the change queue the moment its conditions hold and lapses when they stop, and the setting under it returns; the higher rule wins a primitive two rules set. New levels start at once and each player takes them up over up to 30 seconds, sooner the better he keeps to instructions; a new formation waits for a stoppage. A player instruction sets one of ten primitives for one player only: dribbling, crossing, cross type, final third, forward runs, width, pressing, tackling, on winning the ball and on losing the ball. Forward runs are refused for a player off the attack line. A person and the computer manager use the same rules, and a style may carry them.
+- Content: the tactics file is version 7. Its `game_state` block sets the most rules a tactic holds, the run-of-play window, the take-up time, the range of each condition, and the primitives a player instruction may set with the inputs each sets for the one player. A style entry may carry `rules` and `player_instructions`. A version 6 tactics file converts as it loads, and no shipped tactic or style has a rule or an instruction yet, so matches play as before.
+- `engine-cli primitives check --player <SLOT>` checks a player instruction: one player's instruction one level up from its default, or each choice, against none; his own statistic must move beyond the paired noise and his ten team-mates' pooled statistic must stay inside it. It needs a build with the `measures` feature.
 
 ### Changed
 
@@ -35,6 +38,7 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 - `GET /engine/views` also answers the club's season record.
 - The launcher writes `season.json` to the data folder, and a copy of each side's team file (`team-a.json`, `team-b.json`) with the player's recent form and goal progress into each match's folder.
 - A saved match from 0.2.0-beta.4 resumes on that release's engine.
+- Saved matches are version 19: each side also stores its rules, its player instructions, the rules in force and the change its players are still taking up, so a resumed match plays on exactly as the unbroken one. The match stream's hello and the replay record gain an optional `game_state` field with each side's rules and instructions; it is written only when a side has some, so the protocol stays at version 8. The replay record logs a rule's change with the source `rule`.
 
 ### Fixed
 

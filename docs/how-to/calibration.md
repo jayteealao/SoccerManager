@@ -461,6 +461,16 @@ target/release/engine-cli --content-dir content primitives check --primitive att
 
 The result holds each choice's means and paired differences for every statistic. To check that the channels mirror, compare the rise of `entries_left_share` under `left` with the rise of `entries_right_share` under `right` in that file: they should differ by no more than their combined noise. A primitive whose `data` names a `deferred` part prints its numbers for that part too, but they judge nothing until the deferral ends.
 
+### Check a player instruction
+
+A player instruction sets one primitive for one player (see the game-state section of the tactics file in `docs/reference/data-files.md`). `--player <slot>` checks it the same way, for the player in that slot of the tested side's 4-4-2: one level up from the default against no instruction, or each choice against none. The player's own statistic must rise beyond the noise, and the same statistic pooled over his ten team-mates must stay inside it:
+
+```bash
+target/release/engine-cli --content-dir content primitives check --primitive dribbling --player 5 --pairs 1000 --out runs/dribbling-player.json
+```
+
+Check each primitive on a slot its hook reaches: a striker (slot 9 or 10) for forward runs and the final third, a winger (slot 5 or 8) for dribbling, crossing, cross type and width, and a central midfielder (slot 6 or 7) for pressing, tackling and the two transition primitives. A single player's counts are small, so use 1,000 pairs. Forward runs are refused for a slot off the attack line.
+
 ### Fit a thin-sample primitive
 
 Full-back run frequency fits to the off-ball runs of 13 SkillCorner teams, and forward runs to the runs of the 32 teams of the 2022 World Cup's tracking data: too few, or national teams rather than clubs, for quintiles. Their rows in `signatures.json` carry `thin_sample: true` and five targets spread evenly from the lowest to the highest team; the World Cup rows also carry `national_teams: true`. Run `fit` as for any level; it aims at the ratio of the level's target to the middle target. Full-back runs are rare in the engine, so fit their frequency with `--matches 1000`.

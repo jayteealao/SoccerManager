@@ -165,3 +165,25 @@ Two style pairings play far more shots than real matches: a high press against i
 Mentality used to add a flat bonus to shots and forward passes. It is now only how much the side fears losing the ball: a pass, a dribble or a hold loses the mentality's loss weight times its chance of failing times the danger of losing the ball there. A ball lost near the own goal hands the opponent a chance, and one lost near the other goal gives up the side's own, so the danger is highest at either end. An attacking mentality fears a loss least, and its weight can go below 0, so it seeks risk. The mentality also sets how many players stay behind the ball. Where the block stands belongs to the line height, which moves the block only while the other team has the ball.
 
 A shot carries no loss term. A missed shot hands the ball back at the opponent's own goal line, where it threatens nothing, and the shot spends the side's threat instead of losing it. Counted as a loss at the shooter's feet, the term held back every shot but the closest ones, so the shots left were twice as good and goals rose by half.
+
+## Game-state rules and player instructions
+
+A tactic has three parts: the base tactics the manager sets, up to six game-state rules in priority order, and player instructions for single players. A person and the computer manager hand in the same three parts, and a style may carry rules and instructions as part of its preset.
+
+### Rules
+
+A rule reads "when all these conditions hold, set these primitives". The conditions are the score (leading or trailing by some goals, or level), the time left (so many minutes or less to the end of normal time, or of extra time once it has started), red cards for either side, the run of play (expected goals for less expected goals against over the last 15 minutes) and the team's energy (the mean of the outfield players on the pitch). No condition is a fixed minute of its own: time left is one condition among the others.
+
+The match checks every side's rules each tick, after the tick's events. The tactics in force are the base with the rules that hold applied over it, from the lowest to the highest, so the higher rule wins a primitive that two rules set. When the set of rules that hold changes, a rule change enters the change queue the manager and the computer manager share, on that tick. A rule that stops holding lapses the same way, and the setting under it returns. A manager's own change sets the base, and the rules that hold still apply over it.
+
+A new formation or role waits for the next stoppage that admits a tactics change. Everything else starts at once, and the players take it up over time: each player reads the new levels after a delay set by his shape stage, the stage that holds position and keeps to instructions, from at once at its top to 30 seconds at its bottom. Until his moment comes he plays as before. What the side reads as a whole, such as how many players press, switches when half the side has taken the change up. A substitute comes on with the change already taken up. A rule change that comes while another is being taken up leaves each player on what he was reading.
+
+### Player instructions
+
+A player instruction sets one primitive for one player in one formation slot. Ten primitives take one: dribbling, crossing, cross type, final third, forward runs, width, pressing, tackling, on winning the ball and on losing the ball. The player's own value replaces the side's at the same hook, the place where play reads it, so an instruction never adds a new way to decide; it gives one player another value at the same point. Pressing gives the player his own reach and willingness to press; how many players press stays the side's.
+
+Forward runs reach only the wingers and strikers, because a run in behind starts from the attack line. An instruction for any other slot is refused when the tactic loads, in any formation the tactic or one of its rules can take. Runs from deeper positions, chosen by role and duty, wait for the off-ball work.
+
+`engine-cli primitives check --player <slot>` holds each instruction to the same frame as the team primitives: pairs of matches that differ only in one player's instruction, one level up from the default. The player's own statistic must move beyond the noise of the pairs, and the same statistic pooled over his ten team-mates must stay inside it.
+
+A saved match keeps each side's rules, instructions, the rules in force and the change its players are still taking up, so a resumed match plays on exactly as the unbroken one. The match stream sends each side's rules and instructions in its hello, and a replay keeps them, so a re-simulation fires the same rules again.

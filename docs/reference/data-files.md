@@ -19,7 +19,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `attributes.json` | 4 | The attribute schema: 30 to 50 names in four groups, each with its job in play (two of them hidden values), the stage tables that blend them for every action, and the skill gates |
 | `tuning.json` | 6 | Engine constants, the attribute contract with the state caps, the body jobs and consistency, decision weights, injury rates, the generator's world spread, fatigue curve, stream buffer, the hidden values' words and the match rating |
 | `rules/default.json` | 4 | The rule pack |
-| `tactics.json` | 5 | Ten formations, mentalities, team instructions, roles, duties, the AI manager's settings, and the tactical primitives: what each setting of the tactics board moves, where play reads it, and how its levels were fitted to real teams |
+| `tactics.json` | 7 | Ten formations, mentalities, team instructions, roles, duties, the AI manager's settings, and the tactical primitives: what each setting of the tactics board moves, where play reads it, how its levels were fitted to real teams, and the frame of game-state rules and player instructions |
 | `signatures.json` | 3 | The real-team signature table: for each statistic a tactical primitive moves, its spread across real club seasons, the five quintiles and each quintile's median. No match reads it; the primitives harness fits the levels to it. Written by `engine-cli signatures`, never by hand |
 | `traits.json` | 1 | The trait catalogue: the 31 traits of play a player may carry, each with the engine choice it acts on and, for nine pairs, its opposite. Part of the content hash; a team file naming a trait it does not hold, or two opposites on one player, is refused |
 | `restart-waits.json` | 1 | The restart wait table: for each kind of restart, the drawn extra wait beyond the visible steps, as 21 quantiles from real restart waits, the limit on the visible steps, the late-lead factor and the quick-restart rule. Optional: content without it plays the fixed `restart_delay_s` delays. Part of the content hash when present; written by `engine-cli restart-waits`, never by hand |
@@ -874,6 +874,7 @@ Every other club file in `teams/` plays in the background round of a served matc
 | formations | `{ "name", "slots" }`; eleven slots `{ "x", "y", "position" }` in metres from the own goal line (1 to 100) and from the centre line (-33 to 33) on a 105 by 68 ground; the slots scale with the home ground | 1 to 16; slot 0 is the only `GK` |
 | mentalities | `{ "name", "loss_weight", "rest_defence" }`: how much the danger of a lost ball counts against an option's gain (-5 to 5; below 0 the side seeks risk; see [decision](#decision)), and the fewest outfield players who stay goal-side of the ball while the team has it (0 to 10; optional, 0 when absent). Where the block stands is the line height's, not the mentality's | 1 to 9 |
 | primitives | optional; the tactical primitives (see [Primitives](#primitives)) | none when absent |
+| game_state | optional; the frame of game-state rules and player instructions (see [Game state](#game-state)) | none when absent; then a tactic with a rule or an instruction is refused |
 | instructions | the six team instructions, each `{ "default", "levels" }` with 2 to 5 levels | see below |
 | roles | `{ "name", "positions", "attributes", "in_possession", "out_of_possession", "preferred_actions", "teammates", "options" }`: the positions it suits, attribute weights (0 to 10, each a name in `attributes.json`) the AI manager uses to pick players, the role's behaviours, and its stand options (see below) | 1 to 64; a role for every position a formation uses |
 | duties | `{ "name", "depth", "risk", "scale" }`: metres the anchor moves up (-15 to 15), an offset on forward passes and dribbles (-2 to 2), and a scale on the role's preferred actions (0.5 to 1.5) | 1 to 5 |
@@ -937,6 +938,46 @@ The load refuses, by name: a graded primitive whose block has other than 5 level
 A match keeps the level or choice of each primitive that owns its levels or choices in one byte per primitive, in the file's order, beside the six instructions; a saved match keeps them too.
 
 Three primitives act only in the seconds after the ball changes side in open play. `on_winning_the_ball` (input `counter`, hook `regain.counter`; and `pace_lift`, hook `pace.lift`) acts for 13 seconds after the team wins the ball, while it keeps it: a pass gains `counter` per 45 m it goes toward the attacked goal, the hold loses `counter`, a positive `counter` lets the attack-line players start a run in behind from up to 10 m per unit from the defensive line, and `pace_lift` 1 lifts the team's pressing and support jobs one urgency grade. `on_losing_the_ball` (input `counter_press`, hook `loss.counter_press`) acts for `counter_press_length` seconds (input `counter_press_s`, hook `loss.counter_press_window`) after the team loses the ball, while the other team keeps it: the distance from which the nearest players start to press takes the factor 1 plus `counter_press` (0 at -1: nobody presses). A dead ball closes both windows. Every default is neutral, so a team at its defaults plays as before. The two counter-press primitives keep seeded values and are `deferred`: in this engine more pressers for longer after a loss do not yet win the ball back, so they are judged and fitted with pressing intensity and the tackle decision.
+
+### Game state
+
+A tactic may hold game-state rules and player instructions beside its tactics. The `game_state` block sets their frame:
+
+| Field | Holds | Bound |
+|---|---|---|
+| max_rules | the most rules a tactic holds | 1 to 8; 6 in the shipped file |
+| run_of_play_window_min | the minutes over which the run of play adds up expected goals | 1 to 45; 15 |
+| take_up_s | the seconds a player at the bottom of his shape stage (keeping to instructions) takes to take a rule's new levels up; at the top he takes them at once | 0 to 120; 30 |
+| conditions | `{ "kind", "unit", "min", "max" }`: each condition kind a rule may test and the range its value may take. The kinds are `score` (leading or trailing by, in goals), `time_left` (minutes), `red_cards_ours`, `red_cards_theirs` (players sent off), `run_of_play` (expected goals for less against over the window) and `team_energy` (the mean energy of the outfield players on the pitch, 0 to 1). The minimum is at most the maximum | 1 to 6; each kind once |
+| player_overrides | `{ "primitive", "inputs", "positions" }`: the primitives a player instruction may set, the plan inputs each sets for the one player (1 to 4, each read per player), and, when given, the positions that may take it | at most 16; each a primitive of the file, once; an input it does not set, or one play reads for the side as a whole, is refused |
+
+The shipped list holds ten primitives: `dribbling`, `crossing`, `cross_type`, `final_third`, `forward_runs` (positions `LW`, `RW` and `ST` only: a run in behind starts from the attack line), `width`, `pressing` (its reach and willingness; how many press stays the side's), `tackling`, `on_winning_the_ball` and `on_losing_the_ball`. No other primitive takes a player instruction; marking waits for its own work.
+
+A tactic writes its rules and instructions by name:
+
+```json
+{
+  "rules": [
+    {
+      "when": [
+        { "kind": "score", "state": "leading", "by": 1 },
+        { "kind": "time_left", "minutes": 15 }
+      ],
+      "set": [
+        { "primitive": "mentality", "level": "defensive" },
+        { "primitive": "line_of_engagement", "level": "low" }
+      ]
+    }
+  ],
+  "instructions": [{ "slot": 10, "primitive": "forward_runs", "level": "run_in_behind" }]
+}
+```
+
+A condition takes the field of its kind: `score` takes `state` (`leading`, `level` or `trailing`) and `by` (1 when absent); `time_left` takes `minutes`; `red_cards_ours` and `red_cards_theirs` take `at_least` (1 when absent); `run_of_play` takes `above` or `below`; `team_energy` takes `below`. An action sets a primitive (the mentality among them) to a level, choice or state, or names a `formation`. An instruction names a formation slot (0 to 10), a primitive of the override list and its level. A rule holds while all its conditions hold; the first rule in the list wins a primitive two holding rules set. A new formation waits for a stoppage that admits tactics; everything else starts at once.
+
+The load refuses, by name: more rules than `max_rules`, an unknown condition kind, a value outside its condition's range, a condition missing its field, an unknown primitive, level, choice or formation, an instruction on a primitive outside the override list, a slot outside 0 to 10, and a `forward_runs` instruction for a slot off the attack line in any formation the tactic can take.
+
+A version 6 file converts on load and takes the shipped `game_state` block from a copy compiled into the build.
 
 A version 4 file converts on load: the tempo levels, their default and the tempo primitive's default and fit records take the names `very_fast`, `fast`, `normal`, `slow` and `very_slow` in place of `very_direct`, `direct`, `balanced`, `patient` and `very_patient` (and the earlier `faster`, `normal` and `slower`), with the same values and order. Passing directness keeps its names. The file takes each transition primitive entry it does not hold by name, from a copy compiled into the build.
 
@@ -1095,6 +1136,7 @@ The named styles. An AI manager picks one before each match from the staff advic
 | styles.*.identity | the statistics that show the style: `stat` (one of `possession_pct`, `passes`, `pass_accuracy_pct`, `shots`, `shots_on_target_share`, `fouls`, `corners`, `goals`, `xg`), `direction` (`up` or `down`), and `against` (`true` reads the other side's figure) | 2 or 3 |
 | styles.*.fit | attribute name to weight: the attributes the style's key jobs read; each must be a visible technical, mental or physical attribute | 1 to 12 entries; each weight 0 to 1, sum above 0 |
 | styles.*.fit_positions | the outfield positions whose players the fit reads; every outfield position when absent | optional; not empty, no `GK` |
+| styles.*.rules, styles.*.player_instructions | the style's game-state rules and player instructions, in the form of [Game state](#game-state); a side that starts in the style plays by them | optional; none when absent |
 
 The staff advice, for each style: the lineup the AI would field in each of its formations, the formation whose lineup has the best summed rating, and the weighted mean of the fit attributes over that lineup's players (of `fit_positions`) less the same players' mean over every visible outfield attribute, plus an error drawn with spread `advice_noise`. The draw comes from a generator of its own, seeded by SHA-256 over the match seed, the side, the club id and a label, so the advice reads no match random stream. The best estimate wins; nothing keeps the estimates.
 
