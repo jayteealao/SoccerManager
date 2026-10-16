@@ -173,11 +173,11 @@
     "pressing": {
       "default": "mid",
       "levels": [
-        { "name": "very_low", "press_count": 0, "press_distance_scale": 0.6, "press_willingness": -1.0 },
-        { "name": "low", "press_count": 1, "press_distance_scale": 0.8, "press_willingness": -0.5 },
+        { "name": "very_low", "press_count": 0, "press_distance_scale": 3.0, "press_willingness": -1.0 },
+        { "name": "low", "press_count": 1, "press_distance_scale": 3.0, "press_willingness": -0.5 },
         { "name": "mid", "press_count": 2, "press_distance_scale": 1.0, "press_willingness": 0.0 },
-        { "name": "high", "press_count": 3, "press_distance_scale": 1.3, "press_willingness": 0.5 },
-        { "name": "very_high", "press_count": 4, "press_distance_scale": 1.6, "press_willingness": 1.0 }
+        { "name": "high", "press_count": 3, "press_distance_scale": 0.825, "press_willingness": 0.5 },
+        { "name": "very_high", "press_count": 4, "press_distance_scale": 1.00625, "press_willingness": 1.0 }
       ]
     },
     "width": {
@@ -1718,9 +1718,14 @@
       "data": {
         "source": "wyscout_2017_18",
         "competitions": ["England", "France", "Italy", "Spain"],
-        "row": "pressing",
-        "deferred": "not fitted yet: fitted with the tackle decision"
-      }
+        "row": "pressing"
+      },
+      "fits": [
+        { "level": "very_low", "values": { "press_distance": 3.0 }, "target": 1.234942, "achieved": 2.105865, "noise": 0.114266, "matches": 200, "seed": 9, "unreachable": true },
+        { "level": "low", "values": { "press_distance": 3.0 }, "target": 1.085449, "achieved": 1.384013, "noise": 0.055874, "matches": 200, "seed": 9, "unreachable": true },
+        { "level": "high", "values": { "press_distance": 0.825 }, "target": 0.923793, "achieved": 0.918492, "noise": 0.030434, "matches": 200, "seed": 9 },
+        { "level": "very_high", "values": { "press_distance": 1.00625 }, "target": 0.830506, "achieved": 0.846112, "noise": 0.032565, "matches": 200, "seed": 9 }
+      ]
     },
     {
       "name": "line_height",
@@ -1771,11 +1776,11 @@
       "kind": "graded",
       "levels": "own",
       "steps": [
-        { "name": "very_compact", "values": { "defensive_width": 0.8 } },
-        { "name": "compact", "values": { "defensive_width": 0.9 } },
+        { "name": "very_compact", "values": { "defensive_width": 0.880859375 } },
+        { "name": "compact", "values": { "defensive_width": 0.939453125 } },
         { "name": "normal", "values": { "defensive_width": 1.0 } },
-        { "name": "wide", "values": { "defensive_width": 1.1 } },
-        { "name": "very_wide", "values": { "defensive_width": 1.2 } }
+        { "name": "wide", "values": { "defensive_width": 1.060546875 } },
+        { "name": "very_wide", "values": { "defensive_width": 1.1259765625 } }
       ],
       "default": "normal",
       "inputs": [
@@ -1787,9 +1792,14 @@
       "data": {
         "source": "dfl_open",
         "competitions": ["Bundesliga", "2. Bundesliga"],
-        "row": "defensive_width",
-        "deferred": "not fitted yet: fitted with the tackle decision"
-      }
+        "row": "defensive_width"
+      },
+      "fits": [
+        { "level": "very_compact", "values": { "defensive_width": 0.880859375 }, "target": 0.901474, "achieved": 0.901316, "noise": 0.000955, "matches": 200, "seed": 9 },
+        { "level": "compact", "values": { "defensive_width": 0.939453125 }, "target": 0.950737, "achieved": 0.950335, "noise": 0.000943, "matches": 200, "seed": 9 },
+        { "level": "wide", "values": { "defensive_width": 1.060546875 }, "target": 1.049263, "achieved": 1.049053, "noise": 0.001107, "matches": 200, "seed": 9 },
+        { "level": "very_wide", "values": { "defensive_width": 1.1259765625 }, "target": 1.098526, "achieved": 1.098278, "noise": 0.001235, "matches": 200, "seed": 9 }
+      ]
     },
     {
       "name": "force_the_opponent",
@@ -1821,11 +1831,11 @@
       "kind": "graded",
       "levels": "own",
       "steps": [
-        { "name": "stay_on_feet", "values": { "tackle_risk": -0.6, "tackle_willingness": -1.0 } },
-        { "name": "careful", "values": { "tackle_risk": -0.3, "tackle_willingness": -0.5 } },
+        { "name": "stay_on_feet", "values": { "tackle_risk": 0.125, "tackle_willingness": -1.0 } },
+        { "name": "careful", "values": { "tackle_risk": 0.03125, "tackle_willingness": -0.5 } },
         { "name": "normal", "values": { "tackle_risk": 0.0, "tackle_willingness": 0.0 } },
-        { "name": "committed", "values": { "tackle_risk": 0.3, "tackle_willingness": 0.5 } },
-        { "name": "get_stuck_in", "values": { "tackle_risk": 0.6, "tackle_willingness": 1.0 } }
+        { "name": "committed", "values": { "tackle_risk": 0.125, "tackle_willingness": 0.5 } },
+        { "name": "get_stuck_in", "values": { "tackle_risk": 0.5, "tackle_willingness": 1.0 } }
       ],
       "default": "normal",
       "inputs": [
@@ -1839,9 +1849,14 @@
       "data": {
         "source": "wyscout_2017_18",
         "competitions": ["England", "France", "Italy", "Spain"],
-        "row": "tackling",
-        "deferred": "not fitted yet: fitted with the tackle decision"
-      }
+        "row": "tackling"
+      },
+      "fits": [
+        { "level": "stay_on_feet", "values": { "tackle_risk": 0.125 }, "target": 0.782696, "achieved": 0.772228, "noise": 0.048838, "matches": 200, "seed": 9 },
+        { "level": "careful", "values": { "tackle_risk": 0.03125 }, "target": 0.901409, "achieved": 0.910538, "noise": 0.035897, "matches": 200, "seed": 9 },
+        { "level": "committed", "values": { "tackle_risk": 0.125 }, "target": 1.062374, "achieved": 1.057629, "noise": 0.030578, "matches": 200, "seed": 9 },
+        { "level": "get_stuck_in", "values": { "tackle_risk": 0.5 }, "target": 1.203219, "achieved": 1.22393, "noise": 0.056334, "matches": 200, "seed": 9 }
+      ]
     },
     {
       "name": "offside_trap",
