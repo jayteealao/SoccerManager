@@ -116,13 +116,7 @@ fn every_event_kind_gets_a_line_naming_its_player_and_club() {
         let line = c.line(&event).unwrap();
         names_its_player_and_club(&line, &event, &names, &names.roster);
     }
-    for code in [
-        AiCode::MentalityUpTrailing,
-        AiCode::MentalityDownLeading,
-        AiCode::SubInjury,
-        AiCode::SubFatigue,
-        AiCode::SubKeeper,
-    ] {
+    for code in [AiCode::SubInjury, AiCode::SubFatigue, AiCode::SubKeeper] {
         let mut c = Commentator::new(&commentary, names.clone(), NINETY, common::SEED);
         let mut event = scripted(EngineEventKind::AiDecision, 75);
         event.detail = Some(EventDetail::Ai { code });

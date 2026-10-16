@@ -330,14 +330,6 @@ pub struct Setup {
     pub jobs: u32,
 }
 
-/// The content of a harness run: AI in-match tactic changes off.
-pub fn harness_content(content: &Content) -> Content {
-    let mut c = content.clone();
-    c.tactics.ai.trailing_minute = 200;
-    c.tactics.ai.leading_minute = 200;
-    c
-}
-
 /// The primitive `name` of `schema`.
 pub fn primitive<'a>(schema: &'a TacticsSchema, name: &str) -> anyhow::Result<&'a Primitive> {
     schema
@@ -663,7 +655,6 @@ pub fn check(
     hold: &[String],
     setup: &Setup,
 ) -> anyhow::Result<Vec<StepVerdict>> {
-    let content = harness_content(content);
     let p = primitive(&content.tactics, name)?.clone();
     let levels_of = |given: &[String], flag: &str| -> anyhow::Result<Vec<(Primitive, usize)>> {
         let mut out = Vec::new();
@@ -1044,7 +1035,6 @@ pub fn check_player(
     slot: usize,
     setup: &Setup,
 ) -> anyhow::Result<Vec<PlayerVerdict>> {
-    let content = harness_content(content);
     let schema = &content.tactics;
     let p = primitive(schema, name)?.clone();
     let defaults = Tactics::defaults(schema);
@@ -1441,7 +1431,6 @@ pub fn fit(
     max_evals: usize,
     between_neighbours: bool,
 ) -> anyhow::Result<FitResult> {
-    let content = harness_content(content);
     let p = primitive(&content.tactics, name)?.clone();
     if p.kind != PrimitiveKind::Graded {
         bail!("{name}: only a graded primitive is fitted level by level");
@@ -1624,7 +1613,6 @@ pub fn reach(
     name: &str,
     setup: &Setup,
 ) -> anyhow::Result<BTreeMap<String, [(f64, f64); 2]>> {
-    let content = harness_content(content);
     let p = primitive(&content.tactics, name)?.clone();
     let first = p.inputs.first().context("an input")?.input.clone();
     let (_, _, lo, hi) = input_field(&first).with_context(|| format!("{first} has no range"))?;
@@ -1750,7 +1738,6 @@ pub fn pressure_spread(
     setup: &Setup,
 ) -> anyhow::Result<(SpreadTable, MeanTable)> {
     use engine::measures::PlayerPressure;
-    let content = harness_content(content);
     let list = fixtures::fixtures(setup.pairs);
     let next = AtomicUsize::new(0);
     let pooled_players: Mutex<BTreeMap<(String, usize), PlayerPressure>> =

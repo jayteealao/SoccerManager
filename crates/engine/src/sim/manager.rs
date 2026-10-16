@@ -35,7 +35,6 @@ impl Simulation {
             .modules
             .manager
             .check(&self.view(), team, at_stoppage);
-        self.ai[team] = plan.memory;
         for (change, code) in plan.changes {
             self.ai_queue(team, change, code, plan.minute);
         }

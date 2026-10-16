@@ -807,6 +807,44 @@ fn a_version_6_tactics_file_converts_to_the_shipped_version_7_file() {
     assert_eq!(kinds, engine::tactics::rules::CONDITION_KINDS);
 }
 
+/// A version 7 tactics file (the AI manager's fixed-minute tactics fields) converts to the
+/// shipped version 8 file: the AI block loses the fields, and nothing else changes.
+#[test]
+fn a_version_7_tactics_file_converts_to_the_shipped_version_8_file() {
+    let path = common::content_dir().path(engine::data::TACTICS_FILE);
+    let mut v7: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    v7["schema_version"] = 7.into();
+    v7["ai"]["trailing_minute"] = 70.into();
+    v7["ai"]["leading_minute"] = 80.into();
+    let converted =
+        engine::data::load_tactics_bytes(&serde_json::to_vec(&v7).unwrap(), "tactics-v7.json")
+            .unwrap();
+    assert_eq!(converted.converted_from, Some(7));
+    let shipped = common::content().tactics;
+    assert_eq!(converted.value.ai, shipped.ai);
+    assert_eq!(converted.value.game_state, shipped.game_state);
+    assert_eq!(converted.value.primitives, shipped.primitives);
+    assert_eq!(converted.value.instructions, shipped.instructions);
+    assert_eq!(converted.value.roles, shipped.roles);
+}
+
+/// A version 8 tactics file that still names a field version 8 dropped is refused, naming it.
+#[test]
+fn a_version_8_tactics_file_naming_a_dropped_ai_field_is_refused_by_name() {
+    let path = common::content_dir().path(engine::data::TACTICS_FILE);
+    let shipped: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    assert_eq!(shipped["schema_version"], 8);
+    for field in engine::data::convert::TACTICS_V8_DROPPED_AI {
+        let mut v8 = shipped.clone();
+        v8["ai"][field] = 70.into();
+        let err =
+            engine::data::load_tactics_bytes(&serde_json::to_vec(&v8).unwrap(), "tactics.json")
+                .unwrap_err()
+                .to_string();
+        assert!(err.contains(field), "{field}: {err}");
+    }
+}
+
 /// A game-state block whose override names an input its primitive does not set, or one read
 /// for the side as a whole, or an unknown condition kind, is refused by name.
 #[test]

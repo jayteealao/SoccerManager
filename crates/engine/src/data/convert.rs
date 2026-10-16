@@ -46,8 +46,7 @@ use crate::data::attributes::{
     ATTRIBUTES_VERSION, ActionTables, AttributeDef, AttributeSchema, Direction, Group, Job,
 };
 use crate::data::tactics::{
-    AiTuning, Duty, Formation, Instructions, Offset, PreferredActions, Role, TacticsSchema,
-    Teammates,
+    Duty, Formation, Instructions, Offset, PreferredActions, Role, Teammates,
 };
 use crate::data::team::{
     Club, Foot, MAX_SQUAD, PlayerEntry, Position, Side, TEAM_VERSION, TeamFile,
@@ -65,6 +64,7 @@ pub const TACTICS_V3: u32 = 3;
 pub const TACTICS_V4: u32 = 4;
 pub const TACTICS_V5: u32 = 5;
 pub const TACTICS_V6: u32 = 6;
+pub const TACTICS_V7: u32 = 7;
 /// The attribute file versions the converters read.
 pub const ATTRIBUTES_V1: u32 = 1;
 pub const ATTRIBUTES_V2: u32 = 2;
@@ -848,7 +848,9 @@ pub struct TacticsV1 {
     pub instructions: Instructions,
     pub roles: Vec<RoleV1>,
     pub duties: Vec<DutyV1>,
-    pub ai: AiTuning,
+    /// The AI block as the file holds it; a later conversion drops what a later version
+    /// dropped.
+    pub ai: serde_json::Value,
 }
 
 /// A version 1 tactics file in the version 2 shape, as JSON, with values that keep the play
@@ -856,50 +858,43 @@ pub struct TacticsV1 {
 /// its positions in and out of possession move nothing, teammates treat it as before, and
 /// every duty scales its role by 1. [`tactics_v2_to_v3`] lifts the result.
 pub fn tactics_v1_to_v2(file: TacticsV1) -> serde_json::Value {
-    let mentalities = file.mentalities;
-    let schema = TacticsSchema {
-        schema_version: TACTICS_V2,
-        formations: file.formations,
-        mentalities: Vec::new(),
-        instructions: file.instructions,
-        roles: file
-            .roles
-            .into_iter()
-            .map(|r| Role {
-                name: r.name,
-                positions: r.positions,
-                attributes: r.attributes,
-                in_possession: Offset::default(),
-                out_of_possession: Offset::default(),
-                preferred_actions: PreferredActions {
-                    shoot: r.shoot,
-                    dribble: r.dribble,
-                    progress: r.progress,
-                },
-                teammates: Teammates::default(),
-                options: Default::default(),
-            })
-            .collect(),
-        duties: file
-            .duties
-            .into_iter()
-            .map(|d| Duty {
-                name: d.name,
-                depth: d.depth,
-                risk: d.risk,
-                scale: 1.0,
-            })
-            .collect(),
-        ai: file.ai,
-        stands: Default::default(),
-        stand_options: None,
-        rest_defence: None,
-        primitives: Vec::new(),
-        game_state: None,
-    };
-    let mut value = serde_json::to_value(schema).expect("a tactics file serialises");
-    value["mentalities"] = serde_json::to_value(mentalities).expect("a mentality serialises");
-    value
+    let roles: Vec<Role> = file
+        .roles
+        .into_iter()
+        .map(|r| Role {
+            name: r.name,
+            positions: r.positions,
+            attributes: r.attributes,
+            in_possession: Offset::default(),
+            out_of_possession: Offset::default(),
+            preferred_actions: PreferredActions {
+                shoot: r.shoot,
+                dribble: r.dribble,
+                progress: r.progress,
+            },
+            teammates: Teammates::default(),
+            options: Default::default(),
+        })
+        .collect();
+    let duties: Vec<Duty> = file
+        .duties
+        .into_iter()
+        .map(|d| Duty {
+            name: d.name,
+            depth: d.depth,
+            risk: d.risk,
+            scale: 1.0,
+        })
+        .collect();
+    serde_json::json!({
+        "schema_version": TACTICS_V2,
+        "formations": file.formations,
+        "mentalities": file.mentalities,
+        "instructions": file.instructions,
+        "roles": roles,
+        "duties": duties,
+        "ai": file.ai,
+    })
 }
 
 /// The copy of the version 3 additions compiled into the build: tempo's levels, the loss
@@ -1162,10 +1157,31 @@ pub fn tactics_v6_to_v7(mut file: serde_json::Value) -> Result<serde_json::Value
     let obj = file
         .as_object_mut()
         .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert("schema_version".into(), serde_json::Value::from(TACTICS_V7));
+    obj.entry("game_state").or_insert(frozen.game_state);
+    Ok(file)
+}
+
+/// The AI fields version 8 drops: the minutes of the AI manager's own tactics changes.
+pub const TACTICS_V8_DROPPED_AI: [&str; 2] = ["trailing_minute", "leading_minute"];
+
+/// A version 7 tactics file, as JSON, in the version 8 shape: the AI block loses the fields
+/// version 8 drops ([TACTICS_V8_DROPPED_AI]). No level or value changes. The caller parses
+/// and checks the result as a current file.
+pub fn tactics_v7_to_v8(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
     obj.insert(
         "schema_version".into(),
         serde_json::Value::from(crate::data::tactics::TACTICS_VERSION),
     );
-    obj.entry("game_state").or_insert(frozen.game_state);
+    let ai = obj
+        .get_mut("ai")
+        .and_then(|a| a.as_object_mut())
+        .ok_or_else(|| "ai is missing".to_string())?;
+    for field in TACTICS_V8_DROPPED_AI {
+        ai.remove(field);
+    }
     Ok(file)
 }

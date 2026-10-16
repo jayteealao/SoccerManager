@@ -497,7 +497,8 @@ pub fn load_tuning_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TuningFile>
 /// ([`convert::tactics_v3_to_v4`]), a version 4 file to version 5
 /// ([`convert::tactics_v4_to_v5`]), a version 5 file to version 6
 /// ([`convert::tactics_v5_to_v6`]), a version 6 file to version 7
-/// ([`convert::tactics_v6_to_v7`]), and the result is checked as a current file.
+/// ([`convert::tactics_v6_to_v7`]), a version 7 file to version 8 ([`convert::tactics_v7_to_v8`]),
+/// and the result is checked as a current file.
 pub fn load_tactics_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TacticsSchema>, EngineError> {
     const KIND: &str = "tactics";
     match peek_version(KIND, bytes, shown)? {
@@ -510,40 +511,48 @@ pub fn load_tactics_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TacticsSch
         | convert::TACTICS_V3
         | convert::TACTICS_V4
         | convert::TACTICS_V5
-        | convert::TACTICS_V6) => {
-            let v6 = if found == convert::TACTICS_V6 {
+        | convert::TACTICS_V6
+        | convert::TACTICS_V7) => {
+            let v7 = if found == convert::TACTICS_V7 {
                 parse(KIND, bytes, shown)?
             } else {
-                let v5 = if found == convert::TACTICS_V5 {
+                let v6 = if found == convert::TACTICS_V6 {
                     parse(KIND, bytes, shown)?
                 } else {
-                    let v4 = if found == convert::TACTICS_V4 {
+                    let v5 = if found == convert::TACTICS_V5 {
                         parse(KIND, bytes, shown)?
                     } else {
-                        let v3 = if found == convert::TACTICS_V3 {
+                        let v4 = if found == convert::TACTICS_V4 {
                             parse(KIND, bytes, shown)?
                         } else {
-                            let v2 = if found == convert::TACTICS_V1 {
-                                let v1: convert::TacticsV1 = parse(KIND, bytes, shown)?;
-                                convert::tactics_v1_to_v2(v1)
-                            } else {
+                            let v3 = if found == convert::TACTICS_V3 {
                                 parse(KIND, bytes, shown)?
+                            } else {
+                                let v2 = if found == convert::TACTICS_V1 {
+                                    let v1: convert::TacticsV1 = parse(KIND, bytes, shown)?;
+                                    convert::tactics_v1_to_v2(v1)
+                                } else {
+                                    parse(KIND, bytes, shown)?
+                                };
+                                convert::tactics_v2_to_v3(v2).map_err(|reason| {
+                                    refused(KIND, shown, "tactics".into(), reason)
+                                })?
                             };
-                            convert::tactics_v2_to_v3(v2)
+                            convert::tactics_v3_to_v4(v3)
                                 .map_err(|reason| refused(KIND, shown, "tactics".into(), reason))?
                         };
-                        convert::tactics_v3_to_v4(v3)
+                        convert::tactics_v4_to_v5(v4)
                             .map_err(|reason| refused(KIND, shown, "tactics".into(), reason))?
                     };
-                    convert::tactics_v4_to_v5(v4)
+                    convert::tactics_v5_to_v6(v5)
                         .map_err(|reason| refused(KIND, shown, "tactics".into(), reason))?
                 };
-                convert::tactics_v5_to_v6(v5)
+                convert::tactics_v6_to_v7(v6)
                     .map_err(|reason| refused(KIND, shown, "tactics".into(), reason))?
             };
-            let v7 = convert::tactics_v6_to_v7(v6)
+            let v8 = convert::tactics_v7_to_v8(v7)
                 .map_err(|reason| refused(KIND, shown, "tactics".into(), reason))?;
-            let mut value: TacticsSchema = serde_json::from_value(v7)
+            let mut value: TacticsSchema = serde_json::from_value(v8)
                 .map_err(|e| refused(KIND, shown, "converted file".into(), e.to_string()))?;
             primitives::drop_unmatched_fits(&mut value);
             let value = checked(KIND, shown, value, &())?;

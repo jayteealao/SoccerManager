@@ -154,7 +154,8 @@ impl CardCondition {
     }
 }
 
-/// The AI manager's choice on an `ai-decision` event.
+/// The AI manager's choice on an `ai-decision` event. The two mentality codes are older
+/// builds' choices: the content keeps their lines, and no event of this build matches them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum DecisionCondition {
@@ -169,13 +170,7 @@ impl DecisionCondition {
     pub fn matches(self, code: AiCode) -> bool {
         matches!(
             (self, code),
-            (
-                DecisionCondition::MentalityUpTrailing,
-                AiCode::MentalityUpTrailing
-            ) | (
-                DecisionCondition::MentalityDownLeading,
-                AiCode::MentalityDownLeading
-            ) | (DecisionCondition::SubInjury, AiCode::SubInjury)
+            (DecisionCondition::SubInjury, AiCode::SubInjury)
                 | (DecisionCondition::SubFatigue, AiCode::SubFatigue)
                 | (DecisionCondition::SubKeeper, AiCode::SubKeeper)
         )

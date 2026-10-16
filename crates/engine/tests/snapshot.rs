@@ -20,15 +20,26 @@ use sha2::{Digest, Sha256};
 /// tick, early in the second half, before the AI manager's substitutions and tactics changes.
 const FROM_TICK: u32 = 50 * TICKS_PER_MINUTE;
 
-/// The seed-3, 90-minute match on the shipped content and default teams: after `FROM_TICK` it
-/// brings substitutions and an applied tactics change (seed 1 until the defending stages
-/// read their attributes, when it brought no tactics change after the snapshot; seed 7 with
-/// the player as a person alone). Seed 3 is the lowest that brings both, before and after
-/// the player as a person joined the team shape.
+/// The home side's game-state rule: with half an hour left it plays more attacking and
+/// faster, an applied tactics change after `FROM_TICK`.
+const LATE_RULE: &str = r#"{
+  "rules": [
+    { "when": [{ "kind": "time_left", "minutes": 30 }], "set": [{ "primitive": "mentality", "level": "attacking" }, { "primitive": "tempo", "level": "fast" }] }
+  ]
+}"#;
+
+/// The seed-3, 90-minute match on the shipped content and default teams, the home side
+/// playing [`LATE_RULE`]: after `FROM_TICK` it brings substitutions and an applied tactics
+/// change. (Until the AI manager stopped making tactics changes of its own, its trailing and
+/// leading changes gave the tactics change and no rule was needed.)
 fn resume_match() -> engine::MatchConfig {
     let content = content();
     let [a, b] = default_teams(&content);
-    engine::MatchConfig::new(3, 90, &content, [&a, &b]).unwrap()
+    let config = engine::MatchConfig::new(3, 90, &content, [&a, &b]).unwrap();
+    let file = engine::data::game_state::parse(LATE_RULE.as_bytes()).unwrap();
+    let formation = config.teams[0].tactics.formation;
+    let state = engine::data::game_state::resolve(&file, &config.tactics, &[formation]).unwrap();
+    config.with_game_state(0, state)
 }
 const OWNER: [u8; 16] = [7; 16];
 
@@ -178,7 +189,7 @@ fn a_damaged_or_foreign_snapshot_is_refused_by_name() {
     first_format[4] = 1;
     let reason = refusal(Snapshot::from_bytes(&first_format, "s"));
     assert!(
-        reason.starts_with("unknown version 1; this build reads 19"),
+        reason.starts_with("unknown version 1; this build reads 20"),
         "{reason}"
     );
 
@@ -303,7 +314,7 @@ fn a_version_three_snapshot_is_refused_by_name() {
     bytes[4..6].copy_from_slice(&3u16.to_le_bytes());
     let reason = refusal(Snapshot::from_bytes(&bytes, "s"));
     assert!(
-        reason.starts_with("unknown version 3; this build reads 19"),
+        reason.starts_with("unknown version 3; this build reads 20"),
         "{reason}"
     );
 }
@@ -365,7 +376,7 @@ fn a_version_six_snapshot_is_refused_by_name() {
     bytes[4..6].copy_from_slice(&6u16.to_le_bytes());
     let reason = refusal(Snapshot::from_bytes(&bytes, "s"));
     assert!(
-        reason.starts_with("unknown version 6; this build reads 19"),
+        reason.starts_with("unknown version 6; this build reads 20"),
         "{reason}"
     );
 }
@@ -472,7 +483,7 @@ fn a_snapshot_records_the_engine_version_and_a_display_summary() {
     assert_eq!(read, snapshot);
     let id = Snapshot::identify(&bytes).unwrap();
     assert_eq!(id.format, engine::snapshot::VERSION);
-    assert_eq!(id.format, 19);
+    assert_eq!(id.format, 20);
     assert_eq!(id.engine_version.as_deref(), Some(engine::version()));
     assert_eq!(id.build_hash, engine::build_hash());
     assert_eq!(id.tick, Some(sim.tick()));
@@ -511,7 +522,7 @@ fn the_identity_offsets_are_fixed() {
     assert_eq!(header_len, 192 + EMPTY_MARK_BYTES);
     let body_len = bytes.len() - header_len - 40;
     let mut later = bytes[..header_len].to_vec();
-    later[4..6].copy_from_slice(&20u16.to_le_bytes());
+    later[4..6].copy_from_slice(&21u16.to_le_bytes());
     later[6..8].copy_from_slice(&((header_len + 16) as u16).to_le_bytes());
     later.extend_from_slice(&[0u8; 16]);
     later.extend_from_slice(&bytes[header_len..header_len + body_len]);
@@ -520,12 +531,12 @@ fn the_identity_offsets_are_fixed() {
     later.extend_from_slice(&(body_len as u32).to_le_bytes());
     later.extend_from_slice(&digest);
     let id = Snapshot::identify(&later).unwrap();
-    assert_eq!(id.format, 20);
+    assert_eq!(id.format, 21);
     assert_eq!(id.engine_version.as_deref(), Some("0.3.0"));
     assert_eq!(id.tick, Some(300));
     let reason = refusal(Snapshot::from_bytes(&later, "s"));
     assert!(
-        reason.starts_with("unknown version 20; this build reads 19 (written by Touchline 0.3.0"),
+        reason.starts_with("unknown version 21; this build reads 20 (written by Touchline 0.3.0"),
         "{reason}"
     );
 }
@@ -597,7 +608,7 @@ fn a_snapshot_with_no_round_writes_an_empty_mark() {
 /// Versions 9 and 10 only append: the engine version, the tick, the score and the names stay where
 /// version 8 put them, so the version resolver reads both alike.
 #[test]
-fn the_version_8_offsets_hold_in_version_19() {
+fn the_version_8_offsets_hold_in_version_20() {
     use engine::snapshot::{AWAY_AT, ENGINE_VERSION_AT, HOME_AT, SCORE_AT, TICK_AT};
     assert_eq!(
         (ENGINE_VERSION_AT, TICK_AT, SCORE_AT, HOME_AT, AWAY_AT),
@@ -610,11 +621,11 @@ fn the_version_8_offsets_hold_in_version_19() {
     let bytes = stamped(&sim, "0.3.0", "abcdef0")
         .with_matchday(mark())
         .to_bytes();
-    assert_eq!(u16::from_le_bytes([bytes[4], bytes[5]]), 19);
+    assert_eq!(u16::from_le_bytes([bytes[4], bytes[5]]), 20);
     assert_eq!(&bytes[ENGINE_VERSION_AT..ENGINE_VERSION_AT + 5], b"0.3.0");
     assert_eq!(&bytes[TICK_AT..TICK_AT + 4], &300u32.to_le_bytes());
     let id = Snapshot::identify(&bytes).unwrap();
-    assert_eq!(id.format, 19);
+    assert_eq!(id.format, 20);
     assert_eq!(id.engine_version.as_deref(), Some("0.3.0"));
     assert_eq!(id.tick, Some(300));
     assert_eq!(id.seed, Some(sim.seed()));
@@ -713,7 +724,7 @@ fn older_files_are_named_through_the_released_builds() {
     let reason = refusal(Snapshot::from_bytes(&old_layout(7, "669f68b", &body), "s"));
     assert_eq!(
         reason,
-        "unknown version 7; this build reads 19 (written by Touchline 0.2.0-beta.1 (build 669f68b))"
+        "unknown version 7; this build reads 20 (written by Touchline 0.2.0-beta.1 (build 669f68b))"
     );
 
     // A damaged or too old file is not identified.

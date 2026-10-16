@@ -368,8 +368,6 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     }
     w.mark(Bytes, || "ai".into());
     for state in ai {
-        w.opt_pair(state.trailing_acted);
-        w.opt_pair(state.leading_acted);
         w.bool(state.due);
     }
     w.mark(Bytes, || "ledgers".into());

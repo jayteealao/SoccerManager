@@ -313,9 +313,14 @@ impl MatchConfig {
     /// AI-managed `team` starts with `tactics` instead of the default ones, and with the
     /// lineup and bench its pre-match module picks for them: in another formation, players
     /// whose position suits that formation's slots. A person's side keeps its own lineup
-    /// through [`MatchConfig::with_setup`] and [`MatchConfig::with_tactics`].
+    /// through [`MatchConfig::with_setup`] and [`MatchConfig::with_tactics`]. The side plays no
+    /// style preset's game-state rules: they were made for the preset's own tactics.
     pub fn with_ai_tactics(mut self, team: usize, tactics: Tactics) -> Self {
         let schema = self.tactics.clone();
+        if !self.teams[team].game_state.is_empty() {
+            let tuning = self.tuning.clone();
+            self.teams[team].set_game_state(GameState::default(), &schema, &tuning);
+        }
         let setup =
             self.modules
                 .pre_match

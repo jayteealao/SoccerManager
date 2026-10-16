@@ -10,11 +10,10 @@
 //!   replaced, keeping one substitution back for an injury until
 //!   `keep_for_injury_until_minute`;
 //! - an outfield player keeping goal after the keeper was sent off is replaced by the best
-//!   goalkeeper on the bench, while a substitution can still be made;
-//! - trailing from `trailing_minute`, the mentality rises one step and pressing goes high,
-//!   once per score;
-//! - leading from `leading_minute`, the mentality drops one step and time wasting goes on,
-//!   once per score.
+//!   goalkeeper on the bench, while a substitution can still be made.
+//!
+//! It makes no tactical change: an AI side's in-match tactics are the game-state rules of the
+//! style preset it plays, which the side applies itself, as a person's rules are.
 //!
 //! It draws no random numbers, so a match with the AI draws the same generator stream as
 //! the rules alone would. Every choice goes through the same change queue a human manager
@@ -23,12 +22,12 @@
 use crate::data::attributes::AttributeSchema;
 use crate::data::rules::StoppageKind;
 use crate::data::styles::Styles;
-use crate::data::tactics::{PRESSING, TIME_WASTING, TacticsSchema};
+use crate::data::tactics::TacticsSchema;
 use crate::data::team::Position;
 use crate::modules::{AiPlan, ManagerModule, MatchView, ModuleCard, PreMatchModule};
 use crate::player::Status;
+use crate::tactics::Tactics;
 use crate::tactics::change::{Change, ChangeId, ChangeQueue, QueuedChange};
-use crate::tactics::{Tactics, TacticsPatch};
 use crate::team::{PLAYERS_PER_TEAM, SquadPlayer, Team};
 
 /// Who manages a team during the match.
@@ -41,11 +40,11 @@ pub enum Manager {
     Human,
 }
 
-/// What an AI choice was.
+/// What an AI choice was. Older builds also sent `mentality-up-trailing` and
+/// `mentality-down-leading`; this build sends neither, and a replay that holds them still reads,
+/// since the code travels as a string.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AiCode {
-    MentalityUpTrailing,
-    MentalityDownLeading,
     SubInjury,
     SubFatigue,
     SubKeeper,
@@ -55,8 +54,6 @@ impl AiCode {
     /// The `ai.decision` value.
     pub fn code(&self) -> &'static str {
         match self {
-            AiCode::MentalityUpTrailing => "mentality-up-trailing",
-            AiCode::MentalityDownLeading => "mentality-down-leading",
             AiCode::SubInjury => "sub-injury",
             AiCode::SubFatigue => "sub-fatigue",
             AiCode::SubKeeper => "sub-keeper",
@@ -64,11 +61,9 @@ impl AiCode {
     }
 }
 
-/// The AI manager's memory: the score it last acted on while trailing and while leading.
+/// The AI manager's state between checks.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct AiState {
-    pub trailing_acted: Option<[u32; 2]>,
-    pub leading_acted: Option<[u32; 2]>,
     /// An injury asks for a check on this tick.
     pub due: bool,
 }
@@ -477,7 +472,6 @@ impl ManagerModule for AiManagerV1 {
             queue: view.queue().clone(),
             changes: Vec::new(),
         };
-        let mut memory = view.ai_memory(team);
         let now = view.tick() + 1;
         let minute = view.referee().clock.minute(now).0;
         let ai = &view.tactics().ai;
@@ -552,47 +546,9 @@ impl ManagerModule for AiManagerV1 {
                 }
             }
         }
-        // The score.
-        let score = view.goals();
-        let (mine, theirs) = (score[team], score[1 - team]);
-        let projected = check.projected_tactics();
-        let schema = view.tactics();
-        if mine < theirs && minute >= ai.trailing_minute && memory.trailing_acted != Some(score) {
-            memory.trailing_acted = Some(score);
-            let mut patch = TacticsPatch::default();
-            if usize::from(projected.mentality) + 1 < schema.mentalities.len() {
-                patch.mentality = Some(projected.mentality + 1);
-            }
-            // One level above the default pressing, never lower than the side already presses.
-            let top = (schema.instructions.level_count(PRESSING) - 1) as u8;
-            let high = (schema.instructions.defaults()[PRESSING] + 1).min(top);
-            if projected.instructions[PRESSING] < high {
-                patch.instructions[PRESSING] = Some(high);
-            }
-            if patch != TacticsPatch::default() {
-                check.propose(Change::Tactics(patch), AiCode::MentalityUpTrailing);
-            }
-        } else if mine > theirs
-            && minute >= ai.leading_minute
-            && memory.leading_acted != Some(score)
-        {
-            memory.leading_acted = Some(score);
-            let mut patch = TacticsPatch::default();
-            if projected.mentality > 0 {
-                patch.mentality = Some(projected.mentality - 1);
-            }
-            let on = (schema.instructions.level_count(TIME_WASTING) - 1) as u8;
-            if projected.instructions[TIME_WASTING] != on {
-                patch.instructions[TIME_WASTING] = Some(on);
-            }
-            if patch != TacticsPatch::default() {
-                check.propose(Change::Tactics(patch), AiCode::MentalityDownLeading);
-            }
-        }
         AiPlan {
             minute,
             changes: check.changes,
-            memory,
         }
     }
 }
@@ -638,25 +594,6 @@ impl Check<'_, '_> {
             .iter()
             .any(|&kind| kind != StoppageKind::HalfTime || !self.view.referee().clock.last_half());
         ledger.windows < windows || exempt_ahead
-    }
-
-    /// The team's base tactics once every waiting tactics change has applied.
-    fn projected_tactics(&self) -> Tactics {
-        // A change patches the base tactics, which the side's active rules apply over.
-        let mut t = self.view.teams()[self.team].base;
-        for q in self.queue.pending.iter().filter(|q| q.team == self.team) {
-            if let Change::Tactics(p) = &q.change {
-                if let Some(m) = p.mentality {
-                    t.mentality = m;
-                }
-                for (level, set) in t.instructions.iter_mut().zip(p.instructions) {
-                    if let Some(l) = set {
-                        *level = l;
-                    }
-                }
-            }
-        }
-        t
     }
 
     /// The best substitute on the bench for `slot`'s position and role, leaving out anyone
@@ -726,12 +663,10 @@ impl Check<'_, '_> {
 }
 
 pub const AI_MANAGER_V1_CARD: ModuleCard = ModuleCard {
-    purpose: "Makes the AI manager's in-match choices: substitutions for injury, for the goal, and for fatigue, and the mentality change when trailing or leading.",
-    inputs: "Each player's status, energy, and activity; the team's lineup, bench, squad, and tactics; the change queue; the substitution ledgers and limits; the score; the match clock; the manager's memory; the tactics file, the rule pack, and the attribute schema.",
-    outputs: "The changes to queue in order, each with its reason code, and the manager's memory after the check.",
+    purpose: "Makes the AI manager's in-match choices: substitutions for injury, for the goal, and for fatigue. It makes no tactical change; an AI side's in-match tactics are its style preset's game-state rules.",
+    inputs: "Each player's status, energy, and activity; the team's lineup, bench, squad, and tactics; the change queue; the substitution ledgers and limits; the match clock; the tactics file, the rule pack, and the attribute schema.",
+    outputs: "The changes to queue in order, each with its reason code.",
     tuning: &[
-        "tactics.ai.trailing_minute",
-        "tactics.ai.leading_minute",
         "tactics.ai.fatigue_energy",
         "tactics.ai.fatigue_from_minute",
         "tactics.ai.keep_for_injury_until_minute",
@@ -742,23 +677,22 @@ pub const AI_MANAGER_V1_CARD: ModuleCard = ModuleCard {
     keys: &[],
 };
 
-/// The off version: no in-match decision; the manager's memory stays as it was.
+/// The off version: no in-match decision.
 pub struct ManagerOff;
 
 impl ManagerModule for ManagerOff {
-    fn check(&self, view: &MatchView<'_>, team: usize, _: bool) -> AiPlan {
+    fn check(&self, view: &MatchView<'_>, _: usize, _: bool) -> AiPlan {
         AiPlan {
             minute: view.referee().clock.minute(view.tick() + 1).0,
             changes: Vec::new(),
-            memory: view.ai_memory(team),
         }
     }
 }
 
 pub const MANAGER_OFF_CARD: ModuleCard = ModuleCard {
     purpose: "Makes no in-match decision for an AI-managed team.",
-    inputs: "The manager's memory and the match clock.",
-    outputs: "No change, and the memory as it was.",
+    inputs: "The match clock.",
+    outputs: "No change.",
     tuning: &["none"],
     calibration: "none: off version, no in-match decision",
     keys: &[],

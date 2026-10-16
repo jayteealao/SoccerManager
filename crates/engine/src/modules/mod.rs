@@ -23,7 +23,7 @@ pub mod viewer;
 
 use std::fmt;
 
-use crate::ai::{AiCode, AiState, Setup};
+use crate::ai::{AiCode, Setup};
 use crate::ball::Ball;
 use crate::data::Loaded;
 use crate::data::attributes::AttributeSchema;
@@ -610,13 +610,11 @@ pub trait DecisionModule: Send + Sync + 'static {
     ) -> Option<TackleChances>;
 }
 
-/// One check of the AI manager: the minute, the changes to queue in order, and the manager's
-/// memory after the check.
+/// One check of the AI manager: the minute and the changes to queue in order.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AiPlan {
     pub minute: u32,
     pub changes: Vec<(Change, AiCode)>,
-    pub memory: AiState,
 }
 
 /// The AI manager's in-match checks. It draws nothing.

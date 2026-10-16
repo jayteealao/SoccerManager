@@ -4,7 +4,7 @@
 //! plays exactly as it would without it. Its picks travel as an `advice` server message, which
 //! no record or replay keeps; the page queues a pick only when the person accepts it.
 
-use engine::ai::{AiCode, AiManagerV1, AiState};
+use engine::ai::{AiCode, AiManagerV1};
 use engine::modules::ManagerModule;
 use engine::{Card, Change, EngineEvent, EngineEventKind, Manager, Simulation, TacticsPatch};
 use protocol::{Advice, AdvicePick, PatchWire, RoleWire};
@@ -12,13 +12,9 @@ use protocol::{Advice, AdvicePick, PatchWire, RoleWire};
 /// The team a page manages.
 const HOME: usize = 0;
 
-/// The advice drive of one run: the check's memory and the picks last sent.
+/// The advice drive of one run: the picks last sent.
 #[derive(Debug, Default)]
 pub(crate) struct Advisor {
-    /// The scores a mentality pick was already offered at. The engine never writes a
-    /// person-managed team's memory, so the drive keeps its own; without it the same
-    /// mentality pick would be offered at every check.
-    memory: AiState,
     /// The picks of the last `advice` message; a check that finds the same picks sends none.
     sent: Vec<AdvicePick>,
 }
@@ -43,25 +39,9 @@ impl Advisor {
             return None;
         }
         let plan = AiManagerV1.check(&sim.view(), HOME, at_stoppage);
-        let offered = self.memory;
-        if plan.memory.trailing_acted.is_some() {
-            self.memory.trailing_acted = plan.memory.trailing_acted;
-        }
-        if plan.memory.leading_acted.is_some() {
-            self.memory.leading_acted = plan.memory.leading_acted;
-        }
         let picks: Vec<AdvicePick> = plan
             .changes
             .iter()
-            .filter(|(_, code)| match code {
-                AiCode::MentalityUpTrailing => {
-                    new_score(offered.trailing_acted, plan.memory.trailing_acted)
-                }
-                AiCode::MentalityDownLeading => {
-                    new_score(offered.leading_acted, plan.memory.leading_acted)
-                }
-                _ => true,
-            })
             .map(|(change, code)| pick(change, *code))
             .collect();
         if picks == self.sent {
@@ -74,12 +54,6 @@ impl Advisor {
             picks,
         })
     }
-}
-
-/// `true` when a mentality pick made at the score `acted` was not offered at that score
-/// before (`offered`): a mentality pick shows once per score.
-fn new_score(offered: Option<[u32; 2]>, acted: Option<[u32; 2]>) -> bool {
-    offered != acted
 }
 
 /// `true` for an event after which the computer manager checks at once: a goal, an injury to
@@ -285,12 +259,7 @@ mod tests {
     }
 
     #[test]
-    fn a_mentality_pick_is_offered_once_per_score() {
-        // First offer at 0-1; the same score again is not offered; a new score is.
-        assert!(new_score(None, Some([0, 1])));
-        assert!(!new_score(Some([0, 1]), Some([0, 1])));
-        assert!(new_score(Some([0, 1]), Some([1, 2])));
-        // And the drive offers no pick before a check is due.
+    fn the_drive_offers_no_pick_before_a_check_is_due() {
         let loaded = loaded();
         let sim = page_match(&loaded, DRIVE_SEED, 90);
         assert!(Advisor::default().after_step(&sim, &[]).is_none());
@@ -311,12 +280,12 @@ mod tests {
     }
 
     #[test]
-    fn a_tactics_pick_carries_its_patch_and_no_players() {
+    fn a_tactics_change_as_a_pick_carries_its_patch_and_no_players() {
+        // The check proposes substitutions only; the wire's tactics kind stays readable.
         let mut patch = TacticsPatch::mentality(3);
         patch.instructions[0] = Some(2);
-        let p = pick(&Change::Tactics(patch), AiCode::MentalityUpTrailing);
+        let p = pick(&Change::Tactics(patch), AiCode::SubFatigue);
         assert_eq!(p.kind, "tactics");
-        assert_eq!(p.code, "mentality-up-trailing");
         assert_eq!((p.off, p.on), (None, None));
         let wire = p.patch.unwrap();
         assert_eq!(wire.mentality, Some(3));

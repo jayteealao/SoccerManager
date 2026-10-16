@@ -30,8 +30,11 @@ use crate::team::PLAYERS_PER_TEAM;
 /// into the build ([`crate::data::convert::tactics_v5_to_v6`]). Version 7 adds the
 /// game-state block (`game_state`: the rule limits, the condition kinds, the take-up time and
 /// the player override list); a version 6 file takes it from a copy compiled into the build
-/// ([`crate::data::convert::tactics_v6_to_v7`]).
-pub const TACTICS_VERSION: u32 = 7;
+/// ([`crate::data::convert::tactics_v6_to_v7`]). Version 8 drops the AI manager's fixed-minute
+/// tactics (`ai.trailing_minute` and `ai.leading_minute`): an AI side's in-match tactics are
+/// its style preset's game-state rules. A version 7 file loses the two fields
+/// ([`crate::data::convert::tactics_v7_to_v8`]); a version 8 file that names one is refused.
+pub const TACTICS_VERSION: u32 = 8;
 
 /// The six team instructions, in the order a [`crate::tactics::Tactics`] stores their levels.
 pub const INSTRUCTIONS: [&str; 6] = [
@@ -538,12 +541,6 @@ pub struct AiTuning {
     pub mentality: String,
     #[garde(length(min = 1, max = 32))]
     pub duty: String,
-    /// From this minute a trailing team raises its mentality one step.
-    #[garde(range(min = 0, max = 200))]
-    pub trailing_minute: u32,
-    /// From this minute a leading team lowers its mentality one step and wastes time.
-    #[garde(range(min = 0, max = 200))]
-    pub leading_minute: u32,
     /// Simulated seconds between two checks; an injury triggers a check at once.
     #[garde(range(min = 1, max = 600))]
     pub check_interval_s: u32,

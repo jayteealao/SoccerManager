@@ -71,7 +71,9 @@
 //!   such bytes, room for the out-of-possession primitives; the layout is otherwise version
 //!   17's. Version 19 adds the game state: each team, after its manager's memory, stores its
 //!   base tactics, its rules, its player instructions, the rules active, and the change being
-//!   taken up; the body ends with the shots the run of play reads.
+//!   taken up; the body ends with the shots the run of play reads. Version 20 drops the AI
+//!   manager's score memory: each team stores only whether a check is due (a byte) before its
+//!   game state.
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -104,7 +106,7 @@ use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::Tuning;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 19;
+pub const VERSION: u16 = 20;
 /// The earliest layout version the strict reader still reads: version 8 has no matchday mark.
 const FIRST_READ: u16 = 8;
 /// The released builds from before the snapshot recorded its engine version: the full commit
@@ -875,8 +877,6 @@ fn encode(sim: &Simulation, w: &mut Writer) {
         w.u32(ledger.window_at.unwrap_or(0));
         w.u8(canon::manager_code(sim.managers[t]));
         let ai = &sim.ai[t];
-        w.opt_pair(ai.trailing_acted);
-        w.opt_pair(ai.leading_acted);
         w.u8(u8::from(ai.due));
         w.game_state(&String::new, team);
     }
@@ -1250,11 +1250,7 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
             1 => Manager::Human,
             _ => return Err("malformed body: an unknown manager".into()),
         };
-        sim.ai[t] = AiState {
-            trailing_acted: r.opt_pair()?,
-            leading_acted: r.opt_pair()?,
-            due: r.bool()?,
-        };
+        sim.ai[t] = AiState { due: r.bool()? };
         decode_game_state(r, &mut sim.teams[t], &schema, &tuning)?;
     }
     let mut deltas = Vec::with_capacity(sim.players.len());
@@ -1585,7 +1581,7 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 19"),
+                .contains("unknown version 1; this build reads 20"),
             "{err}"
         );
     }

@@ -1,6 +1,5 @@
 //! The read-only view a module reads the match through.
 
-use crate::ai::AiState;
 use crate::ball::Ball;
 use crate::data::attributes::AttributeSchema;
 use crate::data::rules::RulePack;
@@ -374,12 +373,6 @@ impl<'a> MatchView<'a> {
     #[inline]
     pub fn ledgers(&self) -> [SubLedger; 2] {
         self.sim.ledgers
-    }
-
-    /// The AI manager's memory for `team`.
-    #[inline]
-    pub fn ai_memory(&self, team: usize) -> AiState {
-        self.sim.ai[team]
     }
 
     /// The substitution limit and window count in force.

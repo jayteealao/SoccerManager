@@ -1,5 +1,5 @@
 {
-  "schema_version": 7,
+  "schema_version": 8,
   "formations": [
     {
       "name": "4-4-2",
@@ -369,8 +369,6 @@
     "formation": "4-4-2",
     "mentality": "balanced",
     "duty": "support",
-    "trailing_minute": 70,
-    "leading_minute": 80,
     "check_interval_s": 30,
     "fatigue_energy": 0.55,
     "fatigue_from_minute": 55,
