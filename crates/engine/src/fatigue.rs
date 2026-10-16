@@ -159,6 +159,7 @@ pub const FATIGUE_V1_CARD: ModuleCard = ModuleCard {
     keys: &[
         Action::InjuryMinute,
         Action::InjuryTackle,
+        Action::KnockTackle,
         Action::FormMatch,
         Action::FormPeriod,
     ],
@@ -187,6 +188,7 @@ pub const FATIGUE_OFF_CARD: ModuleCard = ModuleCard {
     keys: &[
         Action::InjuryMinute,
         Action::InjuryTackle,
+        Action::KnockTackle,
         Action::FormMatch,
         Action::FormPeriod,
     ],
