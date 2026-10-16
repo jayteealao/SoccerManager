@@ -609,15 +609,18 @@ Check or fit a tactical primitive from played matches. Only a build with the `me
 engine-cli primitives check --primitive <NAME> [OPTIONS]
 engine-cli primitives fit --primitive <NAME> --level <LEVEL> [OPTIONS]
 engine-cli primitives reach --primitive <NAME> [OPTIONS]
+engine-cli primitives spread [OPTIONS]
 ```
 
 | Flag | Value | Default | Meaning |
 |---|---|---|---|
-| `--primitive` | name | required | The primitive's name in the tactics file. |
+| `--primitive` | name | required | The primitive's name in the tactics file (`check`, `fit` and `reach`). |
 | `--step` | level | every step | `check`: the level to step up from. |
+| `--with` | `<primitive>=<level>` | none | `check`: another primitive's level set in the upper arm of each step beside the step itself: a combined step, read against both primitives at their lower level. May be given more than once. |
+| `--hold` | `<primitive>=<level>` | none | `check`: another primitive's level held in both arms of each step, so the step is read with that primitive at that level on both sides (for example `--hold on_losing_the_ball=counter_press` when checking `counter_press_length`). Holding the checked primitive itself is refused. May be given more than once. |
 | `--level` | level | required | `fit`: the level to fit; the default level is the base of every ratio and is never fitted. |
 | `--pairs` | 1 or more | 40 | `check`: pairs of matches per step. |
-| `--matches` | 1 or more | 40 | `fit` and `reach`: matches per evaluation. |
+| `--matches` | 1 or more | 40 (`spread`: 200) | `fit` and `reach`: matches per evaluation; `spread`: matches to play. |
 | `--evals` | 1 or more | 12 | `fit`: the most evaluations of the search. |
 | `--table` | path | `signatures.json` in the content folder | `fit`: the signature table. |
 | `--seed` | integer | 9 | The equal suite's seed: its clubs and fixtures. |
@@ -625,9 +628,9 @@ engine-cli primitives reach --primitive <NAME> [OPTIONS]
 | `--minutes` | 1 or more | 90 | Minutes of play per match. |
 | `--out` | path | standard output only | Where the JSON result goes. |
 
-Every run plays the equal suite's fixtures with the home club on both sides, the tested side alternating home and away, the opponent on the default tactics, and the AI's in-match tactic changes off. `check` plays each pair twice on the same seed, the tested side one level apart (or, for a choice primitive, each choice against the default choice), and passes a step when its primary statistic moves in its direction by more than 1.96 standard errors of the paired difference (a jackknife over the pairs, each statistic pooled as sum over sum). A secondary statistic is reported beside it and printed as a `secondary miss` when it does not move that far; it does not decide the step. Each step's `differences` lists every statistic the harness measures with its paired difference and that difference's noise, so a statistic a step should leave alone (for example `hold_dribble_share` on a tempo step) can be read against its noise. A failed step prints `<primitive>: <from> -> <to> fails: <stat> moved <difference> (noise <noise>, wanted <direction>)`. `fit` plays the default level once, then searches the level's first plan input by bisection until the ratio of the level's primary statistic to the default level's is within the noise of the real ratio (the level's quintile median over the middle median of `signatures.json`); it reports the value, the achieved ratio, the engine and real values, and each secondary statistic's ratio against its real quintile range. `reach` plays the first plan input at both ends of its range.
+Every run plays the equal suite's fixtures with the home club on both sides, the tested side alternating home and away, the opponent on the default tactics, and the AI's in-match tactic changes off. `check` plays each pair twice on the same seed, the tested side one level apart (or, for a choice primitive, each choice against the default choice), and passes a step when its primary statistic moves in its direction by more than 1.96 standard errors of the paired difference (a jackknife over the pairs, each statistic pooled as sum over sum). A secondary statistic is reported beside it and printed as a `secondary miss` when it does not move that far; it does not decide the step. Each step's `differences` lists every statistic the harness measures with its paired difference and that difference's noise, so a statistic a step should leave alone (for example `hold_dribble_share` on a tempo step) can be read against its noise. A failed step prints `<primitive>: <from> -> <to> fails: <stat> moved <difference> (noise <noise>, wanted <direction>)`. `fit` plays the default level once, then searches the level's first plan input by bisection until the ratio of the level's primary statistic to the default level's is within the noise of the real ratio (the level's quintile median over the middle median of `signatures.json`); it reports the value, the achieved ratio, the engine and real values, and each secondary statistic's ratio against its real quintile range. `reach` plays the first plan input at both ends of its range. `spread` plays each club against its copy at the default tactics and reports, per player with enough pressed actions, the pressed-against-free pass completion, the pressed-minus-free touch loss and the share of running tackles he keeps the ball against, with their spread across players.
 
-Exit codes: 0 when every step passes, the fit ran or the ends were played; 1 when a flag is refused, the primitive or level does not exist, or the fit reads a held-out set; 2 when a step fails.
+Exit codes: 0 when every step passes, the fit ran, the ends were played or the spread was measured; 1 when a flag is refused, the primitive or level does not exist, or the fit reads a held-out set; 2 when a step fails.
 
 ## Debug trace file
 
