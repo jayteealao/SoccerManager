@@ -82,6 +82,7 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         trait_acts,
         carrying,
         chase_seen,
+        chances,
         restart_taker,
         clearers_tried,
         cutters_tried,
@@ -330,6 +331,26 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         w.mark(Bytes, || format!("teams[{t}]"));
         w.team(&|| format!("teams[{t}]"), team);
     }
+    // A side's game state only when it has one, so a match with none hashes as before.
+    for (t, team) in teams.iter().enumerate() {
+        if !team.game_state.is_empty()
+            || team.rules_active != 0
+            || team.take_up.is_some()
+            || team.base != team.tactics
+        {
+            w.mark(Bytes, || format!("teams[{t}].game_state"));
+            w.game_state(&|| format!("teams[{t}].game_state"), team);
+        }
+    }
+    if !chances.is_empty() {
+        w.mark(Bytes, || "chances".into());
+        w.count(chances.len());
+        for (k, &(at, side, xg)) in chances.iter().enumerate() {
+            w.u32(at);
+            w.index(Some(side));
+            w.f64_at(|| format!("chances[{k}].xg"), xg);
+        }
+    }
     w.mark(Bytes, || "timeline".into());
     w.count(timeline.len());
     for (from, shapes) in timeline {
@@ -516,6 +537,10 @@ fn change(w: &mut Writer, change: &Change) {
                 w.u8(rd.role);
                 w.u8(rd.duty);
             }
+        }
+        Change::Rule { active } => {
+            w.u8(2);
+            w.u8(*active);
         }
     }
 }

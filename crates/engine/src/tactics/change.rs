@@ -29,13 +29,25 @@ use crate::team::PLAYERS_PER_TEAM;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {
     Tactics(TacticsPatch),
-    Substitution { off: usize, on: usize },
+    Substitution {
+        off: usize,
+        on: usize,
+    },
+    /// The side's game-state rules that hold changed to `active` (bit `k` for rule `k`): the
+    /// tactics in force become the base with those rules applied. Everything but the
+    /// formation and the roles applies on the tick it is queued, and the players take it up
+    /// over time; a new formation or role waits for a stoppage that admits tactics changes.
+    /// A later rule change of the side replaces one still waiting.
+    Rule {
+        active: u8,
+    },
 }
 
 impl Change {
+    /// A rule change is a tactics change: it waits for the stoppages that admit tactics.
     pub fn kind(&self) -> ChangeKind {
         match self {
-            Change::Tactics(_) => ChangeKind::Tactics,
+            Change::Tactics(_) | Change::Rule { .. } => ChangeKind::Tactics,
             Change::Substitution { .. } => ChangeKind::Substitution,
         }
     }
@@ -98,8 +110,9 @@ pub struct AppliedChange {
     pub id: ChangeId,
     /// The tick it applied on, the tick of its verdict event.
     pub tick: u32,
-    /// The stoppage it applied at.
-    pub stoppage: StoppageKind,
+    /// The stoppage it applied at; `None` for a rule change that applied whole on the tick
+    /// it was queued.
+    pub stoppage: Option<StoppageKind>,
     pub change: Change,
 }
 
@@ -344,12 +357,14 @@ impl Simulation {
                             Ok(()) => {
                                 off_now.push((q.team, off));
                                 changed = true;
-                                self.verdict(&q, now, stoppage.kind, None);
+                                self.verdict(&q, now, Some(stoppage.kind), None);
                             }
-                            Err(reason) => self.verdict(&q, now, stoppage.kind, Some(reason)),
+                            Err(reason) => {
+                                self.verdict(&q, now, Some(stoppage.kind), Some(reason));
+                            }
                         }
                     }
-                    Change::Tactics(_) => keep.push(q),
+                    Change::Tactics(_) | Change::Rule { .. } => keep.push(q),
                 }
             }
             self.queue.pending = keep;
@@ -363,10 +378,19 @@ impl Simulation {
                         match self.retactic(q.team, &patch, &off_now) {
                             Ok(()) => {
                                 changed = true;
-                                self.verdict(&q, now, stoppage.kind, None);
+                                self.verdict(&q, now, Some(stoppage.kind), None);
                             }
-                            Err(reason) => self.verdict(&q, now, stoppage.kind, Some(reason)),
+                            Err(reason) => {
+                                self.verdict(&q, now, Some(stoppage.kind), Some(reason));
+                            }
                         }
+                    }
+                    // The part of a rule change that waited: the formation and roles of the
+                    // tactics in force, every player at once.
+                    Change::Rule { .. } => {
+                        self.rule_in_full(q.team);
+                        changed = true;
+                        self.verdict(&q, now, Some(stoppage.kind), None);
                     }
                     Change::Substitution { .. } => keep.push(q),
                 }
@@ -393,14 +417,16 @@ impl Simulation {
         self.timeline.push((now, self.teams.clone()));
     }
 
-    /// Records the verdict on `q` as an event, a count, and a signal.
-    fn verdict(
+    /// Records the verdict on `q` as an event, a count, and a signal. `kind` is the stoppage
+    /// it applied at, `None` for a rule change that applied whole on its own tick.
+    pub(crate) fn verdict(
         &mut self,
         q: &QueuedChange,
         now: u32,
-        kind: StoppageKind,
+        kind: Option<StoppageKind>,
         reason: Option<RejectReason>,
     ) {
+        let stoppage_code = kind.map_or("none", |k| k.code());
         let event_kind = if reason.is_some() {
             EngineEventKind::ChangeRejected
         } else {
@@ -427,7 +453,7 @@ impl Simulation {
                     "team": q.team,
                     "id": q.id.to_string(),
                     "change": format!("{:?}", q.change),
-                    "stoppage": kind.code(),
+                    "stoppage": stoppage_code,
                     "reason": why,
                 }),
             );
@@ -450,7 +476,7 @@ impl Simulation {
                     kind = q.change.kind().code(),
                     queue_id = %q.id,
                     waited_ticks = now.saturating_sub(q.id.tick),
-                    stoppage = kind.code()
+                    stoppage = stoppage_code
                 );
             }
             Some(reason) => {
@@ -504,6 +530,8 @@ impl Simulation {
         let side = &mut self.teams[team];
         side.bench.retain(|&s| s != on);
         side.lineup[slot] = on;
+        // A substitute comes on with the change the side is taking up.
+        side.take_up_now(slot);
         let mut incoming = side.player(slot, on, at);
         incoming.target = self.players[i].target;
         self.players[i] = incoming;
@@ -527,14 +555,15 @@ impl Simulation {
         Ok(())
     }
 
-    /// Applies a tactics change to `team`, or says why not.
+    /// Applies a tactics change to `team`, or says why not. The change patches the base
+    /// tactics; the tactics in force are the new base with the side's active rules applied.
     fn retactic(
         &mut self,
         team: usize,
         patch: &TacticsPatch,
         off_now: &[(usize, usize)],
     ) -> Result<(), RejectReason> {
-        let tactics = self
+        let base = self
             .config
             .modules
             .changes
@@ -542,6 +571,13 @@ impl Simulation {
         let tuning = self.config.tuning.clone();
         let schema = self.config.tactics.clone();
         let side = &mut self.teams[team];
+        side.base = base;
+        let tactics = crate::tactics::rules::effective(
+            &base,
+            &side.game_state.rules,
+            side.rules_active,
+            &schema,
+        );
         side.set_tactics(tactics, &schema, &tuning);
         tracing::debug!(
             signal = "tactics.plan",

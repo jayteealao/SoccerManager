@@ -174,7 +174,8 @@ pub trait PreMatchModule: Send + Sync + 'static {
         attrs: &AttributeSchema,
     ) -> Setup;
     /// The tactics an AI-managed `team` (`side` 0 home of the match with `seed`) starts with
-    /// from the staff advice on the named `styles`, or `None` to keep its setup. The advice
+    /// from the staff advice on the named `styles`, with the picked style's game-state rules
+    /// and player instructions, or `None` to keep its setup. The advice
     /// draws from its own seeded generator, never a match stream, and nothing keeps it.
     fn advise(
         &self,
@@ -184,7 +185,7 @@ pub trait PreMatchModule: Send + Sync + 'static {
         _attrs: &AttributeSchema,
         _seed: u64,
         _side: usize,
-    ) -> Option<Tactics> {
+    ) -> Option<(Tactics, crate::tactics::rules::GameState)> {
         None
     }
 }

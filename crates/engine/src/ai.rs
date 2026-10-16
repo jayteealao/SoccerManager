@@ -407,7 +407,7 @@ impl PreMatchModule for PreMatchV1 {
         attrs: &AttributeSchema,
         seed: u64,
         side: usize,
-    ) -> Option<Tactics> {
+    ) -> Option<(Tactics, crate::tactics::rules::GameState)> {
         crate::advice::advise(team, styles, tactics, attrs, seed, side)
     }
 }
@@ -640,9 +640,10 @@ impl Check<'_, '_> {
         ledger.windows < windows || exempt_ahead
     }
 
-    /// The team's tactics once every waiting tactics change has applied.
+    /// The team's base tactics once every waiting tactics change has applied.
     fn projected_tactics(&self) -> Tactics {
-        let mut t = self.view.teams()[self.team].tactics;
+        // A change patches the base tactics, which the side's active rules apply over.
+        let mut t = self.view.teams()[self.team].base;
         for q in self.queue.pending.iter().filter(|q| q.team == self.team) {
             if let Change::Tactics(p) = &q.change {
                 if let Some(m) = p.mentality {

@@ -219,7 +219,7 @@ impl PreMatchModule for StandIn<dyn PreMatchModule> {
         attrs: &AttributeSchema,
         seed: u64,
         side: usize,
-    ) -> Option<Tactics> {
+    ) -> Option<(Tactics, crate::tactics::rules::GameState)> {
         self.0.advise(team, styles, tactics, attrs, seed, side)
     }
 }

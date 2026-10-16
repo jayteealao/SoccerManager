@@ -112,7 +112,8 @@ fn a_squad_built_for_a_style_is_picked_for_it_more_often_than_not() {
         let picked = (1..=50)
             .filter(|&seed| {
                 let t = advise(&team, all, &content.tactics, &content.attributes, seed, 0)
-                    .expect("a style is picked");
+                    .expect("a style is picked")
+                    .0;
                 t == style.tactics(t.formation, &content.tactics)
                     && style.formations.contains(&t.formation)
             })
@@ -214,7 +215,8 @@ fn the_ai_side_starts_in_its_style_and_a_person_keeps_the_defaults() {
         11,
         1,
     )
-    .unwrap();
+    .unwrap()
+    .0;
     assert_eq!(teams[1].tactics, picked);
     let keeper = &teams[1].squad[teams[1].lineup[teams[1].keeper_slot()]];
     assert_eq!(keeper.position, Position::GK);

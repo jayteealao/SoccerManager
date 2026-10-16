@@ -112,6 +112,14 @@ fn pick(change: &Change, code: AiCode) -> AdvicePick {
             on: None,
             patch: Some(patch_wire(patch)),
         },
+        // The computer manager proposes no rule change; the side's rules make their own.
+        Change::Rule { .. } => AdvicePick {
+            code: code.code().into(),
+            kind: "rule".into(),
+            off: None,
+            on: None,
+            patch: None,
+        },
     }
 }
 

@@ -69,7 +69,9 @@
 //!   of each primitive that owns its levels or choices (16 bytes, in the tactics file's
 //!   order, 0 past the last), so a resumed match keeps every setting. Version 18 stores 32
 //!   such bytes, room for the out-of-possession primitives; the layout is otherwise version
-//!   17's.
+//!   17's. Version 19 adds the game state: each team, after its manager's memory, stores its
+//!   base tactics, its rules, its player instructions, the rules active, and the change being
+//!   taken up; the body ends with the shots the run of play reads.
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -85,6 +87,7 @@ use sha2::{Digest, Sha256};
 use crate::ai::{AiState, Manager};
 use crate::canon::{self, NONE, Writer};
 use crate::data::rules::StoppageKind;
+use crate::data::tactics::TacticsSchema;
 use crate::error::EngineError;
 use crate::math::{DVec2, DVec3};
 use crate::pace::{Grade, Job, Level, Pace};
@@ -97,10 +100,11 @@ use crate::sim::{DecidedBy, MatchConfig, Simulation, Summary};
 use crate::streams::{KEY_COUNT, STREAM_SCHEME, Scheme, Streams};
 use crate::tactics::change::{Change, ChangeId, QueuedChange, SubLedger};
 use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
-use crate::team::PLAYERS_PER_TEAM;
+use crate::team::{PLAYERS_PER_TEAM, Team};
+use crate::tuning::Tuning;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 18;
+pub const VERSION: u16 = 19;
 /// The earliest layout version the strict reader still reads: version 8 has no matchday mark.
 const FIRST_READ: u16 = 8;
 /// The released builds from before the snapshot recorded its engine version: the full commit
@@ -874,6 +878,7 @@ fn encode(sim: &Simulation, w: &mut Writer) {
         w.opt_pair(ai.trailing_acted);
         w.opt_pair(ai.leading_acted);
         w.u8(u8::from(ai.due));
+        w.game_state(&String::new, team);
     }
     for p in &sim.players {
         w.v2_at(&String::new, p.pos);
@@ -936,6 +941,10 @@ fn encode(sim: &Simulation, w: &mut Writer) {
                     w.u8(rd.role);
                     w.u8(rd.duty);
                 }
+            }
+            Change::Rule { active } => {
+                w.u8(2);
+                w.u8(*active);
             }
         }
     }
@@ -1018,6 +1027,122 @@ fn encode(sim: &Simulation, w: &mut Writer) {
             w.u32(s.live_since.unwrap_or(0));
         }
     }
+    w.count(sim.chances.len());
+    for &(at, side, xg) in &sim.chances {
+        w.u32(at);
+        w.index(Some(side));
+        w.f64_at(String::new, xg);
+    }
+}
+
+/// A side's game state after its manager's memory ([`canon::Writer::game_state`]), put back
+/// on a team whose tactics in force are already set.
+fn decode_game_state(
+    r: &mut Reader<'_>,
+    team: &mut Team,
+    schema: &TacticsSchema,
+    tuning: &Tuning,
+) -> Result<(), String> {
+    use crate::tactics::rules::{Action, Condition, GameState, PlayerInstruction, Rule, Score};
+    let range = "malformed body: the game state names an index the tactics file lacks";
+    let base = r.tactics()?;
+    if !tactics_in_range(&base, schema) {
+        return Err(range.into());
+    }
+    let mut state = GameState::default();
+    let rules = r.u8()?;
+    if usize::from(rules) > crate::tactics::rules::MAX_RULES {
+        return Err("malformed body: more rules than a side holds".into());
+    }
+    for _ in 0..rules {
+        let mut rule = Rule {
+            when: Vec::new(),
+            set: Vec::new(),
+        };
+        for _ in 0..r.u8()? {
+            rule.when.push(match r.u8()? {
+                0 => {
+                    let (kind, n) = (r.u8()?, r.u8()?);
+                    Condition::Score(match kind {
+                        0 => Score::Leading(n),
+                        1 => Score::Level,
+                        2 => Score::Trailing(n),
+                        _ => return Err("malformed body: an unknown score condition".into()),
+                    })
+                }
+                1 => Condition::TimeLeft { minutes: r.f64()? },
+                2 => Condition::RedCardsOurs { at_least: r.u8()? },
+                3 => Condition::RedCardsTheirs { at_least: r.u8()? },
+                4 => Condition::RunOfPlay {
+                    above: r.bool()?,
+                    value: r.f64()?,
+                },
+                5 => Condition::TeamEnergy { below: r.f64()? },
+                _ => return Err("malformed body: an unknown rule condition".into()),
+            });
+        }
+        for _ in 0..r.u8()? {
+            let (kind, a, b) = (r.u8()?, r.u8()?, r.u8()?);
+            rule.set.push(match kind {
+                0 if usize::from(a) < schema.primitives.len() => Action::Level {
+                    primitive: a,
+                    level: b,
+                },
+                1 if usize::from(a) < schema.formations.len() => Action::Formation(a),
+                0 | 1 => return Err(range.into()),
+                _ => return Err("malformed body: an unknown rule action".into()),
+            });
+        }
+        state.rules.push(rule);
+    }
+    for _ in 0..r.u8()? {
+        let (slot, primitive, level) = (r.u8()?, r.u8()?, r.u8()?);
+        if usize::from(slot) >= PLAYERS_PER_TEAM
+            || usize::from(primitive) >= schema.primitives.len()
+        {
+            return Err(range.into());
+        }
+        state.instructions.push(PlayerInstruction {
+            slot,
+            primitive,
+            level,
+        });
+    }
+    let active = r.u8()?;
+    team.game_state = state;
+    team.rules_active = active;
+    team.base = base;
+    team.own = crate::team::own_plans(&team.plan, &team.game_state, schema, tuning);
+    team.take_up = None;
+    match r.u8()? {
+        0 => {}
+        1 => {
+            let mut prior = [base; PLAYERS_PER_TEAM];
+            for t in &mut prior {
+                *t = r.tactics()?;
+                if !tactics_in_range(t, schema) {
+                    return Err(range.into());
+                }
+            }
+            let prior_side = r.tactics()?;
+            if !tactics_in_range(&prior_side, schema) {
+                return Err(range.into());
+            }
+            let mut at = [0; PLAYERS_PER_TEAM];
+            for a in &mut at {
+                *a = r.u32()?;
+            }
+            let mut taken = [false; PLAYERS_PER_TEAM];
+            for k in &mut taken {
+                *k = r.bool()?;
+            }
+            let switched = r.bool()?;
+            let next = crate::tactics::TeamPlan::from(&team.tactics, schema, tuning);
+            team.restore_take_up(prior, prior_side, next, at, taken, switched, schema, tuning);
+        }
+        _ => return Err("malformed body: an unknown take-up flag".into()),
+    }
+    Ok(())
 }
 
 /// The random streams after the restart flag, checked against the match seed.
@@ -1130,6 +1255,7 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
             leading_acted: r.opt_pair()?,
             due: r.bool()?,
         };
+        decode_game_state(r, &mut sim.teams[t], &schema, &tuning)?;
     }
     let mut deltas = Vec::with_capacity(sim.players.len());
     for p in &mut sim.players {
@@ -1225,6 +1351,7 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
                 }
                 Change::Tactics(patch)
             }
+            2 => Change::Rule { active: r.u8()? },
             _ => return Err("malformed body: an unknown change kind".into()),
         };
         sim.queue.pending.push(QueuedChange { id, team, change });
@@ -1320,6 +1447,14 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
     };
     // The phase machine's name is derived state: it follows from the phase and the shoot-out.
     referee.named = crate::rules::phases::derive(referee.phase, referee.shootout.is_some());
+    let chances = r.u32()?;
+    sim.chances = Vec::new();
+    for _ in 0..chances {
+        let at = r.u32()?;
+        let side = r.some_index(2)?;
+        let xg = r.f64()?;
+        sim.chances.push((at, side, xg));
+    }
     if r.at != r.buf.len() {
         return Err("malformed body: bytes left over".into());
     }
@@ -1450,7 +1585,7 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 18"),
+                .contains("unknown version 1; this build reads 19"),
             "{err}"
         );
     }

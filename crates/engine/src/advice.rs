@@ -119,7 +119,8 @@ pub fn style_estimates(
 
 /// The AI manager's pre-match tactics for `team` from the staff advice: the style with the
 /// best estimate ([`style_estimates`]; the first on a tie) in the formation the advice found
-/// for it. `None` when no style is given.
+/// for it, with the style's game-state rules and player instructions. `None` when no style is
+/// given.
 pub fn advise(
     team: &Team,
     styles: &Styles,
@@ -127,7 +128,7 @@ pub fn advise(
     attrs: &AttributeSchema,
     seed: u64,
     side: usize,
-) -> Option<Tactics> {
+) -> Option<(Tactics, crate::tactics::rules::GameState)> {
     let estimates = style_estimates(team, styles, schema, attrs, seed, side);
     let (k, best) = estimates.iter().enumerate().fold(
         None::<(usize, StyleEstimate)>,
@@ -136,5 +137,9 @@ pub fn advise(
             _ => Some((k, *e)),
         },
     )?;
-    Some(styles.styles[k].tactics(best.formation, schema))
+    let style = &styles.styles[k];
+    Some((
+        style.tactics(best.formation, schema),
+        style.game_state.clone(),
+    ))
 }

@@ -380,7 +380,7 @@ impl Team {
     pub fn plan_for(&self, slot: usize) -> &TeamPlan {
         if let Some(t) = &self.take_up {
             if !t.taken[slot] {
-                return t.prior_own[slot].as_deref().unwrap_or(&t.prior_plan);
+                return &t.prior_plans[slot];
             }
             return self.own[slot].as_deref().unwrap_or(&t.next);
         }
@@ -649,16 +649,20 @@ impl Team {
     }
 }
 
-/// A rule change the side is taking up: each player reads the plan before it until his tick
-/// comes, and the side as a whole switches once half of it has taken the change up.
+/// A rule change the side is taking up: each player reads what he read before it until his
+/// tick comes, and the side as a whole switches once half of it has taken the change up.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TakeUp {
-    /// The tactics in force before the change.
-    pub prior: Tactics,
-    /// Their plan, and each instructed slot's own plan under them.
-    pub prior_plan: TeamPlan,
-    pub prior_own: [Option<Box<TeamPlan>>; PLAYERS_PER_TEAM],
-    /// The plan of the tactics in force after the change.
+    /// Per slot, the tactics the player read before the change (a change that comes while
+    /// another is being taken up leaves each player on what he read).
+    pub prior: [Tactics; PLAYERS_PER_TEAM],
+    /// The tactics the side read as a whole before the change.
+    pub prior_side: Tactics,
+    /// Per slot, the plan of `prior` with the slot's instructions applied; and the side's
+    /// plan of `prior_side`.
+    pub prior_plans: Box<[TeamPlan; PLAYERS_PER_TEAM]>,
+    pub prior_side_plan: TeamPlan,
+    /// The side's plan of the tactics in force after the change.
     pub next: TeamPlan,
     /// Per slot, the tick the player takes the change up on.
     pub at: [u32; PLAYERS_PER_TEAM],
@@ -666,6 +670,144 @@ pub struct TakeUp {
     pub taken: [bool; PLAYERS_PER_TEAM],
     /// `true` once half the side has taken the change up and the side reads it as a whole.
     pub switched: bool,
+}
+
+impl Team {
+    /// The plan the player in `slot` reads under `tactics`: their plan with the slot's
+    /// instructions applied.
+    fn slot_plan(
+        &self,
+        tactics: &Tactics,
+        slot: usize,
+        schema: &TacticsSchema,
+        t: &Tuning,
+    ) -> TeamPlan {
+        let side = TeamPlan::from(tactics, schema, t);
+        own_plans(&side, &self.game_state, schema, t)[slot]
+            .as_deref()
+            .copied()
+            .unwrap_or(side)
+    }
+
+    /// Puts `tactics` in force at once for a rule change on tick `now`, with the same
+    /// formation and roles: each player takes it up on his tick of `at`, reading until then
+    /// what he read before; the side as a whole reads it once half the side has.
+    pub(crate) fn begin_take_up(
+        &mut self,
+        tactics: Tactics,
+        at: [u32; PLAYERS_PER_TEAM],
+        now: u32,
+        schema: &TacticsSchema,
+        t: &Tuning,
+    ) {
+        let (prior, prior_side) = match &self.take_up {
+            Some(old) => (
+                std::array::from_fn(|s| {
+                    if old.taken[s] {
+                        self.tactics
+                    } else {
+                        old.prior[s]
+                    }
+                }),
+                if old.switched {
+                    self.tactics
+                } else {
+                    old.prior_side
+                },
+            ),
+            None => ([self.tactics; PLAYERS_PER_TEAM], self.tactics),
+        };
+        self.tactics = tactics;
+        let next = TeamPlan::from(&tactics, schema, t);
+        self.own = own_plans(&next, &self.game_state, schema, t);
+        self.restore_take_up(
+            prior,
+            prior_side,
+            next,
+            at,
+            [false; PLAYERS_PER_TEAM],
+            false,
+            schema,
+            t,
+        );
+        self.advance_take_up(now);
+    }
+
+    /// Sets the take-up state from its parts, the plans worked out from the tactics: the
+    /// snapshot reader's way back to a change being taken up.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn restore_take_up(
+        &mut self,
+        prior: [Tactics; PLAYERS_PER_TEAM],
+        prior_side: Tactics,
+        next: TeamPlan,
+        at: [u32; PLAYERS_PER_TEAM],
+        taken: [bool; PLAYERS_PER_TEAM],
+        switched: bool,
+        schema: &TacticsSchema,
+        t: &Tuning,
+    ) {
+        let prior_plans = Box::new(std::array::from_fn(|s| {
+            self.slot_plan(&prior[s], s, schema, t)
+        }));
+        let prior_side_plan = TeamPlan::from(&prior_side, schema, t);
+        self.plan = if switched { next } else { prior_side_plan };
+        self.take_up = Some(Box::new(TakeUp {
+            prior,
+            prior_side,
+            prior_plans,
+            prior_side_plan,
+            next,
+            at,
+            taken,
+            switched,
+        }));
+    }
+
+    /// Moves the change being taken up on to tick `now`: each player whose tick has come takes
+    /// it up (a slot out of play counts as taken); the side reads it as a whole once half of it
+    /// has; once all have, the change is in force for everyone.
+    pub(crate) fn advance_take_up(&mut self, now: u32) {
+        let Some(take) = self.take_up.as_deref_mut() else {
+            return;
+        };
+        for s in 0..PLAYERS_PER_TEAM {
+            if !take.taken[s] && (take.at[s] <= now || !self.active[s]) {
+                take.taken[s] = true;
+            }
+        }
+        let on = (0..PLAYERS_PER_TEAM).filter(|&s| self.active[s]).count();
+        let taken = (0..PLAYERS_PER_TEAM)
+            .filter(|&s| self.active[s] && take.taken[s])
+            .count();
+        if !take.switched && 2 * taken >= on {
+            take.switched = true;
+            self.plan = take.next;
+        }
+        if take.taken.iter().all(|&t| t) {
+            self.plan = take.next;
+            self.take_up = None;
+        }
+    }
+
+    /// The player now in `slot` has taken the change being taken up: a substitute comes on
+    /// with it.
+    pub(crate) fn take_up_now(&mut self, slot: usize) {
+        if let Some(take) = self.take_up.as_deref_mut() {
+            take.taken[slot] = true;
+        }
+    }
+
+    /// The players of the side who have taken the change being taken up, and the players on
+    /// the pitch; `None` when no change is being taken up.
+    pub fn take_up_share(&self) -> Option<(usize, usize)> {
+        let take = self.take_up.as_deref()?;
+        let on = (0..PLAYERS_PER_TEAM).filter(|&s| self.active[s]).count();
+        let taken = (0..PLAYERS_PER_TEAM)
+            .filter(|&s| self.active[s] && take.taken[s])
+            .count();
+        Some((taken, on))
+    }
 }
 
 /// Each slot's own plan under side plan `plan`: `None` for a slot no instruction names, and

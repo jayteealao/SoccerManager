@@ -6,6 +6,9 @@
 
 mod decisions;
 mod fatigue;
+mod game_state;
+#[cfg(test)]
+mod game_state_tests;
 mod hooks;
 #[cfg(test)]
 mod instruction_tests;
@@ -58,6 +61,7 @@ use crate::tactics::Tactics;
 use crate::tactics::change::{
     AppliedChange, ChangeId, ChangeKind, ChangeQueue, RejectReason, SubLedger,
 };
+use crate::tactics::rules::GameState;
 use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::{Tuning, XgTuning};
 
@@ -213,8 +217,11 @@ impl MatchConfig {
             self.seed,
             team,
         );
-        if let Some(tactics) = tactics {
+        if let Some((tactics, state)) = tactics {
             self = self.with_ai_tactics(team, tactics);
+            if !state.is_empty() {
+                self = self.with_game_state(team, state);
+            }
             self.advice[team] = true;
         }
         self
@@ -262,6 +269,11 @@ impl MatchConfig {
         self.managers[team] = manager;
         if manager == Manager::Human && self.advice[team] {
             let schema = self.tactics.clone();
+            // The preset's rules and instructions are the AI manager's too.
+            if !self.teams[team].game_state.is_empty() {
+                let tuning = self.tuning.clone();
+                self.teams[team].set_game_state(GameState::default(), &schema, &tuning);
+            }
             let setup = self
                 .modules
                 .pre_match
@@ -273,6 +285,16 @@ impl MatchConfig {
             let first = team * PLAYERS_PER_TEAM;
             self.players[first..first + PLAYERS_PER_TEAM].clone_from_slice(&starters);
         }
+        self
+    }
+
+    /// `team` plays by the game-state rules and player instructions of `state`, over its
+    /// tactics as its base, with no rule active at kick-off. A person's tactic and an AI preset
+    /// hand them in the same way.
+    pub fn with_game_state(mut self, team: usize, state: GameState) -> Self {
+        let schema = self.tactics.clone();
+        let tuning = self.tuning.clone();
+        self.teams[team].set_game_state(state, &schema, &tuning);
         self
     }
 
@@ -753,6 +775,9 @@ pub struct Simulation {
     /// The defenders (one bit per roster index) who met the carrier in a take-on and have not
     /// left the pressed distance of him since. Cleared when the ball changes feet.
     pub(crate) duelled: u32,
+    /// The run-of-play record: each shot as the tick after it, its side and its expected
+    /// goals, inside the tactics file's window. Kept only while a side has game-state rules.
+    pub(crate) chances: Vec<(u32, usize, f64)>,
     /// `true` from the placement of a half's kick-off until the walk-on to it is taken
     /// ([`Simulation::take_walk_on`]): the walk-on is shown before the half's first record and
     /// is not match time. No play reads it, and a snapshot is written after it is taken.
@@ -944,6 +969,7 @@ impl Simulation {
             last_pass: None,
             bench_mood: [0.0; 2],
             walk_on_due: false,
+            chances: Vec::new(),
             #[cfg(feature = "scenario")]
             pinned_restart: None,
             team_moods: [0.0; 2],
@@ -1634,9 +1660,10 @@ impl Simulation {
         self.check_clock();
         if !self.is_over() {
             self.fatigue_tick();
-            // Nobody manages a team during the shoot-out.
+            // Nobody manages a team during the shoot-out, and no rule changes a team then.
             if self.referee.shootout.is_none() {
                 self.ai_tick();
+                self.rules_tick();
             }
         }
         if let Some(stoppage) = self.stoppage {
@@ -1757,6 +1784,7 @@ impl Simulation {
                     )
                 };
                 self.summary.xg[team] += xg;
+                self.record_chance(team, xg);
                 self.tally_xg(c, xg);
                 #[cfg(feature = "sensitivity")]
                 if self.probe.is_some() {

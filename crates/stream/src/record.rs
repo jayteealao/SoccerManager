@@ -217,6 +217,10 @@ pub enum LoggedChange {
         instructions: [Option<u8>; 6],
         roles: Vec<LoggedRole>,
     },
+    /// A side's game-state rules moved: `active` is the set that holds, bit `k` for rule `k`.
+    Rule {
+        active: u8,
+    },
 }
 
 impl From<&Change> for LoggedChange {
@@ -237,6 +241,7 @@ impl From<&Change> for LoggedChange {
                     })
                     .collect(),
             },
+            Change::Rule { active } => LoggedChange::Rule { active: *active },
         }
     }
 }
@@ -268,6 +273,7 @@ impl LoggedChange {
                     })
                     .collect(),
             }),
+            LoggedChange::Rule { active } => Change::Rule { active: *active },
         }
     }
 }
@@ -280,6 +286,8 @@ pub enum ChangeSource {
     Manager,
     /// The computer manager; re-simulation lets the engine make it again.
     Ai,
+    /// The side's game-state rules; re-simulation lets the engine make it again.
+    Rule,
 }
 
 /// One entry of the applied-change log.
@@ -296,7 +304,8 @@ pub struct ChangeEntry {
     pub queue_number: u32,
     /// The tick it applied on.
     pub tick: u32,
-    /// The stoppage it applied at, by the rule pack's code.
+    /// The stoppage it applied at, by the rule pack's code; `none` for a rule change that
+    /// applied whole at once.
     pub stoppage: String,
     pub change: LoggedChange,
 }
@@ -307,14 +316,15 @@ impl ChangeEntry {
         Self {
             order: applied.order,
             team: applied.team,
-            source: match manager {
-                Manager::Human => ChangeSource::Manager,
-                Manager::Ai => ChangeSource::Ai,
+            source: match (&applied.change, manager) {
+                (Change::Rule { .. }, _) => ChangeSource::Rule,
+                (_, Manager::Human) => ChangeSource::Manager,
+                (_, Manager::Ai) => ChangeSource::Ai,
             },
             queued_tick: applied.id.tick,
             queue_number: applied.id.n,
             tick: applied.tick,
-            stoppage: applied.stoppage.code().to_string(),
+            stoppage: applied.stoppage.map_or("none", |s| s.code()).to_string(),
             change: LoggedChange::from(&applied.change),
         }
     }
