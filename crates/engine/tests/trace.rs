@@ -194,9 +194,9 @@ fn every_action_and_event_kind_maps_to_a_point() {
     assert_eq!(names.len(), 41, "every point has its own name");
     assert_eq!(
         Action::ALL.iter().filter(|a| trace::is_chance(**a)).count(),
-        // The quick restart, the trait override, the pass cut and the take-on are chances; the
-        // restart wait and the pass weight are drawn values, not chances.
-        25
+        // The quick restart, the trait override, the pass cut, the take-on and the tackle knock
+        // are chances; the restart wait and the pass weight are drawn values, not chances.
+        26
     );
 }
 
