@@ -81,6 +81,15 @@ pub struct StyleEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(skip)]
     pub fit_positions: Option<Vec<Position>>,
+    /// Game-state rules the preset plays by, in priority order, in the form of
+    /// [`crate::data::game_state`]; none when absent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[garde(skip)]
+    pub rules: Vec<crate::data::game_state::RuleFile>,
+    /// Player instructions of the preset, by formation slot; none when absent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[garde(skip)]
+    pub player_instructions: Vec<crate::data::game_state::InstructionFile>,
 }
 
 /// The direction a style moves an identity statistic.
@@ -128,6 +137,8 @@ pub struct Style {
     pub fit: Vec<(usize, f64)>,
     /// The positions whose players the fit reads.
     pub fit_positions: Vec<Position>,
+    /// The preset's game-state rules and player instructions.
+    pub game_state: crate::tactics::rules::GameState,
 }
 
 impl Style {
@@ -289,6 +300,12 @@ pub fn resolve(
             Some(list) => list.clone(),
             None => Position::ALL[1..].to_vec(),
         };
+        let written = crate::data::game_state::GameStateFile {
+            rules: s.rules.clone(),
+            instructions: s.player_instructions.clone(),
+        };
+        let game_state = crate::data::game_state::resolve(&written, tactics, &formations)
+            .map_err(|(field, reason)| (at(&field), reason))?;
         styles.push(Style {
             name: s.name.clone(),
             mentality: mentality as u8,
@@ -298,6 +315,7 @@ pub fn resolve(
             identity: s.identity.clone(),
             fit,
             fit_positions,
+            game_state,
         });
     }
     Ok(Styles {

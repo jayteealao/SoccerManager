@@ -64,6 +64,7 @@ pub const TACTICS_V2: u32 = 2;
 pub const TACTICS_V3: u32 = 3;
 pub const TACTICS_V4: u32 = 4;
 pub const TACTICS_V5: u32 = 5;
+pub const TACTICS_V6: u32 = 6;
 /// The attribute file versions the converters read.
 pub const ATTRIBUTES_V1: u32 = 1;
 pub const ATTRIBUTES_V2: u32 = 2;
@@ -894,6 +895,7 @@ pub fn tactics_v1_to_v2(file: TacticsV1) -> serde_json::Value {
         stand_options: None,
         rest_defence: None,
         primitives: Vec::new(),
+        game_state: None,
     };
     let mut value = serde_json::to_value(schema).expect("a tactics file serialises");
     value["mentalities"] = serde_json::to_value(mentalities).expect("a mentality serialises");
@@ -1114,10 +1116,7 @@ pub fn tactics_v5_to_v6(mut file: serde_json::Value) -> Result<serde_json::Value
     let obj = file
         .as_object_mut()
         .ok_or_else(|| "the file is not an object".to_string())?;
-    obj.insert(
-        "schema_version".into(),
-        serde_json::Value::from(crate::data::tactics::TACTICS_VERSION),
-    );
+    obj.insert("schema_version".into(), serde_json::Value::from(TACTICS_V6));
     for (block, [lowest, highest]) in frozen.outer_levels {
         let levels = obj
             .get_mut("instructions")
@@ -1140,5 +1139,33 @@ pub fn tactics_v5_to_v6(mut file: serde_json::Value) -> Result<serde_json::Value
             primitives.push(entry);
         }
     }
+    Ok(file)
+}
+
+/// The copy of the version 7 addition compiled into the build: the game-state block (the
+/// rule limits, the condition kinds, the run-of-play window, the take-up time and the player
+/// override list).
+pub const FROZEN_TACTICS_V7: &str = include_str!("frozen-tactics-v7.json");
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenTacticsV7 {
+    game_state: serde_json::Value,
+}
+
+/// A version 6 tactics file, as JSON, in the version 7 shape: it takes the frozen
+/// game-state block when it holds none. No level or value changes, so the file plays the
+/// same. The caller parses and checks the result as a current file.
+pub fn tactics_v6_to_v7(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let frozen: FrozenTacticsV7 = serde_json::from_str(FROZEN_TACTICS_V7)
+        .expect("the frozen tactics copy parses; a test checks it");
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert(
+        "schema_version".into(),
+        serde_json::Value::from(crate::data::tactics::TACTICS_VERSION),
+    );
+    obj.entry("game_state").or_insert(frozen.game_state);
     Ok(file)
 }

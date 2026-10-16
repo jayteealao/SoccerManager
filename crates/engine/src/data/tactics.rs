@@ -27,8 +27,11 @@ use crate::team::PLAYERS_PER_TEAM;
 /// ([`crate::data::convert::tactics_v4_to_v5`]). Version 6 gives pressing and line height five
 /// levels (an outer level each side of the three they had) and adds the out-of-possession
 /// primitives, on/off primitives among them; a version 5 file takes them from a copy compiled
-/// into the build ([`crate::data::convert::tactics_v5_to_v6`]).
-pub const TACTICS_VERSION: u32 = 6;
+/// into the build ([`crate::data::convert::tactics_v5_to_v6`]). Version 7 adds the
+/// game-state block (`game_state`: the rule limits, the condition kinds, the take-up time and
+/// the player override list); a version 6 file takes it from a copy compiled into the build
+/// ([`crate::data::convert::tactics_v6_to_v7`]).
+pub const TACTICS_VERSION: u32 = 7;
 
 /// The six team instructions, in the order a [`crate::tactics::Tactics`] stores their levels.
 pub const INSTRUCTIONS: [&str; 6] = [
@@ -86,6 +89,11 @@ pub struct TacticsSchema {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[garde(dive)]
     pub primitives: Vec<crate::data::primitives::Primitive>,
+    /// The game-state rules and player instructions a tactic may hold. A file without it
+    /// takes none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub game_state: Option<crate::data::game_state::GameStateSchema>,
 }
 
 /// Each position's stand per phase, as an offset from its formation slot: metres up the
@@ -677,7 +685,11 @@ impl TacticsSchema {
         if self.duty_index(&self.ai.duty).is_none() {
             return Err(("ai.duty".into(), format!("{} is not a duty", self.ai.duty)));
         }
-        crate::data::primitives::check(self)
+        crate::data::primitives::check(self)?;
+        match &self.game_state {
+            Some(block) => block.check(self),
+            None => Ok(()),
+        }
     }
 
     pub fn formation_index(&self, name: &str) -> Option<usize> {

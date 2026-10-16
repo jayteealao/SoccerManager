@@ -755,6 +755,93 @@ fn a_version_5_tactics_file_converts_to_the_shipped_version_6_file() {
     );
 }
 
+/// A version 6 tactics file (no game-state block) converts to the shipped version 7 file: it
+/// takes the frozen block, and nothing else changes. The shipped override list is exactly the
+/// confirmed ten primitives, and forward runs reach only the attack line.
+#[test]
+fn a_version_6_tactics_file_converts_to_the_shipped_version_7_file() {
+    let path = common::content_dir().path(engine::data::TACTICS_FILE);
+    let mut v6: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    v6["schema_version"] = 6.into();
+    v6.as_object_mut().unwrap().remove("game_state");
+    let converted =
+        engine::data::load_tactics_bytes(&serde_json::to_vec(&v6).unwrap(), "tactics-v6.json")
+            .unwrap();
+    assert_eq!(converted.converted_from, Some(6));
+    let shipped = common::content().tactics;
+    assert_eq!(converted.value.game_state, shipped.game_state);
+    assert_eq!(converted.value.primitives, shipped.primitives);
+    assert_eq!(converted.value.instructions, shipped.instructions);
+    assert_eq!(converted.value.roles, shipped.roles);
+    let block = shipped.game_state.as_ref().unwrap();
+    assert_eq!(block.max_rules, 6);
+    assert_eq!(block.run_of_play_window_min, 15);
+    let list: Vec<&str> = block
+        .player_overrides
+        .iter()
+        .map(|o| o.primitive.as_str())
+        .collect();
+    assert_eq!(
+        list,
+        [
+            "dribbling",
+            "crossing",
+            "cross_type",
+            "final_third",
+            "forward_runs",
+            "width",
+            "pressing",
+            "tackling",
+            "on_winning_the_ball",
+            "on_losing_the_ball",
+        ]
+    );
+    let runs = block.override_of("forward_runs").unwrap();
+    assert_eq!(runs.positions, [Position::LW, Position::RW, Position::ST]);
+    let press = block.override_of("pressing").unwrap();
+    assert!(
+        !press.inputs.iter().any(|i| i == "press_count"),
+        "the press count stays the side's"
+    );
+    let kinds: Vec<&str> = block.conditions.iter().map(|c| c.kind.as_str()).collect();
+    assert_eq!(kinds, engine::tactics::rules::CONDITION_KINDS);
+}
+
+/// A game-state block whose override names an input its primitive does not set, or one read
+/// for the side as a whole, or an unknown condition kind, is refused by name.
+#[test]
+fn a_bad_game_state_block_is_refused_by_name() {
+    let path = common::content_dir().path(engine::data::TACTICS_FILE);
+    let shipped: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    let attributes = common::content().attributes;
+    let refused = |edit: &dyn Fn(&mut serde_json::Value)| {
+        let mut v = shipped.clone();
+        edit(&mut v);
+        match engine::data::load_tactics_bytes(&serde_json::to_vec(&v).unwrap(), "tactics.json") {
+            Err(e) => e.to_string(),
+            Ok(loaded) => {
+                let (field, reason) = loaded.value.check(&attributes).unwrap_err();
+                format!("{field}: {reason}")
+            }
+        }
+    };
+    let err = refused(&|v| v["game_state"]["player_overrides"][0]["inputs"][0] = "crossing".into());
+    assert!(err.contains("dribbling does not set crossing"), "{err}");
+    let err = refused(&|v| {
+        v["game_state"]["player_overrides"][6]["inputs"][0] = "press_count".into();
+    });
+    assert!(
+        err.contains("press_count is read for the side as a whole"),
+        "{err}"
+    );
+    let err = refused(&|v| v["game_state"]["conditions"][0]["kind"] = "weather".into());
+    assert!(err.contains("weather is not a condition kind"), "{err}");
+    let err = refused(&|v| v["game_state"]["player_overrides"][0]["primitive"] = "marking".into());
+    assert!(err.contains("marking is not a primitive"), "{err}");
+    let err = refused(&|v| v["game_state"]["max_rules"] = 9.into());
+    assert!(err.contains("max_rules"), "{err}");
+}
+
 #[test]
 fn a_version_1_tactics_file_converts_to_the_shipped_version_3_file() {
     let v1 = fixture_bytes("tactics-v1.json");

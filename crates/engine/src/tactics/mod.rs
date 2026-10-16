@@ -6,6 +6,7 @@
 pub mod change;
 pub mod hooks;
 pub mod planned;
+pub mod rules;
 pub mod verdict;
 
 use crate::data::primitives::{OWN, SETTINGS_MAX, input_field, settings};

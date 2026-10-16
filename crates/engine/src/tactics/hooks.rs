@@ -353,6 +353,50 @@ pub const SECOND_INPUTS: [(&str, &str); 3] = [
     ("tackle.decide", "press_willingness"),
 ];
 
+/// The plan inputs a player's own plan carries ([`crate::team::Team::plan_for`]): every site
+/// that reads one reads the deciding player's plan, so a player instruction reaches play at
+/// the same hook as the side's value, and nowhere else. The tactics file's player override
+/// list may name only these.
+pub const PLAYER_INPUTS: [&str; 16] = [
+    "dribble",
+    "crossing",
+    "early_cross",
+    "cross_loft",
+    "long_shot",
+    "shot_reach_m",
+    "run_start_m",
+    "width",
+    "wide_target",
+    "press_distance",
+    "press_willingness",
+    "tackle_willingness",
+    "tackle_risk",
+    "counter",
+    "pace_lift",
+    "counter_press",
+];
+
+/// The plan inputs read for the side as a whole ([`crate::team::Team::plan`]): after a rule
+/// change they switch when half the side has taken the change up, and no player instruction
+/// sets them.
+pub const TEAM_INPUTS: [&str; 15] = [
+    "press_count",
+    "rest_defence",
+    "rest",
+    "back_line_gap",
+    "organise_back_line",
+    "time_wasting",
+    "counter_press_s",
+    "offside_trap",
+    "screen_short",
+    "trigger_back_pass",
+    "trigger_poor_touch",
+    "trigger_facing_back",
+    "trigger_wide",
+    "engage_line",
+    "force",
+];
+
 /// The hook named `name`.
 pub fn hook(name: &str) -> Option<&'static Hook> {
     HOOKS.iter().find(|h| h.name == name)
@@ -379,6 +423,17 @@ mod tests {
         for (name, input) in SECOND_INPUTS {
             assert!(hook(name).is_some());
             assert!(HOOKS.iter().all(|h| h.input != input));
+        }
+    }
+
+    #[test]
+    fn player_and_team_inputs_are_hook_inputs_and_never_both() {
+        let all: Vec<&str> = inputs().collect();
+        for input in PLAYER_INPUTS.iter().chain(&TEAM_INPUTS) {
+            assert!(all.contains(input), "{input} is no hook's input");
+        }
+        for input in PLAYER_INPUTS {
+            assert!(!TEAM_INPUTS.contains(&input), "{input} is listed twice");
         }
     }
 }
