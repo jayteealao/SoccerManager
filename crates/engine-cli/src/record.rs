@@ -18,7 +18,9 @@ use stream::{
 
 use crate::cli::RecordOpts;
 use crate::replay_inputs::{Built, InputFiles, build};
-use crate::stream_run::{Drive, Planned, drive, hello_substitutions, hello_tactics, hello_teams};
+use crate::stream_run::{
+    Drive, Planned, drive, hello_game_state, hello_substitutions, hello_tactics, hello_teams,
+};
 
 pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32> {
     let changes = match &opts.changes {
@@ -37,17 +39,21 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
     for change in &changes {
         managers[change.team] = ManagerKind::Human;
     }
-    let settings = MatchSettings {
+    let mut settings = MatchSettings {
         seed: opts.seed,
         minutes: opts.minutes,
         knockout: opts.knockout,
         managers,
+        game_state: None,
     };
     let Built {
         mut sim,
         commentary,
         keyframe_interval,
     } = build(&inputs, &settings, Backstop::default(), false)?;
+    // The rules and instructions each side kicks off with, so a re-simulation gives them to
+    // it whoever set them.
+    settings.game_state = hello_game_state(&sim);
     let owner_id = load_or_create_owner_id(&data_dir())?;
     let match_id = MatchId::now(opts.seed);
     let ticks = sim.config().max_ticks();
@@ -113,6 +119,7 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
         knockout: false,
         ground_length: sim.config().pitch().length(),
         ground_width: sim.config().pitch().width(),
+        game_state: hello_game_state(&sim),
     };
     messages.send(protocol::Frame::Text(
         serde_json::to_string(&ServerMessage::Hello(Box::new(hello)))

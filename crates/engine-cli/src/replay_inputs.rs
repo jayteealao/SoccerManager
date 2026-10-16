@@ -268,6 +268,17 @@ pub fn build(
     for (team, kind) in settings.managers.iter().enumerate() {
         config = config.with_manager(team, kind.manager());
     }
+    for (team, value) in settings.game_state.iter().flatten().enumerate() {
+        let Some(value) = value else {
+            continue;
+        };
+        let formation = config.teams[team].tactics.formation;
+        let state = engine::data::game_state::from_value(value, &config.tactics, &[formation])
+            .map_err(|(field, reason)| {
+                anyhow::anyhow!("the recorded game state of team {team}: {field}: {reason}")
+            })?;
+        config = config.with_game_state(team, state);
+    }
     let keyframe_interval = content.tuning.stream.keyframe_interval;
     let sim = Simulation::start(
         config,
@@ -295,6 +306,7 @@ mod tests {
             minutes: 1,
             knockout: false,
             managers: [stream::ManagerKind::Ai, stream::ManagerKind::Ai],
+            game_state: None,
         }
     }
 
@@ -366,6 +378,71 @@ mod tests {
         assert_ne!(
             with.sim.config().content_hash,
             without.sim.config().content_hash
+        );
+    }
+
+    /// A record's game state gives each side its rules and instructions: the home side here,
+    /// with the away side's `null` left alone; the hello form written back is the recorded
+    /// form, and two builds of the record play the same match, its rules firing.
+    #[test]
+    fn a_recorded_game_state_gives_each_side_its_rules() {
+        let inputs = InputFiles::read(Some(&shipped()), None, None, None).unwrap();
+        let home = serde_json::json!({
+            "rules": [{
+                "when": [{ "kind": "time_left", "minutes": 1.0 }],
+                "set": [{ "primitive": "tempo", "level": "fast" }]
+            }],
+            "instructions": [{ "slot": 10, "primitive": "dribbling", "level": "dribble_more" }]
+        });
+        let recorded = MatchSettings {
+            managers: [stream::ManagerKind::Human, stream::ManagerKind::Ai],
+            game_state: Some([Some(home.clone()), None]),
+            ..settings()
+        };
+        let play = || {
+            let mut built = build(&inputs, &recorded, Backstop::Never, false).unwrap();
+            let teams = built.sim.teams();
+            assert_eq!(teams[0].game_state.rules.len(), 1);
+            assert_eq!(teams[0].game_state.instructions.len(), 1);
+            assert!(teams[1].game_state.is_empty());
+            let sent = crate::stream_run::hello_game_state(&built.sim).unwrap();
+            assert_eq!(sent, [Some(home.clone()), None]);
+            while !built.sim.is_over() {
+                built.sim.step();
+            }
+            (built.sim.summary(), built.sim.applied_changes().to_vec())
+        };
+        let (first, again) = (play(), play());
+        assert!(
+            first
+                .1
+                .iter()
+                .any(|c| matches!(c.change, engine::Change::Rule { .. })),
+            "the rule never fired"
+        );
+        assert_eq!(first, again);
+    }
+
+    /// A recorded game state the tactics file cannot resolve is refused by name.
+    #[test]
+    fn a_recorded_game_state_naming_an_unknown_primitive_is_refused() {
+        let inputs = InputFiles::read(Some(&shipped()), None, None, None).unwrap();
+        let recorded = MatchSettings {
+            game_state: Some([
+                None,
+                Some(serde_json::json!({
+                    "instructions": [{ "slot": 10, "primitive": "juggling", "level": "more" }]
+                })),
+            ]),
+            ..settings()
+        };
+        let Err(err) = build(&inputs, &recorded, Backstop::Never, false) else {
+            panic!("an unknown primitive builds");
+        };
+        let text = format!("{err:#}");
+        assert!(
+            text.contains("the recorded game state of team 1") && text.contains("juggling"),
+            "{text}"
         );
     }
 }

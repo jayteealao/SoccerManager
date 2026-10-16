@@ -47,6 +47,7 @@ fn record(dir: &Path) -> PathBuf {
         minutes: 1,
         knockout: false,
         managers: [ManagerKind::Human, ManagerKind::Human],
+        game_state: None,
     };
     let recorder = SharedRecorder::new(
         Recorder::create_record(

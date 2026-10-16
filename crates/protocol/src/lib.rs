@@ -610,6 +610,7 @@ mod tests {
                 knockout: false,
                 ground_length: DEFAULT_GROUND_LENGTH,
                 ground_width: DEFAULT_GROUND_WIDTH,
+                game_state: None,
             })),
             ServerMessage::Event(Box::new(MatchEvent::play(
                 "",

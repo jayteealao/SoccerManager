@@ -178,6 +178,11 @@ pub struct MatchSettings {
     pub knockout: bool,
     /// Home first.
     pub managers: [ManagerKind; 2],
+    /// Each side's game-state rules and player instructions as the hello carries them, home
+    /// first; re-simulation gives each side its own. Written only when a side has some; a
+    /// record without it, as from an earlier build, has none on either side.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub game_state: Option<[Option<serde_json::Value>; 2]>,
 }
 
 /// One input as the record lists it.
@@ -1113,6 +1118,34 @@ mod tests {
             serde_json::to_string(&LoggedChange::from(&Change::Substitution { off: 1, on: 2 }))
                 .unwrap();
         assert_eq!(json, r#"{"substitution":{"off":1,"on":2}}"#);
+    }
+
+    #[test]
+    fn a_rule_change_is_logged_with_its_own_source_and_no_stoppage() {
+        let change = Change::Rule { active: 5 };
+        let logged = LoggedChange::from(&change);
+        let json = serde_json::to_string(&logged).unwrap();
+        assert_eq!(json, r#"{"rule":{"active":5}}"#);
+        let back: LoggedChange = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.to_change(), change);
+        let applied = engine::AppliedChange {
+            order: 0,
+            team: 1,
+            id: engine::ChangeId { tick: 99, n: 3 },
+            tick: 100,
+            stoppage: None,
+            change,
+        };
+        // A rule change keeps its source whoever manages the side.
+        for manager in [Manager::Human, Manager::Ai] {
+            let entry = ChangeEntry::of(&applied, manager);
+            assert_eq!(entry.source, ChangeSource::Rule);
+            assert_eq!(entry.stoppage, "none");
+        }
+        assert_eq!(
+            serde_json::to_string(&ChangeSource::Rule).unwrap(),
+            r#""rule""#
+        );
     }
 
     #[test]

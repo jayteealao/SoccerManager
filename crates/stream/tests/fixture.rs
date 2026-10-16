@@ -57,6 +57,7 @@ fn record(path: &Path, minutes: u32) -> u32 {
         knockout: false,
         ground_length: protocol::DEFAULT_GROUND_LENGTH,
         ground_width: protocol::DEFAULT_GROUND_WIDTH,
+        game_state: None,
     };
     messages
         .send(Frame::Text(

@@ -358,6 +358,12 @@ pub struct Hello {
         skip_serializing_if = "is_default_ground_width"
     )]
     pub ground_width: f64,
+    /// Each side's game-state rules and player instructions, home first, in the form a
+    /// tactic writes them (`rules`, `instructions`; names, not indices), or `null` for a side
+    /// with neither. Written only when a side has some; a hello without it, as from an earlier
+    /// build, reads as no rules on either side.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub game_state: Option<[Option<serde_json::Value>; 2]>,
 }
 
 /// The length of a ground that a hello does not name, in metres.
@@ -898,6 +904,7 @@ mod tests {
             knockout: true,
             ground_length: DEFAULT_GROUND_LENGTH,
             ground_width: DEFAULT_GROUND_WIDTH,
+            game_state: None,
         }
     }
 
@@ -1524,6 +1531,31 @@ mod tests {
             panic!("not a hello");
         };
         assert_eq!(*back, smaller);
+    }
+
+    #[test]
+    fn a_hello_carries_game_state_only_when_a_side_has_some() {
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(hello()))).unwrap();
+        assert!(!json.contains("game_state"), "{json}");
+        let mut ruled = hello();
+        let away = serde_json::json!({
+            "rules": [{
+                "when": [{ "kind": "score", "state": "leading", "by": 1 }],
+                "set": [{ "primitive": "mentality", "level": "cautious" }]
+            }],
+            "instructions": [{ "slot": 10, "primitive": "forward_runs", "level": "run_in_behind" }]
+        });
+        ruled.game_state = Some([None, Some(away.clone())]);
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(ruled.clone()))).unwrap();
+        assert!(
+            json.ends_with(&format!(",\"game_state\":[null,{away}]}}")),
+            "{json}"
+        );
+        let ServerMessage::Hello(back) = serde_json::from_str::<ServerMessage>(&json).unwrap()
+        else {
+            panic!("not a hello");
+        };
+        assert_eq!(*back, ruled);
     }
 
     #[test]

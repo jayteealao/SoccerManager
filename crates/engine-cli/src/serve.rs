@@ -46,7 +46,8 @@ use stream::{
 use crate::cli::ServeOpts;
 use crate::matchday::{self, Matchday, Round};
 use crate::stream_run::{
-    Drive, PageChange, carry_page_changes, drive, hello_substitutions, hello_tactics, hello_teams,
+    Drive, PageChange, carry_page_changes, drive, hello_game_state, hello_substitutions,
+    hello_tactics, hello_teams,
 };
 
 /// The team the page manages.
@@ -772,6 +773,7 @@ fn hello_for(
         knockout: config.knockout,
         ground_length: config.pitch().length(),
         ground_width: config.pitch().width(),
+        game_state: hello_game_state(sim),
     }
 }
 

@@ -609,6 +609,35 @@ pub fn written(state: &GameState, schema: &TacticsSchema) -> GameStateFile {
     }
 }
 
+/// Each side's rules and player instructions in their written form, home first, as the hello
+/// and the replay record carry them: `None` for a side with neither, and `None` in all when
+/// neither side has any, so a match without them writes nothing.
+pub fn sides_value(
+    states: [&GameState; 2],
+    schema: &TacticsSchema,
+) -> Option<[Option<serde_json::Value>; 2]> {
+    if states.iter().all(|s| s.is_empty()) {
+        return None;
+    }
+    Some(states.map(|s| {
+        (!s.is_empty()).then(|| {
+            serde_json::to_value(written(s, schema)).expect("a written game state is JSON")
+        })
+    }))
+}
+
+/// A side's written rules and instructions from the hello or the replay record, resolved
+/// against the tactics file as a tactic of `formations` resolves them.
+pub fn from_value(
+    value: &serde_json::Value,
+    schema: &TacticsSchema,
+    formations: &[u8],
+) -> Result<GameState, Refusal> {
+    let file: GameStateFile = serde_json::from_value(value.clone())
+        .map_err(|e| ("game_state".to_string(), e.to_string()))?;
+    resolve(&file, schema, formations)
+}
+
 fn condition_file(c: &Condition) -> ConditionFile {
     let base = ConditionFile {
         kind: c.kind().to_string(),

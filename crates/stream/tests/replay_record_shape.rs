@@ -56,6 +56,7 @@ fn full_record() -> ReplayRecord {
             minutes: 1,
             knockout: false,
             managers: [ManagerKind::Human, ManagerKind::Ai],
+            game_state: None,
         },
         inputs: vec![InputInfo {
             role: "tuning".into(),

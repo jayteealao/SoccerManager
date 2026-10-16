@@ -58,6 +58,7 @@ fn recorded_mark(name: &str, backstop: Backstop) -> Watchdog {
                 minutes: 5,
                 knockout: false,
                 managers: [ManagerKind::Ai, ManagerKind::Ai],
+                game_state: None,
             },
             &inputs,
         )

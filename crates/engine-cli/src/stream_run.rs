@@ -674,6 +674,16 @@ fn wire_index(squad: usize) -> u16 {
     u16::try_from(squad).unwrap_or(u16::MAX)
 }
 
+/// Each side's game-state rules and player instructions as the hello carries them; `None`
+/// when neither side has any.
+pub(crate) fn hello_game_state(sim: &Simulation) -> Option<[Option<serde_json::Value>; 2]> {
+    let teams = sim.teams();
+    engine::data::game_state::sides_value(
+        [&teams[0].game_state, &teams[1].game_state],
+        &sim.config().tactics,
+    )
+}
+
 /// The loaded tactics file as the hello carries it, so the page renders its tactics panel
 /// from the same file the engine reads. A JSON object's keys carry no order on the wire, so
 /// `instruction_order` names the instructions in the order a level list indexes them.
