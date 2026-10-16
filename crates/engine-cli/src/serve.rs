@@ -822,8 +822,8 @@ mod skip_equality {
     /// and goes to a shoot-out. `scan_for_the_shootout_seed` finds it again (seed 0 until
     /// tempo became patience and the mentality an appetite for risk; seed 3 until defenders met
     /// a running carrier in a take-on; seed 0 until a passer read the press his receiver would
-    /// meet).
-    const SHOOTOUT_SEED: u64 = 16;
+    /// meet; seed 16 until the AI manager's substitutions followed the situation).
+    const SHOOTOUT_SEED: u64 = 3;
 
     /// The tick the knockout match marks a watchdog hit on, in every run.
     const WATCHDOG_AT: u32 = 60_000;

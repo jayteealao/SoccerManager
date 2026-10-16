@@ -382,8 +382,10 @@ mod tests {
     }
 
     /// A record's game state gives each side its rules and instructions: the home side here,
-    /// with the away side's `null` left alone; the hello form written back is the recorded
-    /// form, and two builds of the record play the same match, its rules firing.
+    /// with the away side's `null` left alone, so the AI side keeps its style's rules and no
+    /// instruction; the hello form written back is the recorded form for the home side and the
+    /// style's rules for the away side, and two builds of the record play the same match, its
+    /// rules firing.
     #[test]
     fn a_recorded_game_state_gives_each_side_its_rules() {
         let inputs = InputFiles::read(Some(&shipped()), None, None, None).unwrap();
@@ -404,9 +406,12 @@ mod tests {
             let teams = built.sim.teams();
             assert_eq!(teams[0].game_state.rules.len(), 1);
             assert_eq!(teams[0].game_state.instructions.len(), 1);
-            assert!(teams[1].game_state.is_empty());
+            assert!(teams[1].game_state.instructions.is_empty());
             let sent = crate::stream_run::hello_game_state(&built.sim).unwrap();
-            assert_eq!(sent, [Some(home.clone()), None]);
+            assert_eq!(sent[0], Some(home.clone()));
+            let away = sent[1].as_ref().expect("the AI side's style rules");
+            assert_eq!(away["rules"].as_array().map(Vec::len), Some(2));
+            assert!(away.get("instructions").is_none());
             while !built.sim.is_over() {
                 built.sim.step();
             }

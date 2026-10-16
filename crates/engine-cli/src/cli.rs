@@ -1160,7 +1160,7 @@ pub struct CalibrateOpts {
     /// engine keeps the planned seeds. A test seam of the gate proof's self runs.
     #[arg(long, hide = true, value_name = "SALT")]
     pub reseed: Option<u64>,
-    /// A rule pack file to play under instead of the content folder's.
+    /// A rule pack file to play every match under.
     #[arg(
         long,
         value_name = "FILE",
