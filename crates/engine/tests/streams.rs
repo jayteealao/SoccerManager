@@ -92,9 +92,10 @@ fn sequences(keys: &[Key], skip: Option<Key>, extra: usize) -> Vec<Vec<u64>> {
 #[test]
 fn extra_draws_on_one_key_leave_every_other_key_unchanged() {
     let keys = sample_keys();
-    // 5 match rows and 42 player rows (the restart wait and the quick restart added two, the
-    // trait override one, the pass cut and the pass weight two, the take-on one).
-    assert_eq!(keys.len(), 5 + 2 * 42);
+    // 5 match rows and 43 player rows (the restart wait and the quick restart added two, the
+    // trait override one, the pass cut and the pass weight two, the take-on one, the knock
+    // one).
+    assert_eq!(keys.len(), 5 + 2 * 43);
     let control = sequences(&keys, None, 0);
     for (x, &key) in keys.iter().enumerate() {
         let disturbed = sequences(&keys, Some(key), 100);

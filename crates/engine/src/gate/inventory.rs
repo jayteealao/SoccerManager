@@ -472,6 +472,7 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
         facing,
         status,
         yellow,
+        knock,
         foul_ready,
         lapse_until,
         pace,
@@ -489,6 +490,8 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
     w.u8(canon::status_code(*status));
     w.mark(Bytes, || format!("players[{i}].yellow"));
     w.u8(*yellow);
+    w.mark(Bytes, || format!("players[{i}].knock"));
+    w.u8(u8::from(*knock));
     w.mark(Bytes, || format!("players[{i}].foul_ready"));
     w.u32(*foul_ready);
     w.mark(Bytes, || format!("players[{i}].lapse_until"));

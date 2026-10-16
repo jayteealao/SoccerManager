@@ -97,6 +97,7 @@
     },
     "injury_per_tackle": 0.004,
     "injury_per_minute": 0.0002,
+    "knock_ratio": 3.0,
     "xg": {
       "intercept": -4.191,
       "distance_coef": -0.0441,

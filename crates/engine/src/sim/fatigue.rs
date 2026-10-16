@@ -281,6 +281,18 @@ impl Simulation {
         self.trace_injury_roll(c, InjurySource::Tackle, chance, injured);
         if injured {
             self.injure(c, InjurySource::Tackle);
+            return;
+        }
+        // A knock: the same tackle, a multiple of the injury chance, on its own stream, so no
+        // other draw moves.
+        let knock = (chance * self.config.tuning.knock_ratio).min(1.0);
+        if knock > 0.0
+            && self
+                .streams
+                .tested(Key::player(Action::KnockTackle, p), &[knock])
+                < knock
+        {
+            self.players[c].knock = true;
         }
     }
 

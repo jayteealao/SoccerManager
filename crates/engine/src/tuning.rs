@@ -204,6 +204,12 @@ pub struct Tuning {
     pub injury_per_tackle: f64,
     #[garde(range(min = 0.0, max = 0.01))]
     pub injury_per_minute: f64,
+    /// Knocks for each tackle injury: after a tackle injury roll that does not injure, the
+    /// tackled player takes a knock with this multiple of that roll's chance. A knock changes
+    /// nothing in play; the AI manager reads it. 3 when the file gives none.
+    #[serde(default = "default_knock_ratio")]
+    #[garde(range(min = 0.0, max = 20.0))]
+    pub knock_ratio: f64,
     /// The expected-goals model of a shot.
     #[garde(dive)]
     pub xg: XgTuning,
@@ -770,6 +776,7 @@ impl Default for Tuning {
             },
             injury_per_tackle: INJURY_PER_TACKLE,
             injury_per_minute: INJURY_PER_MINUTE,
+            knock_ratio: KNOCK_RATIO,
             xg: XgTuning {
                 intercept: -4.191,
                 distance_coef: -0.0441,
@@ -837,6 +844,13 @@ const FOUL_BASE: f64 = 0.1;
 /// The shipped injury rates: a planning estimate of about 0.6 injuries per match with the
 /// default teams, to be replaced with a sourced rate.
 const INJURY_PER_TACKLE: f64 = 0.004;
+/// Three knocks for each tackle injury: a design value; the substitution report sets the share
+/// of changes made for an injury or a knock beside the real injury share.
+const KNOCK_RATIO: f64 = 3.0;
+
+fn default_knock_ratio() -> f64 {
+    KNOCK_RATIO
+}
 const INJURY_PER_MINUTE: f64 = 0.0002;
 
 #[cfg(test)]

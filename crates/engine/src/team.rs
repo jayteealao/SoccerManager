@@ -341,6 +341,7 @@ impl Team {
             facing: DVec2::new(self.attack_x, 0.0),
             status: Status::OnPitch,
             yellow: 0,
+            knock: false,
             foul_ready: 0,
             lapse_until: 0,
             pace: crate::pace::Pace::OFF,

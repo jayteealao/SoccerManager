@@ -73,7 +73,8 @@
 //!   base tactics, its rules, its player instructions, the rules active, and the change being
 //!   taken up; the body ends with the shots the run of play reads. Version 20 drops the AI
 //!   manager's score memory: each team stores only whether a check is due (a byte) before its
-//!   game state.
+//!   game state; and each player stores, after his yellow cards, whether he took a knock (a
+//!   byte).
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -887,6 +888,7 @@ fn encode(sim: &Simulation, w: &mut Writer) {
         w.v2_at(&String::new, p.facing);
         w.u8(canon::status_code(p.status));
         w.u8(p.yellow);
+        w.u8(u8::from(p.knock));
         w.u32(p.foul_ready);
         w.u32(p.lapse_until);
         w.u8(p.squad as u8);
@@ -1266,6 +1268,7 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
             _ => return Err("malformed body: an unknown player status".into()),
         };
         p.yellow = r.u8()?;
+        p.knock = r.bool()?;
         p.foul_ready = r.u32()?;
         p.lapse_until = r.u32()?;
         let team = &sim.teams[p.team];

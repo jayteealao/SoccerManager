@@ -301,6 +301,9 @@ pub struct Player {
     pub status: Status,
     /// Yellow cards shown to the player in this match.
     pub yellow: u8,
+    /// He took a knock in a tackle in this match: it changes nothing in play; the AI manager
+    /// reads it when it weighs a substitution.
+    pub knock: bool,
     /// The first tick the player may attempt a tackle again after a foul.
     pub foul_ready: u32,
     /// The first tick after a concentration lapse; until then the player holds where he
@@ -375,6 +378,7 @@ pub(crate) mod test_support {
             facing: DVec2::X,
             status: Status::OnPitch,
             yellow: 0,
+            knock: false,
             foul_ready: 0,
             lapse_until: 0,
             pace: Pace::OFF,
