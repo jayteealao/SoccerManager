@@ -501,6 +501,38 @@ pub fn block_names<'a>(schema: &'a TacticsSchema, block: &str) -> Vec<&'a str> {
         .unwrap_or_default()
 }
 
+/// Drops each fit record of a graded or on/off primitive whose values differ from its level:
+/// a fit describes the level values it was fitted at, so a converted older file whose own
+/// levels hold other values keeps those values and no fit for them.
+pub fn drop_unmatched_fits(schema: &mut TacticsSchema) {
+    let keep: Vec<Vec<bool>> = schema
+        .primitives
+        .iter()
+        .map(|p| {
+            let names = p.level_names(schema);
+            p.fits
+                .iter()
+                .map(|fit| {
+                    p.kind == PrimitiveKind::Choice
+                        || names
+                            .iter()
+                            .position(|l| *l == fit.level)
+                            .is_some_and(|level| {
+                                fit.values.iter().all(|(input, value)| {
+                                    level_value(schema, input, level)
+                                        .is_some_and(|a| (a - value).abs() <= 1e-9)
+                                })
+                            })
+                })
+                .collect()
+        })
+        .collect();
+    for (p, keep) in schema.primitives.iter_mut().zip(keep) {
+        let mut k = keep.into_iter();
+        p.fits.retain(|_| k.next().unwrap_or(true));
+    }
+}
+
 /// The value of plan input `input` at level `level` of its block, or of the steps or choices
 /// of the primitive that owns it.
 pub fn level_value(schema: &TacticsSchema, input: &str, level: usize) -> Option<f64> {

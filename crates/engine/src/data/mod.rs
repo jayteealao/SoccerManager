@@ -534,8 +534,9 @@ pub fn load_tactics_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TacticsSch
             };
             let v6 = convert::tactics_v5_to_v6(v5)
                 .map_err(|reason| refused(KIND, shown, "tactics".into(), reason))?;
-            let value: TacticsSchema = serde_json::from_value(v6)
+            let mut value: TacticsSchema = serde_json::from_value(v6)
                 .map_err(|e| refused(KIND, shown, "converted file".into(), e.to_string()))?;
+            primitives::drop_unmatched_fits(&mut value);
             let value = checked(KIND, shown, value, &())?;
             Ok(loaded(KIND, bytes, shown, value, found, Some(found)))
         }

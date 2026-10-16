@@ -726,6 +726,33 @@ fn a_version_5_tactics_file_converts_to_the_shipped_version_6_file() {
     );
     assert_eq!(shipped.instructions.defaults()[0], 2);
     assert_eq!(shipped.instructions.defaults()[3], 2);
+
+    // A version 5 file whose own pressing and line-height levels hold other values (an older
+    // replay's content) keeps them and loads; the fits of those levels, made at the shipped
+    // values, are dropped, and the other fits stay.
+    v5["instructions"]["pressing"]["levels"][0]["press_distance_scale"] = 0.8.into();
+    v5["instructions"]["line_height"]["levels"][2]["value"] = 5.0.into();
+    let converted =
+        engine::data::load_tactics_bytes(&serde_json::to_vec(&v5).unwrap(), "tactics-v5.json")
+            .unwrap();
+    let fits = |name: &str| -> Vec<String> {
+        converted
+            .value
+            .primitives
+            .iter()
+            .find(|p| p.name == name)
+            .unwrap()
+            .fits
+            .iter()
+            .map(|f| f.level.clone())
+            .collect()
+    };
+    assert_eq!(fits("pressing"), ["very_low", "high", "very_high"]);
+    assert_eq!(fits("line_height"), ["very_high"]);
+    assert_eq!(
+        converted.value.instructions.pressing.levels[1].press_distance_scale,
+        0.8
+    );
 }
 
 #[test]
