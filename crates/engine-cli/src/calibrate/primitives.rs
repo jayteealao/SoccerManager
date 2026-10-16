@@ -939,6 +939,79 @@ pub fn bisect(
     })
 }
 
+/// The search of [`bisect`] where the mean need not move one way across `[lo, hi]`: the two
+/// ends and the middle first; then [`bisect`] inside the half whose ends bracket the target
+/// (the half that holds `prefer` when both do). When neither half brackets it, the target is
+/// out of reach and the value is the probe nearest it.
+pub fn bisect_bracketed(
+    mut eval: impl FnMut(f64) -> anyhow::Result<(f64, f64)>,
+    lo: f64,
+    hi: f64,
+    prefer: f64,
+    target: f64,
+    max_evals: usize,
+) -> anyhow::Result<Search> {
+    let mut seen: Vec<Probe> = Vec::new();
+    let mut run = |x: f64, seen: &mut Vec<Probe>| -> anyhow::Result<Probe> {
+        if let Some(p) = seen.iter().find(|p| p.value == x) {
+            return Ok(p.clone());
+        }
+        let (mean, noise) = eval(x)?;
+        let p = Probe {
+            value: x,
+            mean,
+            noise,
+        };
+        seen.push(p.clone());
+        Ok(p)
+    };
+    let mid = 0.5 * (lo + hi);
+    let ends = [
+        run(lo, &mut seen)?,
+        run(mid, &mut seen)?,
+        run(hi, &mut seen)?,
+    ];
+    let brackets = |a: &Probe, b: &Probe| {
+        let (low, high) = if a.mean <= b.mean { (a, b) } else { (b, a) };
+        target >= low.mean - low.noise && target <= high.mean + high.noise
+    };
+    let halves = [(&ends[0], &ends[1]), (&ends[1], &ends[2])];
+    let holds = |(a, b): &(&Probe, &Probe)| (a.value..=b.value).contains(&prefer);
+    let half = halves
+        .iter()
+        .filter(|h| brackets(h.0, h.1))
+        .max_by_key(|h| holds(h));
+    let Some((a, b)) = half else {
+        let best = ends
+            .iter()
+            .min_by(|p, q| (p.mean - target).abs().total_cmp(&(q.mean - target).abs()))
+            .cloned()
+            .context("a probe")?;
+        return Ok(Search {
+            value: best.value,
+            achieved: best.mean,
+            noise: best.noise,
+            unreachable: true,
+            probes: seen,
+        });
+    };
+    let (x0, x1) = (a.value, b.value);
+    let inner = bisect(
+        |x| run(x, &mut seen).map(|p| (p.mean, p.noise)),
+        x0,
+        x1,
+        target,
+        max_evals.saturating_sub(1).max(2),
+    )?;
+    let mut probes = seen;
+    for p in inner.probes.iter() {
+        if !probes.iter().any(|q| q.value == p.value) {
+            probes.push(p.clone());
+        }
+    }
+    Ok(Search { probes, ..inner })
+}
+
 /// A secondary signature statistic at a level's fit.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Secondary {
@@ -1039,7 +1112,9 @@ pub fn pooled_ratio(units: &[Vec<(f64, f64)>]) -> (f64, f64) {
 /// other primitive at its default, until the ratio of the side's primary statistic to the
 /// default level's lies within its noise of the real ratio: the median of the level's real
 /// quintile over the median of the default level's. The default level is the base of every
-/// ratio and keeps its value.
+/// ratio and keeps its value. With `between_neighbours`, the search stays between the values
+/// of the level's neighbours (an end level: between its neighbour and the range end), where
+/// the statistic need not move one way, so the fitted levels keep their order.
 pub fn fit(
     content: &Content,
     table: &serde_json::Value,
@@ -1047,6 +1122,7 @@ pub fn fit(
     level: &str,
     setup: &Setup,
     max_evals: usize,
+    between_neighbours: bool,
 ) -> anyhow::Result<FitResult> {
     let content = harness_content(content);
     let p = primitive(&content.tactics, name)?.clone();
@@ -1100,6 +1176,24 @@ pub fn fit(
         Steps::BelowDefault => (lo, middle),
         Steps::AboveDefault => (middle, hi),
     };
+    let current = level_value(&content.tactics, &first, q).unwrap_or(lo);
+    let (lo, hi) = if between_neighbours {
+        let below = q
+            .checked_sub(1)
+            .and_then(|l| level_value(&content.tactics, &first, l))
+            .unwrap_or(lo);
+        let above = (q + 1 < GRADED_LEVELS)
+            .then(|| level_value(&content.tactics, &first, q + 1))
+            .flatten()
+            .unwrap_or(hi);
+        let (below, above) = (below.max(lo), above.min(hi));
+        if below >= above {
+            bail!("{name} {level}: its neighbours' values {below} and {above} leave no room");
+        }
+        (below, above)
+    } else {
+        (lo, hi)
+    };
     let held: BTreeMap<String, f64> = p
         .inputs
         .iter()
@@ -1136,7 +1230,11 @@ pub fn fit(
         played.borrow_mut().push((x, cand));
         Ok(pooled_ratio(&units))
     };
-    let search = bisect(eval, lo, hi, real / real_default, max_evals)?;
+    let search = if between_neighbours {
+        bisect_bracketed(eval, lo, hi, current, real / real_default, max_evals)?
+    } else {
+        bisect(eval, lo, hi, real / real_default, max_evals)?
+    };
     let played = played.into_inner();
     let cand = &played
         .iter()
@@ -1608,6 +1706,7 @@ pub fn run(
             jobs: j,
             minutes,
             evals,
+            between_neighbours,
             table,
             out,
         } => {
@@ -1626,7 +1725,15 @@ pub fn run(
                 minutes: *minutes,
                 jobs: jobs(*j),
             };
-            let result = fit(content, &table, primitive, level, &setup, *evals)?;
+            let result = fit(
+                content,
+                &table,
+                primitive,
+                level,
+                &setup,
+                *evals,
+                *between_neighbours,
+            )?;
             emit(&result, out.as_deref())?;
             Ok(0)
         }
@@ -1698,6 +1805,28 @@ mod tests {
         assert_eq!(s.probes.len(), 2);
         let s = bisect(rising, 0.0, 1.0, 3.5001, 4).unwrap();
         assert!(s.probes.len() <= 4);
+    }
+
+    /// Over a hump the plain bisection sees only its two ends; the bracketed search finds the
+    /// target on the side that holds the preferred value, and names a target above the hump
+    /// out of reach with the probe nearest it, which may lie inside the range.
+    #[test]
+    fn the_bracketed_search_handles_a_statistic_that_does_not_move_one_way() {
+        let hump = |x: f64| Ok((1.0 - (x - 0.5).powi(2), 0.001));
+        let plain = bisect(hump, 0.0, 1.0, 0.9, 12).unwrap();
+        assert!(plain.unreachable, "{plain:?}");
+        let s = bisect_bracketed(hump, 0.0, 1.0, 0.8, 0.9, 12).unwrap();
+        assert!(!s.unreachable, "{s:?}");
+        assert!((s.achieved - 0.9).abs() <= 0.001, "{s:?}");
+        assert!(s.value > 0.5, "the half that holds 0.8: {s:?}");
+        let s = bisect_bracketed(hump, 0.0, 1.0, 0.2, 0.9, 12).unwrap();
+        assert!(s.value < 0.5, "the half that holds 0.2: {s:?}");
+        let s = bisect_bracketed(hump, 0.0, 1.0, 0.2, 1.5, 12).unwrap();
+        assert!(s.unreachable);
+        assert_eq!(s.value, 0.5);
+        assert_eq!(s.probes.len(), 3);
+        let s = bisect_bracketed(hump, 0.0, 1.0, 0.2, 0.9001, 5).unwrap();
+        assert!(s.probes.len() <= 5, "{s:?}");
     }
 
     #[test]

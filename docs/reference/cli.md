@@ -622,6 +622,7 @@ engine-cli primitives spread [OPTIONS]
 | `--pairs` | 1 or more | 40 | `check`: pairs of matches per step. |
 | `--matches` | 1 or more | 40 (`spread`: 200) | `fit` and `reach`: matches per evaluation; `spread`: matches to play. |
 | `--evals` | 1 or more | 12 | `fit`: the most evaluations of the search. |
+| `--between-neighbours` | flag | off | `fit`: search only between the values of the level's neighbours (an end level: between its neighbour and the end of the input's range), for a statistic that does not move one way across the whole range. The search plays both ends and the middle first and bisects the half whose ends bracket the target (the half that holds the level's current value when both do); when neither does, the level is out of reach and takes the value nearest the target. Fit the levels beside the default first, so each end level reads its fitted neighbour. |
 | `--table` | path | `signatures.json` in the content folder | `fit`: the signature table. |
 | `--seed` | integer | 9 | The equal suite's seed: its clubs and fixtures. |
 | `--jobs` | 1 or more | the logical cores | Matches played at once. |

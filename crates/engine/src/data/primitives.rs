@@ -369,7 +369,8 @@ pub struct Fit {
     #[garde(skip)]
     pub seed: u64,
     /// `true` when the target lies outside what the input's range reaches; the value is then
-    /// the range end nearest the target.
+    /// the probe nearest the target (a range end, or a value between the neighbours' values
+    /// when the search stayed between them).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     #[garde(skip)]
     pub unreachable: bool,

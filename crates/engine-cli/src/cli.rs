@@ -185,6 +185,11 @@ pub enum PrimitivesAction {
         /// The most evaluations of the search.
         #[arg(long, default_value_t = 12)]
         evals: usize,
+        /// Search only between the values of the level's neighbours (an end level: between
+        /// its neighbour and the end of the input's range), so the fitted levels keep their
+        /// order where the statistic does not move one way across the whole range.
+        #[arg(long)]
+        between_neighbours: bool,
         /// The signature table; default signatures.json in the content folder.
         #[arg(long, value_name = "FILE")]
         table: Option<PathBuf>,
