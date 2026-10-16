@@ -299,6 +299,7 @@ Play many AI-managed matches and check the realism bands.
 | `--pair` | flag name | none | Play every fixture with the flag off, then on, on the same match seeds, and compare the two arms band by band. |
 | `--base` | revision | none | Make it a change run: compare this build with the old engine of the revision, and judge each band `pass`, `fail`, or `not sure`. See "Change runs" below. Cannot be used with `--pair`. |
 | `--real-data` | folder | the main checkout's `.scratch/out` | The folder of measured real data that each band's real record points into. See "Real values" below. |
+| `--rules` | file | the content's `rules/default.json` | Play every match under this rule pack instead, for example `crates/engine-cli/tests/fixtures/rules/three-substitutions.json` (3 substitutions in 3 windows). The substitution report reads the real era of the pack's limit. |
 
 Output: the run report as one JSON line. Files: `run.json`, `target.json`, `ledger/`, `rows/`, `report.json`, `stats/<match.id>.json`, and `events/<match.id>.jsonl` in the run folder, and `accepted.json` once `calibrate accept` has accepted a band.
 
@@ -596,6 +597,8 @@ engine-cli signatures [OPTIONS]
 | `--real-data` | folder | the main checkout's `.scratch/out`, as `calibrate --real-data` | The measured real data holding `wy2_matches.csv`, `wy2_team_matches.csv` and `wy2_events.csv.gz`, `sb2_events.csv.gz` for the StatsBomb check, `sc_dynamic_events.csv.gz` for the full-backs' runs and `tracking_runs.csv.gz` (written by `scripts/tracking-runs.py`) for the forwards' runs. A file that is absent leaves out its rows. |
 | `--out` | path | `signatures.json` in the content folder | Where the table goes. |
 | `--competitions` | list | `England,France,Italy,Spain` | The competitions to read, comma separated. |
+
+The table's `substitutions` rows come from `wy2_subs.csv` with `wy2_matches.csv` (the three-substitution era, the asked Wyscout leagues) and from the `Substitution` events of `sb2_events.csv.gz` in periods 1 and 2 of Euro 2020, the 2022 World Cup and Euro 2024 (the five-substitution era, with the share forced by an injury); each era is left out when its files are absent.
 
 The held-out sets are never read: rows of other competitions are skipped before they are parsed, a held-out competition asked for by name stops the run with `held-out set: <name> is never read`, and so does an event whose match belongs to a held-out competition. Two runs on the same files write the same bytes. Output: one JSON line with the file written, the rows, the teams and the matches.
 

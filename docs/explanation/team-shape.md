@@ -104,15 +104,22 @@ A side that a person manages keeps the default tactics as its starting point; a 
 
 The AI picks its starters for the chosen formation by each player's rating at each slot's position, not by the position listed in the squad. A listed player keeps his slot unless another player is clearly better there: the listed player gets a margin (`ai.out_of_position_margin` in `tactics.json`). The pick fills slots from the best player-and-slot pairs first, then swaps pairs of players when a swap raises the summed rating.
 
-The bench is picked as cover: a spare goalkeeper, then at least one player for each line (defence, midfield and attack), then a full-back and a winger when the squad has a spare, then the positions the formation uses most. A substitute is the bench player with the best rating at the slot. The number and the timing of substitutions do not change: only who comes on.
+The bench is picked as cover: a spare goalkeeper, then at least one player for each line (defence, midfield and attack), then a full-back and a winger when the squad has a spare, then the positions the formation uses most. A substitute is the bench player with the best rating at the slot.
 
 With the shipped squads, which hold one spare per central position, some substitutions still put a player out of position: no bench of seven can cover every slot twice.
 
+### Decisions during the match
+
+During the match the AI manager reads the situation, never the clock. It replaces an injured player and an outfield player keeping goal at once. Otherwise it looks at its players at each stoppage that allows a substitution. Each player's need adds up four things: how tired he is, a yellow card weighted by how many tackles and fouls he has made and how many cards the referee has shown, a match rating below par, and a knock from a tackle he played on with. The bench option's rating at his slot counts for or against the change. The manager makes the change when the gain clears a bar, and the bar rises as the substitutions and the windows run out. A substitution that would use a new window has to clear a higher bar than one at a stoppage where the team is already changing, so changes tend to come together. The commentary and the assistant name the largest part of the need: tired, booked, off his game, or carrying a knock.
+
+The AI manager makes no tactics change of its own. An AI side's in-match tactics are its style's game-state rules, in the same form a person writes: each style chases a game it trails late with the run of play against it, with a more attacking mentality and harder pressing, and holds a late lead with a more cautious mentality and time wasting on. A side with no style has no in-match tactics.
+
+The real substitutions are the benchmark. With three substitutions in three windows (the 2017/18 Wyscout leagues) the AI makes about as many as real teams did, but earlier in the match. With five (the recent StatsBomb tournaments) it makes about three where real teams made about four. Both gaps are recorded in the calibration's substitution report.
 ### The styles suite
 
 `engine-cli calibrate --suite styles` plays every ordered pairing of two different styles, with the same squad on both sides, and a formation drawn from each style's list. It reports each style's points per match, the styles it loses to clearly, and a dominance flag: a style with no clear loss, or with more than a fifth of all points, would be a style with no weakness. It also flags an identity statistic that a style does not move in its direction. Every change run plays a small sample, one match per ordered pairing, and reports it beside the verdict; the suite judges no band. See [Run the styles suite](../how-to/calibration.md#run-the-styles-suite).
 
-The suite tests presets only. The AI does not yet adapt during a match or remember which styles worked; that comes with later work on the AI manager.
+The suite tests presets only. The AI adapts during a match only through its style's rules, and it does not remember which styles worked; that comes with later work on the AI manager.
 
 ## Tactical primitives
 

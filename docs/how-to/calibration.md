@@ -216,6 +216,21 @@ field rating: 0 of 10 formations flagged (field rating above win rate by more th
 
 The rating never changes a band, the verdict, `calib.pass` or the exit code. Read a flag as a question about the formations, not as a failure. With few matches per pairing each share is 0, 0.5 or 1, and the equilibrium can jump from run to run: read a flag only from a run with many matches per pairing. A run that played only some pairings (`--pairing`), or in which a pairing finished no match, prints `formation field rating: needs every pairing (<k> of <n> played)` instead and writes no `calib.nash`.
 
+## Read the substitutions against the real eras
+
+Each run reports the AI managers' substitutions in `calib.substitutions` of `report.json`, against the real era of the rule pack's limit from the `substitutions` rows of `signatures.json`: the Wyscout leagues of 2017/18 for a limit of 3, and Euro 2020, the 2022 World Cup and Euro 2024 for a limit of 5. To read the three-substitution era, play under its pack:
+
+```text
+target/release/engine-cli calibrate --suite equal --seed 9 --matches 200 --rules crates/engine-cli/tests/fixtures/rules/three-substitutions.json --out runs/subs-three-9
+```
+
+- `per_team` is the substitutions a team makes in a match, and `per_team_inside` whether it lies inside the real competitions' range.
+- `minute_quartiles` are the quartiles of the substitution minutes, and `quartiles_inside` whether each lies inside the real range of that quartile.
+- `reasons` splits the substitutions by `ai-decision` code; `injury_knock_share` is the share made for an injury or a knock, beside the real share forced by an injury.
+- `count_shares` gives the share of teams making 0, 1, 2 and more substitutions.
+
+The report never changes a band, the verdict, `calib.pass` or the exit code.
+
 ## Run the styles suite
 
 The styles suite plays the eight named styles of `content/styles.json` against each other: every ordered pairing of two different styles, with the same squad on both sides and a formation drawn from each style's list. It judges no band; it tells you whether a style dominates and whether each style shows its identity. Run it on demand, for example before a release or after a change to how instructions play:

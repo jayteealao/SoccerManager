@@ -38,7 +38,7 @@ The table lists the slots in the order the engine resolves them. A required slot
 | `engine.fouls` | no | `fouls@1` | none | `off` | Tackle, FoulCard | yellow_cards_per_team |
 | `engine.offside` | no | `offside@1` | none | `off` | none | none: no offside band in realism-bands.json |
 | `engine.shot` | no | `shot@1` | none | `off` | Save, ShootoutSave | goals_per_xg |
-| `engine.fatigue` | no | `fatigue@1` | none | `off` | InjuryMinute, InjuryTackle, FormMatch, FormPeriod | none: no fatigue or injury band in realism-bands.json |
+| `engine.fatigue` | no | `fatigue@1` | none | `off` | InjuryMinute, InjuryTackle, KnockTackle, FormMatch, FormPeriod | none: no fatigue or injury band in realism-bands.json |
 | `engine.steering` | yes | `steering@1` | none | none | none | none: movement maths, no realism band |
 | `engine.pre-match` | no | `pre-match@1` | none | `off` | none | none: lineup choice, no realism band |
 | `engine.modifier.fatigue` | no | `fatigue-curve@1` | none | `off` | none | none: no fatigue band in realism-bands.json |
@@ -55,7 +55,7 @@ The table lists the slots in the order the engine resolves them. A required slot
 | `engine.ball` | yes | `ball@1` | none | none | BlockDeflect, ParryAngle, ParryLoft, CrossAngle, CrossLoft | none: ball physics, no realism band |
 | `engine.possession` | yes | `possession@1` | none | none | Block, SaveHold, ParrySide, CrossClear, CrossWide, KeeperCatch, Header | possession_pct |
 | `engine.decision` | yes | `decision@1` | none | none | ShotScore, PassScore, DribbleScore, HoldScore, ClearScore, PassAim, ClearWide, ClearAim, ShotSide, ShotAim, ShotSpread, ShotLoft, Lapse | pass_accuracy_pct |
-| `engine.manager` | no | `ai-manager@1` | none | `off` | none | none: no substitution or mentality band in realism-bands.json |
+| `engine.manager` | no | `ai-manager@1` | none | `off` | none | none: no band in realism-bands.json; calibrate's substitution report reads it against the real eras of the rule pack's limit |
 | `engine.changes` | no | `changes@1` | none | `off` | none | none: Law 3 change rules, no band |
 | `engine.hook.decision` | no | `decision-hook@1` | none | `off` | none | none: plugin hook adapter, no realism band |
 | `engine.hook.rule` | no | `rule-hook@1` | none | `off` | none | none: plugin hook adapter, no realism band |

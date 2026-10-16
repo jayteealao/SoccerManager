@@ -282,7 +282,7 @@ One `match-event` row. The same object is written to
 | `change.rejected_reason` | string | present only on a refused change |
 | `change.state` | enumeration | `queued`, `applies-now`, `applied`, or `rejected` |
 | `change.applied_tick` | integer | on an applied change: the tick it took effect on, which is the tick of the stoppage that admitted it |
-| `ai.decision` | string | on `ai-decision`: `mentality-up-trailing`, `mentality-down-leading`, `sub-injury`, `sub-fatigue`, or `sub-keeper` (the bench keeper replaces an outfield player keeping goal) |
+| `ai.decision` | string | on `ai-decision`: `sub-injury`, `sub-keeper` (the bench keeper replaces an outfield player keeping goal), `sub-fatigue`, `sub-booked`, `sub-form`, or `sub-knock`, the largest part of the player's need. A replay of an earlier engine may also hold `mentality-up-trailing` or `mentality-down-leading` |
 | `player.id` | string | the player the event names: the offender on `offside` and `foul`, the booked player on `card`, the injured player on `injury`, the player leaving on `substitution`, the taker on `kick-off` and on every restart, the player whose trait overrode an instruction on `trait-override`, and on `goal` the player who kicked the ball last (a player of the other club on an own goal) |
 | `player.secondary_id` | string | the fouled player, on `foul`; the player coming on, on `substitution` |
 | `card.kind` | enumeration | `yellow`, `second-yellow`, or `red`, on `card`; a second yellow sends the player off |
@@ -407,8 +407,8 @@ or replay keeps it, and it never changes the match.
 ### advice
 
 Sent on `serve` to a page that manages the home team, after a check of the computer manager
-finds picks that differ from the last ones sent. The check runs for the page's team every
-`tactics.ai.check_interval_s` of match time (30 seconds with the shipped tactics file) and on
+finds picks that differ from the last ones sent. The check runs for the page's team on the tick
+a stoppage that admits a substitution opens, and on
 a tick that holds a goal, an injury to the home team, or a sending-off of a home player; it
 does not run in a penalty shoot-out or after full time. The check is advice only: it reads the
 match, works on a copy of the change queue, draws no random number, and writes nothing, so the
@@ -426,8 +426,8 @@ Each entry of `picks`:
 
 | Field | Type | Meaning |
 |---|---|---|
-| `code` | string | the reason, as `ai.decision` names it: `sub-injury`, `sub-keeper`, `sub-fatigue`, `mentality-up-trailing`, or `mentality-down-leading`. A mentality pick is offered once per score |
-| `kind` | enumeration | `substitution` or `tactics`, as `change.kind` names it |
+| `code` | string | the reason, as `ai.decision` names it: `sub-injury`, `sub-keeper`, `sub-fatigue`, `sub-booked`, `sub-form`, or `sub-knock` |
+| `kind` | enumeration | `substitution`; `tactics` stays readable, but the assistant offers no tactical pick until the tactics board can make one |
 | `off` | integer | on a substitution: the squad index of the player coming off |
 | `on` | integer | on a substitution: the squad index of the player coming on |
 | `patch` | object | on a tactics pick: the change as `queue-change` writes it (`mentality`, `instructions`) |
