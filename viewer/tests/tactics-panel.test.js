@@ -56,7 +56,7 @@ test('the instructions follow the tactics file and every chip names its change i
   const sorted = { ...SCHEMA, instruction_order: ['width', 'pressing'] };
   assert.deepEqual(instructionNames(sorted), ['width', 'pressing']);
   assert.equal(labelFor({ mentality: 4 }, SCHEMA), 'Mentality: Attacking');
-  assert.equal(labelFor({ instruction: 3, level: 2 }, SCHEMA), 'Line height: High');
+  assert.equal(labelFor({ instruction: 3, level: 3 }, SCHEMA), 'Line height: High');
   assert.equal(
     labelFor({ role: { squad: 9, role: 11, duty: 2 } }, SCHEMA, () => 'Sam Ode'),
     'Sam Ode: Striker, Attack'

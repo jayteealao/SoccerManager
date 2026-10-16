@@ -77,7 +77,7 @@ test('each pick reads as its change and its reason, and its label is the chip’
     { code: 'sub-fatigue', kind: 'substitution', off: 7, on: 18 },
     { code: 'sub-injury', kind: 'substitution', off: 3, on: 14 },
     { code: 'sub-keeper', kind: 'substitution', off: 5, on: 12 },
-    { code: 'mentality-up-trailing', kind: 'tactics', patch: { mentality: 3, instructions: [2, null, null, null, null, null] } },
+    { code: 'mentality-up-trailing', kind: 'tactics', patch: { mentality: 3, instructions: [3, null, null, null, null, null] } },
     { code: 'mentality-down-leading', kind: 'tactics', patch: { mentality: 1, instructions: [null, null, null, null, null, 1] } },
   ];
   const rows = proposalRows(picks, SQUAD, SCHEMA, new Set([pickKey(picks[0])]));
