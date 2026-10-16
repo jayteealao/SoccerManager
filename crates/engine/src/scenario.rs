@@ -551,6 +551,35 @@ impl Scene {
         self
     }
 
+    /// Player `i` has taken a knock.
+    pub fn knock(mut self, i: usize) -> Self {
+        self.sim.players[i].knock = true;
+        self
+    }
+
+    /// Edits the match tally of player `i`.
+    pub fn player_tally(
+        mut self,
+        i: usize,
+        edit: impl FnOnce(&mut crate::sim::tally::PlayerTally),
+    ) -> Self {
+        let (team, squad) = (self.sim.players[i].team, self.sim.players[i].squad);
+        edit(&mut self.sim.tallies[team][squad]);
+        self
+    }
+
+    /// A stoppage of `kind` opens on the scene's current tick, as the step that stopped play
+    /// leaves it for the AI manager's check.
+    pub fn stoppage_opened(mut self, kind: StoppageKind) -> Self {
+        self.sim.stoppage = Some(crate::rules::Stoppage {
+            tick: self.sim.tick,
+            kind,
+            team: Some(0),
+            spot: DVec2::ZERO,
+        });
+        self
+    }
+
     /// Injures player `i` through the engine's own path, as a background roll would.
     pub fn injure(mut self, i: usize) -> Self {
         self.sim.injure(i, InjurySource::Background);

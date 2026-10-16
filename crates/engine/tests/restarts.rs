@@ -151,7 +151,8 @@ fn extra_bounds(config: &MatchConfig, kind: engine::StoppageKind) -> (u32, u32) 
 
 /// AC-19: over four seeded 90-minute matches, every stoppage not forced by its hard limit is
 /// taken exactly its drawn extra after its visible steps are done, so it lasts its visible
-/// steps plus the extra; each extra lies inside what the table allows.
+/// steps plus the extra, unless a player stands out of place again once the extra has run, when
+/// it waits for him; each extra lies inside what the table allows.
 #[test]
 fn every_stoppage_lasts_its_visible_steps_plus_its_drawn_extra() {
     let content = common::content();
@@ -160,10 +161,13 @@ fn every_stoppage_lasts_its_visible_steps_plus_its_drawn_extra() {
         let config = MatchConfig::new(seed, 90, &content, [&a, &b]).unwrap();
         let mut sim = Simulation::new(config.clone()).unwrap();
         let mut open: Option<DeadBall> = None;
+        // A tick after the drawn extra began on which a player stood out of place again.
+        let mut undone = false;
         let mut checked = 0u32;
         while !sim.is_over() {
             sim.step();
-            let breaks = sim.take_events().iter().any(|e| {
+            let events = sim.take_events();
+            let breaks = events.iter().any(|e| {
                 matches!(
                     e.kind,
                     EngineEventKind::HalfTime | EngineEventKind::FullTime
@@ -174,10 +178,24 @@ fn every_stoppage_lasts_its_visible_steps_plus_its_drawn_extra() {
                 continue;
             }
             match (open, sim.dead_ball()) {
-                (_, Some(d)) => open = Some(d),
+                (_, Some(d)) => {
+                    if d.ready_at != DeadBall::UNSET
+                        && sim.tick() >= d.ready_at
+                        && !engine::rules::restart::steps_done(
+                            &d,
+                            sim.players(),
+                            &sim.teams(),
+                            &config.tuning,
+                        )
+                    {
+                        undone = true;
+                    }
+                    open = Some(d);
+                }
                 (Some(d), None) => {
                     open = None;
                     let taken = sim.tick();
+                    let undone = std::mem::take(&mut undone);
                     // A stoppage the half or the match ends was never taken: the full-time
                     // event of a match that ends at a dead ball comes when it finishes.
                     if taken >= d.hard_limit() || breaks || sim.is_over() {
@@ -191,10 +209,13 @@ fn every_stoppage_lasts_its_visible_steps_plus_its_drawn_extra() {
                         d.ready_at - d.extra
                     };
                     assert!(steps >= d.since, "seed {seed}: {d:?}");
-                    assert_eq!(
-                        taken - d.since,
-                        (steps - d.since) + d.extra,
-                        "seed {seed}: {d:?}"
+                    // Taken the drawn extra after the steps were done; later only when a player
+                    // stood out of place again once the extra had run, as the Laws wait for him.
+                    let due = (steps - d.since) + d.extra;
+                    assert!(
+                        taken - d.since == due || (taken - d.since > due && undone),
+                        "seed {seed}: taken after {} ticks, due after {due}: {d:?}",
+                        taken - d.since
                     );
                     if !d.quick {
                         let (lo, hi) = extra_bounds(&config, d.kind);
@@ -206,7 +227,7 @@ fn every_stoppage_lasts_its_visible_steps_plus_its_drawn_extra() {
                     }
                     checked += 1;
                 }
-                (None, None) => {}
+                (None, None) => undone = false,
             }
         }
         checked
@@ -352,19 +373,20 @@ impl TickSink for Order {
 /// each of its four halves. Each starts at the tunnel on the near touchline, ends on the
 /// positions of that record, and never moves a player faster than the walk; the records stay
 /// consecutive across it, and the match plays exactly as with no one listening, so the
-/// walk-on takes no match time and no ball-in-play time. Seed 1 is the lowest knockout seed
+/// walk-on takes no match time and no ball-in-play time. Seed 5 is the lowest knockout seed
 /// level after 90 minutes with all 22 players on through extra time (seed 1 until the running
 /// pace lifted on a counter rather than with the press; seed 9 until opponents walked round
 /// the restart spot; seed 0 until the in-possession settings came in; seed 8 until tempo
 /// became patience and the mentality an appetite for risk; seed 0 until a player stepped aside
 /// from a team-mate walking at him; seed 2 until a passer read the offside line; seed 0 until a passer read the press his receiver would meet;
 /// seed 2 until a kick stayed on its way from its kicker along the line he sent it; seed 0 until
-/// the AI manager stopped making tactics changes of its own).
+/// the AI manager stopped making tactics changes of its own; seed 1 until its substitutions
+/// followed the situation rather than the clock).
 #[test]
 fn each_half_opens_with_a_walk_on_that_takes_no_match_time() {
     let content = common::content();
     let [a, b] = common::default_teams(&content);
-    let config = MatchConfig::new(1, 90, &content, [&a, &b])
+    let config = MatchConfig::new(5, 90, &content, [&a, &b])
         .unwrap()
         .with_knockout();
     let dt = config.tuning.dt;

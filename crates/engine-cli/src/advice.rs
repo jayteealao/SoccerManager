@@ -21,9 +21,10 @@ pub(crate) struct Advisor {
 
 impl Advisor {
     /// The advice after a step that recorded `events`, when a check is due and its picks
-    /// differ from the last ones sent. A check is due every `check_interval_s` of match time,
-    /// and on a tick whose events hold a goal, an injury to the page's team, or a sending-off
-    /// of one of its players. No check runs for a team the computer manages, in a penalty
+    /// differ from the last ones sent. A check is due, as the computer manager's own, on the
+    /// tick a stoppage that admits a substitution opened, and on a tick whose events hold a
+    /// goal, an injury to the page's team, or a sending-off of one of its players. The picks
+    /// are substitutions only. No check runs for a team the computer manages, in a penalty
     /// shoot-out, or after full time.
     pub(crate) fn after_step(
         &mut self,
@@ -33,12 +34,12 @@ impl Advisor {
         if sim.managers()[HOME] != Manager::Human || sim.is_over() || sim.in_shootout() {
             return None;
         }
-        let at_stoppage = events.iter().any(asks_for_check);
-        let interval = sim.config().tactics.ai.check_interval_s * engine::TICKS_PER_SECOND;
-        if !at_stoppage && (interval == 0 || !sim.tick().is_multiple_of(interval)) {
+        let view = sim.view();
+        if !events.iter().any(asks_for_check) && !view.substitutions_admitted() {
             return None;
         }
-        let plan = AiManagerV1.check(&sim.view(), HOME, at_stoppage);
+        let plan = AiManagerV1.check(&view, HOME, true);
+        let minute = view.referee().clock.minute(sim.tick() + 1).0;
         let picks: Vec<AdvicePick> = plan
             .changes
             .iter()
@@ -50,7 +51,7 @@ impl Advisor {
         self.sent.clone_from(&picks);
         Some(Advice {
             tick: sim.tick(),
-            minute: plan.minute,
+            minute,
             picks,
         })
     }

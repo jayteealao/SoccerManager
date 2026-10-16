@@ -392,6 +392,31 @@ impl<'a> MatchView<'a> {
     pub fn summary(&self) -> &'a Summary {
         &self.sim.summary
     }
+
+    /// Every player's tally so far, by side and squad index.
+    #[inline]
+    pub fn tallies(&self) -> &'a [Vec<crate::sim::tally::PlayerTally>; 2] {
+        &self.sim.tallies
+    }
+
+    /// The weights of the match rating.
+    #[inline]
+    pub fn match_rating(&self) -> &'a crate::match_rating::MatchRatingTuning {
+        &self.sim.config.match_rating
+    }
+
+    /// The stoppage the current tick opened, if any.
+    #[inline]
+    pub fn stoppage(&self) -> Option<crate::rules::Stoppage> {
+        self.sim.stoppage
+    }
+
+    /// `true` when the stoppage the current tick opened admits a substitution.
+    pub fn substitutions_admitted(&self) -> bool {
+        self.sim
+            .stoppage
+            .is_some_and(|s| self.sim.config.modules.changes.admits(self, s.kind).1)
+    }
 }
 
 impl Simulation {

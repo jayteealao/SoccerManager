@@ -610,16 +610,16 @@ pub trait DecisionModule: Send + Sync + 'static {
     ) -> Option<TackleChances>;
 }
 
-/// One check of the AI manager: the minute and the changes to queue in order.
+/// One check of the AI manager: the changes to queue in order.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AiPlan {
-    pub minute: u32,
     pub changes: Vec<(Change, AiCode)>,
 }
 
 /// The AI manager's in-match checks. It draws nothing.
 pub trait ManagerModule: Send + Sync + 'static {
-    /// One check for `team`; `at_stoppage` marks the check an injury or a goal asks for.
+    /// One check for `team`; `at_stoppage` marks a check on the tick a stoppage that admits a
+    /// substitution opened, or one an injury, a goal or a sending-off asks for.
     fn check(&self, view: &MatchView<'_>, team: usize, at_stoppage: bool) -> AiPlan;
 }
 

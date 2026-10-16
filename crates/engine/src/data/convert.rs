@@ -1162,13 +1162,34 @@ pub fn tactics_v6_to_v7(mut file: serde_json::Value) -> Result<serde_json::Value
     Ok(file)
 }
 
-/// The AI fields version 8 drops: the minutes of the AI manager's own tactics changes.
-pub const TACTICS_V8_DROPPED_AI: [&str; 2] = ["trailing_minute", "leading_minute"];
+/// The AI fields version 8 drops: the minutes of the AI manager's own tactics changes, its
+/// check interval, and its fatigue minutes and energy.
+pub const TACTICS_V8_DROPPED_AI: [&str; 6] = [
+    "trailing_minute",
+    "leading_minute",
+    "check_interval_s",
+    "fatigue_energy",
+    "fatigue_from_minute",
+    "keep_for_injury_until_minute",
+];
+
+/// The copy of the version 8 addition compiled into the build: the AI manager's substitution
+/// weights and threshold.
+pub const FROZEN_TACTICS_V8: &str = include_str!("frozen-tactics-v8.json");
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenTacticsV8 {
+    ai_substitutions: serde_json::Value,
+}
 
 /// A version 7 tactics file, as JSON, in the version 8 shape: the AI block loses the fields
-/// version 8 drops ([TACTICS_V8_DROPPED_AI]). No level or value changes. The caller parses
-/// and checks the result as a current file.
+/// version 8 drops ([`TACTICS_V8_DROPPED_AI`]) and takes the frozen substitution block when it
+/// holds none. No level or value changes. The caller parses and checks the result as a current
+/// file.
 pub fn tactics_v7_to_v8(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let frozen: FrozenTacticsV8 = serde_json::from_str(FROZEN_TACTICS_V8)
+        .expect("the frozen tactics copy parses; a test checks it");
     let obj = file
         .as_object_mut()
         .ok_or_else(|| "the file is not an object".to_string())?;
@@ -1183,5 +1204,6 @@ pub fn tactics_v7_to_v8(mut file: serde_json::Value) -> Result<serde_json::Value
     for field in TACTICS_V8_DROPPED_AI {
         ai.remove(field);
     }
+    ai.entry("substitutions").or_insert(frozen.ai_substitutions);
     Ok(file)
 }

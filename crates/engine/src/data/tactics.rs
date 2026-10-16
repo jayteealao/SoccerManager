@@ -31,9 +31,12 @@ use crate::team::PLAYERS_PER_TEAM;
 /// game-state block (`game_state`: the rule limits, the condition kinds, the take-up time and
 /// the player override list); a version 6 file takes it from a copy compiled into the build
 /// ([`crate::data::convert::tactics_v6_to_v7`]). Version 8 drops the AI manager's fixed-minute
-/// tactics (`ai.trailing_minute` and `ai.leading_minute`): an AI side's in-match tactics are
-/// its style preset's game-state rules. A version 7 file loses the two fields
-/// ([`crate::data::convert::tactics_v7_to_v8`]); a version 8 file that names one is refused.
+/// fields (the trailing and leading minutes of its own tactics changes, its check interval and
+/// its fatigue minutes and energy): an AI side's in-match tactics are its style preset's
+/// game-state rules, and it weighs a substitution by the situation (`ai.substitutions`). A
+/// version 7 file loses the six fields and takes the substitution block from a copy compiled
+/// into the build ([`crate::data::convert::tactics_v7_to_v8`]); a version 8 file that names one
+/// of them is refused.
 pub const TACTICS_VERSION: u32 = 8;
 
 /// The six team instructions, in the order a [`crate::tactics::Tactics`] stores their levels.
@@ -541,17 +544,9 @@ pub struct AiTuning {
     pub mentality: String,
     #[garde(length(min = 1, max = 32))]
     pub duty: String,
-    /// Simulated seconds between two checks; an injury triggers a check at once.
-    #[garde(range(min = 1, max = 600))]
-    pub check_interval_s: u32,
-    /// A player below this energy is substituted for fatigue from `fatigue_from_minute`.
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub fatigue_energy: f64,
-    #[garde(range(min = 0, max = 200))]
-    pub fatigue_from_minute: u32,
-    /// Until this minute one substitution is kept back for an injury.
-    #[garde(range(min = 0, max = 200))]
-    pub keep_for_injury_until_minute: u32,
+    /// How the AI manager weighs a substitution it is not forced to make.
+    #[garde(dive)]
+    pub substitutions: AiSubstitutions,
     /// Substitutes named before kick-off; one is a goalkeeper when the squad has one.
     #[garde(range(min = 0, max = 12))]
     pub bench_size: u8,
@@ -561,6 +556,45 @@ pub struct AiTuning {
     #[serde(default)]
     #[garde(range(min = 0.0, max = 10.0))]
     pub out_of_position_margin: f64,
+}
+
+/// The AI manager's substitutions it is not forced to make. At each stoppage that admits a
+/// substitution, each outfield player's need to come off is
+/// `w_energy * (1 - energy) + w_card * card_risk + w_rating * max(0, rating_ref - rating) +
+/// w_knock * knock`, where the card risk is `yellow * (1 + card_tackles * his tackles) *
+/// (1 + card_match * the cards shown in the match)` and the rating is his match rating so
+/// far. The gain of replacing him is the need plus `w_quality` times the best bench option's
+/// slot value over his. The highest gain is made while it is above
+/// `threshold * (1 + rise * (used / limit + windows_used / windows))`, where `used` counts the
+/// substitutions made and queued and the window share counts only for a change that would open
+/// a window (none at a stoppage that uses no window or whose window the team already opened),
+/// so each later change needs more and changes come together. Nothing reads the match clock.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct AiSubstitutions {
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub threshold: f64,
+    #[garde(range(min = 0.0, max = 20.0))]
+    pub rise: f64,
+    /// The match rating (1 to 10) under which a player's form adds to his need.
+    #[garde(range(min = 1.0, max = 10.0))]
+    pub rating_ref: f64,
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub w_energy: f64,
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub w_card: f64,
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub w_rating: f64,
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub w_knock: f64,
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub w_quality: f64,
+    /// What each tackle a booked player made (won or fouled) adds to his card risk.
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub card_tackles: f64,
+    /// What each card shown in the match adds to a booked player's card risk.
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub card_match: f64,
 }
 
 fn weights_in_range(weights: &BTreeMap<String, f64>, _ctx: &()) -> garde::Result {

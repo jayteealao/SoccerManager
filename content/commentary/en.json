@@ -575,6 +575,39 @@
         "The {team} bench sends the reserve keeper to warm up.",
         "{team} will bring on a proper goalkeeper against {opponent}."
       ]
+    },
+    {
+      "event": "ai-decision",
+      "when": {
+        "decision": "sub-booked"
+      },
+      "lines": [
+        "{team} have a booked player living dangerously, and the manager readies a change.",
+        "One more foul could cost {team} a man, so the bench is getting a substitute ready.",
+        "The {team} manager wants a booked player off before the referee decides for him."
+      ]
+    },
+    {
+      "event": "ai-decision",
+      "when": {
+        "decision": "sub-form"
+      },
+      "lines": [
+        "It has not been his day, and the {team} manager readies a change.",
+        "{team} prepare a substitute for a player who has struggled against {opponent}.",
+        "The {team} bench has seen enough of an off-colour display and gets a change ready."
+      ]
+    },
+    {
+      "event": "ai-decision",
+      "when": {
+        "decision": "sub-knock"
+      },
+      "lines": [
+        "A {team} player is still feeling that knock, and a substitute is getting ready.",
+        "{team} prepare a change for a player carrying a knock.",
+        "The {team} manager takes no risk with a knock and readies a substitute."
+      ]
     }
   ]
 }

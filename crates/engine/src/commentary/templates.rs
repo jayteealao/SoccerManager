@@ -164,6 +164,9 @@ pub enum DecisionCondition {
     SubInjury,
     SubFatigue,
     SubKeeper,
+    SubBooked,
+    SubForm,
+    SubKnock,
 }
 
 impl DecisionCondition {
@@ -173,6 +176,9 @@ impl DecisionCondition {
             (DecisionCondition::SubInjury, AiCode::SubInjury)
                 | (DecisionCondition::SubFatigue, AiCode::SubFatigue)
                 | (DecisionCondition::SubKeeper, AiCode::SubKeeper)
+                | (DecisionCondition::SubBooked, AiCode::SubBooked)
+                | (DecisionCondition::SubForm, AiCode::SubForm)
+                | (DecisionCondition::SubKnock, AiCode::SubKnock)
         )
     }
 }

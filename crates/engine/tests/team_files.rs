@@ -807,15 +807,26 @@ fn a_version_6_tactics_file_converts_to_the_shipped_version_7_file() {
     assert_eq!(kinds, engine::tactics::rules::CONDITION_KINDS);
 }
 
-/// A version 7 tactics file (the AI manager's fixed-minute tactics fields) converts to the
-/// shipped version 8 file: the AI block loses the fields, and nothing else changes.
+/// A version 7 tactics file (the AI manager's fixed-minute fields, no substitution block)
+/// converts to the shipped version 8 file: the AI block loses the six fields and takes the
+/// frozen substitution block, and nothing else changes.
 #[test]
 fn a_version_7_tactics_file_converts_to_the_shipped_version_8_file() {
     let path = common::content_dir().path(engine::data::TACTICS_FILE);
     let mut v7: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
     v7["schema_version"] = 7.into();
-    v7["ai"]["trailing_minute"] = 70.into();
-    v7["ai"]["leading_minute"] = 80.into();
+    let ai = v7["ai"].as_object_mut().unwrap();
+    ai.remove("substitutions").unwrap();
+    for (field, value) in [
+        ("trailing_minute", serde_json::json!(70)),
+        ("leading_minute", serde_json::json!(80)),
+        ("check_interval_s", serde_json::json!(30)),
+        ("fatigue_energy", serde_json::json!(0.55)),
+        ("fatigue_from_minute", serde_json::json!(55)),
+        ("keep_for_injury_until_minute", serde_json::json!(80)),
+    ] {
+        ai.insert(field.into(), value);
+    }
     let converted =
         engine::data::load_tactics_bytes(&serde_json::to_vec(&v7).unwrap(), "tactics-v7.json")
             .unwrap();

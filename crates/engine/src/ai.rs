@@ -2,15 +2,18 @@
 //! rating at the slots' positions, a bench that covers every line, and its tactics: the named
 //! style the staff advice rates best for its squad when the content has styles, else the
 //! tactics file's default tactics. The advice is an estimate with an error drawn from its own
-//! seeded generator; nothing keeps it, and play never reads it. During the match it checks
-//! every `check_interval_s` simulated seconds and at once after an injury:
+//! seeded generator; nothing keeps it, and play never reads it. During the match it checks on
+//! the tick a stoppage that admits a substitution opens, and at once after an injury, a goal
+//! or a sending-off:
 //!
 //! - an injured player is replaced by the substitute with the best rating at his slot;
-//! - from `fatigue_from_minute`, a tired outfield player (energy below `fatigue_energy`) is
-//!   replaced, keeping one substitution back for an injury until
-//!   `keep_for_injury_until_minute`;
 //! - an outfield player keeping goal after the keeper was sent off is replaced by the best
-//!   goalkeeper on the bench, while a substitution can still be made.
+//!   goalkeeper on the bench, while a substitution can still be made;
+//! - at a stoppage that admits a substitution, an outfield player whose need to come off (his
+//!   energy, his card risk, his form and a knock), with the best bench option's quality, is
+//!   above a bar that rises with the substitutions used, is replaced
+//!   ([`crate::data::tactics::AiSubstitutions`]). Nothing in it reads the match clock, so the
+//!   same situation brings the same decision at any minute.
 //!
 //! It makes no tactical change: an AI side's in-match tactics are the game-state rules of the
 //! style preset it plays, which the side applies itself, as a person's rules are.
@@ -46,8 +49,15 @@ pub enum Manager {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AiCode {
     SubInjury,
+    /// A need-driven change whose largest term is the player's energy.
     SubFatigue,
     SubKeeper,
+    /// A need-driven change whose largest term is the card risk of a booked player.
+    SubBooked,
+    /// A need-driven change whose largest term is the player's form (his match rating).
+    SubForm,
+    /// A need-driven change whose largest term is a knock.
+    SubKnock,
 }
 
 impl AiCode {
@@ -57,6 +67,9 @@ impl AiCode {
             AiCode::SubInjury => "sub-injury",
             AiCode::SubFatigue => "sub-fatigue",
             AiCode::SubKeeper => "sub-keeper",
+            AiCode::SubBooked => "sub-booked",
+            AiCode::SubForm => "sub-form",
+            AiCode::SubKnock => "sub-knock",
         }
     }
 }
@@ -472,11 +485,6 @@ impl ManagerModule for AiManagerV1 {
             queue: view.queue().clone(),
             changes: Vec::new(),
         };
-        let now = view.tick() + 1;
-        let minute = view.referee().clock.minute(now).0;
-        let ai = &view.tactics().ai;
-        let limit = usize::from(view.substitution_limits().0);
-        let used = usize::from(view.ledgers()[team].used);
         let players = view.players();
         let side = &view.teams()[team];
         // Injuries: every injured player on the lineup without a substitute queued. The check
@@ -519,37 +527,86 @@ impl ManagerModule for AiManagerV1 {
                 AiCode::SubKeeper,
             );
         }
-        // Fatigue.
-        let windows_left = view.ledgers()[team].windows < view.substitution_limits().1;
-        if minute >= ai.fatigue_from_minute && windows_left {
-            let reserve = usize::from(minute < ai.keep_for_injury_until_minute);
-            let mut tired: Vec<(f64, usize)> = (1..PLAYERS_PER_TEAM)
-                .map(|slot| (slot, team * PLAYERS_PER_TEAM + slot))
-                .filter(|&(slot, i)| {
-                    let p = &players[i];
-                    slot != keeper_slot
-                        && p.active()
-                        && p.energy < ai.fatigue_energy
-                        && !check.queue.has_substitution(team, side.lineup[slot])
-                })
-                .map(|(slot, i)| (players[i].energy, slot))
-                .collect();
-            tired.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
-            for (_, slot) in tired {
-                let left = limit.saturating_sub(used + check.queue.substitutions(team));
-                if left <= reserve {
-                    break;
-                }
+        // The changes the team is not forced to make: only at a stoppage that admits a
+        // substitution, and only one this stoppage can take. The highest gain goes first, and
+        // the bar is set again after each, so a later change in the same window needs more.
+        if at_stoppage {
+            while check.applies_now()
+                && let Some((gain, slot, on, code)) = check.best_gain()
+                && gain > check.threshold()
+            {
                 let off = side.lineup[slot];
-                if let Some(on) = check.substitute_for(slot) {
-                    check.propose(Change::Substitution { off, on }, AiCode::SubFatigue);
-                }
+                check.propose(Change::Substitution { off, on }, code);
             }
         }
         AiPlan {
-            minute,
             changes: check.changes,
         }
+    }
+}
+
+/// What a need-driven substitution weighs for one player: the four terms of his need, each
+/// already weighted, in the order of [`NEED_CODES`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Need {
+    pub terms: [f64; 4],
+}
+
+/// The reason code of each need term: energy, card risk, form, a knock.
+pub const NEED_CODES: [AiCode; 4] = [
+    AiCode::SubFatigue,
+    AiCode::SubBooked,
+    AiCode::SubForm,
+    AiCode::SubKnock,
+];
+
+impl Need {
+    /// The weighted sum.
+    pub fn total(&self) -> f64 {
+        self.terms.iter().sum()
+    }
+
+    /// The code of the largest term; the earlier term wins a tie.
+    pub fn code(&self) -> AiCode {
+        let mut best = 0;
+        for (k, &t) in self.terms.iter().enumerate() {
+            if t > self.terms[best] {
+                best = k;
+            }
+        }
+        NEED_CODES[best]
+    }
+}
+
+/// The need of the player at roster index `i` of `view` to come off, by the AI manager's
+/// substitution weights. It reads his energy, his yellow card, his tackles (won or fouled),
+/// the cards shown in the match, his match rating so far and his knock; never the clock.
+pub fn need_of(view: &MatchView<'_>, i: usize) -> Need {
+    let w = &view.tactics().ai.substitutions;
+    let p = &view.players()[i];
+    let tally = &view.tallies()[p.team][p.squad];
+    let summary = view.summary();
+    let cards: u32 = summary.yellow.iter().chain(summary.red.iter()).sum();
+    let card_risk = f64::from(p.yellow)
+        * (1.0 + w.card_tackles * f64::from(tally.tackles_won + tally.fouls))
+        * (1.0 + w.card_match * f64::from(cards));
+    // His rating as if the match ended level now, over his own time on the pitch: the result
+    // term of a draw is 0, so no length of match enters it.
+    let position = view.teams()[p.team].squad[p.squad].position;
+    let rating = f64::from(crate::match_rating::rating(
+        tally,
+        position,
+        crate::match_rating::Outcome::Draw,
+        tally.ticks_played,
+        view.match_rating(),
+    )) / 10.0;
+    Need {
+        terms: [
+            w.w_energy * (1.0 - p.energy).max(0.0),
+            w.w_card * card_risk,
+            w.w_rating * (w.rating_ref - rating).max(0.0),
+            w.w_knock * f64::from(u8::from(p.knock)),
+        ],
     }
 }
 
@@ -594,6 +651,90 @@ impl Check<'_, '_> {
             .iter()
             .any(|&kind| kind != StoppageKind::HalfTime || !self.view.referee().clock.last_half());
         ledger.windows < windows || exempt_ahead
+    }
+
+    /// `true` while one more substitution would apply at the stoppage this tick opened: the
+    /// limit is not used up by substitutions made and waiting, and a window is left or the
+    /// stoppage uses none.
+    fn applies_now(&self) -> bool {
+        let rules = &self.view.rules().substitutions;
+        let (limit, windows) = self.view.substitution_limits();
+        let ledger = self.view.ledgers()[self.team];
+        let taken = usize::from(ledger.used) + self.queue.substitutions(self.team);
+        if taken >= usize::from(limit) {
+            return false;
+        }
+        let exempt = self
+            .view
+            .stoppage()
+            .is_some_and(|s| rules.windows_exempt.contains(&s.kind));
+        ledger.windows < windows || exempt
+    }
+
+    /// The bar a need-driven change must clear: the threshold, raised by the share of the
+    /// limit already made or waiting and, for a change that would open a window, by the share
+    /// of the windows already used. A change at a stoppage whose window is already open (or
+    /// that uses none) costs no window, so it clears a lower bar, and changes come together.
+    fn threshold(&self) -> f64 {
+        let w = &self.view.tactics().ai.substitutions;
+        let (limit, windows) = self.view.substitution_limits();
+        let ledger = self.view.ledgers()[self.team];
+        let used = f64::from(ledger.used) + self.queue.substitutions(self.team) as f64;
+        let mut scarcity = used / f64::from(limit.max(1));
+        if !self.window_open() {
+            scarcity += f64::from(ledger.windows) / f64::from(windows.max(1));
+        }
+        w.threshold * (1.0 + w.rise * scarcity)
+    }
+
+    /// `true` when one more substitution at the stoppage this tick opened uses no new window:
+    /// the stoppage uses none, or the team already makes a substitution at it.
+    fn window_open(&self) -> bool {
+        let rules = &self.view.rules().substitutions;
+        let now = self.view.tick() + 1;
+        let ledger = self.view.ledgers()[self.team];
+        self.view
+            .stoppage()
+            .is_some_and(|s| rules.windows_exempt.contains(&s.kind))
+            || ledger.window_at == Some(now)
+            || self
+                .changes
+                .iter()
+                .any(|(c, _)| matches!(c, Change::Substitution { .. }))
+    }
+
+    /// The best need-driven change: over every outfield player on the pitch with no change
+    /// waiting for him and a bench option for his slot, the highest gain (his need plus the
+    /// quality weight times the option's slot value over his), with the slot, the option and
+    /// the code of his largest need term. The lower slot wins a tie.
+    fn best_gain(&self) -> Option<(f64, usize, usize, AiCode)> {
+        let side = &self.view.teams()[self.team];
+        let schema = self.view.tactics();
+        let w = &schema.ai.substitutions;
+        let margin = schema.ai.out_of_position_margin;
+        let slots = &schema.formations[usize::from(side.tactics.formation)].slots;
+        let keeper_slot = side.keeper_slot();
+        let mut best: Option<(f64, usize, usize, AiCode)> = None;
+        for slot in 0..PLAYERS_PER_TEAM {
+            let i = self.team * PLAYERS_PER_TEAM + slot;
+            let p = &self.view.players()[i];
+            let off = side.lineup[slot];
+            if slot == keeper_slot || !p.active() || self.queue.has_substitution(self.team, off) {
+                continue;
+            }
+            let Some(on) = self.substitute_for(slot) else {
+                continue;
+            };
+            let position = slots[slot].position;
+            let quality = slot_value(&side.squad[on], position, margin)
+                - slot_value(&side.squad[off], position, margin);
+            let need = need_of(self.view, i);
+            let gain = need.total() + w.w_quality * quality;
+            if best.is_none_or(|b| gain > b.0) {
+                best = Some((gain, slot, on, need.code()));
+            }
+        }
+        best
     }
 
     /// The best substitute on the bench for `slot`'s position and role, leaving out anyone
@@ -663,17 +804,16 @@ impl Check<'_, '_> {
 }
 
 pub const AI_MANAGER_V1_CARD: ModuleCard = ModuleCard {
-    purpose: "Makes the AI manager's in-match choices: substitutions for injury, for the goal, and for fatigue. It makes no tactical change; an AI side's in-match tactics are its style preset's game-state rules.",
-    inputs: "Each player's status, energy, and activity; the team's lineup, bench, squad, and tactics; the change queue; the substitution ledgers and limits; the match clock; the tactics file, the rule pack, and the attribute schema.",
+    purpose: "Makes the AI manager's in-match choices: substitutions for injury and for the goal, and at each stoppage that admits one, a substitution whose need (energy, card risk, form, a knock) and bench quality clear a bar that rises with the substitutions used. It reads no clock and makes no tactical change; an AI side's in-match tactics are its style preset's game-state rules.",
+    inputs: "Each player's status, energy, yellow card, knock and tally; the cards shown; the team's lineup, bench, squad, and tactics; the change queue; the substitution ledgers and limits; the stoppage the tick opened; the tactics file, the rule pack, the match-rating weights and the attribute schema.",
     outputs: "The changes to queue in order, each with its reason code.",
     tuning: &[
-        "tactics.ai.fatigue_energy",
-        "tactics.ai.fatigue_from_minute",
-        "tactics.ai.keep_for_injury_until_minute",
+        "tactics.ai.substitutions",
+        "match_rating",
         "rules.substitutions",
         "rules.extra_time",
     ],
-    calibration: "none: no substitution or mentality band in realism-bands.json",
+    calibration: "none: no band in realism-bands.json; calibrate's substitution report reads it against the real eras of the rule pack's limit (signatures.json substitutions)",
     keys: &[],
 };
 
@@ -681,9 +821,8 @@ pub const AI_MANAGER_V1_CARD: ModuleCard = ModuleCard {
 pub struct ManagerOff;
 
 impl ManagerModule for ManagerOff {
-    fn check(&self, view: &MatchView<'_>, _: usize, _: bool) -> AiPlan {
+    fn check(&self, _: &MatchView<'_>, _: usize, _: bool) -> AiPlan {
         AiPlan {
-            minute: view.referee().clock.minute(view.tick() + 1).0,
             changes: Vec::new(),
         }
     }
@@ -691,7 +830,7 @@ impl ManagerModule for ManagerOff {
 
 pub const MANAGER_OFF_CARD: ModuleCard = ModuleCard {
     purpose: "Makes no in-match decision for an AI-managed team.",
-    inputs: "The match clock.",
+    inputs: "Nothing.",
     outputs: "No change.",
     tuning: &["none"],
     calibration: "none: off version, no in-match decision",
