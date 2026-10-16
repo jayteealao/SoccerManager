@@ -7,7 +7,8 @@
 //!   crosser;
 //! - open-play shots and those from outside the penalty area, by the shooter;
 //! - pressures, by the presser: his first press of a carrier in that carrier's spell;
-//! - tackles, by the tackler: his first attempt on a carrier in that carrier's spell;
+//! - tackles, by the tackler: each tackle he chooses to make at the tackle decision (the
+//!   take-on duels a dribbler draws him into are not his choice and do not count);
 //! - the open-play passes a player kicks within [`crate::decision::COUNTER_WINDOW_S`] of his
 //!   side's open-play regain, and the forward ones among them;
 //! - his pressures within [`crate::decision::COUNTERPRESS_S`] of an open-play loss of his

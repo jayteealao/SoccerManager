@@ -180,7 +180,7 @@ A new formation or role waits for the next stoppage that admits a tactics change
 
 ### Player instructions
 
-A player instruction sets one primitive for one player in one formation slot. Ten primitives take one: dribbling, crossing, cross type, final third, forward runs, width, pressing, tackling, on winning the ball and on losing the ball. The player's own value replaces the side's at the same hook, the place where play reads it, so an instruction never adds a new way to decide; it gives one player another value at the same point. Pressing gives the player his own reach and willingness to press; how many players press stays the side's.
+A player instruction sets one primitive for one player in one formation slot. Ten primitives take one: dribbling, crossing, cross type, final third, forward runs, width, pressing, tackling, on winning the ball and on losing the ball. The player's own value replaces the side's at the same hook, the place where play reads it, so an instruction never adds a new way to decide; it gives one player another value at the same point. Pressing gives the player his own reach and willingness to press; how many players press stays the side's. A pressing level's reach is sized with its count (more pressers each press from nearer), so a player's own reach is the side's reach scaled by his level's count over the side's: one level up, he presses from farther.
 
 Forward runs reach only the wingers and strikers, because a run in behind starts from the attack line. An instruction for any other slot is refused when the tactic loads, in any formation the tactic or one of its rules can take. Runs from deeper positions, chosen by role and duty, wait for the off-ball work.
 

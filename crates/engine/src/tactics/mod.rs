@@ -544,9 +544,14 @@ impl TeamPlan {
 
     /// This plan with the per-player inputs `inputs` of primitive `primitive` (an index into
     /// the tactics file's primitives) at level or choice `level`, as a player instruction sets
-    /// them: each input takes the value the level gives it (the press distance scaled by the
-    /// tuned distance, as [`TeamPlan::from`] scales it), and an input a choice does not name
-    /// takes its neutral value. Every other input stays this plan's.
+    /// them: each input takes the value the level gives it, and an input a choice does not
+    /// name takes its neutral value. Every other input stays this plan's.
+    ///
+    /// The press distance is the one exception. A pressing level's distance scale is sized
+    /// with its press count: more pressers each press from nearer. One player's instruction
+    /// cannot change how many press, so his reach is the side's reach times the level's press
+    /// count over the side's: a level above the side's presses from farther, one below from
+    /// nearer, and the lowest, which sends nobody, from nowhere.
     pub fn with_override(
         &self,
         primitive: usize,
@@ -568,7 +573,20 @@ impl TeamPlan {
                     crate::data::primitives::level_value(schema, input, level)
                 };
             let value = match (input.as_str(), value) {
-                ("press_distance", Some(scale)) => Some(t.press_distance * scale),
+                ("press_distance", Some(_)) => {
+                    let levels = &schema.instructions.pressing.levels;
+                    // The side's reach, from its own level (the one with its press count),
+                    // so that a second override replaces the first rather than compounding.
+                    let side = levels
+                        .iter()
+                        .find(|l| usize::from(l.press_count) == self.press_count)
+                        .map_or(self.press_distance, |l| {
+                            t.press_distance * l.press_distance_scale
+                        });
+                    levels
+                        .get(level)
+                        .map(|l| side * f64::from(l.press_count) / self.press_count.max(1) as f64)
+                }
                 (_, v) => v,
             };
             if let Some(v) = value.or_else(|| neutral.player_input(input)) {

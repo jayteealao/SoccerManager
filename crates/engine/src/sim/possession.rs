@@ -507,7 +507,12 @@ impl Simulation {
                         continue;
                     };
                     #[cfg(feature = "measures")]
-                    self.measure_tackle(i, c);
+                    {
+                        self.measure_tackle(i, c);
+                        if let Some(m) = self.measures.as_deref_mut() {
+                            m.tackle_decided(i);
+                        }
+                    }
                     let (p_win, p_foul) = (chances.p_win, chances.p_foul);
                     let draw = self
                         .streams

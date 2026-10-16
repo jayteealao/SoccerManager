@@ -631,7 +631,7 @@ impl DecisionModule for DecisionV1 {
                         * counter_press_factor(view, def, plan.counter_press)
                         * trigger
                 };
-                // The side's reach, for the trace only.
+                // The side's reach: the trace's, and the base of the pressers' order.
                 let side_plan = &teams[def].plan;
                 let reach = side_plan.press_distance
                     * counter_press_factor(view, def, side_plan.counter_press)
@@ -642,6 +642,11 @@ impl DecisionModule for DecisionV1 {
                 let behind = goals[def] < goals[team];
                 let behind_effort = t.contract.hooks().behind_effort;
                 let mut pressers = [(f64::INFINITY, usize::MAX); MAX_PRESSERS];
+                // The order the pressers are taken in: each candidate's distance over his own
+                // reach, against the side's, so a player told to press from farther takes a
+                // place ahead of a nearer team-mate who would not. With every reach the
+                // side's, the order is the distance.
+                let mut keys = [f64::INFINITY; MAX_PRESSERS];
                 // The carrier's team is in possession.
                 let phase = Some(team);
                 let anchors = shape::anchors(view, phase);
@@ -678,16 +683,20 @@ impl DecisionModule for DecisionV1 {
                             + view
                                 .traits(i)
                                 .weight(TraitKind::PressesRelentlessly, t.contract.traits());
-                        if d < reach_of(p.slot) * p.derived.knobs.press * effort * relentless
-                            && d < pressers[count - 1].0
+                        let own = reach_of(p.slot);
+                        let key = if own == reach { d } else { d * reach / own };
+                        if d < own * p.derived.knobs.press * effort * relentless
+                            && key < keys[count - 1]
                         {
-                            // Insert in distance order among the first `count` places.
+                            // Insert in order among the first `count` places.
                             let mut k = count - 1;
-                            while k > 0 && pressers[k - 1].0 > d {
+                            while k > 0 && keys[k - 1] > key {
                                 pressers[k] = pressers[k - 1];
+                                keys[k] = keys[k - 1];
                                 k -= 1;
                             }
                             pressers[k] = (d, i);
+                            keys[k] = key;
                         }
                     }
                 }

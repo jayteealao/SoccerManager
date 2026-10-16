@@ -94,7 +94,10 @@ fn each_override_sets_only_its_inputs_in_its_slots_plan() {
                 level_value(&schema, input, level)
             };
             let want = match (input.as_str(), value) {
-                ("press_distance", Some(v)) => t.press_distance * v,
+                ("press_distance", Some(_)) => {
+                    let count = schema.instructions.pressing.levels[level].press_count;
+                    side.press_distance * f64::from(count) / side.press_count.max(1) as f64
+                }
                 ("pace_lift", Some(v)) => f64::from(u8::from(v > 0.0)),
                 (_, Some(v)) => v,
                 (_, None) => TeamPlan::neutral(&t).player_input(input).unwrap(),
@@ -260,16 +263,17 @@ fn press_reach(d: usize, since_s: Option<f64>, instruct: impl Fn(&mut Simulation
     farthest
 }
 
-/// Pressing (hook `press.distance`): the instructed player's press reach is his own level's;
-/// a team-mate's instruction leaves his reach as it was.
+/// Pressing (hook `press.distance`): a level above the side's presses from farther, one below
+/// from nearer; a team-mate's instruction leaves his reach as it was.
 #[test]
 fn a_pressing_instruction_moves_only_its_players_reach() {
     let d = PLAYERS_PER_TEAM + 6;
     let base = press_reach(d, None, |_| {});
-    // The low level's press distance scale is three times the default's.
-    let own = press_reach(d, None, |sim| instruct(sim, 1, 6, "pressing", "low"));
-    let mate = press_reach(d, None, |sim| instruct(sim, 1, 7, "pressing", "low"));
-    assert!(own > base, "{own} against {base}");
+    let high = press_reach(d, None, |sim| instruct(sim, 1, 6, "pressing", "high"));
+    let low = press_reach(d, None, |sim| instruct(sim, 1, 6, "pressing", "low"));
+    let mate = press_reach(d, None, |sim| instruct(sim, 1, 7, "pressing", "high"));
+    assert!(high > base, "{high} against {base}");
+    assert!(low < base, "{low} against {base}");
     assert_eq!(mate, base);
 }
 

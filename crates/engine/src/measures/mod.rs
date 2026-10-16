@@ -896,8 +896,13 @@ impl MatchMeasures {
         self.tackled = Some((c, seen | (1u32 << i)));
         if seen & (1u32 << i) == 0 {
             self.defending[def].action(at.0, at.1, defender);
-            self.per_player[i].tackles += 1;
         }
+    }
+
+    /// Defender `i` chose to tackle the carrier ([`crate::decision::tackle_decision`]): his
+    /// own tackle, apart from the take-on duels a dribbler draws him into.
+    pub(crate) fn tackle_decided(&mut self, i: usize) {
+        self.per_player[i].tackles += 1;
     }
 
     /// An interception or a foul by a player of `def` at `at` (the share of the pitch length
