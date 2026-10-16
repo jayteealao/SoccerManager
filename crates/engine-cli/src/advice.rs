@@ -133,10 +133,21 @@ mod tests {
     use std::hash::{DefaultHasher, Hasher};
     use std::path::Path;
 
-    /// The seed the viewer's advice drive plays: the first seed from 1 whose page team gets a
-    /// tired-player pick after the computer manager's fatigue minute. `scan_for_the_drive_seed`
-    /// finds it again.
-    pub(crate) const DRIVE_SEED: u64 = 1;
+    /// The advice drive the viewer's browser test plays, as `scan_for_the_drive_seed` finds it:
+    /// the first seed from 1 whose page team gets a substitution pick, the tick of the first
+    /// advice that holds one, and that pick's code. The browser test reads the same file.
+    const DRIVE: &str = include_str!("../../../e2e/match/advice-drive.json");
+
+    #[derive(serde::Deserialize)]
+    struct Drive {
+        seed: u64,
+        tick: u32,
+        code: String,
+    }
+
+    fn drive() -> Drive {
+        serde_json::from_str(DRIVE).unwrap()
+    }
 
     fn loaded() -> crate::content::Loaded {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content");
@@ -195,17 +206,22 @@ mod tests {
         }
     }
 
-    fn first_fatigue_pick(advice: &[Advice]) -> Option<&Advice> {
-        advice
-            .iter()
-            .find(|a| a.minute >= 55 && a.picks.iter().any(|p| p.code == "sub-fatigue"))
+    /// The first advice that holds a substitution pick, and that pick.
+    fn first_sub_pick(advice: &[Advice]) -> Option<(&Advice, &AdvicePick)> {
+        advice.iter().find_map(|a| {
+            a.picks
+                .iter()
+                .find(|p| p.kind == "substitution" && p.code.starts_with("sub-"))
+                .map(|p| (a, p))
+        })
     }
 
     #[test]
     fn the_advice_changes_nothing_in_the_match_and_a_planted_queue_write_would() {
         let loaded = loaded();
-        let without = play(&loaded, DRIVE_SEED, false, false);
-        let with = play(&loaded, DRIVE_SEED, true, false);
+        let seed = drive().seed;
+        let without = play(&loaded, seed, false, false);
+        let with = play(&loaded, seed, true, false);
         assert!(
             !with.advice.is_empty(),
             "the check found no pick to test with"
@@ -216,7 +232,7 @@ mod tests {
         );
         // The control: the same run with the one write the advice must never make fails the
         // comparison, so the comparison can fail.
-        let planted = play(&loaded, DRIVE_SEED, true, true);
+        let planted = play(&loaded, seed, true, true);
         assert_ne!(
             planted.hash, without.hash,
             "a planted queue write went unseen"
@@ -224,45 +240,52 @@ mod tests {
     }
 
     #[test]
-    fn the_drive_seed_gets_a_tired_player_pick_after_the_fatigue_minute() {
+    fn the_drive_seed_gets_the_substitution_pick_the_scan_found() {
         let loaded = loaded();
-        let played = play(&loaded, DRIVE_SEED, true, false);
-        let advice = first_fatigue_pick(&played.advice).expect("no tired-player pick");
-        let pick = advice
-            .picks
-            .iter()
-            .find(|p| p.code == "sub-fatigue")
-            .unwrap();
-        assert_eq!(pick.kind, "substitution");
+        let drive = drive();
+        let played = play(&loaded, drive.seed, true, false);
+        let (advice, pick) = first_sub_pick(&played.advice).expect("no substitution pick");
+        assert_eq!(
+            (advice.tick, pick.code.as_str()),
+            (drive.tick, drive.code.as_str())
+        );
         assert!(pick.off.is_some() && pick.on.is_some() && pick.patch.is_none());
-        let sim = page_match(&loaded, DRIVE_SEED, 90);
+        // The assistant offers substitutions only.
+        assert!(
+            played
+                .advice
+                .iter()
+                .all(|a| a.picks.iter().all(|p| p.kind == "substitution"))
+        );
+        let sim = page_match(&loaded, drive.seed, 90);
         let home = &sim.teams()[HOME];
         assert!(home.bench.contains(&usize::from(pick.on.unwrap())));
         assert!(home.lineup.contains(&usize::from(pick.off.unwrap())));
     }
 
     #[test]
-    #[ignore = "a scan over 20 full matches; run it to choose DRIVE_SEED again"]
+    #[ignore = "a scan over 20 full matches; run it to write e2e/match/advice-drive.json again"]
     fn scan_for_the_drive_seed() {
         let loaded = loaded();
         for seed in 1..=20 {
             let played = play(&loaded, seed, true, false);
-            if let Some(a) = first_fatigue_pick(&played.advice) {
+            if let Some((a, p)) = first_sub_pick(&played.advice) {
+                // The file `e2e/match/advice-drive.json` holds this line.
                 println!(
-                    "seed {seed}: sub-fatigue at minute {} (tick {})",
-                    a.minute, a.tick
+                    "{{ \"seed\": {seed}, \"tick\": {}, \"minute\": {}, \"code\": \"{}\" }}",
+                    a.tick, a.minute, p.code
                 );
                 return;
             }
-            println!("seed {seed}: no sub-fatigue pick");
+            println!("seed {seed}: no substitution pick");
         }
-        panic!("no seed in 1 to 20 gives a sub-fatigue pick");
+        panic!("no seed in 1 to 20 gives a substitution pick");
     }
 
     #[test]
     fn the_drive_offers_no_pick_before_a_check_is_due() {
         let loaded = loaded();
-        let sim = page_match(&loaded, DRIVE_SEED, 90);
+        let sim = page_match(&loaded, drive().seed, 90);
         assert!(Advisor::default().after_step(&sim, &[]).is_none());
     }
 
@@ -270,7 +293,7 @@ mod tests {
     fn no_advice_runs_for_a_team_the_computer_manages() {
         let loaded = loaded();
         let [a, b] = &loaded.teams;
-        let config = MatchConfig::new(DRIVE_SEED, 90, &loaded.content, [a, b]).unwrap();
+        let config = MatchConfig::new(drive().seed, 90, &loaded.content, [a, b]).unwrap();
         let mut sim = Simulation::new(config).unwrap();
         let mut advisor = Advisor::default();
         while !sim.is_over() {

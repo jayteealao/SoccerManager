@@ -1716,7 +1716,7 @@ mod tests {
         assert!(
             advice
                 .iter()
-                .any(|a| a.picks.iter().any(|p| p.code == "sub-fatigue")),
+                .any(|a| a.picks.iter().any(|p| p.kind == "substitution")),
             "{advice:?}"
         );
         // Each message differs from the one before it.

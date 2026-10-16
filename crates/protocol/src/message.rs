@@ -473,7 +473,10 @@ pub struct ChangeStateNote {
 #[serde(deny_unknown_fields)]
 pub struct AdvicePick {
     /// The reason, as the `ai.decision` codes name it: `sub-injury`, `sub-keeper`,
-    /// `sub-fatigue`, `mentality-up-trailing` or `mentality-down-leading`.
+    /// `sub-fatigue`, `sub-booked`, `sub-form` or `sub-knock`. An earlier engine also sent
+    /// `mentality-up-trailing` or `mentality-down-leading` with a `tactics` pick, from when
+    /// the AI manager made tactics changes of its own; the assistant now offers substitutions
+    /// only, and the `tactics` kind stays readable.
     pub code: String,
     /// `substitution` or `tactics`, as `change.kind` names it.
     pub kind: String,

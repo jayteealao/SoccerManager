@@ -77,6 +77,9 @@ test('each pick reads as its change and its reason, and its label is the chip’
     { code: 'sub-fatigue', kind: 'substitution', off: 7, on: 18 },
     { code: 'sub-injury', kind: 'substitution', off: 3, on: 14 },
     { code: 'sub-keeper', kind: 'substitution', off: 5, on: 12 },
+    { code: 'sub-booked', kind: 'substitution', off: 4, on: 13 },
+    { code: 'sub-form', kind: 'substitution', off: 6, on: 15 },
+    { code: 'sub-knock', kind: 'substitution', off: 8, on: 16 },
     { code: 'mentality-up-trailing', kind: 'tactics', patch: { mentality: 3, instructions: [3, null, null, null, null, null] } },
     { code: 'mentality-down-leading', kind: 'tactics', patch: { mentality: 1, instructions: [null, null, null, null, null, 1] } },
   ];
@@ -87,10 +90,14 @@ test('each pick reads as its change and its reason, and its label is the chip’
   assert.ok(!rows[1].accepted);
   assert.equal(rows[1].reason, 'injured player');
   assert.equal(rows[2].reason, 'outfield player in goal');
-  assert.equal(rows[3].text, 'Mentality Positive, Pressing high · trailing');
-  assert.equal(rows[4].reason, 'leading');
-  assert.match(rows[4].what, /^Mentality Cautious, Time wasting /);
-  assert.deepEqual(rows.map((r) => r.n), [1, 2, 3, 4, 5]);
+  assert.equal(rows[3].reason, 'booked player at risk');
+  assert.equal(rows[4].reason, 'player off his game');
+  assert.equal(rows[5].text, 'Player8 → Player16 · player carrying a knock');
+  // The old mentality codes still read for an older replay.
+  assert.equal(rows[6].text, 'Mentality Positive, Pressing high · trailing');
+  assert.equal(rows[7].reason, 'leading');
+  assert.match(rows[7].what, /^Mentality Cautious, Time wasting /);
+  assert.deepEqual(rows.map((r) => r.n), [1, 2, 3, 4, 5, 6, 7, 8]);
 });
 
 test('accepting a pick queues exactly the change the assistant named', () => {
@@ -98,7 +105,7 @@ test('accepting a pick queues exactly the change the assistant named', () => {
   const patch = { mentality: 3 };
   assert.deepEqual(pickDetail({ kind: 'tactics', patch }), { patch });
   assert.notEqual(pickKey({ code: 'a', kind: 'substitution', off: 1, on: 2 }), pickKey({ code: 'a', kind: 'substitution', off: 1, on: 3 }));
-  assert.match(NO_PICK, /every 30 seconds/);
+  assert.match(NO_PICK, /at each stoppage/);
 });
 
 test('the strip names the ball state, the next stoppage and the counts', () => {
