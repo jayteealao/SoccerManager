@@ -241,3 +241,100 @@ fn the_shape_figures_change_no_tick_and_add_up() {
         );
     }
 }
+
+/// A seed's match on the shipped content: its open-play passes, the passes their own passer
+/// gained back first, those the keeper took back, and those he caught still on their way
+/// (faster than a pass arrives).
+fn self_regains(seed: u64) -> [u32; 4] {
+    let content = common::content();
+    let [a, b] = common::default_teams(&content);
+    let config = engine::MatchConfig::new(seed, 90, &content, [&a, &b]).unwrap();
+    let mut sim = Simulation::new(config).unwrap();
+    sim.with_measures();
+    while !sim.is_over() {
+        sim.step();
+        if sim.is_over() {
+            sim.finish();
+        }
+        sim.take_events();
+    }
+    let m = sim.measures().cloned().unwrap();
+    [
+        m.pass_attempts.iter().flatten().sum(),
+        m.self_regains.iter().sum(),
+        m.keeper_self_regains.iter().sum(),
+        m.keeper_self_catches.iter().sum(),
+    ]
+}
+
+/// A kicker does not take back his own pass while it runs on along the line he sent it: over
+/// eight seeded matches the keepers catch fewer than 5 of their own passes a match still on
+/// their way, and passers gain back first fewer than 5 percent of open-play passes. A pass
+/// that has slowed to a pass's arrival speed with nobody else on it is his to collect.
+#[test]
+fn a_kicker_does_not_take_back_his_own_pass_on_its_way() {
+    let mut total = [0u32; 4];
+    let seeds = 1..=8u64;
+    let n = seeds.clone().count() as f64;
+    for seed in seeds {
+        for (t, x) in total.iter_mut().zip(self_regains(seed)) {
+            *t += x;
+        }
+    }
+    let share = f64::from(total[1]) / f64::from(total[0]);
+    let catches = f64::from(total[3]) / n;
+    assert!(catches < 5.0, "keeper own catches {catches:.2} a match");
+    assert!(share < 0.05, "self-regained share {share:.4}");
+}
+
+/// The same figures over many matches, for the record: `SM_SELF_REGAIN_MATCHES` matches
+/// (default 1000) from seed `SM_SELF_REGAIN_SEED` (default 9) times a million on, on all
+/// cores.
+///
+/// ```text
+/// cargo test --release -p engine --features measures --test measures -- --ignored self_regains_over_many --nocapture
+/// ```
+#[test]
+#[ignore = "a long run for the record"]
+fn self_regains_over_many_matches() {
+    let var = |name: &str, default: u64| {
+        std::env::var(name)
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(default)
+    };
+    let matches = var("SM_SELF_REGAIN_MATCHES", 1000);
+    let base = var("SM_SELF_REGAIN_SEED", 9) * 1_000_000;
+    let threads = std::thread::available_parallelism().map_or(4, |n| n.get()) as u64;
+    let next = std::sync::atomic::AtomicU64::new(0);
+    let totals = std::sync::Mutex::new([0u64; 4]);
+    std::thread::scope(|s| {
+        for _ in 0..threads {
+            s.spawn(|| {
+                loop {
+                    let k = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if k >= matches {
+                        break;
+                    }
+                    let one = self_regains(base + k);
+                    let mut t = totals.lock().unwrap();
+                    for (t, x) in t.iter_mut().zip(one) {
+                        *t += u64::from(x);
+                    }
+                }
+            });
+        }
+    });
+    let [passes, own, keeper, catches] = totals.into_inner().unwrap();
+    let per = |x: u64| x as f64 / matches as f64;
+    println!(
+        "matches {matches} seed base {base}: passes {:.1} a match, self-regained {:.2} a match \
+         (share {:.4}), keeper own regains {:.2} a match, keeper own catches on their way {:.2} \
+         a match",
+        per(passes),
+        per(own),
+        own as f64 / passes as f64,
+        per(keeper),
+        per(catches)
+    );
+}

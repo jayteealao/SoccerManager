@@ -731,9 +731,10 @@ fn a_carrier_who_resists_the_press_badly_clears_more_as_it_rises() {
     assert!(keep_margin(0.85, Some(1.0)) > keep_margin(0.15, Some(1.0)));
 }
 
-/// A pass just kicked by home carrier 9 at the centre: the ball `ahead` metres in front of
-/// him, running away at `speed`, team-mate 10 waiting 8 m ahead and away player `d` at `at`
-/// (written for the side attacking +x).
+/// A pass just kicked forward by home carrier 9 at the centre: the ball `ahead` metres in front
+/// of him (behind him when negative), running at `speed` (back toward his side when negative,
+/// a rebound), team-mate 10 waiting 8 m ahead and away player `d` at `at` (written for the side
+/// attacking +x).
 fn pass_on_its_way(ahead: f64, speed: f64, d: usize, at: DVec2) -> Simulation {
     let mut sim = scene();
     clear(&mut sim);
@@ -744,6 +745,7 @@ fn pass_on_its_way(ahead: f64, speed: f64, d: usize, at: DVec2) -> Simulation {
     sim.ball.vel = DVec2::new(speed * ax, 0.0).extend(0.0);
     sim.carrier = None;
     sim.last_kicker = Some(9);
+    sim.last_kick_dir = DVec2::new(9.0 * ax, 0.0);
     sim.pass_in_flight = Some(0);
     sim.possession_phase = Some(0);
     sim
@@ -774,6 +776,30 @@ fn a_passer_does_not_play_his_own_pass_on_its_way() {
     assert_eq!(best(&slow), Some(9), "slowed to the arrival speed");
     let back = pass_on_its_way(0.4, -9.0, far, DVec2::new(-30.0, 20.0));
     assert_eq!(best(&back), Some(9), "coming back to him");
+}
+
+/// A kick that starts behind its kicker (a keeper holds the ball up to his reach from his
+/// body) is still his kick on its way while it runs along the line he sent it: it passes him
+/// and he neither plays nor chases it; a rebound back down that line is his again.
+#[test]
+fn a_kick_from_behind_the_kicker_is_not_his_while_it_runs_on() {
+    use crate::modules::PossessionModule;
+    let far = PLAYERS_PER_TEAM + 9;
+    let best = |sim: &Simulation| {
+        crate::possession::PossessionV1
+            .loose_ball(&sim.view())
+            .and_then(|l| l.best)
+            .map(|(_, i)| i)
+    };
+    let behind = pass_on_its_way(-0.4, 9.0, far, DVec2::new(-30.0, 20.0));
+    assert_eq!(best(&behind), None, "his kick passing him");
+    let chasers = match crate::decision::DecisionV1.targets(&behind.view()).trace {
+        crate::modules::TargetsTrace::Loose { nearest, .. } => nearest,
+        _ => panic!("a loose ball"),
+    };
+    assert_ne!(chasers[0], 9, "he does not chase it");
+    let rebound = pass_on_its_way(-0.4, -9.0, far, DVec2::new(-30.0, 20.0));
+    assert_eq!(best(&rebound), Some(9), "a rebound back down the line");
 }
 
 /// A defender in or near the lane of a short pass can cut it out as it passes him: his chance

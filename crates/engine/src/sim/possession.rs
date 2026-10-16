@@ -333,6 +333,7 @@ impl Simulation {
         }
         self.last_touch = Some(team);
         self.last_kicker = Some(i);
+        self.last_kick_dir = self.ball.vel.truncate();
         self.end_shot();
     }
 
@@ -589,8 +590,16 @@ impl Simulation {
         self.keeper_beaten = false;
         let team = self.players[i].team;
         #[cfg(feature = "measures")]
+        let (keeper, fast) = (
+            i == self.keeper(team),
+            self.ball.vel.truncate().length() > _t.pass_arrival_speed,
+        );
+        #[cfg(feature = "measures")]
         if let Some(m) = self.measures.as_deref_mut() {
             if self.pass_in_flight == Some(team) {
+                if self.last_kicker == Some(i) {
+                    m.self_regained(team, keeper, fast);
+                }
                 m.completed(team);
             }
             m.touched(team, self.tick);

@@ -685,6 +685,11 @@ pub struct Simulation {
     /// dead ball clears it, and a snapshot is written only when play stops, so the snapshot
     /// never needs it.
     pub(crate) last_kicker: Option<usize>,
+    /// The ground velocity the last kicker gave the ball, read only for its direction: his
+    /// kick, or the ball's new line when he deflected it. A kick is still leaving him while
+    /// the ball runs along this line ([`crate::possession::leaving_kicker`]); a rebound
+    /// reverses it. Set and cleared with `last_kicker`.
+    pub(crate) last_kick_dir: DVec2,
     pub(crate) summary: Summary,
     pub(crate) referee: Referee,
     pub(crate) restart: bool,
@@ -937,6 +942,7 @@ impl Simulation {
             control_since: 0,
             last_touch: None,
             last_kicker: None,
+            last_kick_dir: DVec2::ZERO,
             summary: Summary::default(),
             referee,
             restart: false,
@@ -1750,6 +1756,7 @@ impl Simulation {
     ) {
         let (dir, speed, loft) = kick.flight();
         let mut shooter = None;
+        let kicker = self.carrier;
         self.end_shot();
         self.heavy_mask = 0;
         self.clearers_tried = 0;
@@ -1892,6 +1899,9 @@ impl Simulation {
             .modules
             .ball
             .kick(&self.view(), self.ball, dir, speed, loft);
+        if kicker.is_some() {
+            self.last_kick_dir = self.ball.vel.truncate();
+        }
         if let Some((team, attack_x, c)) = shooter
             && self
                 .config

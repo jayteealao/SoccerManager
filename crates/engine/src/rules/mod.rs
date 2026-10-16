@@ -292,6 +292,7 @@ impl Simulation {
         }
         self.restart = true;
         self.last_kicker = None;
+        self.last_kick_dir = DVec2::ZERO;
         self.last_pass = None;
         self.pass_in_flight = None;
         self.possession_phase = None;
@@ -809,6 +810,7 @@ impl Simulation {
         self.carrier = None;
         self.keeper_beaten = false;
         self.last_kicker = None;
+        self.last_kick_dir = DVec2::ZERO;
         self.last_pass = None;
         self.pass_in_flight = None;
         self.possession_phase = None;
@@ -1340,6 +1342,7 @@ impl Simulation {
         self.keeper_beaten = false;
         self.restart = true;
         self.last_kicker = None;
+        self.last_kick_dir = DVec2::ZERO;
         self.last_pass = None;
         self.pass_in_flight = None;
         self.possession_phase = None;
@@ -1433,6 +1436,7 @@ impl Simulation {
         self.keeper_beaten = false;
         self.last_touch = Some(dead.team);
         self.last_kicker = Some(dead.taker);
+        self.last_kick_dir = self.ball.vel.truncate();
         self.control_since = self.tick;
     }
 

@@ -141,11 +141,13 @@ fn dribble_more(data: &Path, dribble: f64) -> PathBuf {
 
 /// The per-player check: a planted dribble value for the left winger (slot 5 of the 4-4-2)
 /// raises his own take-ons beyond the paired noise while his ten team-mates' pooled take-ons
-/// stay inside it.
+/// stay inside it. The plant is 0.3 (0.5 until a kick stayed on its way from its kicker along the
+/// line he sent it: a dribbler that eager then took enough of the ball to lower his team-mates'
+/// take-ons beyond the noise of these short runs).
 #[test]
 fn a_planted_player_instruction_moves_his_own_statistic_and_not_the_others() {
     let data = temp("engine-cli-primitives", "player-with");
-    let content = dribble_more(&data, 0.5);
+    let content = dribble_more(&data, 0.3);
     let out = data.join("player.json");
     let mut args = vec!["check", "--primitive", "dribbling", "--player", "5"];
     args.extend(SHORT);

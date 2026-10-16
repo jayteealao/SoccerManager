@@ -375,21 +375,22 @@ struct BallAt {
     vel: DVec2,
 }
 
-/// `true` while the ball at `ball_xy` moving at `ball_vel` along the ground is still on its way
-/// from player `p`, who kicked it last: it is faster than a pass reaches its receiver
-/// (`pass_arrival_speed`) and not coming back toward him. A kicker neither plays nor chases his
-/// own kick on its way; once it has slowed to a pass's arrival speed, or comes back to him (a
-/// rebound), he may.
+/// `true` while the ball moving at `ball_vel` along the ground is still on its way from player
+/// `p`, who kicked it last: it is faster than a pass reaches its receiver
+/// (`pass_arrival_speed`) and still runs along the line he sent it ([`MatchView::last_kick_dir`]).
+/// A kicker neither plays nor chases his own kick on its way, wherever he stands against the
+/// ball (a keeper holds it up to his reach from his body, so a kick can start behind him);
+/// once it has slowed to a pass's arrival speed, or a rebound turns it back, he may.
 #[inline]
 pub(crate) fn leaving_kicker(
     view: &MatchView<'_>,
     p: &crate::player::Player,
-    ball_xy: DVec2,
+    _ball_xy: DVec2,
     ball_vel: DVec2,
 ) -> bool {
     view.last_kicker() == Some(p.id)
         && ball_vel.length() > view.tuning().pass_arrival_speed
-        && ball_vel.dot(p.pos - ball_xy) <= 0.0
+        && ball_vel.dot(view.last_kick_dir()) > 0.0
 }
 
 /// How far player `p` reaches a ball at `ball.xy` and height `ball.z`, or `None` when he

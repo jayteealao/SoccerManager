@@ -310,12 +310,19 @@ fn a_version_three_snapshot_is_refused_by_name() {
 
 /// A snapshot taken while a player who just fouled still waits out the foul cooldown keeps
 /// that cooldown: the resumed match plays on tick for tick through the cooldown's end. It
-/// plays the scoring match (seed 1): in the seed-42 match since the player record came in,
+/// plays seed 0, the lowest whose first foul to stop play leaves its offender cooling down
+/// (the scoring match until a kick stayed on its way from its kicker along the line he sent
+/// it): in the seed-42 match since the player record came in,
 /// the manager takes off the first offender whose foul stops play at that same stoppage, so
 /// nobody is left cooling down.
 #[test]
 fn a_resumed_match_keeps_a_foul_cooldown_running() {
-    let mut sim = Simulation::new(scoring_match()).unwrap();
+    let cooldown_match = || {
+        let content = content();
+        let [a, b] = default_teams(&content);
+        engine::MatchConfig::new(0, 90, &content, [&a, &b]).unwrap()
+    };
+    let mut sim = Simulation::new(cooldown_match()).unwrap();
     let mut waiting = None;
     for _ in 0..(90 * TICKS_PER_MINUTE) {
         sim.step();
@@ -333,7 +340,7 @@ fn a_resumed_match_keeps_a_foul_cooldown_running() {
     let ready = sim.players()[player].foul_ready;
     let read =
         Snapshot::from_bytes(&Snapshot::capture(&sim, OWNER, 1).to_bytes(), "s.smsn").unwrap();
-    let mut resumed = Simulation::from_snapshot(scoring_match(), &read).unwrap();
+    let mut resumed = Simulation::from_snapshot(cooldown_match(), &read).unwrap();
     assert_eq!(resumed.players()[player].foul_ready, ready);
     let span = ready - sim.tick() + 100;
     for _ in 0..span {

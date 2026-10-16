@@ -49,6 +49,7 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         control_since,
         last_touch,
         last_kicker,
+        last_kick_dir,
         summary,
         referee,
         restart,
@@ -155,6 +156,8 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     w.index(*last_touch);
     w.mark(Bytes, || "last_kicker".into());
     w.index(*last_kicker);
+    w.mark(Floats, || "last_kick_dir".into());
+    w.v2_at(&|| "last_kick_dir".into(), *last_kick_dir);
     w.mark(Bytes, || "keeper_beaten".into());
     w.bool(*keeper_beaten);
     w.mark(Bytes, || "pass_in_flight".into());

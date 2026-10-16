@@ -216,6 +216,13 @@ impl<'a> MatchView<'a> {
         self.sim.last_kicker
     }
 
+    /// The ground velocity the last kicker gave the ball (his kick, or his deflection), read
+    /// for its direction only; zero while nobody has kicked in this spell of play.
+    #[inline]
+    pub(crate) fn last_kick_dir(&self) -> crate::math::DVec2 {
+        self.sim.last_kick_dir
+    }
+
     /// The attribute schema of the match.
     #[inline]
     pub fn attributes(&self) -> &'a AttributeSchema {

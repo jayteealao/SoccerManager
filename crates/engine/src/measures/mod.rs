@@ -372,6 +372,11 @@ pub struct MatchMeasures {
     /// Those whose next controlling touch was a team-mate's; they sum to the summary's
     /// completed passes.
     pub pass_completed: [[u32; PASS_CELLS]; 2],
+    /// Open-play passes their own passer gained back first; those of them the side's keeper
+    /// took back; and those he caught still faster than a pass arrives (a kick on its way).
+    pub self_regains: [u32; 2],
+    pub keeper_self_regains: [u32; 2],
+    pub keeper_self_catches: [u32; 2],
     /// Goals by phase, in [`PHASES`] order; they sum to the summary's goals.
     pub goals_by_phase: [[u32; PHASE_COUNT]; 2],
     /// Open-play ticks credited to the side, by the ball's third counted from the side's own
@@ -456,6 +461,9 @@ impl Default for MatchMeasures {
             shot_distance_m: [0.0; 2],
             pass_attempts: [[0; PASS_CELLS]; 2],
             pass_completed: [[0; PASS_CELLS]; 2],
+            self_regains: [0; 2],
+            keeper_self_regains: [0; 2],
+            keeper_self_catches: [0; 2],
             goals_by_phase: [[0; PHASE_COUNT]; 2],
             third_ticks: [[0; 3]; 2],
             chains: [0; 2],
@@ -744,6 +752,14 @@ impl MatchMeasures {
     pub(crate) fn received(&mut self, team: usize, pressed: bool, band: usize, squad: usize) {
         self.touch
             .get_or_insert((team, usize::from(pressed), band, squad));
+    }
+
+    /// `team`'s pass in flight was gained first by its own passer: the side's keeper when
+    /// `keeper`, with the ball faster than a pass arrives when `fast`.
+    pub(crate) fn self_regained(&mut self, team: usize, keeper: bool, fast: bool) {
+        self.self_regains[team] += 1;
+        self.keeper_self_regains[team] += u32::from(keeper);
+        self.keeper_self_catches[team] += u32::from(keeper && fast);
     }
 
     /// The pass in flight reached a team-mate of its passer.
