@@ -1798,7 +1798,7 @@ impl Simulation {
                     if let Some(m) = self.measures.as_deref_mut() {
                         m.shot(team, distance);
                         if open {
-                            m.open_shot(team, distance, outside);
+                            m.open_shot(team, c, distance, outside);
                         }
                     }
                 }

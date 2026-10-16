@@ -29,6 +29,7 @@
 //! kind, once each time his choice changes, not on every tick he holds it.
 
 pub mod defending;
+pub mod players;
 pub mod runs;
 pub mod shape;
 pub mod transitions;
@@ -407,6 +408,8 @@ pub struct MatchMeasures {
     pub defending: [defending::Defending; 2],
     /// Per side, each player's pressure counts by his squad index.
     pub players: [std::collections::BTreeMap<usize, PlayerPressure>; 2],
+    /// Each player's own counts by roster index ([`players`]).
+    pub per_player: [players::PlayerCounts; players::ROSTER],
     /// Per pressing side, the tick each press trigger of the other side last fired, while
     /// its possession lasts.
     trigger_at: [[Option<u32>; 4]; 2],
@@ -474,6 +477,7 @@ impl Default for MatchMeasures {
                 std::collections::BTreeMap::new(),
                 std::collections::BTreeMap::new(),
             ],
+            per_player: [players::PlayerCounts::default(); players::ROSTER],
             trigger_at: [[None; 4]; 2],
             tackled: None,
             now: 0,
@@ -553,7 +557,9 @@ impl MatchMeasures {
             && last == c
             && dribbling
         {
-            self.possessing[team].takeons += (was_ahead & beside).count_ones();
+            let n = (was_ahead & beside).count_ones();
+            self.possessing[team].takeons += n;
+            self.per_player[c].takeons += n;
         }
         self.taking_on = Some((c, ahead));
     }
@@ -599,6 +605,15 @@ impl MatchMeasures {
                 s.crosses += 1;
                 s.high_crosses += u32::from(loft > 0.0);
                 s.cross_origin_m += f.origin_m;
+                let own = &mut self.per_player[c];
+                own.crosses += 1;
+                own.high_crosses += u32::from(loft > 0.0);
+                own.cross_origin_m += f.origin_m;
+            }
+            if self.in_regain_window(team) {
+                let own = &mut self.per_player[c];
+                own.window_passes += 1;
+                own.window_forward += u32::from(p.progress_m >= crate::decision::FORWARD_M);
             }
             if f.start_third < 2 && f.target_third == 2 {
                 self.entry = Some(f.channel);
@@ -646,13 +661,27 @@ impl MatchMeasures {
         }
     }
 
-    /// `team` shot in open play from `distance_m` metres from the goal centre, from outside
-    /// the penalty area when `outside`.
-    pub(crate) fn open_shot(&mut self, team: usize, distance_m: f64, outside: bool) {
+    /// Shooter `c` of `team` shot in open play from `distance_m` metres from the goal centre,
+    /// from outside the penalty area when `outside`.
+    pub(crate) fn open_shot(&mut self, team: usize, c: usize, distance_m: f64, outside: bool) {
         let s = &mut self.possessing[team];
         s.open_shots += 1;
         s.outside_shots += u32::from(outside);
         s.open_shot_m += distance_m;
+        let own = &mut self.per_player[c];
+        own.open_shots += 1;
+        own.outside_shots += u32::from(outside);
+    }
+
+    /// `true` while `team`'s possession, or its spell on the ball, started with an open-play
+    /// regain within [`crate::decision::COUNTER_WINDOW_S`].
+    fn in_regain_window(&self, team: usize) -> bool {
+        let poss = match self.spell {
+            Some(s) if s.poss.team == team => Some(s.poss),
+            _ => self.possession.filter(|p| p.team == team),
+        };
+        let window = transitions::ticks(crate::decision::COUNTER_WINDOW_S);
+        poss.is_some_and(|p| p.regain && self.now.saturating_sub(p.start) <= window)
     }
 
     /// `team`'s restart taker played his first kick: it adds a pass to the side's chain and
@@ -820,6 +849,13 @@ impl MatchMeasures {
             return;
         }
         self.transitions[team].pressures += n;
+        let counterpress = self.loss[team].is_some_and(|l| {
+            tick.saturating_sub(l.at) <= transitions::ticks(crate::decision::COUNTERPRESS_S)
+        });
+        for i in players::roster(near & !seen) {
+            self.per_player[i].pressures += 1;
+            self.per_player[i].counterpress_pressures += u32::from(counterpress);
+        }
         if let Some(l) = self.loss[team].as_mut() {
             l.pressed(n, tick);
         }
@@ -860,6 +896,7 @@ impl MatchMeasures {
         self.tackled = Some((c, seen | (1u32 << i)));
         if seen & (1u32 << i) == 0 {
             self.defending[def].action(at.0, at.1, defender);
+            self.per_player[i].tackles += 1;
         }
     }
 

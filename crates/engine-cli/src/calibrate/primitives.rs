@@ -28,8 +28,11 @@ use engine::data::primitives::{
 };
 use engine::data::tactics::{INSTRUCTIONS, TacticsSchema};
 use engine::measures::MatchMeasures;
+use engine::measures::players::PlayersSink;
 use engine::measures::runs::RunsSink;
 use engine::measures::shape::BlockHeightSink;
+use engine::tactics::rules::GameState;
+use engine::team::PLAYERS_PER_TEAM;
 use engine::{Content, FanoutSink, MatchConfig, Simulation, Tactics};
 use serde::Serialize;
 
@@ -437,16 +440,42 @@ pub fn play_pairs(
     arms: &[Arm],
     salt: &str,
 ) -> anyhow::Result<Vec<Vec<Stats>>> {
+    play_pairs_by(
+        setup,
+        teams_of,
+        arms.len(),
+        salt,
+        |a, teams, tested, seed| {
+            let arm = &arms[a];
+            let opponent = Tactics::defaults(&arm.content.tactics);
+            let mut tactics = [opponent; 2];
+            tactics[tested] = arm.tactics;
+            Ok(play_one(&arm.content, teams, tactics, seed, setup.minutes)?[tested])
+        },
+    )
+}
+
+/// Plays `arms` arms on each of `pairs` fixtures on `jobs` threads: `play(arm, teams, tested,
+/// seed)` plays one arm of one fixture, the tested side alternating home and away, and gives
+/// what the run keeps of it. Per fixture, each arm's result in arm order.
+pub fn play_pairs_by<T: Send>(
+    setup: &Setup,
+    teams_of: &Content,
+    arms: usize,
+    salt: &str,
+    play: impl Fn(usize, &[TeamFile; 2], usize, u64) -> anyhow::Result<T> + Sync,
+) -> anyhow::Result<Vec<Vec<T>>> {
     let list = fixtures::fixtures(setup.pairs);
     let next = AtomicUsize::new(0);
-    let results: Mutex<Vec<(usize, Vec<Stats>)>> = Mutex::new(Vec::new());
+    let results: Mutex<Vec<(usize, Vec<T>)>> = Mutex::new(Vec::new());
     let first_error: Mutex<Option<anyhow::Error>> = Mutex::new(None);
     let threads = usize::try_from(setup.jobs.max(1))
         .unwrap_or(1)
         .min(list.len().max(1));
     std::thread::scope(|scope| {
         for _ in 0..threads {
-            let (list, next, results, first_error) = (&list, &next, &results, &first_error);
+            let (list, next, results, first_error, play) =
+                (&list, &next, &results, &first_error, &play);
             scope.spawn(move || {
                 let mut leagues = Leagues::new(setup.seed, teams_of);
                 loop {
@@ -466,14 +495,11 @@ pub fn play_pairs(
                         i as u64,
                     );
                     let tested = i % 2;
-                    let mut out = vec![[(0.0, 0.0); STATS.len()]; arms.len()];
+                    let mut out = Vec::with_capacity(arms);
                     let mut failed = None;
-                    for (a, arm) in arms.iter().enumerate() {
-                        let opponent = Tactics::defaults(&arm.content.tactics);
-                        let mut tactics = [opponent; 2];
-                        tactics[tested] = arm.tactics;
-                        match play_one(&arm.content, &teams, tactics, engine_seed, setup.minutes) {
-                            Ok(stats) => out[a] = stats[tested],
+                    for a in 0..arms {
+                        match play(a, &teams, tested, engine_seed) {
+                            Ok(kept) => out.push(kept),
                             Err(e) => failed = Some(e),
                         }
                     }
@@ -826,6 +852,297 @@ pub fn check(
                 differences: arm_differences(&pairs),
             });
         }
+    }
+    Ok(out)
+}
+
+/// The statistics of one player that the per-player check reads, in [`PlayerStats`] order:
+/// each a primitive's team signature counted for one player
+/// ([`engine::measures::players`]).
+pub const PLAYER_STATS: [&str; 12] = [
+    "takeons_per_90",
+    "crosses_per_90",
+    "high_cross_share",
+    "low_cross_share",
+    "cross_origin_m",
+    "outside_box_shot_share",
+    "runs_in_behind_share",
+    "width_m",
+    "pressures_per_90",
+    "tackles_per_90",
+    "window_forward_share",
+    "counterpress_pressures_per_loss",
+];
+
+/// One side's per-player statistics of one match: per statistic, the instructed player's
+/// numerator and denominator, then the pooled ones of his ten team-mates.
+pub type PlayerStats = [[(f64, f64); 2]; PLAYER_STATS.len()];
+
+/// The player statistic that judges an instruction of `primitive` one level up, rising: the
+/// team signature counted for the one player. A choice primitive judges each choice on its
+/// own statistic, as the team check does.
+pub fn player_signature(primitive: &str) -> Option<&'static str> {
+    Some(match primitive {
+        "dribbling" => "takeons_per_90",
+        "crossing" => "crosses_per_90",
+        "final_third" => "outside_box_shot_share",
+        "forward_runs" => "runs_in_behind_share",
+        "width" => "width_m",
+        "pressing" => "pressures_per_90",
+        "tackling" => "tackles_per_90",
+        "on_winning_the_ball" => "window_forward_share",
+        "on_losing_the_ball" => "counterpress_pressures_per_loss",
+        _ => return None,
+    })
+}
+
+/// Side `team`'s per-player statistics with the player in formation slot `slot` apart.
+pub fn player_side(
+    m: &MatchMeasures,
+    sink: &PlayersSink,
+    nineties: f64,
+    team: usize,
+    slot: usize,
+) -> PlayerStats {
+    let f = f64::from;
+    let losses = f(m.transitions[team].losses);
+    let one = |i: usize| -> [(f64, f64); PLAYER_STATS.len()] {
+        let c = &m.per_player[i];
+        let width = (
+            sink.width_m.get(i).copied().unwrap_or(0.0),
+            f(sink.width_steps.get(i).copied().unwrap_or(0)),
+        );
+        let runs = f(sink.runs.get(i).copied().unwrap_or(0));
+        let behind = f(sink.behind.get(i).copied().unwrap_or(0));
+        [
+            (f(c.takeons), nineties),
+            (f(c.crosses), nineties),
+            (f(c.high_crosses), f(c.crosses)),
+            (f(c.crosses - c.high_crosses), f(c.crosses)),
+            (c.cross_origin_m, f(c.crosses)),
+            (f(c.outside_shots), f(c.open_shots)),
+            (behind, runs),
+            width,
+            (f(c.pressures), nineties),
+            (f(c.tackles), nineties),
+            (f(c.window_forward), f(c.window_passes)),
+            (f(c.counterpress_pressures), losses),
+        ]
+    };
+    let first = team * PLAYERS_PER_TEAM;
+    let own = one(first + slot);
+    let mut others = [(0.0, 0.0); PLAYER_STATS.len()];
+    for s in (0..PLAYERS_PER_TEAM).filter(|&s| s != slot) {
+        for (sum, x) in others.iter_mut().zip(one(first + s)) {
+            sum.0 += x.0;
+            sum.1 += x.1;
+        }
+    }
+    // A rate per 90 or per loss pools the ten players' counts over the one denominator.
+    for k in [0, 1, 8, 9, 11] {
+        others[k].1 = own[k].1;
+    }
+    std::array::from_fn(|k| [own[k], others[k]])
+}
+
+/// One match of a per-player check: the tested side's per-player statistics, its player in
+/// `slot` playing `state` (his instruction; empty for none).
+#[allow(clippy::too_many_arguments)]
+pub fn play_one_player(
+    content: &Content,
+    teams: &[TeamFile; 2],
+    tactics: [Tactics; 2],
+    state: &GameState,
+    tested: usize,
+    slot: usize,
+    seed: u64,
+    minutes: u32,
+) -> anyhow::Result<PlayerStats> {
+    let mut config = MatchConfig::new(seed, minutes, content, [&teams[0], &teams[1]])?;
+    for (team, t) in tactics.into_iter().enumerate() {
+        config = config.with_ai_tactics(team, t);
+    }
+    if !state.is_empty() {
+        config = config.with_game_state(tested, state.clone());
+    }
+    let mut sim = Simulation::new(config)?;
+    sim.with_measures();
+    let mut sink = PlayersSink::default();
+    sim.run(&mut sink)?;
+    let m = sim
+        .measures()
+        .context("a measures build counts the measures")?;
+    Ok(player_side(
+        m,
+        &sink,
+        f64::from(minutes) / 90.0,
+        tested,
+        slot,
+    ))
+}
+
+/// The verdict of one per-player step or choice: the instructed player's statistic must move
+/// in its direction beyond the paired noise, and the same statistic pooled over his ten
+/// team-mates must stay inside it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PlayerVerdict {
+    pub primitive: String,
+    pub slot: usize,
+    /// The slot's position in the side's formation.
+    pub position: String,
+    /// `<from> -> <to>`.
+    pub step: String,
+    pub own: StatVerdict,
+    pub others: StatVerdict,
+    pub pass: bool,
+    /// Every per-player statistic, the player's paired difference and its noise.
+    pub differences: BTreeMap<String, [f64; 2]>,
+}
+
+/// The verdict of `pairs` on per-player statistic `stat`, the player's (`k` 0) or the pooled
+/// team-mates' (`k` 1), moving in `direction`.
+fn judge_player(
+    pairs: &[Vec<PlayerStats>],
+    stat: usize,
+    k: usize,
+    direction: Direction,
+) -> StatVerdict {
+    let units = |arms: &[usize]| -> Vec<Vec<(f64, f64)>> {
+        pairs
+            .iter()
+            .map(|p| arms.iter().map(|&a| p[a][stat][k]).collect())
+            .collect()
+    };
+    let (difference, se, n) = pooled(&units(&[0, 1]));
+    let noise = 1.96 * se;
+    StatVerdict {
+        stat: PLAYER_STATS[stat].to_string(),
+        direction: match direction {
+            Direction::Up => "up".into(),
+            Direction::Down => "down".into(),
+        },
+        before: pooled(&units(&[0])).0,
+        after: pooled(&units(&[1])).0,
+        difference,
+        noise,
+        pairs: n,
+        pass: if k == 0 {
+            difference * direction.sign() > noise
+        } else {
+            difference.abs() <= noise
+        },
+    }
+}
+
+/// The per-player check of `name` for the player in formation slot `slot` of the tested
+/// side: a graded primitive's instruction one level up from the default against no
+/// instruction, or each choice of a choice primitive against no instruction. The instruction
+/// is resolved as a tactic's is, so an instruction the slot cannot take is refused by name.
+pub fn check_player(
+    content: &Content,
+    name: &str,
+    slot: usize,
+    setup: &Setup,
+) -> anyhow::Result<Vec<PlayerVerdict>> {
+    let content = harness_content(content);
+    let schema = &content.tactics;
+    let p = primitive(schema, name)?.clone();
+    let defaults = Tactics::defaults(schema);
+    let position = schema.formations[usize::from(defaults.formation)]
+        .slots
+        .get(slot)
+        .map(|s| format!("{:?}", s.position))
+        .with_context(|| format!("--player {slot}: the formation has slots 0 to 10"))?;
+    let names: Vec<String> = p
+        .level_names(schema)
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    let d = p.default_index(schema).context("a default")?;
+    let steps: Vec<(usize, &'static str)> = match p.kind {
+        PrimitiveKind::Graded => {
+            if d + 1 >= names.len() {
+                bail!("{name} has no level above its default");
+            }
+            let stat = player_signature(name)
+                .with_context(|| format!("{name} has no per-player statistic"))?;
+            vec![(d + 1, stat)]
+        }
+        PrimitiveKind::Choice => p
+            .choices
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.name != p.default)
+            .map(|(k, c)| -> anyhow::Result<(usize, &'static str)> {
+                let stat = PLAYER_STATS
+                    .iter()
+                    .find(|s| **s == c.stat)
+                    .with_context(|| format!("{}: no per-player {}", c.name, c.stat))?;
+                Ok((k, *stat))
+            })
+            .collect::<anyhow::Result<_>>()?,
+        PrimitiveKind::OnOff => {
+            bail!("{name}: the per-player check steps graded and choice primitives")
+        }
+    };
+    let mut out = Vec::new();
+    for (level, stat) in steps {
+        let file = engine::data::game_state::GameStateFile {
+            rules: Vec::new(),
+            instructions: vec![engine::data::game_state::InstructionFile {
+                slot: u8::try_from(slot).context("a slot")?,
+                primitive: name.to_string(),
+                level: names[level].clone(),
+            }],
+        };
+        let state = engine::data::game_state::resolve(&file, schema, &[defaults.formation])
+            .map_err(|(field, reason)| anyhow::anyhow!("{field}: {reason}"))?;
+        let states = [GameState::default(), state];
+        let step = format!("{} -> {}", names[d], names[level]);
+        let pairs = play_pairs_by(
+            setup,
+            &content,
+            2,
+            &format!("{name}:player {slot}:{step}"),
+            |a, teams, tested, seed| {
+                let tactics = [defaults; 2];
+                play_one_player(
+                    &content,
+                    teams,
+                    tactics,
+                    &states[a],
+                    tested,
+                    slot,
+                    seed,
+                    setup.minutes,
+                )
+            },
+        )?;
+        let s = PLAYER_STATS
+            .iter()
+            .position(|x| *x == stat)
+            .context("a player statistic")?;
+        let own = judge_player(&pairs, s, 0, Direction::Up);
+        let others = judge_player(&pairs, s, 1, Direction::Up);
+        let pass = own.pass && others.pass;
+        let differences = PLAYER_STATS
+            .iter()
+            .enumerate()
+            .map(|(i, n)| {
+                let v = judge_player(&pairs, i, 0, Direction::Up);
+                (n.to_string(), [v.difference, v.noise])
+            })
+            .collect();
+        out.push(PlayerVerdict {
+            primitive: name.into(),
+            slot,
+            position: position.clone(),
+            step,
+            own,
+            others,
+            pass,
+            differences,
+        });
     }
     Ok(out)
 }
@@ -1641,6 +1958,7 @@ pub fn run(
             step,
             with,
             hold,
+            player,
             pairs,
             seed,
             jobs: j,
@@ -1653,6 +1971,35 @@ pub fn run(
                 minutes: *minutes,
                 jobs: jobs(*j),
             };
+            if let Some(slot) = player {
+                let verdicts = check_player(content, primitive, *slot, &setup)?;
+                let pass = verdicts.iter().all(|v| v.pass);
+                for v in verdicts.iter().filter(|v| !v.pass) {
+                    let mut failed = Vec::new();
+                    if !v.own.pass {
+                        failed.push(format!(
+                            "slot {} {} moved {:+.4} (noise {:.4}, wanted up)",
+                            v.slot, v.own.stat, v.own.difference, v.own.noise
+                        ));
+                    }
+                    if !v.others.pass {
+                        failed.push(format!(
+                            "the other ten's {} moved {:+.4} (noise {:.4})",
+                            v.others.stat, v.others.difference, v.others.noise
+                        ));
+                    }
+                    eprintln!("{}: {} fails: {}", v.primitive, v.step, failed.join("; "));
+                }
+                emit(
+                    &serde_json::json!({
+                        "kind": "primitives-check-player",
+                        "pass": pass,
+                        "steps": verdicts
+                    }),
+                    out.as_deref(),
+                )?;
+                return Ok(if pass { 0 } else { 2 });
+            }
             let verdicts = check(content, primitive, step.as_deref(), with, hold, &setup)?;
             let pass = verdicts.iter().all(|v| v.pass);
             for v in &verdicts {

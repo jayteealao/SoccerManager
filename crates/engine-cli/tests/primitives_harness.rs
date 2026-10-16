@@ -124,6 +124,79 @@ fn a_choice_that_lowers_its_own_statistic_fails_and_is_named() {
     std::fs::remove_dir_all(&data).unwrap();
 }
 
+/// The content folder in `data` with dribbling's `dribble_more` level planted at `dribble`;
+/// the planted value is no fit, so dribbling's fit records go.
+fn dribble_more(data: &Path, dribble: f64) -> PathBuf {
+    edited_content(data, "tactics.json", |t| {
+        let p = t["primitives"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|p| p["name"] == "dribbling")
+            .unwrap();
+        p["steps"][3]["values"]["dribble"] = json!(dribble);
+        p["fits"] = json!([]);
+    })
+}
+
+/// The per-player check: a planted dribble value for the left winger (slot 5 of the 4-4-2)
+/// raises his own take-ons beyond the paired noise while his ten team-mates' pooled take-ons
+/// stay inside it.
+#[test]
+fn a_planted_player_instruction_moves_his_own_statistic_and_not_the_others() {
+    let data = temp("engine-cli-primitives", "player-with");
+    let content = dribble_more(&data, 0.5);
+    let out = data.join("player.json");
+    let mut args = vec!["check", "--primitive", "dribbling", "--player", "5"];
+    args.extend(SHORT);
+    args.extend(["--out", out.to_str().unwrap()]);
+    let run = primitives(&data, &content, &args);
+    assert_eq!(run.status.code(), Some(0), "{}", stderr(&run));
+    let result: Value = serde_json::from_str(&std::fs::read_to_string(&out).unwrap()).unwrap();
+    assert_eq!(result["kind"], "primitives-check-player");
+    let step = &result["steps"][0];
+    assert_eq!(step["step"], "dribble_normally -> dribble_more");
+    assert_eq!(step["slot"], 5);
+    assert_eq!(step["own"]["stat"], "takeons_per_90");
+    assert!(step["own"]["difference"].as_f64().unwrap() > 0.0);
+    assert_eq!(step["others"]["pass"], true);
+    std::fs::remove_dir_all(&data).unwrap();
+}
+
+/// A planted value against the instruction's direction fails and names the slot's statistic;
+/// a forward-runs instruction for a slot off the attack line is refused by name.
+#[test]
+fn a_player_instruction_moving_against_its_direction_fails_and_one_off_the_line_is_refused() {
+    let data = temp("engine-cli-primitives", "player-against");
+    let content = dribble_more(&data, -0.5);
+    let mut args = vec!["check", "--primitive", "dribbling", "--player", "5"];
+    args.extend(SHORT);
+    let run = primitives(&data, &content, &args);
+    assert_eq!(run.status.code(), Some(2), "{}", stderr(&run));
+    assert!(
+        stderr(&run)
+            .contains("dribbling: dribble_normally -> dribble_more fails: slot 5 takeons_per_90"),
+        "{}",
+        stderr(&run)
+    );
+    let run = primitives(
+        &data,
+        &content,
+        &[
+            "check",
+            "--primitive",
+            "forward_runs",
+            "--player",
+            "6",
+            "--pairs",
+            "2",
+        ],
+    );
+    assert_eq!(run.status.code(), Some(1), "{}", stderr(&run));
+    assert!(stderr(&run).contains("forward_runs"), "{}", stderr(&run));
+    std::fs::remove_dir_all(&data).unwrap();
+}
+
 /// The shipped tempo and mentality: every step one level up moves the primary statistic in its
 /// direction by more than the paired noise of 200 pairs (verify runs it; about half an hour).
 #[test]

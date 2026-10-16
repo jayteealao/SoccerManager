@@ -150,6 +150,12 @@ pub enum PrimitivesAction {
         /// given more than once.
         #[arg(long = "hold", value_name = "PRIMITIVE=LEVEL")]
         hold: Vec<String>,
+        /// Check a player instruction instead: the tested side's player in this formation slot
+        /// (0 to 10) takes the primitive one level up from its default (each choice of a
+        /// choice primitive), against no instruction. His own statistic must move beyond the
+        /// paired noise and his ten team-mates' pooled statistic must stay inside it.
+        #[arg(long, value_name = "SLOT", conflicts_with_all = ["step", "with", "hold"])]
+        player: Option<usize>,
         /// Pairs of matches per step.
         #[arg(long, default_value_t = 40)]
         pairs: u32,
