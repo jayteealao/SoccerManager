@@ -21,7 +21,7 @@
       },
       {
         "name": "very_high",
-        "value": 10.0
+        "value": 3.125
       }
     ]
   },
@@ -94,8 +94,13 @@
           "Spain"
         ],
         "row": "line_height",
-        "deferred": "not fitted yet: fitted with the tackle decision"
-      }
+        "deferred": "very deep and deep not fitted: below a block depth of about -5 m the defenders' action height stops falling (very deep to deep -0.19 m, noise 0.27, at 1000 pairs), so neither reaches its real ratio; both keep their seeded depths until the off-ball positioning work",
+        "deferred_levels": ["very_deep", "deep"]
+      },
+      "fits": [
+        { "level": "high", "values": { "block_depth": 1.25 }, "target": 1.031675, "achieved": 1.032013, "noise": 0.011902, "matches": 200, "seed": 9 },
+        { "level": "very_high", "values": { "block_depth": 3.125 }, "target": 1.100655, "achieved": 1.10128, "noise": 0.012518, "matches": 200, "seed": 9 }
+      ]
     },
     {
       "name": "line_of_engagement",

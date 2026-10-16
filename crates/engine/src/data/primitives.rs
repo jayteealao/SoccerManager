@@ -339,6 +339,12 @@ pub struct DataSource {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(skip)]
     pub deferred: Option<String>,
+    /// The levels the `deferred` reason covers, when it covers only some: those keep their
+    /// seeded values and the other levels but the default hold fits. Empty: the whole
+    /// primitive is deferred.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[garde(skip)]
+    pub deferred_levels: Vec<String>,
 }
 
 /// The fit of one level: the plan input values it found and what the search measured.
@@ -922,19 +928,40 @@ fn check_one(schema: &TacticsSchema, p: &Primitive) -> Result<(), Refusal> {
                     "a data source names its row of the signature table".into(),
                 ));
             }
-            if d.deferred
-                .as_deref()
-                .is_some_and(|r| r.trim().is_empty() || !p.fits.is_empty())
-            {
+            if d.deferred.as_deref().is_some_and(|r| {
+                r.trim().is_empty() || (d.deferred_levels.is_empty() && !p.fits.is_empty())
+            }) {
                 return Err(refuse(
                     n,
                     "data",
                     "a deferred primitive gives its reason and has no fit".into(),
                 ));
             }
+            if !d.deferred_levels.is_empty() {
+                let names = p.level_names(schema);
+                let default = p.default.as_str();
+                if d.deferred.is_none()
+                    || d.deferred_levels
+                        .iter()
+                        .any(|l| l == default || !names.contains(&l.as_str()))
+                    || p.fits.iter().any(|f| d.deferred_levels.contains(&f.level))
+                {
+                    return Err(refuse(
+                        n,
+                        "data",
+                        "deferred levels are levels other than the default, under a deferred \
+                         reason, with no fit"
+                            .into(),
+                    ));
+                }
+            }
         }
         (None, Some(reason)) => {
-            if reason.trim().is_empty() || !p.fits.is_empty() || d.deferred.is_some() {
+            if reason.trim().is_empty()
+                || !p.fits.is_empty()
+                || d.deferred.is_some()
+                || !d.deferred_levels.is_empty()
+            {
                 return Err(refuse(
                     n,
                     "data",

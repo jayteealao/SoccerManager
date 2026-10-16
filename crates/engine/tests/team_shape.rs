@@ -82,7 +82,7 @@ fn mean_depth(config: MatchConfig, slots: &[usize]) -> f64 {
 /// Shape AC-3: over the same 20 seeded minutes, an attacking duty takes the left-back at
 /// least 2 m further up on average than a defending one, and a high line takes the home back
 /// line at least 2 m further up than a deep one. 2 m is a quarter of the 8 m the content
-/// moves a slot between those duties, and a fifth of the 10 m between those lines, which
+/// moves a slot between those duties, and about a third of the 6.25 m between those lines, which
 /// move the back line only while the other team has the ball (the line of engagement moves
 /// the players in front of it). A mentality is the side's appetite for risk and moves no
 /// anchor.

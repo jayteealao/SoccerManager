@@ -103,19 +103,24 @@ fn the_shipped_primitives_are_complete() {
         .collect();
     assert!(patience.windows(2).all(|w| w[0] < w[1]), "{patience:?}");
     // Each graded primitive with real data that is not deferred holds a fit record for every
-    // level but its default (the base of every ratio), and each fit landed within its paired
-    // noise of the real ratio, or names the target as out of reach. A choice, a primitive with
-    // no real data and a deferred one hold none.
+    // level but its default (the base of every ratio) and the levels a partial deferral names,
+    // and each fit landed within its paired noise of the real ratio, or names the target as out
+    // of reach. A choice, a primitive with no real data and a wholly deferred one hold none.
     for p in &t.primitives {
-        let fitted =
-            p.kind == PrimitiveKind::Graded && p.data.source.is_some() && p.data.deferred.is_none();
+        let fitted = p.kind == PrimitiveKind::Graded
+            && p.data.source.is_some()
+            && (p.data.deferred.is_none() || !p.data.deferred_levels.is_empty());
         if !fitted {
             assert!(p.fits.is_empty(), "{}: no fit records", p.name);
             continue;
         }
         let levels = p.level_names(t);
         let fitted: Vec<&str> = p.fits.iter().map(|f| f.level.as_str()).collect();
-        let others: Vec<&str> = levels.iter().copied().filter(|l| *l != p.default).collect();
+        let others: Vec<&str> = levels
+            .iter()
+            .copied()
+            .filter(|l| *l != p.default && !p.data.deferred_levels.iter().any(|d| d == l))
+            .collect();
         assert_eq!(fitted, others, "{}: the fit records", p.name);
         for fit in &p.fits {
             assert!(
@@ -147,6 +152,48 @@ fn the_shipped_primitives_are_complete() {
             "data": { "none": "a planted entry" }
         }))
         .is_none()
+    );
+    // A partial deferral names levels other than the default, under its reason.
+    let part = |data: serde_json::Value| {
+        refusal_with(serde_json::json!({
+            "name": "planted_part",
+            "kind": "on_off",
+            "states": ["off", "on"],
+            "default": "off",
+            "inputs": [{ "input": "pace_lift", "hook": "pace.lift" }],
+            "signature": [{ "stat": "shot_share", "direction": "up" }],
+            "data": data
+        }))
+    };
+    let source = |extra: serde_json::Value| {
+        let mut d = serde_json::json!({
+            "source": "wyscout_2017_18",
+            "competitions": ["England"],
+            "row": "pressing"
+        });
+        d.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        d
+    };
+    assert!(
+        part(source(
+            serde_json::json!({ "deferred": "planted", "deferred_levels": ["on"] })
+        ))
+        .is_none()
+    );
+    assert!(part(source(serde_json::json!({ "deferred_levels": ["on"] }))).is_some());
+    assert!(
+        part(source(
+            serde_json::json!({ "deferred": "planted", "deferred_levels": ["off"] })
+        ))
+        .is_some()
+    );
+    assert!(
+        part(source(
+            serde_json::json!({ "deferred": "planted", "deferred_levels": ["up"] })
+        ))
+        .is_some()
     );
 }
 
