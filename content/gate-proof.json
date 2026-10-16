@@ -8,7 +8,7 @@
       "flag": {
         "hypothesis": "a longer shooting range raises the shots per team by about 10 percent",
         "overrides": {
-          "engine.shot_range": 23.25
+          "engine.shot_range": 22.5
         },
         "owner": "engine team",
         "removal_condition": "a broken copy of the gate proof; never on in play"
@@ -50,7 +50,7 @@
       "flag": {
         "hypothesis": "more aim noise on a pass lowers the pass accuracy by about 5 points",
         "overrides": {
-          "engine.aim_noise": 0.25
+          "engine.aim_noise": 0.175
         },
         "owner": "engine team",
         "removal_condition": "a broken copy of the gate proof; never on in play"
