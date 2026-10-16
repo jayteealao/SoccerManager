@@ -754,6 +754,12 @@ fn every_plan_input_a_decision_site_reads_has_a_hook() {
                 read.insert(field);
             }
         }
+        // A read of a player's own plan: `plan_for(<slot>).<field>`.
+        for field in plan_for_reads(&source) {
+            if fields.contains(&field) {
+                read.insert(field);
+            }
+        }
     }
     assert!(
         read.contains("patience") && read.contains("loss_weight"),
@@ -792,6 +798,157 @@ fn every_plan_input_a_decision_site_reads_has_a_hook() {
         "plan inputs read with no hook: {missing:?}"
     );
     assert_eq!(HOOKS.len(), 48);
+}
+
+/// The fields read straight off a player's own plan: `plan_for(<slot>).<field>`.
+fn plan_for_reads(source: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for (at, _) in source.match_indices("plan_for(") {
+        let rest = &source[at + "plan_for(".len()..];
+        let mut depth = 1;
+        let mut end = None;
+        for (k, ch) in rest.char_indices() {
+            match ch {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = Some(k);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        let Some(end) = end else { continue };
+        let after = rest[end + 1..].trim_start();
+        if let Some(field) = after.strip_prefix('.') {
+            let field: String = field
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            out.push(field);
+        }
+    }
+    out
+}
+
+/// What reads a per-player input ([`hooks::PLAYER_INPUTS`]) off the side's plan instead of
+/// the deciding player's: a direct `.plan.<input>`, or `<name>.<input>` after a binding
+/// `let <name> = …plan;`. Each finding as `<line>: <text>`.
+fn side_plan_reads_of_player_inputs(source: &str) -> Vec<String> {
+    let mut bound: Vec<String> = Vec::new();
+    let mut found = Vec::new();
+    for (n, line) in source.lines().enumerate() {
+        let code = line.trim_start();
+        if code.starts_with("//") {
+            continue;
+        }
+        // A binding lives inside its function.
+        if code.starts_with("fn ") || code.contains(" fn ") {
+            bound.clear();
+        }
+        if let Some(rest) = code.strip_prefix("let ") {
+            let name: String = rest
+                .trim_start_matches("mut ")
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            let value = rest.split_once('=').map(|(_, v)| v.trim()).unwrap_or("");
+            if value.ends_with(".plan;") {
+                bound.push(name);
+            } else {
+                bound.retain(|b| *b != name);
+            }
+        }
+        for input in hooks::PLAYER_INPUTS {
+            let direct = format!(".plan.{input}");
+            let mut hit = line
+                .match_indices(&direct)
+                .any(|(at, _)| !word_char_at(line, at + direct.len()));
+            for b in &bound {
+                let via = format!("{b}.{input}");
+                hit |= line.match_indices(&via).any(|(at, _)| {
+                    !word_char_at(line, at + via.len()) && (at == 0 || !word_char_before(line, at))
+                });
+            }
+            if hit {
+                found.push(format!("{}: {}", n + 1, line.trim()));
+            }
+        }
+    }
+    found
+}
+
+fn word_char_at(line: &str, at: usize) -> bool {
+    line[at..]
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_alphanumeric() || c == '_')
+}
+
+fn word_char_before(line: &str, at: usize) -> bool {
+    line[..at]
+        .chars()
+        .next_back()
+        .is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '.')
+}
+
+/// Every site that reads a per-player input reads the deciding player's own plan
+/// (`Team::plan_for`), so a player instruction reaches play at the same hook as the side's
+/// value; no site reads one off the side's plan. The one exception is the press trace, which
+/// reports the side's reach. A planted read off the side's plan is caught.
+#[test]
+fn every_per_player_input_is_read_off_the_players_own_plan() {
+    // (file, the binding or field read, why it reads the side's plan)
+    let allowed = [(
+        "decision.rs",
+        "side_plan.",
+        "the press trace reports the side's reach beside each presser's own",
+    )];
+    let sites = decision_sites().into_iter().chain([src().join("team.rs")]);
+    let mut found = Vec::new();
+    for path in sites {
+        let rel = path
+            .strip_prefix(src())
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
+        for f in side_plan_reads_of_player_inputs(&non_test_source(&path)) {
+            if !allowed
+                .iter()
+                .any(|(file, what, _)| *file == rel && f.contains(what))
+            {
+                found.push(format!("{rel}:{f}"));
+            }
+        }
+    }
+    assert!(
+        found.is_empty(),
+        "side-plan reads of per-player inputs: {found:?}"
+    );
+    // Every per-player input is read somewhere off a player's own plan.
+    let mut own = std::collections::BTreeSet::new();
+    for path in decision_sites().into_iter().chain([src().join("team.rs")]) {
+        let source = non_test_source(&path);
+        own.extend(plan_for_reads(&source));
+        for (at, _) in source.match_indices("plan.") {
+            if !word_char_before(&source, at) {
+                own.insert(
+                    source[at + 5..]
+                        .chars()
+                        .take_while(|c| c.is_alphanumeric() || *c == '_')
+                        .collect::<String>(),
+                );
+            }
+        }
+    }
+    for input in hooks::PLAYER_INPUTS {
+        assert!(own.contains(input), "{input} is never read: {own:?}");
+    }
+    let planted = "fn planted(side: &Team) -> f64 {\n    let p = &side.plan;\n    \
+                   side.plan.dribble + p.crossing\n}\n";
+    assert_eq!(side_plan_reads_of_player_inputs(planted).len(), 2);
 }
 
 /// The tackle decision replaces the automatic tackle: in the possession pass, each tackle's

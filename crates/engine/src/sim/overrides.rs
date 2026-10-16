@@ -360,7 +360,6 @@ impl Simulation {
             return;
         }
         let ball = self.ball.xy();
-        let reach = self.teams[def].plan.press_distance;
         let weights = self.config.tuning.contract.traits().weights;
         for i in def * 11..def * 11 + 11 {
             let p = self.players[i];
@@ -372,6 +371,8 @@ impl Simulation {
             {
                 continue;
             }
+            // Each player's own press distance (a player instruction may set it).
+            let reach = self.teams[def].plan_for(p.slot).press_distance;
             let far = reach * p.derived.knobs.press * (1.0 + weights.presses_relentlessly);
             if (p.pos - ball).length() >= far {
                 continue;

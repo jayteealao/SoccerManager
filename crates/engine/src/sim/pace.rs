@@ -27,12 +27,13 @@ impl Simulation {
             // their grades, with or without the ball.
             let wasting = plan.time_wasting > 1.0 && dead;
             // On winning the ball: a counter sends the side's runners at speed while its
-            // regain window is open (hook `pace.lift`).
+            // regain window is open (hook `pace.lift`); each runner reads his own plan's lift
+            // below, so here `lift` holds whether the window is open.
             let countering = self
                 .since_regain_s(team)
                 .is_some_and(|s| s < crate::decision::COUNTER_WINDOW_S);
             TeamPace {
-                lift: plan.pace_lift && countering,
+                lift: countering,
                 trailing_late: late && mine < theirs,
                 wasting_late: late && mine > theirs && wasting,
             }
@@ -59,7 +60,9 @@ impl Simulation {
             }
             let t = &self.config.tuning.pace;
             let job = p.pace.job;
-            let grade = pace::adjust(pace::base_grade(job), job, ctx[p.team], Floor::Keep);
+            let mut mine = ctx[p.team];
+            mine.lift = mine.lift && self.teams[p.team].plan_for(p.slot).pace_lift;
+            let grade = pace::adjust(pace::base_grade(job), job, mine, Floor::Keep);
             let starts =
                 grade == Grade::Urgent && (p.pace.since == tick || p.pace.grade != Grade::Urgent);
             let sprint = if triggered[p.team] == Some(i) {

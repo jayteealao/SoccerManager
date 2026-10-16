@@ -459,10 +459,16 @@ pub struct TeamPlan {
 }
 
 impl TeamPlan {
-    /// Sets the plan input `input` that a primitive's own step or choice holds; an input the
-    /// plan does not hold is ignored (a checked tactics file names none).
+    /// Sets the plan input `input` that a primitive's own step or choice holds, or a per-player
+    /// input of a level block (width, the wide-pass weight, the press distance and the presser
+    /// willingness); an input the plan does not hold is ignored (a checked tactics file names
+    /// none).
     fn set_input(&mut self, input: &str, v: f64) {
         let field = match input {
+            "width" => &mut self.width,
+            "wide_target" => &mut self.wide_target,
+            "press_distance" => &mut self.press_distance,
+            "press_willingness" => &mut self.press_willingness,
             "build_up" => &mut self.build_up,
             "channel_left" => &mut self.channel_left,
             "channel_centre" => &mut self.channel_centre,
@@ -510,6 +516,66 @@ impl TeamPlan {
             _ => return,
         };
         *field = v;
+    }
+
+    /// The value of per-player input `input` ([`hooks::PLAYER_INPUTS`]); `None` for any
+    /// other input.
+    pub fn player_input(&self, input: &str) -> Option<f64> {
+        Some(match input {
+            "dribble" => self.dribble,
+            "crossing" => self.crossing,
+            "early_cross" => self.early_cross,
+            "cross_loft" => self.cross_loft,
+            "long_shot" => self.long_shot,
+            "shot_reach_m" => self.shot_reach_m,
+            "run_start_m" => self.run_start_m,
+            "width" => self.width,
+            "wide_target" => self.wide_target,
+            "press_distance" => self.press_distance,
+            "press_willingness" => self.press_willingness,
+            "tackle_willingness" => self.tackle_willingness,
+            "tackle_risk" => self.tackle_risk,
+            "counter" => self.counter,
+            "pace_lift" => f64::from(u8::from(self.pace_lift)),
+            "counter_press" => self.counter_press,
+            _ => return None,
+        })
+    }
+
+    /// This plan with the per-player inputs `inputs` of primitive `primitive` (an index into
+    /// the tactics file's primitives) at level or choice `level`, as a player instruction sets
+    /// them: each input takes the value the level gives it (the press distance scaled by the
+    /// tuned distance, as [`TeamPlan::from`] scales it), and an input a choice does not name
+    /// takes its neutral value. Every other input stays this plan's.
+    pub fn with_override(
+        &self,
+        primitive: usize,
+        inputs: &[String],
+        level: usize,
+        schema: &TacticsSchema,
+        t: &Tuning,
+    ) -> Self {
+        let mut plan = *self;
+        let Some(p) = schema.primitives.get(primitive) else {
+            return plan;
+        };
+        let neutral = Self::neutral(t);
+        for input in inputs {
+            let value =
+                if p.owns_levels() || p.kind == crate::data::primitives::PrimitiveKind::Choice {
+                    p.own_value(input, level)
+                } else {
+                    crate::data::primitives::level_value(schema, input, level)
+                };
+            let value = match (input.as_str(), value) {
+                ("press_distance", Some(scale)) => Some(t.press_distance * scale),
+                (_, v) => v,
+            };
+            if let Some(v) = value.or_else(|| neutral.player_input(input)) {
+                plan.set_input(input, v);
+            }
+        }
+        plan
     }
 
     /// The plan of `tactics` under the tactics file and the tuning.

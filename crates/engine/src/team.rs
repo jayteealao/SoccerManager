@@ -16,6 +16,7 @@ use crate::error::EngineError;
 use crate::math::DVec2;
 use crate::pitch::Pitch;
 use crate::player::{Attributes, Derived, Player, Status};
+use crate::tactics::rules::GameState;
 use crate::tactics::{RoleDuty, Tactics, TeamPlan};
 use crate::tuning::Tuning;
 
@@ -131,8 +132,23 @@ pub struct Team {
     pub lineup: [usize; PLAYERS_PER_TEAM],
     /// Squad indices of the substitutes still available, in the order they were named.
     pub bench: Vec<usize>,
+    /// The tactics in force: the base tactics with the active rules applied.
     pub tactics: Tactics,
+    /// The plan the side reads as a whole: the plan of the tactics in force, or, while a rule
+    /// change is being taken up, the plan before it until half the side has taken it up.
     pub plan: TeamPlan,
+    /// The base tactics: what the manager set. With no rule active they are the tactics in
+    /// force.
+    pub base: Tactics,
+    /// The side's game-state rules and player instructions.
+    pub game_state: GameState,
+    /// The rules that hold: bit `k` for rule `k`.
+    pub rules_active: u8,
+    /// Per slot, the slot's own plan when a player instruction names it: the side's plan with
+    /// the instruction's inputs set. `None` reads the side's plan.
+    pub own: [Option<Box<TeamPlan>>; PLAYERS_PER_TEAM],
+    /// A rule change the players are still taking up.
+    pub take_up: Option<Box<TakeUp>>,
     /// `false` for a slot whose player left play (sent off, or injured and not replaced).
     pub active: [bool; PLAYERS_PER_TEAM],
     /// The ground of the match: the home team's. The formation, drawn for 105 by 68, scales
@@ -168,6 +184,17 @@ impl Team {
                 settings: [0; crate::data::primitives::SETTINGS_MAX],
             },
             plan: TeamPlan::neutral(&t),
+            base: Tactics {
+                formation: 0,
+                mentality: 0,
+                instructions: [0; 6],
+                roles: [RoleDuty::default(); PLAYERS_PER_TEAM],
+                settings: [0; crate::data::primitives::SETTINGS_MAX],
+            },
+            game_state: GameState::default(),
+            rules_active: 0,
+            own: std::array::from_fn(|_| None),
+            take_up: None,
             active: [true; PLAYERS_PER_TEAM],
             pitch: Pitch::DEFAULT,
         };
@@ -322,11 +349,42 @@ impl Team {
 
     /// Puts `tactics` in force: the formation's slots from the tactics file with every line
     /// closed up around the slots out of play, and the plan play reads.
+    ///
+    /// Every player takes the tactics up at once: a change still being taken up ends. With no
+    /// rule active the tactics are the base tactics too.
     pub fn set_tactics(&mut self, tactics: Tactics, schema: &TacticsSchema, t: &Tuning) {
         self.tactics = tactics;
+        if self.rules_active == 0 {
+            self.base = tactics;
+        }
         self.base_formation = schema.slots(usize::from(tactics.formation));
         self.plan = TeamPlan::from(&tactics, schema, t);
+        self.own = own_plans(&self.plan, &self.game_state, schema, t);
+        self.take_up = None;
         self.relayout();
+    }
+
+    /// Gives the side its rules and player instructions, with no rule active; the tactics in
+    /// force become the base tactics again.
+    pub fn set_game_state(&mut self, state: GameState, schema: &TacticsSchema, t: &Tuning) {
+        self.game_state = state;
+        self.rules_active = 0;
+        let base = self.base;
+        self.set_tactics(base, schema, t);
+    }
+
+    /// The plan the player in `slot` reads: his own plan when a player instruction names his
+    /// slot, the side's otherwise; while a rule change is being taken up, a player who has not
+    /// taken it up yet reads the plan before it.
+    #[inline]
+    pub fn plan_for(&self, slot: usize) -> &TeamPlan {
+        if let Some(t) = &self.take_up {
+            if !t.taken[slot] {
+                return t.prior_own[slot].as_deref().unwrap_or(&t.prior_plan);
+            }
+            return self.own[slot].as_deref().unwrap_or(&t.next);
+        }
+        self.own[slot].as_deref().unwrap_or(&self.plan)
     }
 
     /// The formation's slots, with each line closed up around every slot out of the outfield
@@ -554,11 +612,14 @@ impl Team {
         }
         let (fx, fy) = self.formation[slot];
         let (sx, sy) = self.pitch.scale();
-        let plan = &self.plan.slots[slot];
+        // The player's own plan: a player instruction may set his width, and a rule change
+        // reaches his place once he has taken it up.
+        let plan = self.plan_for(slot);
+        let slot_plan = &plan.slots[slot];
         let offset = if in_possession {
-            plan.in_possession
+            slot_plan.in_possession
         } else {
-            plan.out_of_possession
+            slot_plan.out_of_possession
         };
         // The role's offset comes after the existing sums, so an offset of 0 keeps every
         // anchor's bits.
@@ -567,17 +628,17 @@ impl Team {
         let block = if in_possession {
             0.0
         } else if self.in_back_line(slot) {
-            self.plan.block_depth
+            plan.block_depth
         } else {
-            self.plan.engage_depth_m
+            plan.engage_depth_m
         };
-        let depth = (fx + block + plan.depth + offset.x) * sx;
+        let depth = (fx + block + slot_plan.depth + offset.x) * sx;
         let side = self.slot_side(slot);
         // Width spreads the side with the ball; defensive width spreads it without the ball.
         let width = if in_possession {
-            self.plan.width
+            plan.width
         } else {
-            self.plan.defensive_width
+            plan.defensive_width
         };
         let base = DVec2::new(
             (depth - self.pitch.half_length()) * self.attack_x,
@@ -586,6 +647,55 @@ impl Team {
         let shift = DVec2::new(ball.x * t.compactness_x, ball.y * t.compactness_y);
         self.pitch.clamp(base + shift, 0.5)
     }
+}
+
+/// A rule change the side is taking up: each player reads the plan before it until his tick
+/// comes, and the side as a whole switches once half of it has taken the change up.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TakeUp {
+    /// The tactics in force before the change.
+    pub prior: Tactics,
+    /// Their plan, and each instructed slot's own plan under them.
+    pub prior_plan: TeamPlan,
+    pub prior_own: [Option<Box<TeamPlan>>; PLAYERS_PER_TEAM],
+    /// The plan of the tactics in force after the change.
+    pub next: TeamPlan,
+    /// Per slot, the tick the player takes the change up on.
+    pub at: [u32; PLAYERS_PER_TEAM],
+    /// Per slot, `true` once the player has taken the change up.
+    pub taken: [bool; PLAYERS_PER_TEAM],
+    /// `true` once half the side has taken the change up and the side reads it as a whole.
+    pub switched: bool,
+}
+
+/// Each slot's own plan under side plan `plan`: `None` for a slot no instruction names, and
+/// the side's plan with each of the slot's instructions applied
+/// ([`TeamPlan::with_override`]) otherwise.
+pub fn own_plans(
+    plan: &TeamPlan,
+    state: &GameState,
+    schema: &TacticsSchema,
+    t: &Tuning,
+) -> [Option<Box<TeamPlan>>; PLAYERS_PER_TEAM] {
+    std::array::from_fn(|slot| {
+        if !state.instructs(slot) {
+            return None;
+        }
+        let block = schema.game_state.as_ref()?;
+        let mut own = *plan;
+        for ins in state.instructions_for(slot) {
+            let primitive = usize::from(ins.primitive);
+            let Some(entry) = schema
+                .primitives
+                .get(primitive)
+                .and_then(|p| block.override_of(&p.name))
+            else {
+                continue;
+            };
+            own = own.with_override(primitive, &entry.inputs, usize::from(ins.level), schema, t);
+        }
+        Some(Box::new(own))
+    })
 }
 
 /// One tick of a player's followed ball point: `seen` eases toward `ball` with a time

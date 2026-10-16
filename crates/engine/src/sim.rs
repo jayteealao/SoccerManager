@@ -7,6 +7,8 @@
 mod decisions;
 mod fatigue;
 mod hooks;
+#[cfg(test)]
+mod instruction_tests;
 mod manager;
 pub mod mood;
 mod movement;

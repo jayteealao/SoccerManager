@@ -207,12 +207,13 @@ pub(crate) fn engaged(view: &MatchView<'_>, team: usize, ball: DVec2) -> bool {
     from_own_line < share * pitch.length()
 }
 
-/// On winning the ball (hook `regain.counter`): side `team`'s on-winning weight while its
-/// regain window is open, [`COUNTER_WINDOW_S`] after it won the ball in open play and still
-/// on it; 0 otherwise, and 0 at the default level.
-pub(crate) fn counter_weight(view: &MatchView<'_>, team: usize) -> f64 {
+/// On winning the ball (hook `regain.counter`): the on-winning weight of the player in slot
+/// `slot` of side `team` (his own plan's) while the side's regain window is open,
+/// [`COUNTER_WINDOW_S`] after it won the ball in open play and still on it; 0 otherwise, and
+/// 0 at the default level.
+pub(crate) fn counter_weight(view: &MatchView<'_>, team: usize, slot: usize) -> f64 {
     match view.since_regain_s(team) {
-        Some(s) if s < COUNTER_WINDOW_S => view.teams()[team].plan.counter,
+        Some(s) if s < COUNTER_WINDOW_S => view.teams()[team].plan_for(slot).counter,
         _ => 0.0,
     }
 }
@@ -222,11 +223,11 @@ pub(crate) fn counter_weight(view: &MatchView<'_>, team: usize) -> f64 {
 /// players start to press; how many press stays the pressing level's. While its counter-press
 /// window is open, `counter_press_s` seconds after it lost the ball in open play with the
 /// other side still on it, the factor is 1 plus its counter-press, never below 0; otherwise 1.
-/// The default level's counter-press is 0, so a side presses as its pressing level says.
-pub(crate) fn counter_press_factor(view: &MatchView<'_>, team: usize) -> f64 {
-    let plan = &view.teams()[team].plan;
+/// The default level's counter-press is 0, so a side presses as its pressing level says. The
+/// window is the side's; `counter_press` is the pressing player's own (his plan's).
+pub(crate) fn counter_press_factor(view: &MatchView<'_>, team: usize, counter_press: f64) -> f64 {
     match view.since_loss_s(team) {
-        Some(s) if s < plan.counter_press_s => (1.0 + plan.counter_press).max(0.0),
+        Some(s) if s < view.teams()[team].plan.counter_press_s => (1.0 + counter_press).max(0.0),
         _ => 1.0,
     }
 }
@@ -621,9 +622,20 @@ impl DecisionModule for DecisionV1 {
                 } else {
                     0
                 };
-                let reach = teams[def].plan.press_distance
-                    * counter_press_factor(view, def)
-                    * trigger_factor(view, def);
+                // Each defender's reach reads his own plan: his press distance and his
+                // counter-press (player instructions); the trigger factor is the side's.
+                let trigger = trigger_factor(view, def);
+                let reach_of = |slot: usize| {
+                    let plan = teams[def].plan_for(slot);
+                    plan.press_distance
+                        * counter_press_factor(view, def, plan.counter_press)
+                        * trigger
+                };
+                // The side's reach, for the trace only.
+                let side_plan = &teams[def].plan;
+                let reach = side_plan.press_distance
+                    * counter_press_factor(view, def, side_plan.counter_press)
+                    * trigger;
                 // While the defending side trails, each presser's determination widens his
                 // reach.
                 let goals = view.goals();
@@ -666,7 +678,7 @@ impl DecisionModule for DecisionV1 {
                             + view
                                 .traits(i)
                                 .weight(TraitKind::PressesRelentlessly, t.contract.traits());
-                        if d < reach * p.derived.knobs.press * effort * relentless
+                        if d < reach_of(p.slot) * p.derived.knobs.press * effort * relentless
                             && d < pressers[count - 1].0
                         {
                             // Insert in distance order among the first `count` places.
@@ -884,7 +896,8 @@ impl DecisionModule for DecisionV1 {
                 // default (no forward runs) every run stops at a pass, as before.
                 let mut runners = 0u32;
                 if let Some(team) = view.pass_in_flight().filter(|&team| {
-                    run_start(view, team) != 0.0 && ball.vel.x * teams[team].attack_x > 0.0
+                    (0..PLAYERS_PER_TEAM).any(|slot| run_start(view, team, slot) != 0.0)
+                        && ball.vel.x * teams[team].attack_x > 0.0
                 }) {
                     for (i, p) in players.iter().enumerate() {
                         if p.team == team
@@ -966,7 +979,8 @@ impl DecisionModule for DecisionV1 {
         let gates = carrier.derived.gates;
         let team = carrier.team;
         let side = &view.teams()[team];
-        let plan = side.plan;
+        // The carrier's own plan: the side's, with his player instructions.
+        let plan = side.plan_for(carrier.slot);
         let role = plan.slots[carrier.slot];
         let goal = side.target_goal();
         let attack = DVec2::new(side.attack_x, 0.0);
@@ -1003,7 +1017,7 @@ impl DecisionModule for DecisionV1 {
         // left were twice as good and goals rose by half.)
         // On winning the ball: inside the side's regain window a counter plays the ball
         // forward and holds it less; 0 outside it and at the default.
-        let counter = counter_weight(view, team);
+        let counter = counter_weight(view, team, carrier.slot);
         let half = view.pitch().half_length();
         let danger = |at: DVec2| {
             let s = ((at.x * side.attack_x + half) / (2.0 * half)).clamp(0.0, 1.0);
@@ -1632,7 +1646,7 @@ impl DecisionModule for DecisionV1 {
         let lofted = if d > 25.0 { 3.0 + d * 0.08 } else { 0.0 };
         // The cross type (hook `cross.trajectory`): a driven cross stays on the ground, a
         // floated one is lofted at every length, and the default keeps the length rule.
-        let cross_loft = view.teams()[carrier.team].plan.cross_loft;
+        let cross_loft = view.teams()[carrier.team].plan_for(carrier.slot).cross_loft;
         let loft = if kind != PassKind::Cross || cross_loft == 0.0 {
             lofted
         } else if cross_loft < 0.0 {
@@ -1988,7 +2002,8 @@ pub fn tackle_decision(
 ) -> Option<TackleChances> {
     let team = view.player(tackler).team;
     let side = &view.teams()[team];
-    let plan = &side.plan;
+    // The tackler's own plan: the side's, with his player instructions.
+    let plan = side.plan_for(view.player(tackler).slot);
     let pitch = view.pitch();
     let from_own = view.ball().xy().x * side.attack_x + pitch.half_length();
     let s = (from_own / pitch.length()).clamp(0.0, 1.0);
@@ -2298,9 +2313,9 @@ const SETTLED_M: f64 = 2.0;
 /// How far from the defensive line side `team`'s attack-line players may start a timed run:
 /// its forward runs (hook `run.start`); inside its regain window a positive on-winning weight
 /// lets them start a run in behind from up to `counter x COUNTER_RUN_M` metres.
-fn run_start(view: &MatchView<'_>, team: usize) -> f64 {
-    let start = view.teams()[team].plan.run_start_m;
-    let counter = counter_weight(view, team);
+fn run_start(view: &MatchView<'_>, team: usize, slot: usize) -> f64 {
+    let start = view.teams()[team].plan_for(slot).run_start_m;
+    let counter = counter_weight(view, team, slot);
     if counter > 0.0 {
         start.max(counter * COUNTER_RUN_M)
     } else {
@@ -2323,9 +2338,11 @@ fn run_start(view: &MatchView<'_>, team: usize) -> f64 {
 /// frequency rises with the level. Returns the roster bits of the runners.
 fn forward_runs(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER], team: usize, c: usize) -> u32 {
     let side = &view.teams()[team];
-    let start = run_start(view, team);
+    // Each runner's start reads his own plan (a player instruction may set it); the side
+    // runs nothing when every player's start is 0.
+    let starts: [f64; PLAYERS_PER_TEAM] = std::array::from_fn(|slot| run_start(view, team, slot));
     let mut running = 0u32;
-    if start == 0.0 {
+    if starts.iter().all(|&s| s == 0.0) {
         return running;
     }
     let attack_x = side.attack_x;
@@ -2337,12 +2354,16 @@ fn forward_runs(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER], team: usize
     let carrier = view.player(c);
     let carrier_depth = carrier.pos.x * attack_x;
     let pass_on = !pressed(view, c);
-    let behind = start > 0.0;
     for (i, p) in view.players().iter().enumerate() {
         if p.team != team || i == c || !p.active() || !attack_line(side.plan.slots[p.slot].position)
         {
             continue;
         }
+        let start = starts[p.slot];
+        if start == 0.0 {
+            continue;
+        }
+        let behind = start > 0.0;
         let line = line + line_lag(view, i, speed);
         let depth = p.pos.x * attack_x;
         let gap = line - depth;
