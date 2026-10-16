@@ -115,7 +115,12 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     }
 
     // Every flag name and state is checked before any match plays.
-    let loaded = crate::content::load(Some(dir.root()), None, None, None)?;
+    let mut loaded = crate::content::load(Some(dir.root()), None, None, None)?;
+    if let Some(path) = &opts.rules {
+        let bytes =
+            std::fs::read(path).with_context(|| format!("cannot read {}", path.display()))?;
+        loaded.content = engine::Content::load_with_rules(&dir, bytes)?;
+    }
     let arms: Vec<(&str, FlagStates)> = match &opts.pair {
         None => vec![("", states.clone())],
         Some(flag) => {
@@ -669,6 +674,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         stages: stages::snapshot(run_started.elapsed()),
         rules,
         styles: None,
+        substitutions: None,
     };
     if let Some(sample) = styles_sample {
         report.stages.insert(
@@ -679,6 +685,21 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
             },
         );
         report.styles = Some(sample);
+    }
+    // The substitutions of the first arm's matches against the real era of the rule pack's
+    // limit; report only.
+    if !quiet {
+        let table: Option<serde_json::Value> = std::fs::read(dir.path("signatures.json"))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok());
+        report.substitutions = crate::report::substitutions::report(
+            &first.rows,
+            loaded.content.rules.substitutions.limit,
+            table.as_ref(),
+        );
+        if let Some(s) = &report.substitutions {
+            eprint!("{}", crate::report::substitutions::render(s));
+        }
     }
     if let Some(base) = &base {
         let diff = baseline::diff(base, &report.content_hash, &report.bands);

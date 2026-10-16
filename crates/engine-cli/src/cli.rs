@@ -1160,6 +1160,16 @@ pub struct CalibrateOpts {
     /// engine keeps the planned seeds. A test seam of the gate proof's self runs.
     #[arg(long, hide = true, value_name = "SALT")]
     pub reseed: Option<u64>,
+    /// A rule pack file to play under instead of the content folder's.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "A rule pack file (the shape of content/rules/default.json) that\n\
+                     every match plays under instead of the content folder's rule\n\
+                     file; the content hash follows it. The substitution report reads\n\
+                     the real era of its substitution limit."
+    )]
+    pub rules: Option<PathBuf>,
 }
 
 impl CalibrateOpts {

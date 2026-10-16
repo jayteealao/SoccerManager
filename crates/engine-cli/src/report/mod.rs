@@ -14,6 +14,7 @@ pub mod nash;
 pub mod proof;
 pub mod real;
 pub mod styles;
+pub mod substitutions;
 pub mod verdict;
 
 use std::collections::BTreeMap;
@@ -1179,6 +1180,13 @@ pub struct CalibrationReport {
     /// the changed engine; report only. Absent in other runs and without a styles file.
     #[serde(rename = "calib.styles", skip_serializing_if = "Option::is_none")]
     pub styles: Option<styles::StylesReport>,
+    /// The substitutions of the first arm's matches against the real era of the rule pack's
+    /// limit; absent in the old engine's own quiet run and when no row holds a match.
+    #[serde(
+        rename = "calib.substitutions",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub substitutions: Option<substitutions::SubstitutionReport>,
 }
 
 /// One figure's row: its value over a suite beside the value an earlier build gave.

@@ -27,6 +27,11 @@
       "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows; 4 for a calibrate run that reports each band's real value (calib.real, calib.realism, and the real columns of each verdict); 5 for a calibrate run that reports the bands that only report apart (calib.reported), the developer's acceptances (calib.accepted), the match counts (calib.counts), and how each verdict row was judged; 6 for a calibrate run with the whole-distribution bands (upper and noise_floor on a verdict row); 7 for a calibrate run with the formation field rating (calib.nash); 8 for a calibrate run with the registry's figures (calib.figures); 9 for a calibrate run whose change run reports a styles sample (calib.styles). Every key of an older version stays.",
       "enum": ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
     },
+    "calib.substitutions": {
+      "description": "The substitutions of the run's matches (per team a match, the share of team matches by count, the minute quartiles, the reasons, the out-of-position share) beside the real era of the rule pack's substitution limit from the signature table; report only.",
+      "type": "object",
+      "required": ["limit", "matches", "substitutions", "per_team", "count_shares", "minute_quartiles", "reasons"]
+    },
     "calib.styles": {
       "description": "A change run's sample of the styles suite: one match per ordered pairing of the named styles on the changed engine, report only.",
       "type": "object",

@@ -185,7 +185,7 @@ pub fn play_match(
     let events = sim.take_events();
     let summary = sim.summary();
     let tactics = TacticsStats::new(&sim);
-    let row = Row::played(
+    let mut row = Row::played(
         (m.key, m.seed),
         &summary,
         &tactics,
@@ -193,6 +193,7 @@ pub fn play_match(
         sim.tick(),
         u64::try_from(elapsed.as_micros()).unwrap_or(u64::MAX),
     );
+    row.subs = crate::report::substitutions::of_match(&events, &sim);
     #[cfg(feature = "measures")]
     let row = match sim.measures() {
         Some(measures) => row.with_measures(measures, &physical, &shape.finish()),

@@ -668,6 +668,15 @@ impl Content {
         content.with_slots(&read_bytes(&dir.path(SLOTS_FILE), SLOTS_FILE)?)
     }
 
+    /// Loads the content of `dir` as [`Content::load`] does, with the rule file's bytes
+    /// `rules` in place of the folder's: the rule pack and the digest follow them.
+    pub fn load_with_rules(dir: &ContentDir, rules: Vec<u8>) -> Result<Self, EngineError> {
+        let mut files = ContentFiles::read(dir)?;
+        files.rules = rules;
+        let content = Self::from_files(&files)?;
+        content.with_slots(&read_bytes(&dir.path(SLOTS_FILE), SLOTS_FILE)?)
+    }
+
     /// This content with the modules the slot file `bytes` selects. A bad entry is refused
     /// with the slot, the value, and the valid names.
     ///
