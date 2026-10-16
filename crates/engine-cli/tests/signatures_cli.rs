@@ -370,3 +370,36 @@ fn the_out_of_possession_rows_follow_the_shared_definitions() {
     assert_eq!(row(&table, "yellows_per_match")["medians"][2], 1.0);
     std::fs::remove_dir_all(&data).unwrap();
 }
+
+/// The substitution rows: English matches 1 to 10 each with three substitutions by the first
+/// team at minutes 60, 70 and 80 and none by the other, and a German line that is never read
+/// (its minute is not a number). The era of three substitutions pools them: 1.5 a team.
+#[test]
+fn the_substitution_rows_read_only_the_fit_leagues() {
+    let data = temp("engine-cli-signatures", "subs");
+    let real = fixture(&data.join("real"), false);
+    let mut subs = String::from("match,team,minute,pin,pout\n");
+    for i in 1..=10 {
+        for minute in [60, 70, 80] {
+            subs.push_str(&format!("m{i},{i},{minute},1,2\n"));
+        }
+    }
+    subs.push_str("g1,99,not-a-minute,1,2\n");
+    std::fs::write(real.join("wy2_subs.csv"), subs).unwrap();
+    let table: serde_json::Value =
+        serde_json::from_str(&run(&data, &real, "table.json", &[]).unwrap()).unwrap();
+    let era = &table["substitutions"]["eras"][0];
+    assert_eq!(era["limit"], 3);
+    assert_eq!(era["matches"], 10);
+    assert_eq!(era["substitutions"], 30);
+    assert_eq!(era["per_team"], 1.5);
+    assert_eq!(
+        era["minute_quartiles"],
+        serde_json::json!([60.0, 70.0, 80.0])
+    );
+    assert_eq!(
+        table["substitutions"]["competitions"][0]["counts"],
+        serde_json::json!([10, 0, 0, 10])
+    );
+    std::fs::remove_dir_all(&data).unwrap();
+}

@@ -101,9 +101,10 @@ pub struct SignaturesOpts {
         long = "real-data",
         value_name = "DIR",
         long_help = "The folder of measured real data holding wy2_matches.csv,\n\
-                     wy2_team_matches.csv and wy2_events.csv.gz (and\n\
-                     sb2_events.csv.gz for the StatsBomb check); default the\n\
-                     main checkout's .scratch/out, as calibrate --real-data."
+                     wy2_team_matches.csv, wy2_events.csv.gz and wy2_subs.csv\n\
+                     (and sb2_events.csv.gz for the StatsBomb rows, the\n\
+                     five-substitution era among them); default the main\n\
+                     checkout's .scratch/out, as calibrate --real-data."
     )]
     pub real_data: Option<PathBuf>,
     /// Where the table goes; default signatures.json in the content folder.

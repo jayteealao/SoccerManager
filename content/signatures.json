@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "held_out": [
     "wyscout_2017_18:Germany",
     "wyscout_2017_18:World_Cup",
@@ -2436,5 +2436,234 @@
       "min": 31.0,
       "max": 49.0
     }
-  ]
+  ],
+  "substitutions": {
+    "competitions": [
+      {
+        "source": "wyscout_2017_18",
+        "competition": "England",
+        "limit": 3,
+        "matches": 380,
+        "substitutions": 2083,
+        "per_team": 2.740789,
+        "counts": [
+          5,
+          25,
+          132,
+          598
+        ],
+        "minute_quartiles": [
+          64.0,
+          74.0,
+          82.0
+        ]
+      },
+      {
+        "source": "wyscout_2017_18",
+        "competition": "France",
+        "limit": 3,
+        "matches": 380,
+        "substitutions": 2155,
+        "per_team": 2.835526,
+        "counts": [
+          1,
+          12,
+          98,
+          649
+        ],
+        "minute_quartiles": [
+          62.0,
+          72.0,
+          81.0
+        ]
+      },
+      {
+        "source": "wyscout_2017_18",
+        "competition": "Italy",
+        "limit": 3,
+        "matches": 380,
+        "substitutions": 2221,
+        "per_team": 2.922368,
+        "counts": [
+          0,
+          2,
+          55,
+          703
+        ],
+        "minute_quartiles": [
+          61.0,
+          71.0,
+          79.0
+        ]
+      },
+      {
+        "source": "wyscout_2017_18",
+        "competition": "Spain",
+        "limit": 3,
+        "matches": 380,
+        "substitutions": 2195,
+        "per_team": 2.888158,
+        "counts": [
+          0,
+          5,
+          75,
+          680
+        ],
+        "minute_quartiles": [
+          62.0,
+          71.0,
+          80.0
+        ]
+      },
+      {
+        "source": "statsbomb_open",
+        "competition": "UEFA Euro 2020",
+        "limit": 5,
+        "matches": 51,
+        "substitutions": 416,
+        "per_team": 4.078431,
+        "counts": [
+          0,
+          3,
+          11,
+          9,
+          31,
+          48
+        ],
+        "minute_quartiles": [
+          63.495833,
+          73.325,
+          83.229167
+        ],
+        "injury_share": 0.060096,
+        "national_teams": true
+      },
+      {
+        "source": "statsbomb_open",
+        "competition": "FIFA World Cup 2022",
+        "limit": 5,
+        "matches": 64,
+        "substitutions": 562,
+        "per_team": 4.390625,
+        "counts": [
+          0,
+          2,
+          5,
+          11,
+          34,
+          75,
+          1
+        ],
+        "minute_quartiles": [
+          61.858333,
+          71.258333,
+          79.458333
+        ],
+        "injury_share": 0.069395,
+        "national_teams": true
+      },
+      {
+        "source": "statsbomb_open",
+        "competition": "UEFA Euro 2024",
+        "limit": 5,
+        "matches": 51,
+        "substitutions": 449,
+        "per_team": 4.401961,
+        "counts": [
+          0,
+          1,
+          5,
+          8,
+          26,
+          62
+        ],
+        "minute_quartiles": [
+          62.516667,
+          73.0,
+          81.05
+        ],
+        "injury_share": 0.060134,
+        "national_teams": true
+      }
+    ],
+    "eras": [
+      {
+        "limit": 3,
+        "source": "wyscout_2017_18",
+        "competitions": [
+          "England",
+          "France",
+          "Italy",
+          "Spain"
+        ],
+        "matches": 1520,
+        "substitutions": 8654,
+        "per_team": 2.846711,
+        "per_team_range": [
+          2.740789,
+          2.922368
+        ],
+        "minute_quartiles": [
+          62.0,
+          72.0,
+          80.0
+        ],
+        "minute_quartile_ranges": [
+          [
+            61.0,
+            64.0
+          ],
+          [
+            71.0,
+            74.0
+          ],
+          [
+            79.0,
+            82.0
+          ]
+        ]
+      },
+      {
+        "limit": 5,
+        "source": "statsbomb_open",
+        "competitions": [
+          "UEFA Euro 2020",
+          "FIFA World Cup 2022",
+          "UEFA Euro 2024"
+        ],
+        "matches": 166,
+        "substitutions": 1427,
+        "per_team": 4.298193,
+        "per_team_range": [
+          4.078431,
+          4.401961
+        ],
+        "minute_quartiles": [
+          62.583333,
+          72.283333,
+          80.891667
+        ],
+        "minute_quartile_ranges": [
+          [
+            61.858333,
+            63.495833
+          ],
+          [
+            71.258333,
+            73.325
+          ],
+          [
+            79.458333,
+            83.229167
+          ]
+        ],
+        "injury_share": 0.06377,
+        "injury_share_range": [
+          0.060096,
+          0.069395
+        ],
+        "national_teams": true
+      }
+    ]
+  }
 }

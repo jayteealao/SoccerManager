@@ -55,6 +55,8 @@ use serde::Serialize;
 
 use crate::cli::SignaturesOpts;
 
+pub mod substitutions;
+
 /// The source name of the Wyscout club data.
 pub const WYSCOUT: &str = "wyscout_2017_18";
 /// The source name of the StatsBomb open data.
@@ -67,8 +69,9 @@ const PITCH_M: f64 = 105.0;
 /// The table's format version. Version 2 adds the in-possession rows and the thin-sample rows
 /// of the SkillCorner runs; version 3 the transition rows and their checks. Version 4's
 /// goal-kick rows read the StatsBomb open data (played under the 2019 law), with the fit
-/// leagues' older lengths as checks.
-pub const SIGNATURES_VERSION: u32 = 4;
+/// leagues' older lengths as checks. Version 5 adds the substitution rows of the two eras of the
+/// substitution law ([substitutions]).
+pub const SIGNATURES_VERSION: u32 = 5;
 /// The StatsBomb competitions that are held-out sets: never read.
 pub const STATSBOMB_HELD_OUT: [&str; 2] = ["FIFA World Cup 2018", "UEFA Euro 2016"];
 /// The StatsBomb competition of club teams; the others are national-team tournaments.
@@ -196,6 +199,9 @@ pub struct Table {
     pub held_out: Vec<String>,
     pub rows: Vec<Row>,
     pub checks: Vec<Check>,
+    /// The substitutions of each era, when the real-data folder holds their files.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub substitutions: Option<substitutions::Substitutions>,
 }
 
 /// The cells of one CSV line; a quoted cell may hold a comma and a doubled quote.
@@ -2206,6 +2212,7 @@ pub fn build(dir: &Path, competitions: &[String]) -> anyhow::Result<Table> {
             .collect(),
         rows,
         checks,
+        substitutions: substitutions::build(dir, competitions)?,
     })
 }
 
