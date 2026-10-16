@@ -687,7 +687,13 @@ mod tests {
         let balanced = TeamPlan::from(&Tactics::defaults(schema), schema, t);
         assert!(plan.loss_weight < balanced.loss_weight);
         assert_eq!(plan.press_count, 3);
-        assert!(plan.press_distance > t.press_distance);
+        // The level's reach is its fitted scale on the tuning distance: the extra presser, not
+        // a longer reach, makes high pressing press more.
+        let high = &schema.instructions.pressing.levels[tactics.instructions[PRESSING] as usize];
+        assert_eq!(
+            plan.press_distance,
+            t.press_distance * high.press_distance_scale
+        );
         assert!(!plan.pace_lift, "pressing lifts no running pace");
     }
 
