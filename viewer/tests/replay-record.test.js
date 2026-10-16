@@ -152,3 +152,28 @@ test('a header seed that the record does not carry is refused', async () => {
     (error) => error.reason.includes('seed mismatch: the header says 43, the record says 42')
   );
 });
+
+/// A record whose sides carry game-state rules, and whose rules moved once, as every match an
+/// AI side plays in a style records: `settings.game_state` and a `rule` change are read; the
+/// game state may be missing or null, and a damaged one is refused by its path.
+test('a record with game-state rules and a rule change is read', async () => {
+  const { meta } = await fullRecord();
+  const rules = { rules: [{ when: [{ kind: 'time_left', minutes: 10 }], set: [] }] };
+  meta.settings.game_state = [null, rules];
+  meta.changes.push({ ...clone(meta.changes[0]), order: 2, source: 'rule', change: { rule: { active: 1 } } });
+  requireRecord(meta);
+  const unset = clone(meta);
+  unset.settings.game_state = null;
+  requireRecord(unset);
+  const cases = [
+    [['settings', 'game_state'], [rules], 'settings.game_state holds 1 items and must hold 2'],
+    [['settings', 'game_state', 0], 'rules', 'settings.game_state[0] is not an object'],
+    [['changes', 2, 'change', 'rule', 'active'], 256, 'changes[2].change.rule.active is not a whole number'],
+    [['changes', 2, 'source'], 'robot', 'changes[2].source is not one of manager, ai, rule'],
+  ];
+  for (const [steps, value, reason] of cases) {
+    const copy = clone(meta);
+    apply(copy, { path: steps, op: 'set', value });
+    assert.throws(() => requireRecord(copy), (error) => error.reason.includes(reason), reason);
+  }
+});

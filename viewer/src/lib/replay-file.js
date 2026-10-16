@@ -569,10 +569,14 @@ export async function readReplay(input, { chain = productionChain } = {}) {
 // Every field of the version-4 record, as the engine's record types name them (`ReplayRecord`
 // in `crates/stream/src/record.rs`, which refuses unknown fields). A leaf is a type name:
 // `str`, `bool`, `u8`, `u32`, `u64` (a whole number, no sign), or `seed` (a decimal string of
-// a 64-bit number). `opt(t)` may also be null (an `Option` in the engine), `one(...)` is one
-// of the listed strings, `list(shape, length?)` is a list, and an object is a record whose
-// keys are exactly the listed ones. `variants` is an object with exactly one of the keys.
+// a 64-bit number), or `object` (any JSON object, which the engine reads as it reads a team
+// file's). `opt(t)` may also be null (an `Option` in the engine), `absent(t)` may also be
+// missing or null (an `Option` the engine writes only when it holds something), `one(...)` is
+// one of the listed strings, `list(shape, length?)` is a list, and an object is a record whose
+// keys are exactly the listed ones, less any `absent` key. `variants` is an object with
+// exactly one of the keys.
 const opt = (of) => ({ opt: of });
+const absent = (of) => ({ absent: of });
 const one = (...values) => ({ one: values });
 const list = (of, length = null) => ({ list: of, length });
 const variants = (of) => ({ variants: of });
@@ -584,6 +588,7 @@ const CHANGE_SHAPE = variants({
     instructions: list(opt('u8'), 6),
     roles: list({ squad: 'u64', role: 'u8', duty: 'u8' }),
   },
+  rule: { active: 'u8' },
 });
 const RECORD_SHAPE = {
   engine: {
@@ -600,13 +605,14 @@ const RECORD_SHAPE = {
     minutes: 'u32',
     knockout: 'bool',
     managers: list(one('ai', 'human'), 2),
+    game_state: absent(list(opt('object'), 2)),
   },
   inputs: list({ role: 'str', name: 'str', bytes: 'u64', sha256: 'str' }),
   inputs_bytes: 'u64',
   changes: list({
     order: 'u32',
     team: 'u64',
-    source: one('manager', 'ai'),
+    source: one('manager', 'ai', 'rule'),
     queued_tick: 'u32',
     queue_number: 'u32',
     tick: 'u32',
@@ -626,6 +632,8 @@ function requireLeaf(value, type, path) {
     if (typeof value !== 'string') throw bad('a string');
   } else if (type === 'bool') {
     if (typeof value !== 'boolean') throw bad('true or false');
+  } else if (type === 'object') {
+    if (!isObject(value)) throw bad('an object');
   } else if (type === 'seed') {
     if (typeof value !== 'string' || !/^\d+$/.test(value) || BigInt(value) >= 1n << 64n) {
       throw bad('a decimal string of a 64-bit number');
@@ -638,8 +646,8 @@ function requireLeaf(value, type, path) {
 function requireShape(value, shape, path) {
   if (typeof shape === 'string') {
     requireLeaf(value, shape, path);
-  } else if (shape.opt) {
-    if (value !== null) requireShape(value, shape.opt, path);
+  } else if (shape.opt || shape.absent) {
+    if (value !== null) requireShape(value, shape.opt ?? shape.absent, path);
   } else if (shape.one) {
     if (!shape.one.includes(value)) {
       throw new ReplayRefused(`the record field ${path} is not one of ${shape.one.join(', ')}`);
@@ -682,9 +690,10 @@ function requireObject(value, shape, path) {
   for (const [key, inner] of Object.entries(shape)) {
     const at = path ? `${path}.${key}` : key;
     if (!Object.hasOwn(value, key)) {
+      if (inner.absent) continue;
       throw new ReplayRefused(`the record has no field ${at}`);
     }
-    if (value[key] === null && !inner.opt) {
+    if (value[key] === null && !inner.opt && !inner.absent) {
       throw new ReplayRefused(`the record field ${at} is null`);
     }
     requireShape(value[key], inner, at);

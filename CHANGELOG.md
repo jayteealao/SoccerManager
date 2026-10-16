@@ -49,6 +49,7 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 
 ### Fixed
 
+- The page opens a replay file whose sides carry game-state rules, or whose rules moved during the match, instead of refusing it. Every match a computer-managed side plays in a style is such a file.
 - The page no longer stops updating at the full-time report when two players of one side were booked at the same moment.
 - A player hurt or sent off once full time is reached no longer ends the finished match a second time as abandoned.
 - A keeper no longer catches his own pass the moment he plays it. A kick stays on its way from its kicker while it runs along the line he sent it, wherever he stands against the ball, so a keeper who holds the ball out in front of him no longer takes it back and plays it again in a loop. Matches play differently for the same seed: keepers caught about 75 of their own passes a match while the ball still ran away from them, now none (a pass that has slowed with nobody else on it is still the keeper's to collect, about 8 a match), and passers win back their own pass first on about 1 percent of passes, down from about 19 percent.
