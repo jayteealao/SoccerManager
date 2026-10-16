@@ -43,9 +43,11 @@ fn stderr(o: &Output) -> String {
     String::from_utf8_lossy(&o.stderr).into_owned()
 }
 
-/// A short paired run of one tempo step: strong enough planted values move passes per
-/// possession far beyond the noise of a few short matches.
-const SHORT: [&str; 6] = ["--pairs", "8", "--minutes", "30", "--jobs", "4"];
+/// A short paired run of one tempo step: planted values move passes per possession beyond the
+/// noise of 48 short matches. A patience of 0.5 raises it; above about 1 a side that waits that
+/// long passes into receivers who are pressed on arrival and loses the ball sooner, so a
+/// patience of 2 lowers it.
+const SHORT: [&str; 6] = ["--pairs", "48", "--minutes", "30", "--jobs", "4"];
 
 #[test]
 fn a_graded_primitive_moving_against_its_direction_fails_and_names_the_step() {
@@ -66,7 +68,7 @@ fn a_graded_primitive_moving_against_its_direction_fails_and_names_the_step() {
 #[test]
 fn a_graded_primitive_moving_with_its_direction_passes() {
     let data = temp("engine-cli-primitives", "with");
-    let content = tempo_slow(&data, 2.0);
+    let content = tempo_slow(&data, 0.5);
     let out = data.join("check.json");
     let mut args = vec!["check", "--primitive", "tempo", "--step", "normal"];
     args.extend(SHORT);
@@ -90,7 +92,7 @@ fn a_choice_that_lowers_its_own_statistic_fails_and_is_named() {
             "kind": "choice",
             "choices": [
                 { "name": "neutral", "values": { "patience": 0.0 }, "stat": "passes_per_possession" },
-                { "name": "keep", "values": { "patience": 2.0 }, "stat": "passes_per_possession" },
+                { "name": "keep", "values": { "patience": 0.375 }, "stat": "passes_per_possession" },
                 { "name": "rush", "values": { "patience": -2.0 }, "stat": "passes_per_possession" }
             ],
             "default": "neutral",
@@ -99,8 +101,18 @@ fn a_choice_that_lowers_its_own_statistic_fails_and_is_named() {
             "data": { "none": "a planted test primitive" }
         }));
     });
-    let mut args = vec!["check", "--primitive", "planted_choice"];
-    args.extend(SHORT);
+    // The weak keep choice needs twice the short run's pairs to clear its noise.
+    let args = [
+        "check",
+        "--primitive",
+        "planted_choice",
+        "--pairs",
+        "96",
+        "--minutes",
+        "30",
+        "--jobs",
+        "4",
+    ];
     let run = primitives(&data, &content, &args);
     assert_eq!(run.status.code(), Some(2), "{}", stderr(&run));
     let text = stderr(&run);
