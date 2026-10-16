@@ -2,6 +2,8 @@
 //!
 //! - A1: no AI decision reads a fixed minute; the tactics file holds no fixed-minute field and
 //!   refuses each old one.
+//! - A2: every style's rules load in the person's rule form, and play the same under the AI
+//!   manager and a person, with substitutions off.
 //! - A3: the AI manager makes no tactical change of its own.
 //! - A4: a booked heavy tackler is replaced earlier on average (slow; paired seeds).
 //! - A5: a planted need above the bar is substituted at the stoppage, with the code of its
@@ -17,7 +19,7 @@ use engine::data::rules::StoppageKind;
 use engine::modules::ManagerModule;
 use engine::record::NullSink;
 use engine::scenario::Scene;
-use engine::{Change, EngineEventKind, EventDetail, MatchConfig, Simulation};
+use engine::{Change, EngineEventKind, EventDetail, Manager, MatchConfig, Simulation};
 
 /// The home slot the planted scenes load: a midfielder in every shipped formation.
 const SLOT: usize = 6;
@@ -63,6 +65,50 @@ fn ai_tick() -> &'static str {
         .find("fn ai_check")
         .map_or(TICK_SOURCE.len(), |e| start + e);
     &TICK_SOURCE[start..end]
+}
+
+#[test]
+fn a2_a_styles_rules_play_the_same_under_the_ai_and_a_person() {
+    let content = content();
+    let [a, b] = default_teams(&content);
+    let styles = content.styles.as_ref().expect("the shipped styles");
+    let mut fired = 0;
+    for (k, style) in styles.styles.iter().enumerate() {
+        // Every style carries its chase and hold rules, which load in the person's rule form.
+        assert_eq!(style.game_state.rules.len(), 2, "{}", style.name);
+        let tactics = style.tactics(style.formations[0], &content.tactics);
+        let play = |manager: Manager| {
+            let mut config = MatchConfig::new(k as u64 + 1, 90, &content, [&a, &b]).unwrap();
+            // Substitutions off on both sides: the AI manager's own check makes no change.
+            config.modules.manager = &engine::ai::ManagerOff;
+            let config = config
+                .with_ai_tactics(0, tactics)
+                .with_manager(0, manager)
+                .with_game_state(0, style.game_state.clone());
+            let mut sim = Simulation::new(config).unwrap();
+            let mut records = Vec::new();
+            let mut sink = engine::VecSink::default();
+            sim.run(&mut sink).unwrap();
+            records.extend(sink.records);
+            let rules = sim
+                .applied_changes()
+                .iter()
+                .filter(|c| c.team == 0 && matches!(c.change, Change::Rule { .. }))
+                .count();
+            (
+                records,
+                sim.applied_changes().to_vec(),
+                sim.take_events(),
+                rules,
+            )
+        };
+        let (ai, person) = (play(Manager::Ai), play(Manager::Human));
+        assert!(ai.0 == person.0, "{}: the records differ", style.name);
+        assert_eq!(ai.1, person.1, "{}", style.name);
+        assert_eq!(ai.2, person.2, "{}", style.name);
+        fired += ai.3;
+    }
+    assert!(fired > 0, "no style's rule fired");
 }
 
 #[test]

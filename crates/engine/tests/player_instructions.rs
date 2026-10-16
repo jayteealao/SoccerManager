@@ -209,10 +209,16 @@ fn a_tactics_file_without_the_block_takes_no_rule() {
 }
 
 #[test]
-fn a_style_preset_may_carry_rules_and_instructions_and_the_shipped_ones_carry_none() {
+fn a_style_preset_may_carry_rules_and_instructions_and_the_shipped_ones_carry_two_rules() {
     let content = common::content();
     let styles = content.styles.as_ref().expect("the styles ship");
-    assert!(styles.styles.iter().all(|s| s.game_state.is_empty()));
+    // Each shipped style chases a late deficit and holds a late lead, with no instruction.
+    assert!(
+        styles
+            .styles
+            .iter()
+            .all(|s| s.game_state.rules.len() == 2 && s.game_state.instructions.is_empty())
+    );
     let path = common::content_dir().path("styles.json");
     let mut v: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
     v["styles"][0]["rules"] = serde_json::to_value(fixture("leading-late.json").rules).unwrap();

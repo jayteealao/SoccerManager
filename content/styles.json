@@ -13,7 +13,11 @@
         { "stat": "passes", "direction": "up" },
         { "stat": "pass_accuracy_pct", "direction": "up" }
       ],
-      "fit": { "passing": 0.25, "first_touch": 0.25, "composure": 0.25, "vision": 0.25 }
+      "fit": { "passing": 0.25, "first_touch": 0.25, "composure": 0.25, "vision": 0.25 },
+      "rules": [
+        { "when": [{ "kind": "score", "state": "trailing", "by": 1 }, { "kind": "time_left", "minutes": 20 }, { "kind": "run_of_play", "below": 0.01 }], "set": [{ "primitive": "mentality", "level": "attacking" }, { "primitive": "pressing", "level": "high" }] },
+        { "when": [{ "kind": "score", "state": "leading", "by": 1 }, { "kind": "time_left", "minutes": 10 }], "set": [{ "primitive": "mentality", "level": "balanced" }, { "primitive": "time_wasting", "level": "on" }] }
+      ]
     },
     {
       "name": "low_block",
@@ -25,7 +29,11 @@
         { "stat": "possession_pct", "direction": "down" },
         { "stat": "xg", "direction": "down", "against": true }
       ],
-      "fit": { "positioning": 0.40, "concentration": 0.25, "anticipation": 0.20, "teamwork": 0.15 }
+      "fit": { "positioning": 0.40, "concentration": 0.25, "anticipation": 0.20, "teamwork": 0.15 },
+      "rules": [
+        { "when": [{ "kind": "score", "state": "trailing", "by": 1 }, { "kind": "time_left", "minutes": 20 }, { "kind": "run_of_play", "below": 0.01 }], "set": [{ "primitive": "mentality", "level": "balanced" }, { "primitive": "pressing", "level": "high" }] },
+        { "when": [{ "kind": "score", "state": "leading", "by": 1 }, { "kind": "time_left", "minutes": 10 }], "set": [{ "primitive": "mentality", "level": "defensive" }, { "primitive": "time_wasting", "level": "on" }] }
+      ]
     },
     {
       "name": "high_press",
@@ -37,7 +45,11 @@
         { "stat": "fouls", "direction": "up" },
         { "stat": "shots", "direction": "up" }
       ],
-      "fit": { "decisions": 0.25, "anticipation": 0.25, "pace": 0.20, "positioning": 0.15, "stamina": 0.15 }
+      "fit": { "decisions": 0.25, "anticipation": 0.25, "pace": 0.20, "positioning": 0.15, "stamina": 0.15 },
+      "rules": [
+        { "when": [{ "kind": "score", "state": "trailing", "by": 1 }, { "kind": "time_left", "minutes": 20 }, { "kind": "run_of_play", "below": 0.01 }], "set": [{ "primitive": "mentality", "level": "attacking" }, { "primitive": "pressing", "level": "very_high" }] },
+        { "when": [{ "kind": "score", "state": "leading", "by": 1 }, { "kind": "time_left", "minutes": 10 }], "set": [{ "primitive": "mentality", "level": "balanced" }, { "primitive": "time_wasting", "level": "on" }] }
+      ]
     },
     {
       "name": "counter_attack",
@@ -49,7 +61,11 @@
         { "stat": "possession_pct", "direction": "down" },
         { "stat": "shots_on_target_share", "direction": "up" }
       ],
-      "fit": { "pace": 0.45, "off_ball_movement": 0.45, "passing": 0.10 }
+      "fit": { "pace": 0.45, "off_ball_movement": 0.45, "passing": 0.10 },
+      "rules": [
+        { "when": [{ "kind": "score", "state": "trailing", "by": 1 }, { "kind": "time_left", "minutes": 20 }, { "kind": "run_of_play", "below": 0.01 }], "set": [{ "primitive": "mentality", "level": "balanced" }, { "primitive": "pressing", "level": "high" }] },
+        { "when": [{ "kind": "score", "state": "leading", "by": 1 }, { "kind": "time_left", "minutes": 10 }], "set": [{ "primitive": "mentality", "level": "defensive" }, { "primitive": "time_wasting", "level": "on" }] }
+      ]
     },
     {
       "name": "direct",
@@ -61,7 +77,11 @@
         { "stat": "passes", "direction": "down" },
         { "stat": "pass_accuracy_pct", "direction": "down" }
       ],
-      "fit": { "passing": 0.60, "pace": 0.20, "off_ball_movement": 0.20 }
+      "fit": { "passing": 0.60, "pace": 0.20, "off_ball_movement": 0.20 },
+      "rules": [
+        { "when": [{ "kind": "score", "state": "trailing", "by": 1 }, { "kind": "time_left", "minutes": 20 }, { "kind": "run_of_play", "below": 0.01 }], "set": [{ "primitive": "mentality", "level": "positive" }, { "primitive": "pressing", "level": "high" }] },
+        { "when": [{ "kind": "score", "state": "leading", "by": 1 }, { "kind": "time_left", "minutes": 10 }], "set": [{ "primitive": "mentality", "level": "cautious" }, { "primitive": "time_wasting", "level": "on" }] }
+      ]
     },
     {
       "name": "wing_play",
@@ -74,7 +94,11 @@
         { "stat": "shots", "direction": "up" }
       ],
       "fit": { "crossing": 0.60, "pace": 0.40 },
-      "fit_positions": ["LB", "RB", "LW", "RW"]
+      "fit_positions": ["LB", "RB", "LW", "RW"],
+      "rules": [
+        { "when": [{ "kind": "score", "state": "trailing", "by": 1 }, { "kind": "time_left", "minutes": 20 }, { "kind": "run_of_play", "below": 0.01 }], "set": [{ "primitive": "mentality", "level": "attacking" }, { "primitive": "pressing", "level": "high" }] },
+        { "when": [{ "kind": "score", "state": "leading", "by": 1 }, { "kind": "time_left", "minutes": 10 }], "set": [{ "primitive": "mentality", "level": "balanced" }, { "primitive": "time_wasting", "level": "on" }] }
+      ]
     },
     {
       "name": "gegenpress",
@@ -86,7 +110,11 @@
         { "stat": "fouls", "direction": "up" },
         { "stat": "possession_pct", "direction": "up" }
       ],
-      "fit": { "work_rate": 0.35, "stamina": 0.30, "pace": 0.15, "positioning": 0.10, "anticipation": 0.10 }
+      "fit": { "work_rate": 0.35, "stamina": 0.30, "pace": 0.15, "positioning": 0.10, "anticipation": 0.10 },
+      "rules": [
+        { "when": [{ "kind": "score", "state": "trailing", "by": 1 }, { "kind": "time_left", "minutes": 20 }, { "kind": "run_of_play", "below": 0.01 }], "set": [{ "primitive": "mentality", "level": "attacking" }, { "primitive": "pressing", "level": "very_high" }] },
+        { "when": [{ "kind": "score", "state": "leading", "by": 1 }, { "kind": "time_left", "minutes": 10 }], "set": [{ "primitive": "mentality", "level": "positive" }, { "primitive": "time_wasting", "level": "on" }] }
+      ]
     },
     {
       "name": "park_the_bus",
@@ -102,7 +130,11 @@
         { "stat": "goals", "direction": "down", "against": true },
         { "stat": "shots", "direction": "down" }
       ],
-      "fit": { "teamwork": 0.40, "concentration": 0.40, "positioning": 0.20 }
+      "fit": { "teamwork": 0.40, "concentration": 0.40, "positioning": 0.20 },
+      "rules": [
+        { "when": [{ "kind": "score", "state": "trailing", "by": 1 }, { "kind": "time_left", "minutes": 20 }, { "kind": "run_of_play", "below": 0.01 }], "set": [{ "primitive": "mentality", "level": "cautious" }, { "primitive": "pressing", "level": "high" }] },
+        { "when": [{ "kind": "score", "state": "leading", "by": 1 }, { "kind": "time_left", "minutes": 10 }], "set": [{ "primitive": "mentality", "level": "defensive" }, { "primitive": "time_wasting", "level": "on" }] }
+      ]
     }
   ]
 }
