@@ -6,7 +6,8 @@
 // 1. The walk-on: before the first tick the players walk from the touchline to their places,
 //    and the clock waits; no player moves faster than a top speed at any tick of play.
 // 2. The home team builds from the back after its keeper's restart: the figures of its back
-//    line are measured and recorded (see the step for what the shipped play shows).
+//    line are measured and recorded (see the step for what the shipped play shows), and while
+//    it keeps the ball at least the smallest rest-defence minimum stays back.
 // 3. The ball goes wide: both blocks shift toward it, and the players far from it walk.
 // 4. The home team loses the ball: the nearest home player sprints to press, and at least the
 //    smallest rest-defence minimum of home players stayed goal-side of the ball.
@@ -153,7 +154,26 @@ function findMoments({ homeId, topSpeed, restMin }) {
       }
     }
     const behind = outfield(0).filter((k) => s * at(t, k)[0] > s * ball(t)[0]).length;
-    out.step2 = { event: e.tick, kick: go, tick: t, back_line: back, centre_gap_m: gap, centre_gap_kickoff_m: gapKickOff, full_backs_ahead_m: fullBacksAhead, goal_side: behind, received };
+    // The rest-defence guard: while the home side keeps the ball after the kick, from its 2 s
+    // grace on, the players other than the one on the ball who stand goal-side of the ball, or
+    // of the halfway line while the ball is in the home half. One second after a short kick the
+    // ball is still at the edge of the home area, where nobody can stand behind it.
+    const nextStop = events.find((x) => x.tick > go)?.tick ?? last;
+    let onBall = null;
+    let rest = null;
+    let samples = 0;
+    for (let u = go + 1; u < Math.min(nextStop, go + 1500); u += 1) {
+      const h = holder(u);
+      if (h !== null && h !== 0) onBall = h;
+      if (onBall !== null && onBall >= 11) break;
+      if (u < go + 100 || (u - go) % 10 !== 0) continue;
+      const line = Math.max(-s * ball(u)[0], 0);
+      const count = outfield(0).filter((k) => k !== onBall && -s * at(u, k)[0] < line).length;
+      samples += 1;
+      if (rest === null || count < rest.lowest) rest = { lowest: count, tick: u, line_m: line };
+    }
+    if (rest) rest.samples = samples;
+    out.step2 = { event: e.tick, kick: go, tick: t, back_line: back, centre_gap_m: gap, centre_gap_kickoff_m: gapKickOff, full_backs_ahead_m: fullBacksAhead, goal_side: behind, rest_defence: rest, received };
     break;
   }
 
@@ -314,12 +334,15 @@ test('the team-shape charter, steps 1 to 6, on a watched match', async ({ page }
     // 2. The build-up after the home keeper's restart, measured. With the off-ball stands off
     //    (the tuning flag team_stands), the back line keeps its formation places: the
     //    centre-backs' gap and the full-backs' height are recorded here, not asserted, until the
-    //    stands come back; the rest-defence minimum is asserted.
+    //    stands come back. The rest-defence minimum is asserted as the guard reads it: while
+    //    the home side keeps the ball, after the guard's 2 s grace, goal-side of the ball or of
+    //    the halfway line while the ball is in the home half.
     expect(moments.step2, 'a home goal kick that the keeper plays').toBeTruthy();
     note(2, moments.step2);
     const shot2 = await seek(page, moments.step2.tick);
     expect(shot2.tick).toBe(moments.step2.tick);
-    expect(moments.step2.goal_side).toBeGreaterThanOrEqual(REST_DEFENCE_MIN);
+    expect(moments.step2.rest_defence, 'the home side keeps the ball past the 2 s grace').toBeTruthy();
+    expect(moments.step2.rest_defence.lowest).toBeGreaterThanOrEqual(REST_DEFENCE_MIN);
     await page.screenshot({ path: evidence(info, 'step-2.png') });
 
     // 3. The ball wide: the blocks shift toward it; the far players walk.
