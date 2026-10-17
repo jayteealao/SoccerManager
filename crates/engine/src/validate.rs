@@ -13,7 +13,10 @@
 //! change ends at half-time, a line closes up after a sending-off or an injury and reopens when
 //! a substitute replaces the injured player, and a tactics change moves every anchor. From the
 //! first kick of a penalty shoot-out on, the players wait in the centre circle and the anchor
-//! rule no longer applies.
+//! rule no longer applies. The ball-rest rule flags a ball in play that lies still for
+//! [`MAX_BALL_REST_S`] (a stall: nobody reaches it, and play never stops); a dead spell, from an
+//! event naming a restart spot until the ball first moves after it is placed, and a shoot-out
+//! are exempt.
 //!
 //! [`Validator::check_events`] judges a match's event stream on its own rules, whatever
 //! produced it: the full engine or the fast model, which has no ticks to check.
@@ -36,6 +39,64 @@ pub const MIN_SEPARATION: f64 = 0.1;
 pub const MAX_BALL_SPEED: f64 = 40.0;
 /// How far the ball may lie from the restart spot a restart event names.
 pub const RESTART_SPOT_TOLERANCE: f64 = 0.5;
+/// The longest a ball in play may lie still, in seconds: the median length of the 696 real
+/// dead spells of the IDSSE Bundesliga and 2. Bundesliga matches (`idsse_dead.csv`, the spells
+/// the restart waits are drawn from; shortest 1.64 s, longest 206.48 s). Half of all real
+/// stoppages are over sooner, so a ball that lies still this long while play has not stopped
+/// is a stall, not football.
+pub const MAX_BALL_REST_S: f64 = 19.92;
+/// A ball that moves less than this between two records is at rest, in metres.
+pub const BALL_REST_STEP: f64 = 0.001;
+
+/// The `ball_rest` rule's state, shared by the two checkers: a dead spell runs from an event
+/// that names a restart spot until the ball first moves on a record after the restart record
+/// that placed it; outside one, the records the ball lies still on are counted, and the rule
+/// fires once, on the record that reaches [`MAX_BALL_REST_S`].
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct BallRest {
+    dead: bool,
+    placed: bool,
+    still: u32,
+}
+
+impl BallRest {
+    /// The records of rest at which the rule fires, at the tuning's tick length.
+    pub(crate) fn limit_ticks(t: &Tuning) -> u32 {
+        (MAX_BALL_REST_S / t.dt).round() as u32
+    }
+
+    /// An event naming a restart spot: play has stopped.
+    pub(crate) fn stopped(&mut self) {
+        self.dead = true;
+        self.placed = false;
+    }
+
+    /// The next record's ball after `prev` (none on the first record); `true` when this record
+    /// reaches the limit. A shoot-out's records count no rest.
+    pub(crate) fn record(
+        &mut self,
+        prev: Option<DVec2>,
+        ball: DVec2,
+        restart: bool,
+        shootout: bool,
+        limit: u32,
+    ) -> bool {
+        let still = prev.is_some_and(|p| (ball - p).length() < BALL_REST_STEP);
+        if self.dead {
+            if restart {
+                self.placed = true;
+            } else if self.placed && !still && prev.is_some() {
+                self.dead = false;
+            }
+        }
+        if still && !self.dead && !shootout {
+            self.still += 1;
+        } else {
+            self.still = 0;
+        }
+        self.still == limit
+    }
+}
 
 /// One rule violation.
 #[derive(Debug, Clone, PartialEq)]
@@ -174,6 +235,9 @@ impl Validator {
         let mut fetch_spot: Option<DVec2> = None;
         let mut next_spot = 0;
         let mut shape = 0;
+        let mut rest = BallRest::default();
+        let rest_limit = BallRest::limit_ticks(&self.tuning);
+        let mut next_stop = 0;
         for r in records {
             while shape + 1 < self.timeline.len() && self.timeline[shape + 1].0 <= r.tick {
                 shape += 1;
@@ -181,6 +245,14 @@ impl Validator {
             let teams = &self.timeline[shape].1;
             let pitch = teams[0].pitch();
             let ball = DVec2::new(f64::from(r.ball[0]), f64::from(r.ball[1]));
+            while let Some(&(tick, _)) = self.spots.get(next_stop)
+                && tick <= r.tick
+            {
+                rest.stopped();
+                next_stop += 1;
+            }
+            let shootout = self.shootout_from.is_some_and(|from| r.tick >= from);
+            let rested = rest.record(prev_ball, ball, r.restart, shootout, rest_limit);
             // Fixed-size, so a whole match of records allocates nothing per tick.
             let pos: [DVec2; PLAYER_COUNT] = std::array::from_fn(|i| {
                 DVec2::new(f64::from(r.players[i][0]), f64::from(r.players[i][1]))
@@ -273,7 +345,6 @@ impl Validator {
                 fetch_spot = None;
             }
 
-            let shootout = self.shootout_from.is_some_and(|from| r.tick >= from);
             for (i, p) in pos.iter().enumerate() {
                 if parked[i] || shootout {
                     far_ticks[i] = 0;
@@ -315,6 +386,14 @@ impl Validator {
                 }
             }
             prev_chase = Some((reference, pos));
+            if rested {
+                out.push(Violation {
+                    tick: r.tick,
+                    rule: "ball_rest",
+                    player: None,
+                    value: MAX_BALL_REST_S,
+                });
+            }
         }
         for v in &out {
             tracing::warn!(signal = "validate.violation", tick = v.tick, rule = v.rule, player = ?v.player, value = v.value);
@@ -575,5 +654,44 @@ mod tests {
         let out = v.check(&[record(1), restart]);
         assert_eq!(out.len(), 1, "{out:?}");
         assert_eq!(out[0].rule, "restart_spot");
+    }
+
+    /// A ball in play that lies still for the rest limit is one `ball_rest` violation, on the
+    /// record that reaches it. The same rest while play is stopped (from a stoppage until the
+    /// ball first moves after its restart record) is no violation; once that ball has moved,
+    /// a new rest counts from there.
+    #[test]
+    fn a_ball_still_in_play_for_the_rest_limit_is_one_violation_and_a_dead_ball_none() {
+        let t = Tuning::default();
+        let limit = BallRest::limit_ticks(&t);
+        assert_eq!(limit, 996, "19.92 s at 50 ticks a second");
+        let records: Vec<TickRecord> = (1..=limit + 200).map(record).collect();
+        let v = Validator::new(t.clone(), [bare(0), bare(1)]);
+        let out = v.check(&records);
+        assert_eq!(out.len(), 1, "{out:?}");
+        assert_eq!(out[0].rule, "ball_rest");
+        assert_eq!(out[0].tick, limit + 1, "the first record rests nothing");
+        assert_eq!(out[0].value, MAX_BALL_REST_S);
+
+        // A throw-in at tick 2: the ball is placed there and waits to the end.
+        let config = crate::data::test_support::shipped_config(1, 90).unwrap();
+        let sim = crate::sim::Simulation::new(config).unwrap();
+        let mut throw = sim.event(crate::sim::EngineEventKind::ThrowIn, Some(0));
+        throw.tick = 2;
+        throw.spot = Some(DVec2::ZERO);
+        let v = Validator::for_match(t.clone(), &[(0, [bare(0), bare(1)])], &[throw]);
+        let mut waiting = records.clone();
+        waiting[1].restart = true;
+        assert!(v.check(&waiting).is_empty(), "{:?}", v.check(&waiting));
+
+        // The throw is taken at tick 100 (the ball moves 0.5 m); from there it lies still again.
+        let mut taken = waiting;
+        for r in &mut taken[99..] {
+            r.ball = [0.5, 0.0, 0.0];
+        }
+        let out = v.check(&taken);
+        assert_eq!(out.len(), 1, "{out:?}");
+        assert_eq!(out[0].rule, "ball_rest");
+        assert_eq!(out[0].tick, 100 + limit);
     }
 }

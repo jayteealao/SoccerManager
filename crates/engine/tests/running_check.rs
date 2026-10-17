@@ -17,14 +17,15 @@ use engine::{
     Tuning, Validator, Violation,
 };
 
-/// Every rule the two checkers judge: six tick rules, then the twelve event rules.
-const RULES: [&str; 18] = [
+/// Every rule the two checkers judge: seven tick rules, then the twelve event rules.
+const RULES: [&str; 19] = [
     "in_bounds",
     "separation",
     "ball_speed",
     "player_speed",
     "restart_spot",
     "anchor_tolerance",
+    "ball_rest",
     "event_order",
     "kick_off_first",
     "full_time_last",
@@ -285,6 +286,57 @@ fn tick_plants() -> Vec<Plant> {
             }
         },
     ));
+
+    // The ball held still in open play for the rest limit and ten records more: from a record
+    // after a restart was taken (the ball placed, then moving), with no stoppage and no restart
+    // in the window. The rule fires on the record that reaches the limit.
+    let limit = (engine::validate::MAX_BALL_REST_S / base.tuning.dt).round() as usize;
+    let stops: Vec<u32> = base
+        .events
+        .iter()
+        .filter(|e| e.spot.is_some())
+        .map(|e| e.tick)
+        .collect();
+    let r = &base.records;
+    // Record k is in play: the last stoppage at or before it was placed by a restart record
+    // and the ball has moved since on a record that is not one.
+    let mut taken = vec![false; r.len()];
+    let (mut dead, mut placed, mut next) = (false, false, 0);
+    for k in 0..r.len() {
+        while next < stops.len() && stops[next] <= r[k].tick {
+            (dead, placed) = (true, false);
+            next += 1;
+        }
+        if dead && r[k].restart {
+            placed = true;
+        } else if dead && placed && k > 0 && r[k].ball != r[k - 1].ball {
+            dead = false;
+        }
+        taken[k] = !dead;
+    }
+    let s = (1..r.len() - limit - 20)
+        .find(|&s| {
+            let window = &r[s..=s + limit + 10];
+            taken[s]
+                && r[s].ball != r[s - 1].ball
+                && window.iter().all(|x| !x.restart)
+                && !stops
+                    .iter()
+                    .any(|&t| t >= r[s].tick && t <= window.last().unwrap().tick)
+        })
+        .expect("an open-play stretch as long as the rest limit");
+    plants.push(plant(
+        "ball still in open play",
+        "ball_rest",
+        s + limit,
+        None,
+        &|r| {
+            let at = r[s].ball;
+            for x in &mut r[s..=s + limit + 10] {
+                x.ball = at;
+            }
+        },
+    ));
     plants
 }
 
@@ -531,6 +583,7 @@ fn the_fixed_set_plants_every_rule() {
         "player_speed",
         "restart_spot",
         "anchor_tolerance",
+        "ball_rest",
     ]);
     planted.sort_unstable();
     let mut rules = RULES.to_vec();

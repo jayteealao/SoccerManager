@@ -19,7 +19,10 @@
 
 use std::collections::VecDeque;
 
-use super::{MAX_BALL_SPEED, MIN_SEPARATION, RESTART_SPOT_TOLERANCE, StreamRules, Violation};
+use super::{
+    BallRest, MAX_BALL_REST_S, MAX_BALL_SPEED, MIN_SEPARATION, RESTART_SPOT_TOLERANCE, StreamRules,
+    Violation,
+};
 use crate::error::EngineError;
 use crate::math::DVec2;
 use crate::record::{PLAYER_COUNT, TickRecord, TickSink};
@@ -39,8 +42,9 @@ const BALL_SPEED: u8 = 2;
 const PLAYER_SPEED: u8 = 3;
 const RESTART_SPOT: u8 = 4;
 const ANCHOR_TOLERANCE: u8 = 5;
+const BALL_REST: u8 = 6;
 /// The tick rules' count: the first places of [`RunningCheck::RULES`].
-const TICK_RULES: usize = 6;
+const TICK_RULES: usize = 7;
 
 /// A squared distance a little above `MIN_SEPARATION²`: a pair at or beyond it is far
 /// enough apart that its exact distance need not be taken.
@@ -181,6 +185,9 @@ pub struct RunningCheck {
     restarts: Vec<(usize, u32, DVec2)>,
     /// The restart spots the events name, in stream order.
     spots: Vec<(u32, DVec2)>,
+    /// The ball-rest rule's dead spell and still count.
+    rest: BallRest,
+    rest_limit: u32,
     tick_found: Found<TICK_RULES>,
 
     // Event rules.
@@ -205,14 +212,15 @@ pub struct RunningCheck {
 }
 
 impl RunningCheck {
-    /// Every rule it judges: the six tick rules, then the twelve event rules.
-    pub const RULES: [&'static str; 18] = [
+    /// Every rule it judges: the seven tick rules, then the twelve event rules.
+    pub const RULES: [&'static str; 19] = [
         "in_bounds",
         "separation",
         "ball_speed",
         "player_speed",
         "restart_spot",
         "anchor_tolerance",
+        "ball_rest",
         "kick_off_first",
         "full_time_last",
         "period_end_team",
@@ -233,6 +241,7 @@ impl RunningCheck {
 
     /// A checker for a match judged by `tuning` and `rules`, whose teams start in `teams`.
     pub fn new(tuning: Tuning, teams: [Team; 2], rules: StreamRules) -> Self {
+        let rest_limit = BallRest::limit_ticks(&tuning);
         Self {
             max_step: max_step(&tuning),
             tuning,
@@ -249,6 +258,8 @@ impl RunningCheck {
             shootout_from: None,
             restarts: Vec::new(),
             spots: Vec::new(),
+            rest: BallRest::default(),
+            rest_limit,
             tick_found: Found::new(),
             events: 0,
             prev_event: None,
@@ -295,6 +306,7 @@ impl RunningCheck {
         if let Some(spot) = e.spot {
             self.spots.push((e.tick, spot));
             self.fetch_spot = Some(spot);
+            self.rest.stopped();
         }
         if e.kind == EngineEventKind::Substitution
             && let Some(p) = e.player
@@ -495,6 +507,13 @@ impl RunningCheck {
                 bad(BALL_SPEED, "ball_speed", None, speed);
             }
         }
+        let shootout = self.shootout_from.is_some_and(|from| r.tick >= from);
+        if self
+            .rest
+            .record(self.prev_ball, ball, r.restart, shootout, self.rest_limit)
+        {
+            bad(BALL_REST, "ball_rest", None, MAX_BALL_REST_S);
+        }
         self.prev_ball = Some(ball);
         // The first record of a half places the kick-off: no jump is judged on it.
         let half_start = self.half_times.last() == Some(&r.tick);
@@ -524,7 +543,6 @@ impl RunningCheck {
             self.fetch_spot = None;
         }
 
-        let shootout = self.shootout_from.is_some_and(|from| r.tick >= from);
         for (i, p) in pos.iter().enumerate() {
             if parked[i] || shootout {
                 self.far_ticks[i] = 0;

@@ -49,6 +49,7 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 
 ### Fixed
 
+- A loose ball no longer stops in open play with two players standing beside it. Two players going for the same loose ball no longer push each other off it, so one of them reaches it: over 200 matches of the default teams, 8 matches with such a stall (the ball still for 100 s or more in all) now have none. The match check gains the rule `ball_rest`: a ball still in open play for longer than 19.92 s (the median of 696 dead-ball spells measured on real Bundesliga matches) is a violation. Matches play differently for the same seed.
 - The page opens a replay file whose sides carry game-state rules, or whose rules moved during the match, instead of refusing it. Every match a computer-managed side plays in a style is such a file.
 - The page no longer stops updating at the full-time report when two players of one side were booked at the same moment.
 - A player hurt or sent off once full time is reached no longer ends the finished match a second time as abandoned.
