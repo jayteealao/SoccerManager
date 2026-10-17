@@ -12,8 +12,10 @@
 //! - at a stoppage that admits a substitution, an outfield player whose need to come off (his
 //!   energy, his card risk, his form and a knock), with the best bench option's quality, is
 //!   above a bar that rises with the substitutions used, is replaced
-//!   ([`crate::data::tactics::AiSubstitutions`]). Nothing in it reads the match clock, so the
-//!   same situation brings the same decision at any minute.
+//!   ([`crate::data::tactics::AiSubstitutions`]). A change that joins one made at the same
+//!   stoppage, while more substitutions are left than windows after it, meets a lower bar, so
+//!   the substitutions beyond one a window come as double and triple changes. Nothing in it
+//!   reads the match clock, so the same situation brings the same decision at any minute.
 //!
 //! It makes no tactical change: an AI side's in-match tactics are the game-state rules of the
 //! style preset it plays, which the side applies itself, as a person's rules are.
@@ -675,16 +677,61 @@ impl Check<'_, '_> {
     /// limit already made or waiting and, for a change that would open a window, by the share
     /// of the windows already used. A change at a stoppage whose window is already open (or
     /// that uses none) costs no window, so it clears a lower bar, and changes come together.
+    ///
+    /// The window rule: a change that joins one the team already makes at this stoppage
+    /// knows the substitutions left and the windows left after this one. When more
+    /// substitutions are left than those windows can take one at a time, the rest can only be
+    /// made together, so its bar is scaled by the windows left after this one over the
+    /// substitutions left (zero in the last window: any gain is taken). With as many windows
+    /// as substitutions (the 3-substitution pack) the bar is unchanged.
     fn threshold(&self) -> f64 {
         let w = &self.view.tactics().ai.substitutions;
         let (limit, windows) = self.view.substitution_limits();
         let ledger = self.view.ledgers()[self.team];
-        let used = f64::from(ledger.used) + self.queue.substitutions(self.team) as f64;
+        let made = usize::from(ledger.used) + self.queue.substitutions(self.team);
+        let used = made as f64;
         let mut scarcity = used / f64::from(limit.max(1));
         if !self.window_open() {
             scarcity += f64::from(ledger.windows) / f64::from(windows.max(1));
         }
-        w.threshold * (1.0 + w.rise * scarcity)
+        let bar = w.threshold * (1.0 + w.rise * scarcity);
+        if !self.grouped() {
+            return bar;
+        }
+        let left = usize::from(limit).saturating_sub(made);
+        // Each window after this one can take one change without grouping.
+        let windows_left = usize::from(windows).saturating_sub(self.windows_after_this());
+        if left > windows_left {
+            bar * windows_left as f64 / left as f64
+        } else {
+            bar
+        }
+    }
+
+    /// `true` when the team already makes a substitution at the stoppage this tick opened, so
+    /// one more joins it.
+    fn grouped(&self) -> bool {
+        let now = self.view.tick() + 1;
+        self.view.ledgers()[self.team].window_at == Some(now)
+            || self
+                .changes
+                .iter()
+                .any(|(c, _)| matches!(c, Change::Substitution { .. }))
+    }
+
+    /// The windows the team will have used once the stoppage this tick opened is over: the
+    /// ledger's count, plus this stoppage's window when it uses one that the ledger does not
+    /// yet hold (a change the check proposed opens it).
+    fn windows_after_this(&self) -> usize {
+        let rules = &self.view.rules().substitutions;
+        let now = self.view.tick() + 1;
+        let ledger = self.view.ledgers()[self.team];
+        let exempt = self
+            .view
+            .stoppage()
+            .is_some_and(|s| rules.windows_exempt.contains(&s.kind));
+        let counted = ledger.window_at == Some(now);
+        usize::from(ledger.windows) + usize::from(!exempt && !counted)
     }
 
     /// `true` when one more substitution at the stoppage this tick opened uses no new window:
@@ -804,7 +851,7 @@ impl Check<'_, '_> {
 }
 
 pub const AI_MANAGER_V1_CARD: ModuleCard = ModuleCard {
-    purpose: "Makes the AI manager's in-match choices: substitutions for injury and for the goal, and at each stoppage that admits one, a substitution whose need (energy, card risk, form, a knock) and bench quality clear a bar that rises with the substitutions used. It reads no clock and makes no tactical change; an AI side's in-match tactics are its style preset's game-state rules.",
+    purpose: "Makes the AI manager's in-match choices: substitutions for injury and for the goal, and at each stoppage that admits one, a substitution whose need (energy, card risk, form, a knock) and bench quality clear a bar that rises with the substitutions used and falls for a change grouped with another while more substitutions than windows are left. It reads no clock and makes no tactical change; an AI side's in-match tactics are its style preset's game-state rules.",
     inputs: "Each player's status, energy, yellow card, knock and tally; the cards shown; the team's lineup, bench, squad, and tactics; the change queue; the substitution ledgers and limits; the stoppage the tick opened; the tactics file, the rule pack, the match-rating weights and the attribute schema.",
     outputs: "The changes to queue in order, each with its reason code.",
     tuning: &[

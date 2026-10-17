@@ -10,6 +10,8 @@
 //!   largest term; at or below the bar, not.
 //! - A6: no need-driven change with the limit used, with no window left, or between stoppages.
 //! - A7: the same planted need brings the same decision at every minute from 1 to 89.
+//! - A9 (the window rule): with more substitutions left than windows, a second change joins
+//!   the window the first opened over a lower bar; with as many windows as substitutions, not.
 
 mod common;
 
@@ -296,6 +298,56 @@ fn a7_the_same_need_brings_the_same_decision_at_every_minute() {
             below.get_or_insert(under);
         }
     }
+}
+
+/// The window rule: with more substitutions left than the windows after this one can take one
+/// at a time, a second change joins the window the first one opened when its need clears the
+/// lower bar (the bar times the windows left over the substitutions left). With as many
+/// windows as substitutions the bar is unchanged, so the same second need waits.
+#[test]
+fn a9_with_more_substitutions_than_windows_left_changes_come_together() {
+    let (first, second) = (common::index(0, SLOT), common::index(0, SLOT + 1));
+    // The first need is 0.8, far above the bar of 0.5. The second, 0.4, is under the bar a
+    // second change meets alone (0.5 * (1 + 0.2 / limit)) and over the grouped bar of the
+    // five-substitution pack (that bar times 2 windows left after this one over 4 left).
+    let plant = move |s: Scene| s.energy(first, 0.2).energy(second, 0.6);
+    let threshold = |c: &mut MatchConfig| {
+        c.tactics.ai.substitutions.threshold = 0.5;
+        c.tactics.ai.substitutions.rise = 0.2;
+    };
+    let five = scene(60, threshold, plant);
+    assert_eq!(
+        five.view().substitution_limits(),
+        (5, 3),
+        "the shipped pack"
+    );
+    let changes = decide(&five);
+    assert_eq!(changes.len(), 2, "grouped in one window: {changes:?}");
+    let offs: Vec<usize> = changes
+        .iter()
+        .map(|(c, _)| match c {
+            Change::Substitution { off, .. } => *off,
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    let lineup = five.teams()[0].lineup;
+    assert_eq!(offs, vec![lineup[SLOT], lineup[SLOT + 1]]);
+    // Three substitutions in three windows: the second need waits for a window of its own.
+    let three = scene(
+        60,
+        |c| {
+            threshold(c);
+            c.rules.substitutions.limit = 3;
+            c.rules.substitutions.windows = 3;
+        },
+        plant,
+    );
+    assert_eq!(three.view().substitution_limits(), (3, 3));
+    let changes = decide(&three);
+    assert_eq!(changes.len(), 1, "one change: {changes:?}");
+    // The same two needs with nothing grouped yet: the second alone is under its bar.
+    let alone = scene(60, threshold, move |s: Scene| s.energy(second, 0.6));
+    assert!(decide(&alone).is_empty());
 }
 
 /// The minute the home slot's starter left the pitch in a match played from `minute` with

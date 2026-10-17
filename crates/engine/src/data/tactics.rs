@@ -568,7 +568,10 @@ pub struct AiTuning {
 /// `threshold * (1 + rise * (used / limit + windows_used / windows))`, where `used` counts the
 /// substitutions made and queued and the window share counts only for a change that would open
 /// a window (none at a stoppage that uses no window or whose window the team already opened),
-/// so each later change needs more and changes come together. Nothing reads the match clock.
+/// so each later change needs more and changes come together. A change that joins one made at
+/// the same stoppage while more substitutions are left than windows after it meets that bar
+/// times the windows left after it over the substitutions left (the window rule). Nothing reads
+/// the match clock.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct AiSubstitutions {
