@@ -324,16 +324,17 @@ fn off_minute(seed: u64, plant: &dyn Fn(Scene) -> Scene) -> f64 {
 #[ignore = "slow: 600 matches from minute 30; cargo test --release -p engine --test ai_in_match -- --ignored"]
 fn a4_a_booked_heavy_tackler_is_replaced_earlier_on_average() {
     let i = common::index(0, SLOT);
-    let none = |s: Scene| s;
-    let booked = move |s: Scene| {
-        s.yellow(i, 1).player_tally(i, |t| {
+    // Both arms plant the same heavy tackling; only the booking differs.
+    let tackler = move |s: Scene| {
+        s.player_tally(i, |t| {
             t.tackles_won = 3;
             t.fouls = 2;
         })
     };
+    let booked = move |s: Scene| tackler(s).yellow(i, 1);
     // The control first: two unbooked arms are the same match.
-    let control: Vec<f64> = run_many(1..=200, |seed| off_minute(seed, &none));
-    let again: Vec<f64> = run_many(1..=200, |seed| off_minute(seed, &none));
+    let control: Vec<f64> = run_many(1..=200, |seed| off_minute(seed, &tackler));
+    let again: Vec<f64> = run_many(1..=200, |seed| off_minute(seed, &tackler));
     assert_eq!(control, again, "the unbooked arms differ");
     let arm: Vec<f64> = run_many(1..=200, |seed| off_minute(seed, &booked));
     let mean = |v: &[f64]| v.iter().sum::<f64>() / v.len() as f64;
