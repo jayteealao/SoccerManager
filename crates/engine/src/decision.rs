@@ -2145,9 +2145,8 @@ fn recovery_jobs(view: &MatchView<'_>, jobs: &mut [Job; ROSTER], def: usize, kee
 
 /// A player in a concentration lapse holds: his job is `Hold` until the lapse ends.
 fn lapse_jobs(view: &MatchView<'_>, jobs: &mut [Job; ROSTER]) {
-    let tick = view.tick();
-    for (job, p) in jobs.iter_mut().zip(view.players()) {
-        if tick < p.lapse_until && p.active() {
+    for (i, job) in jobs.iter_mut().enumerate() {
+        if lapsing(view, i) {
             *job = Job::Hold;
         }
     }
@@ -2158,28 +2157,14 @@ fn lapse_jobs(view: &MatchView<'_>, jobs: &mut [Job; ROSTER]) {
 /// the ball than `anchor_ball_distance` and farther than `anchor_tolerance` from both his
 /// places (his anchors in and out of possession, read with the ball itself), his target is
 /// the nearer place, whatever option or held spot the shape pass gave him. Pressers, chasers
-/// and the cover defender take their targets after this, and a lapse still holds him; the
-/// line step leaves him. Returns the roster bits of the players it sent back.
+/// and the cover defender take their targets after this; a lapse never holds him
+/// ([`lapsing`]), and the line step leaves him. Returns the roster bits of the players it
+/// sent back.
 fn back_to_place(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER]) -> u32 {
     let mut sent = 0u32;
-    let t = view.tuning();
-    let ball = view.ball().xy();
-    let teams = view.teams();
-    for (i, p) in view.players().iter().enumerate() {
-        if !p.active()
-            || i == view.keeper(p.team)
-            || (p.pos - ball).length() <= t.anchor_ball_distance
-        {
-            continue;
-        }
-        let [a_in, a_out] = [true, false].map(|has| teams[p.team].anchor(p.slot, ball, has, t));
-        let nearer = if (p.pos - a_in).length() <= (p.pos - a_out).length() {
-            a_in
-        } else {
-            a_out
-        };
-        if (p.pos - nearer).length() > t.anchor_tolerance {
-            targets[i] = nearer;
+    for (i, target) in targets.iter_mut().enumerate() {
+        if let Some(nearer) = out_of_shape(view, i) {
+            *target = nearer;
             sent |= 1 << i;
         }
     }
@@ -2189,12 +2174,40 @@ fn back_to_place(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER]) -> u32 {
 /// A player in a concentration lapse holds where he stands: his target is his position until
 /// the lapse ends.
 fn hold_lapses(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER]) {
-    let tick = view.tick();
-    for (slot, p) in targets.iter_mut().zip(view.players()) {
-        if tick < p.lapse_until && p.active() {
-            *slot = p.pos;
+    for (i, slot) in targets.iter_mut().enumerate() {
+        if lapsing(view, i) {
+            *slot = view.player(i).pos;
         }
     }
+}
+
+/// `true` while player `i` is in a concentration lapse that holds him. A lapse is a moment a
+/// player in the team's shape stops tracking his place, so it never holds one who is far
+/// from play and from his place ([`out_of_shape`]); he gets back into shape instead.
+fn lapsing(view: &MatchView<'_>, i: usize) -> bool {
+    let p = view.player(i);
+    view.tick() < p.lapse_until && p.active() && out_of_shape(view, i).is_none()
+}
+
+/// The nearer of player `i`'s two places (his anchors in and out of possession, read with the
+/// ball itself) while he is farther from the ball than `anchor_ball_distance` and farther
+/// than `anchor_tolerance` from both places; `None` otherwise, for an inactive player and for
+/// a keeper.
+fn out_of_shape(view: &MatchView<'_>, i: usize) -> Option<DVec2> {
+    let p = view.player(i);
+    let t = view.tuning();
+    let ball = view.ball().xy();
+    if !p.active() || i == view.keeper(p.team) || (p.pos - ball).length() <= t.anchor_ball_distance
+    {
+        return None;
+    }
+    let [a_in, a_out] = [true, false].map(|has| view.teams()[p.team].anchor(p.slot, ball, has, t));
+    let nearer = if (p.pos - a_in).length() <= (p.pos - a_out).length() {
+        a_in
+    } else {
+        a_out
+    };
+    ((p.pos - nearer).length() > t.anchor_tolerance).then_some(nearer)
 }
 
 /// The distance from the ball within which keeper `gk` comes off his line for a loose ball:

@@ -234,3 +234,38 @@ fn a_player_stranded_far_from_play_heads_for_his_nearer_place() {
     assert!(target != a_in);
     assert!((target - a_out).length() < (pos - a_out).length());
 }
+
+/// A concentration lapse holds a player in the team's shape where he stands, but it never
+/// holds one left far from play and from both his places: he heads for the nearer place, as
+/// he would without the lapse.
+#[test]
+fn a_lapse_holds_a_player_in_shape_but_not_one_far_from_play_and_his_place() {
+    const LEFT_BACK: usize = 1;
+    let lapsing_target = |offset: DVec2| {
+        let mut sim = scene_with_stands(0.04);
+        hold(&mut sim, DVec2::new(35.0, 25.0));
+        let ball = sim.ball.xy();
+        let t = sim.tuning.clone();
+        let team = sim.teams[0].clone();
+        let a_in = team.anchor(LEFT_BACK, ball, true, &t);
+        let a_out = team.anchor(LEFT_BACK, ball, false, &t);
+        let pos = a_in + DVec2::new(offset.x * team.attack_x, offset.y);
+        sim.players[LEFT_BACK].pos = pos;
+        sim.players[LEFT_BACK].lapse_until = sim.tick + 100;
+        assert!((pos - ball).length() > t.anchor_ball_distance);
+        let decided = sim.config.modules.decision.targets(&sim.view());
+        let reach = t.anchor_tolerance;
+        let far = (pos - a_in).length() > reach && (pos - a_out).length() > reach;
+        (decided.targets[LEFT_BACK], pos, a_in, far)
+    };
+    // Far from play and beyond reach of both places: the lapse does not hold him; he heads
+    // for the nearer place, his in-possession one.
+    let (target, pos, a_in, far) = lapsing_target(DVec2::new(10.0, -12.0));
+    assert!(far);
+    assert!(target != pos, "a lapse held a player far out of shape");
+    assert_eq!(target, a_in);
+    // Within reach of that place he is in the shape, and the lapse holds him where he stands.
+    let (target, pos, _, far) = lapsing_target(DVec2::new(6.0, -6.0));
+    assert!(!far);
+    assert_eq!(target, pos, "a lapse did not hold a player in shape");
+}
