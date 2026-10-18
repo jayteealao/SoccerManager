@@ -826,7 +826,7 @@ mod skip_equality {
     /// the computer manager grouped its substitutions and a player going for a loose ball stopped
     /// being pushed off it; seed 0 until the styles became presets of primitives; seed 11 until
     /// clearances, shots and misreads were scored by their cost).
-    const SHOOTOUT_SEED: u64 = 10;
+    const SHOOTOUT_SEED: u64 = 5;
 
     /// The tick the knockout match marks a watchdog hit on, in every run.
     const WATCHDOG_AT: u32 = 60_000;
