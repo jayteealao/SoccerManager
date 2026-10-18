@@ -88,6 +88,9 @@ pub struct MatchInput<'a> {
     /// Each side's starting tactics, in the styles suite: its style in a formation of the
     /// style's list.
     pub tactics: Option<[Tactics; 2]>,
+    /// Each side's game-state rules and player instructions, in the styles suite: its
+    /// style's own, set after `tactics`, so each side plays its preset whole.
+    pub game_state: Option<[engine::tactics::rules::GameState; 2]>,
     /// The red-card suite: cards otherwise off, and the player sent off at kick-off.
     pub red_card: Option<Option<usize>>,
     pub key: FixtureKey,
@@ -129,6 +132,13 @@ pub fn play_match(
     if let Some(sides) = m.tactics {
         for (team, tactics) in sides.into_iter().enumerate() {
             config = config.with_ai_tactics(team, tactics);
+        }
+    }
+    if let Some(sides) = &m.game_state {
+        for (team, state) in sides.iter().enumerate() {
+            if !state.is_empty() {
+                config = config.with_game_state(team, state.clone());
+            }
         }
     }
     if m.red_card.is_some() {
@@ -414,6 +424,7 @@ mod tests {
                 teams,
                 formations,
                 tactics: None,
+                game_state: None,
                 red_card,
                 key: FixtureKey::from_u64(seed),
                 seed,

@@ -507,6 +507,7 @@ fn play_unit(
                     teams: &teams,
                     formations,
                     tactics: None,
+                    game_state: None,
                     red_card,
                     key: keyed.key,
                     seed,

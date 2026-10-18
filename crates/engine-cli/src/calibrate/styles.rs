@@ -1,9 +1,10 @@
 //! The styles suite: every ordered pairing of two distinct named styles of `styles.json`,
 //! each match with identical squads. A match takes the home club of the equal suite's
 //! fixture at the same place and gives a copy of it to the away side, so both sides field
-//! the same players while the clubs rotate across matches. Each side starts in its style's
-//! tactics, in a formation drawn from the style's list by a draw seeded from the fixture
-//! key, with the lineup its AI picks for that formation.
+//! the same players while the clubs rotate across matches. Each side plays its style's preset
+//! whole: its tactics, in a formation drawn from the style's list by a draw seeded from the
+//! fixture key, with the lineup its AI picks for that formation, and its game-state rules and
+//! player instructions.
 //!
 //! The suite is report only: it feeds no realism band and no verdict. `--suite styles` plays
 //! it alone; a change run plays one match per ordered pairing on the changed engine only and
@@ -224,6 +225,9 @@ pub fn play(input: &SuiteInput<'_>) -> anyhow::Result<Option<StylesReport>> {
                             teams: &teams,
                             formations: None,
                             tactics: Some(tactics),
+                            game_state: Some(
+                                [0, 1].map(|side| styles.styles[f.styles[side]].game_state.clone()),
+                            ),
                             red_card: None,
                             key: f.key,
                             seed: f.engine_seed,
