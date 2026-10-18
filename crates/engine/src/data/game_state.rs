@@ -356,8 +356,9 @@ pub fn resolve(
     })
 }
 
-/// The index of primitive `name` and of its level, choice or state `level`.
-fn level_of(
+/// The index of primitive `name` and of its level, choice or state `level`; a refusal names
+/// `at` and lists the primitive's levels. A style preset's settings resolve through it too.
+pub(crate) fn level_of(
     schema: &TacticsSchema,
     name: &str,
     level: &str,

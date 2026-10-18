@@ -1,8 +1,9 @@
 //! The named styles and the AI's pick of one before a match.
 //!
-//! - AC-33: the shipped file holds eight styles, each with a mentality, instruction levels,
-//!   duty hints, a non-empty formation list and 2 or 3 identity statistics; each style has a
-//!   signature attribute it weighs more than any other style does.
+//! - AC-33: the shipped file holds eight styles, each a preset of primitive settings with one
+//!   mentality setting, duty hints, a non-empty formation list, 2 or 3 identity statistics and
+//!   1 to the tactics file's limit of game-state rules; each style has a signature attribute it
+//!   weighs more than any other style does.
 //! - AC-36: a squad built for each style is picked for it in more than 25 of 50 seeds.
 //! - AC-37: with the tactics set by hand, two matches whose advice differs play identically,
 //!   tick for tick: play never reads an estimate.
@@ -63,12 +64,32 @@ fn the_shipped_file_holds_eight_complete_styles_each_with_a_signature() {
             "park_the_bus"
         ]
     );
+    let max_rules = content
+        .tactics
+        .game_state
+        .as_ref()
+        .expect("the tactics file has a game-state block")
+        .max_rules;
     for (k, s) in all.styles.iter().enumerate() {
-        assert!(usize::from(s.mentality) < content.tactics.mentalities.len());
-        assert!(s.instructions.iter().any(Option::is_some), "{}", s.name);
+        let mentality = s
+            .primitives
+            .iter()
+            .filter(|&&(p, _)| content.tactics.primitives[usize::from(p)].name == "mentality")
+            .count();
+        assert_eq!(mentality, 1, "{} sets the mentality once", s.name);
+        assert!(
+            s.primitives.len() > 1,
+            "{} sets more than the mentality",
+            s.name
+        );
         assert!(s.duties.iter().any(Option::is_some), "{}", s.name);
         assert!(!s.formations.is_empty(), "{}", s.name);
         assert!((2..=3).contains(&s.identity.len()), "{}", s.name);
+        assert!(
+            (1..=usize::from(max_rules)).contains(&s.game_state.rules.len()),
+            "{} holds 1 to {max_rules} rules",
+            s.name
+        );
         assert!(
             !signature(all, k).is_empty(),
             "{} has no signature attribute",

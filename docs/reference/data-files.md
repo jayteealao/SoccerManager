@@ -23,7 +23,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `signatures.json` | 3 | The real-team signature table: for each statistic a tactical primitive moves, its spread across real club seasons, the five quintiles and each quintile's median. No match reads it; the primitives harness fits the levels to it. Written by `engine-cli signatures`, never by hand |
 | `traits.json` | 1 | The trait catalogue: the 31 traits of play a player may carry, each with the engine choice it acts on and, for nine pairs, its opposite. Part of the content hash; a team file naming a trait it does not hold, or two opposites on one player, is refused |
 | `restart-waits.json` | 1 | The restart wait table: for each kind of restart, the drawn extra wait beyond the visible steps, as 21 quantiles from real restart waits, the limit on the visible steps, the late-lead factor and the quick-restart rule. Optional: content without it plays the fixed `restart_delay_s` delays. Part of the content hash when present; written by `engine-cli restart-waits`, never by hand |
-| `styles.json` | 1 | The eight named styles: each with a mentality, instruction levels, duty hints, the formations that suit it, the statistics that show it, and the attributes its key jobs read. Optional: content without it keeps the AI manager on the tactics file's default setup and cannot play the styles suite. Part of the content hash when present |
+| `styles.json` | 2 | The eight named styles, each a preset of tactics primitives: its primitive settings (the mentality among them), duty hints, the formations that suit it, the statistics that show it, the attributes its key jobs read, and its game-state rules. A version 1 file converts on load. Optional: content without it keeps the AI manager on the tactics file's default setup and cannot play the styles suite. Part of the content hash when present |
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
 | `commentary/en.json` | 1 | The English commentary lines, grouped by event kind and match situation |
 | `realism-bands.json` | 5 | The band registry: every realism band the calibration run judges, with its measure, design range, smallest shift, and its record (where its real value is measured, the evidence label, the confidence counts, the condition, and whether it gates), and the figures it reports beside an earlier build's value. Versions 4, 3 and 2 still load. They are acceptance criteria, never tuning values |
@@ -1104,20 +1104,28 @@ The named styles. An AI manager picks one before each match from the staff advic
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "advice_noise": 0.5,
   "styles": [
     {
       "name": "low_block",
-      "mentality": "cautious",
-      "instructions": { "pressing": "low", "line_height": "deep", "width": "narrow" },
+      "primitives": [
+        { "primitive": "mentality", "level": "cautious" },
+        { "primitive": "pressing", "level": "low" },
+        { "primitive": "line_height", "level": "deep" },
+        { "primitive": "width", "level": "narrow" }
+      ],
       "duties": { "CB": "defend", "DM": "defend" },
       "formations": ["4-4-2", "4-1-4-1", "4-4-1-1"],
       "identity": [
         { "stat": "possession_pct", "direction": "down" },
         { "stat": "xg", "direction": "down", "against": true }
       ],
-      "fit": { "positioning": 0.40, "concentration": 0.25, "anticipation": 0.20, "teamwork": 0.15 }
+      "fit": { "positioning": 0.40, "concentration": 0.25, "anticipation": 0.20, "teamwork": 0.15 },
+      "rules": [
+        { "when": [{ "kind": "score", "state": "leading", "by": 1 }, { "kind": "time_left", "minutes": 10 }],
+          "set": [{ "primitive": "mentality", "level": "defensive" }, { "primitive": "time_wasting", "level": "on" }] }
+      ]
     }
   ]
 }
@@ -1125,24 +1133,26 @@ The named styles. An AI manager picks one before each match from the staff advic
 
 | Field | Holds | Bound |
 |---|---|---|
-| schema_version | 1 | |
+| schema_version | 2 (a version 1 file converts, below) | |
 | advice_noise | the spread of the advice's error on each style's estimate, on the 1 to 20 rating scale | 0 to 5 |
 | styles | the styles, in the order the report lists them | 1 to 16 |
 | styles.*.name | the style's name | 1 to 32 characters, unique |
-| styles.*.mentality | a mentality of `tactics.json` | |
-| styles.*.instructions | instruction name to level name, from `tactics.json`; an instruction left out keeps its default level | |
+| styles.*.primitives | the preset's settings, each `{ "primitive": <name>, "level": <name> }`, the form of a rule action: a primitive of `tactics.json` and one of its levels, choices or states. It must set `mentality`; each primitive at most once; a primitive left out keeps its default | 1 to 32 entries |
 | styles.*.duties | position code to duty name: the duty of each slot of that position; a position left out takes the `ai` block's duty | 1 to 10 entries |
 | styles.*.formations | formations of `tactics.json` that suit the style, in preference order | 1 to 16 |
 | styles.*.identity | the statistics that show the style: `stat` (one of `possession_pct`, `passes`, `pass_accuracy_pct`, `shots`, `shots_on_target_share`, `fouls`, `corners`, `goals`, `xg`), `direction` (`up` or `down`), and `against` (`true` reads the other side's figure) | 2 or 3 |
 | styles.*.fit | attribute name to weight: the attributes the style's key jobs read; each must be a visible technical, mental or physical attribute | 1 to 12 entries; each weight 0 to 1, sum above 0 |
 | styles.*.fit_positions | the outfield positions whose players the fit reads; every outfield position when absent | optional; not empty, no `GK` |
-| styles.*.rules, styles.*.player_instructions | the style's game-state rules and player instructions, in the form of [Game state](#game-state); a side that starts in the style plays by them | optional; none when absent |
+| styles.*.rules | the style's game-state rules, in the form of [Game state](#game-state); a side that starts in the style plays by them | 1 to the `game_state` block's `max_rules` (6) |
+| styles.*.player_instructions | the style's player instructions, in the form of [Game state](#game-state) | optional; none when absent |
 
 The staff advice, for each style: the lineup the AI would field in each of its formations, the formation whose lineup has the best summed rating, and the weighted mean of the fit attributes over that lineup's players (of `fit_positions`) less the same players' mean over every visible outfield attribute, plus an error drawn with spread `advice_noise`. The draw comes from a generator of its own, seeded by SHA-256 over the match seed, the side, the club id and a label, so the advice reads no match random stream. The best estimate wins; nothing keeps the estimates.
 
 Each shipped style carries two rules built from its own levels. Chase: trailing by 1 or more with 20 minutes or less left and the run of play below 0.01 (none in the side's favour), the mentality one level above the style's and pressing one level above the style's, never below `high`. Hold: leading by 1 or more with 10 minutes or less left, the mentality one level below the style's and `time_wasting` on. Levels stop at the ends of their lists.
 
-A file with an unknown formation, mentality, instruction, level, duty, position or attribute, an empty formation list, an identity list outside 2 to 3, an unknown identity statistic, a weight outside 0 to 1 or weights that sum to 0 is refused by field, for example `content refused: styles styles.json: styles[0].formations: 4-2-4 is not a formation`. A replay stores the file among its inputs (role `styles`) and plays with it.
+A preset's tactics are the tactics file's defaults with each setting applied in turn, as a rule action applies it, then the drawn formation, each slot's first suitable role and the duty hints. A version 1 file (`"mentality"` and an `"instructions"` map in place of `"primitives"`, as replays recorded before version 2 carry it) converts on load: the mentality and each instruction become settings, so it plays the same tactics; it may hold no rule.
+
+A file with an unknown formation, primitive, level, choice, state, duty, position or attribute, a primitive set twice, a preset without a `mentality` setting, a preset with no rule or more rules than `max_rules`, an empty formation list, an identity list outside 2 to 3, an unknown identity statistic, a weight outside 0 to 1 or weights that sum to 0 is refused by field, for example `content refused: styles styles.json: styles[0].formations: 4-2-4 is not a formation`. A replay stores the file among its inputs (role `styles`) and plays with it.
 
 ## Generating clubs
 

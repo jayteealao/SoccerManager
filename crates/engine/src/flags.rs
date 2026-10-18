@@ -31,8 +31,9 @@ pub const CODE_FLAGS: &[&str] = &[AI_STYLE_PICK, TEAM_STANDS];
 pub const TEAM_STANDS: &str = "team_stands";
 
 /// The AI manager's pick of a named style before a match (`styles.json`). Off, an AI-managed
-/// side starts with the tactics file's default AI tactics; on, with the style the staff advice
-/// rates best for its squad. It ships on; with the shipped styles some pairings of styles play
+/// side starts with the tactics file's default AI tactics; on, with the style preset the staff
+/// advice rates best for its squad: the preset's primitive settings and its game-state rules,
+/// which the side then plays by as a person's side plays by its own. It ships on; with the shipped styles some pairings of styles play
 /// far outside the realism bands (shots and goals per match), recorded as band misses until
 /// the tuning work settles them.
 pub const AI_STYLE_PICK: &str = "ai_style_pick";
