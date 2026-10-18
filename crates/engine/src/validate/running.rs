@@ -576,8 +576,8 @@ impl RunningCheck {
                 self.prev_chase.map(|(_, at)| at[i]),
                 *p,
                 teams[team].attack_x,
-                nearer,
-                far,
+                far.then_some(nearer),
+                self.max_step,
                 &self.tuning,
             );
             let closing = d_ball < prev_dist[0] - 1e-3
@@ -1210,6 +1210,7 @@ mod tests {
     #[test]
     fn a_runner_on_his_way_back_is_closing_while_he_moves_toward_his_anchor() {
         let tuning = Tuning::default();
+        let step_max = max_step(&tuning);
         let dt = tuning.dt;
         let run = DVec2::new(8.0 * dt, 0.0);
         let walk = DVec2::new(-1.5 * dt, 0.0);
@@ -1217,56 +1218,90 @@ mod tests {
         let ran = || {
             let mut spell = RunSpell::default();
             let mut at = DVec2::new(-40.0, -30.0);
-            spell.closing(None, at, 1.0, anchor, true, &tuning);
+            spell.closing(None, at, 1.0, Some(anchor), step_max, &tuning);
             for _ in 0..50 {
-                assert!(spell.closing(Some(at), at + run, 1.0, anchor, true, &tuning));
+                assert!(spell.closing(Some(at), at + run, 1.0, Some(anchor), step_max, &tuning));
                 at += run;
             }
             (spell, at)
         };
         let (mut spell, at) = ran();
         assert!(
-            spell.closing(Some(at), at + walk, 1.0, anchor, true, &tuning),
+            spell.closing(Some(at), at + walk, 1.0, Some(anchor), step_max, &tuning),
             "on his way back"
         );
         let (mut spell, at) = ran();
         assert!(
-            !spell.closing(Some(at), at, 1.0, anchor, true, &tuning),
+            !spell.closing(Some(at), at, 1.0, Some(anchor), step_max, &tuning),
             "standing still"
         );
         let mut fresh = RunSpell::default();
         let at = DVec2::new(-30.0, -30.0);
-        fresh.closing(None, at, 1.0, anchor, true, &tuning);
+        fresh.closing(None, at, 1.0, Some(anchor), step_max, &tuning);
         assert!(
-            !fresh.closing(Some(at), at + walk, 1.0, anchor, true, &tuning),
+            !fresh.closing(Some(at), at + walk, 1.0, Some(anchor), step_max, &tuning),
             "no run before"
         );
         let (mut spell, at) = ran();
         assert!(
-            !spell.closing(Some(at), at + walk, 1.0, anchor, false, &tuning),
+            !spell.closing(Some(at), at + walk, 1.0, None, step_max, &tuning),
             "near again"
         );
-        assert!(!spell.closing(Some(at + walk), at + walk * 2.0, 1.0, anchor, true, &tuning));
+        assert!(!spell.closing(
+            Some(at + walk),
+            at + walk * 2.0,
+            1.0,
+            Some(anchor),
+            step_max,
+            &tuning
+        ));
     }
 
     /// A run counts as closing for as long as real runs last ([`MAX_RUN_S`]) and no longer.
     #[test]
     fn a_run_is_closing_for_at_most_the_longest_real_runs() {
         let tuning = Tuning::default();
+        let step_max = max_step(&tuning);
         let mut spell = RunSpell::default();
         let step = DVec2::new(8.0 * tuning.dt, 0.0);
         let limit = (MAX_RUN_S / tuning.dt + 1e-9).floor() as u32;
         let mut at = DVec2::new(-40.0, -30.0);
         let anchor = DVec2::new(-60.0, -30.0);
-        assert!(!spell.closing(None, at, 1.0, anchor, true, &tuning));
+        assert!(!spell.closing(None, at, 1.0, Some(anchor), step_max, &tuning));
         for k in 1..=limit + 50 {
             let next = at + step;
-            let closing = spell.closing(Some(at), next, 1.0, anchor, true, &tuning);
+            let closing = spell.closing(Some(at), next, 1.0, Some(anchor), step_max, &tuning);
             assert_eq!(closing, k <= limit, "record {k}");
             at = next;
         }
         // Turning back toward the anchor behind him ends the run; the way back is closing.
-        assert!(spell.closing(Some(at), at - step, 1.0, anchor, true, &tuning));
+        assert!(spell.closing(Some(at), at - step, 1.0, Some(anchor), step_max, &tuning));
+    }
+
+    /// A step faster than any player's top speed is a jump, which the speed rule reports; it is
+    /// no run, so it starts neither a run nor a way back.
+    #[test]
+    fn a_jump_is_no_run() {
+        let tuning = Tuning::default();
+        let step_max = max_step(&tuning);
+        let anchor = DVec2::new(-60.0, -30.0);
+        let mut spell = RunSpell::default();
+        let at = DVec2::new(-40.0, -30.0);
+        spell.closing(None, at, 1.0, Some(anchor), step_max, &tuning);
+        let jump = at + DVec2::new(step_max * 2.0, 0.0);
+        assert!(!spell.closing(Some(at), jump, 1.0, Some(anchor), step_max, &tuning));
+        let walk = DVec2::new(-1.5 * tuning.dt, 0.0);
+        assert!(
+            !spell.closing(
+                Some(jump),
+                jump + walk,
+                1.0,
+                Some(anchor),
+                step_max,
+                &tuning
+            ),
+            "no way back after a jump"
+        );
     }
 
     #[test]

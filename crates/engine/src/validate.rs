@@ -120,16 +120,17 @@ pub(crate) struct RunSpell {
 
 impl RunSpell {
     /// The player's step from `was` (the previous record; none on the first) to `now`, on a
-    /// side that attacks `attack_x`; `anchor` is his nearer anchor and `far` is true while he is
-    /// farther than the rule's distances from both his anchor and the ball. `true` when the step
-    /// counts as closing.
+    /// side that attacks `attack_x`; `far_from` is his nearer anchor while he is farther than the
+    /// rule's distances from both his anchor and the ball, and `None` otherwise. A step longer
+    /// than `max_step`, the most any player moves between two records, is a jump that the speed
+    /// rule reports, not a run. `true` when the step counts as closing.
     pub(crate) fn closing(
         &mut self,
         was: Option<DVec2>,
         now: DVec2,
         attack_x: f64,
-        anchor: DVec2,
-        far: bool,
+        far_from: Option<DVec2>,
+        max_step: f64,
         t: &Tuning,
     ) -> bool {
         let Some(was) = was else {
@@ -137,19 +138,22 @@ impl RunSpell {
             return false;
         };
         let step = now - was;
-        let on_run = step.length() >= crate::run_kind::RUN_SPEED * t.dt && step.x * attack_x > 0.0;
+        let length = step.length();
+        let on_run = length >= crate::run_kind::RUN_SPEED * t.dt
+            && length <= max_step
+            && step.x * attack_x > 0.0;
         if on_run {
             self.ticks += 1;
         } else {
             self.returning |= self.ticks > 0;
             self.ticks = 0;
         }
-        if !far {
+        if far_from.is_none() {
             self.returning = false;
         }
         let live = on_run && f64::from(self.ticks) * t.dt <= MAX_RUN_S;
-        let to_anchor = (anchor - now).normalize_or_zero();
-        let back = self.returning && step.dot(to_anchor) > 1e-3;
+        let back = self.returning
+            && far_from.is_some_and(|anchor| step.dot((anchor - now).normalize_or_zero()) > 1e-3);
         live || back
     }
 }
@@ -430,8 +434,8 @@ impl Validator {
                     prev_chase.map(|(_, at)| at[i]),
                     *p,
                     teams[team].attack_x,
-                    nearer,
-                    far,
+                    far.then_some(nearer),
+                    max_step,
                     &self.tuning,
                 );
                 let closing = d_ball < prev_dist[i][0] - 1e-3

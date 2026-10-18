@@ -238,17 +238,19 @@ fn tick_plants() -> Vec<Plant> {
     ));
 
     // One outfield player held at the pitch corner farthest from the ball and its anchors
-    // while the ball lies still, for the grace period and ten ticks more.
+    // while the ball lies still, for the grace period and ten ticks more. No event falls in the
+    // stretch: a stoppage that opens there moves the point the anchors read from the ball to
+    // the restart spot, which moves the anchors under him (seed 42's first such stretch, after
+    // the style presets, is a throw-in's fetch).
     let grace = base.tuning.anchor_grace_ticks as usize;
     let still = (1..base.records.len() - grace - 10)
         .find(|&s| {
             let r = &base.records;
             let window = &r[s..s + grace + 10];
+            let outside = |t: u32| t <= r[s - 1].tick || t > window.last().unwrap().tick;
             window.iter().all(|x| x.ball == r[s].ball && !x.restart)
-                && base
-                    .timeline
-                    .iter()
-                    .all(|(t, _)| *t <= r[s - 1].tick || *t > window.last().unwrap().tick)
+                && base.timeline.iter().all(|(t, _)| outside(*t))
+                && base.events.iter().all(|e| outside(e.tick))
         })
         .expect("a stretch with the ball still");
     let (player, team, slot) = (16, 1, 5);
