@@ -3115,7 +3115,8 @@ mod tests {
 
     /// A forward's timed run goes on while his side's pass travels forward: he keeps his
     /// target and his job. A pass back ends it, and at the default (no forward runs) every run
-    /// ends at a pass, as before.
+    /// ends at a pass, as before. The pass is within a pass's reach of him (33.5 m), as a run
+    /// in behind needs since it ends out of that reach.
     #[test]
     fn a_forward_run_goes_on_while_a_pass_travels_forward() {
         let goal = DVec2::new(40.0, -5.0);
@@ -3128,7 +3129,7 @@ mod tests {
             sim.carrier = None;
             sim.pass_in_flight = Some(0);
             sim.possession_phase = Some(0);
-            sim.ball.pos = crate::math::DVec3::new(-10.0, 20.0, 0.0);
+            sim.ball.pos = crate::math::DVec3::new(0.0, 10.0, 0.0);
             sim.ball.vel = crate::math::DVec3::new(ball_vx, 0.0, 0.0);
             sim.tick = 100;
             let view = sim.view();

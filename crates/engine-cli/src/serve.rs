@@ -823,8 +823,9 @@ mod skip_equality {
     /// tempo became patience and the mentality an appetite for risk; seed 3 until defenders met
     /// a running carrier in a take-on; seed 0 until a passer read the press his receiver would
     /// meet; seed 16 until the AI manager's substitutions followed the situation; seed 3 until
-    /// the computer manager grouped its substitutions and a player going for a loose ball stopped being pushed off it).
-    const SHOOTOUT_SEED: u64 = 0;
+    /// the computer manager grouped its substitutions and a player going for a loose ball stopped
+    /// being pushed off it; seed 0 until the styles became presets of primitives).
+    const SHOOTOUT_SEED: u64 = 11;
 
     /// The tick the knockout match marks a watchdog hit on, in every run.
     const WATCHDOG_AT: u32 = 60_000;

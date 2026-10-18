@@ -8,14 +8,25 @@ use crate::decision::{COUNTER_WINDOW_S, tackle_decision};
 use crate::math::DVec2;
 use crate::modules::TackleChances;
 use crate::pace::Job;
-use crate::sim::Simulation;
-use crate::tactics::TeamPlan;
+use crate::sim::{MatchConfig, Simulation};
 use crate::tactics::rules::{GameState, PlayerInstruction};
+use crate::tactics::{Tactics, TeamPlan};
 use crate::team::PLAYERS_PER_TEAM;
 
-/// A seed-7 one-minute match on the shipped content with the options' noise off.
+/// A seed-7 one-minute match on the shipped content with both sides in the tactics file's
+/// default tactics, so every primitive of the side's plan is at its default: the premise of
+/// each test here, which a style preset the AI would otherwise pick could break.
+fn at_defaults() -> MatchConfig {
+    let config = shipped_config(7, 1).unwrap();
+    let defaults = Tactics::defaults(&config.tactics);
+    config
+        .with_ai_tactics(0, defaults)
+        .with_ai_tactics(1, defaults)
+}
+
+/// [`at_defaults`] with the options' noise off.
 fn calm() -> Simulation {
-    let mut config = shipped_config(7, 1).unwrap();
+    let mut config = at_defaults();
     config.tuning.decision.noise = 0.0;
     Simulation::new(config).unwrap()
 }
@@ -331,7 +342,7 @@ fn a_tackling_instruction_moves_only_its_players_tackle() {
 #[test]
 fn a_forward_runs_instruction_moves_only_its_players_runs() {
     let job = |slot: Option<usize>| {
-        let mut sim = Simulation::new(shipped_config(7, 1).unwrap()).unwrap();
+        let mut sim = Simulation::new(at_defaults()).unwrap();
         if let Some(s) = slot {
             instruct(&mut sim, 0, s, "forward_runs", "run_in_behind");
         }
@@ -366,7 +377,7 @@ fn a_forward_runs_instruction_moves_only_its_players_runs() {
 #[test]
 fn a_run_in_behind_under_way_stops_out_of_a_passs_reach() {
     let job = |carrier_x: f64| {
-        let mut sim = Simulation::new(shipped_config(7, 1).unwrap()).unwrap();
+        let mut sim = Simulation::new(at_defaults()).unwrap();
         instruct(&mut sim, 0, 9, "forward_runs", "run_in_behind");
         let carrier = 6;
         sim.players[carrier].pos = DVec2::new(carrier_x, 0.0);

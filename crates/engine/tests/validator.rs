@@ -69,9 +69,11 @@ fn engine_events(config: engine::MatchConfig) -> (Vec<engine::EngineEvent>, Stre
 /// injuries, and seed 67, which brought a straight red until
 /// the computer manager grouped its substitutions and a player going for a loose ball stopped being pushed off it, when seed 3 brought one instead (seed 67 the lowest since a pressed carrier weighed
 /// his options by the pressure he feels; seed 65 since defenders could cut out passes; seed 15 from the in-possession settings until then; before them seeds 1 to 5 and 9 to
-/// 28 brought it); a 10-minute match, which adds no time; a
-/// knockout match (seed 14, the lowest whose shoot-out scores and that brings the refused
-/// substitution, which no other stream brings since a kick stayed on its way from its kicker
+/// 28 brought it); since the styles became presets of primitives, seed 15 brings the straight
+/// red and seed 4 the refused substitution; a 10-minute match, which adds no time; a
+/// knockout match (seed 11, the lowest whose shoot-out scores since the styles became presets
+/// of primitives; seed 14 until then, the lowest whose shoot-out scored and that brought the
+/// refused substitution, which no other stream brought since a kick stayed on its way from its kicker
 /// along the line he sent it; seed 120 until the computer manager grouped its
 /// substitutions when its windows ran short; seed 8 until the styles carried rules for a side chasing or
 /// holding a score; seed 79 until the AI manager's substitutions followed the situation
@@ -81,8 +83,9 @@ fn engine_events(config: engine::MatchConfig) -> (Vec<engine::EngineEvent>, Stre
 /// lifted on a counter rather than with the press, seed 4 until opponents walked round the
 /// restart spot, seed 2 until tempo became patience and the mentality an appetite for risk)
 /// played through extra time and a
-/// shoot-out; and seed 2 between two generated top-flight clubs (league seed 1), the lowest
-/// that brings a second yellow, with the refused substitution brought by the knockout match
+/// shoot-out; and seed 15 between two generated top-flight clubs (league seed 1), the lowest
+/// that brings a second yellow since the styles became presets of primitives (seed 2 until
+/// then), with the refused substitution brought by the knockout match
 /// (by the other streams until a kick stayed on its way from its kicker; seed 1 until opponents walked round the restart spot; seed 4, which brought both, until
 /// tempo became patience and the mentality an appetite for risk). Until the AI
 /// sides started in the style their staff picks the knockout match was seed 1 and the
@@ -105,7 +108,7 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
         });
     let short = engine::MatchConfig::new(1, 10, &content, [&a, &b]).unwrap();
     streams.push(("10 minutes seed 1".into(), engine_events(short)));
-    let knockout = engine::MatchConfig::new(14, 90, &content, [&a, &b])
+    let knockout = engine::MatchConfig::new(11, 90, &content, [&a, &b])
         .unwrap()
         .with_knockout();
     let (events, rules) = engine_events(knockout);
@@ -113,10 +116,10 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
         events.iter().any(|e| e.shootout_scored == Some(true)),
         "the knockout match reached a shoot-out with a scored kick"
     );
-    streams.push(("knockout seed 14".into(), (events, rules)));
+    streams.push(("knockout seed 11".into(), (events, rules)));
     let league = engine::data::generate_league(1, 2, &content);
-    let generated = engine::MatchConfig::new(2, 90, &content, [&league[0], &league[1]]).unwrap();
-    streams.push(("generated seed 2".into(), engine_events(generated)));
+    let generated = engine::MatchConfig::new(15, 90, &content, [&league[0], &league[1]]).unwrap();
+    streams.push(("generated seed 15".into(), engine_events(generated)));
     let all: Vec<&engine::EngineEvent> = streams.iter().flat_map(|(_, (e, _))| e).collect();
     let has = |f: &dyn Fn(&engine::EngineEvent) -> bool| all.iter().any(|e| f(e));
     assert!(has(&|e| e.kind == Injury), "an injury is judged");

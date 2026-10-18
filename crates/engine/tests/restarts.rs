@@ -179,8 +179,10 @@ fn every_stoppage_lasts_its_visible_steps_plus_its_drawn_extra() {
             }
             match (open, sim.dead_ball()) {
                 (_, Some(d)) => {
+                    // The step to tick `n` judges the steps on the positions of tick `n - 1`,
+                    // so the positions read here count for the restart from the next tick.
                     if d.ready_at != DeadBall::UNSET
-                        && sim.tick() >= d.ready_at
+                        && sim.tick() + 1 >= d.ready_at
                         && !engine::rules::restart::steps_done(
                             &d,
                             sim.players(),
@@ -373,8 +375,9 @@ impl TickSink for Order {
 /// each of its four halves. Each starts at the tunnel on the near touchline, ends on the
 /// positions of that record, and never moves a player faster than the walk; the records stay
 /// consecutive across it, and the match plays exactly as with no one listening, so the
-/// walk-on takes no match time and no ball-in-play time. Seed 2 is the lowest knockout seed
-/// level after 90 minutes with all 22 players on through extra time (seed 5 until a player
+/// walk-on takes no match time and no ball-in-play time. Seed 11 is the lowest knockout seed
+/// level after 90 minutes with all 22 players on through extra time (seed 2 until the styles
+/// became presets of primitives; seed 5 until a player
 /// going for a loose ball stopped being pushed off it; seed 1 until the running
 /// pace lifted on a counter rather than with the press; seed 9 until opponents walked round
 /// the restart spot; seed 0 until the in-possession settings came in; seed 8 until tempo
@@ -387,7 +390,7 @@ impl TickSink for Order {
 fn each_half_opens_with_a_walk_on_that_takes_no_match_time() {
     let content = common::content();
     let [a, b] = common::default_teams(&content);
-    let config = MatchConfig::new(2, 90, &content, [&a, &b])
+    let config = MatchConfig::new(11, 90, &content, [&a, &b])
         .unwrap()
         .with_knockout();
     let dt = config.tuning.dt;
