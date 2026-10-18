@@ -1113,7 +1113,9 @@ The named styles. An AI manager picks one before each match from the staff advic
         { "primitive": "mentality", "level": "cautious" },
         { "primitive": "pressing", "level": "low" },
         { "primitive": "line_height", "level": "deep" },
-        { "primitive": "width", "level": "narrow" }
+        { "primitive": "line_of_engagement", "level": "low" },
+        { "primitive": "defensive_width", "level": "compact" },
+        { "primitive": "on_losing_the_ball", "level": "regroup" }
       ],
       "duties": { "CB": "defend", "DM": "defend" },
       "formations": ["4-4-2", "4-1-4-1", "4-4-1-1"],
@@ -1148,7 +1150,22 @@ The named styles. An AI manager picks one before each match from the staff advic
 
 The staff advice, for each style: the lineup the AI would field in each of its formations, the formation whose lineup has the best summed rating, and the weighted mean of the fit attributes over that lineup's players (of `fit_positions`) less the same players' mean over every visible outfield attribute, plus an error drawn with spread `advice_noise`. The draw comes from a generator of its own, seeded by SHA-256 over the match seed, the side, the club id and a label, so the advice reads no match random stream. The best estimate wins; nothing keeps the estimates.
 
-Each shipped style carries two rules built from its own levels. Chase: trailing by 1 or more with 20 minutes or less left and the run of play below 0.01 (none in the side's favour), the mentality one level above the style's and pressing one level above the style's, never below `high`. Hold: leading by 1 or more with 10 minutes or less left, the mentality one level below the style's and `time_wasting` on. Levels stop at the ends of their lists.
+Each shipped style sets only the primitives its common football definition names; every other primitive keeps its default. The settings were written once from those definitions, before any styles-suite result, and are not tuned to win a gate or a band:
+
+| Style | Settings | Duty hints |
+|---|---|---|
+| possession | mentality `balanced`, tempo `slow`, passing directness `short`, build-up `play_out`, width `wide`, final third `work_into_box`, on winning the ball `keep_shape`, on losing the ball `counter_press` | DM defend; LB, RB support |
+| low_block | mentality `cautious`, pressing `low`, line height `deep`, line of engagement `low`, defensive width `compact`, on losing the ball `regroup` | CB, DM defend |
+| high_press | mentality `positive`, pressing `high`, line height `high`, line of engagement `high`, tempo `fast`, on losing the ball `counter_press`, the back-pass and poor-touch press triggers, the offside trap and stop short goal kicks on, tackling `committed` | ST, LW, RW support |
+| counter_attack | mentality `cautious`, pressing `low`, line height `deep`, line of engagement `low`, on winning the ball `always_counter`, tempo `fast`, passing directness `direct`, forward runs `run_in_behind`, on losing the ball `regroup` | ST attack; LW, RW support |
+| direct | mentality `balanced`, passing directness `very_direct`, build-up `go_long`, tempo `fast`, forward runs `push_up` | ST attack |
+| wing_play | mentality `positive`, width `very_wide`, attacking channel `both_wings`, crossing `cross_more`, full-back runs `overlap`, full-back run frequency `runs_more` | LW, RW attack; LB, RB support |
+| gegenpress | mentality `attacking`, pressing `very_high`, line height `high`, line of engagement `very_high`, on losing the ball `always_counter_press`, counter-press length `long`, on winning the ball `counter`, tempo `fast`, the back-pass, poor-touch, facing-back and wide press triggers on, tackling `committed` | ST attack; CM support |
+| park_the_bus | mentality `defensive`, pressing `very_low`, line height `very_deep`, line of engagement `own_third`, defensive width `very_compact`, on winning the ball `always_keep_shape`, on losing the ball `always_regroup`, tempo `slow`, tackling `careful` | every outfield position defend |
+
+Some of these settings carry a deferred reason in `tactics.json` (crossing, the counter-press settings, line height's two deepest levels): they play their seeded values, and their checks do not gate.
+
+Each shipped style carries two rules. Chase: trailing by 1 or more with 20 minutes or less left and the run of play below 0.01 (none in the side's favour), a more attacking mentality and pressing at `high` or above. Hold: leading by 1 or more with 10 minutes or less left, a more cautious mentality and `time_wasting` on. The rule levels were set one level above and below each style's mentality before the presets above; possession's mentality has since moved from `positive` to `balanced`, so its chase sets `attacking` and its hold keeps `balanced`. Levels stop at the ends of their lists.
 
 A preset's tactics are the tactics file's defaults with each setting applied in turn, as a rule action applies it, then the drawn formation, each slot's first suitable role and the duty hints. A version 1 file (`"mentality"` and an `"instructions"` map in place of `"primitives"`, as replays recorded before version 2 carry it) converts on load: the mentality and each instruction become settings, so it plays the same tactics; it may hold no rule.
 

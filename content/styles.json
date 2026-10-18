@@ -5,10 +5,14 @@
     {
       "name": "possession",
       "primitives": [
-        { "primitive": "mentality", "level": "positive" },
-        { "primitive": "width", "level": "wide" },
+        { "primitive": "mentality", "level": "balanced" },
         { "primitive": "tempo", "level": "slow" },
-        { "primitive": "passing_directness", "level": "short" }
+        { "primitive": "passing_directness", "level": "short" },
+        { "primitive": "build_up", "level": "play_out" },
+        { "primitive": "width", "level": "wide" },
+        { "primitive": "final_third", "level": "work_into_box" },
+        { "primitive": "on_winning_the_ball", "level": "keep_shape" },
+        { "primitive": "on_losing_the_ball", "level": "counter_press" }
       ],
       "duties": { "DM": "defend", "LB": "support", "RB": "support" },
       "formations": ["4-3-3", "4-2-3-1", "4-1-4-1"],
@@ -29,7 +33,9 @@
         { "primitive": "mentality", "level": "cautious" },
         { "primitive": "pressing", "level": "low" },
         { "primitive": "line_height", "level": "deep" },
-        { "primitive": "width", "level": "narrow" }
+        { "primitive": "line_of_engagement", "level": "low" },
+        { "primitive": "defensive_width", "level": "compact" },
+        { "primitive": "on_losing_the_ball", "level": "regroup" }
       ],
       "duties": { "CB": "defend", "DM": "defend" },
       "formations": ["4-4-2", "4-1-4-1", "4-4-1-1"],
@@ -49,9 +55,16 @@
         { "primitive": "mentality", "level": "positive" },
         { "primitive": "pressing", "level": "high" },
         { "primitive": "line_height", "level": "high" },
-        { "primitive": "tempo", "level": "fast" }
+        { "primitive": "line_of_engagement", "level": "high" },
+        { "primitive": "tempo", "level": "fast" },
+        { "primitive": "on_losing_the_ball", "level": "counter_press" },
+        { "primitive": "press_on_back_pass", "level": "on" },
+        { "primitive": "press_on_poor_touch", "level": "on" },
+        { "primitive": "offside_trap", "level": "on" },
+        { "primitive": "stop_short_goal_kicks", "level": "on" },
+        { "primitive": "tackling", "level": "committed" }
       ],
-      "duties": { "ST": "attack", "LW": "support", "RW": "support" },
+      "duties": { "ST": "support", "LW": "support", "RW": "support" },
       "formations": ["4-3-3", "4-2-3-1", "4-4-2"],
       "identity": [
         { "stat": "fouls", "direction": "up" },
@@ -67,11 +80,16 @@
       "name": "counter_attack",
       "primitives": [
         { "primitive": "mentality", "level": "cautious" },
+        { "primitive": "pressing", "level": "low" },
         { "primitive": "line_height", "level": "deep" },
+        { "primitive": "line_of_engagement", "level": "low" },
+        { "primitive": "on_winning_the_ball", "level": "always_counter" },
         { "primitive": "tempo", "level": "fast" },
-        { "primitive": "passing_directness", "level": "direct" }
+        { "primitive": "passing_directness", "level": "direct" },
+        { "primitive": "forward_runs", "level": "run_in_behind" },
+        { "primitive": "on_losing_the_ball", "level": "regroup" }
       ],
-      "duties": { "ST": "attack", "LW": "attack", "RW": "attack" },
+      "duties": { "ST": "attack", "LW": "support", "RW": "support" },
       "formations": ["4-4-2", "4-2-3-1", "4-4-1-1"],
       "identity": [
         { "stat": "possession_pct", "direction": "down" },
@@ -87,8 +105,10 @@
       "name": "direct",
       "primitives": [
         { "primitive": "mentality", "level": "balanced" },
-        { "primitive": "passing_directness", "level": "direct" },
-        { "primitive": "tempo", "level": "fast" }
+        { "primitive": "passing_directness", "level": "very_direct" },
+        { "primitive": "build_up", "level": "go_long" },
+        { "primitive": "tempo", "level": "fast" },
+        { "primitive": "forward_runs", "level": "push_up" }
       ],
       "duties": { "ST": "attack" },
       "formations": ["4-4-2", "4-4-1-1", "3-5-2"],
@@ -106,9 +126,13 @@
       "name": "wing_play",
       "primitives": [
         { "primitive": "mentality", "level": "positive" },
-        { "primitive": "width", "level": "wide" }
+        { "primitive": "width", "level": "very_wide" },
+        { "primitive": "attacking_channel", "level": "both_wings" },
+        { "primitive": "crossing", "level": "cross_more" },
+        { "primitive": "fullback_runs", "level": "overlap" },
+        { "primitive": "fullback_run_frequency", "level": "runs_more" }
       ],
-      "duties": { "LB": "attack", "RB": "attack", "LW": "attack", "RW": "attack" },
+      "duties": { "LB": "support", "RB": "support", "LW": "attack", "RW": "attack" },
       "formations": ["4-4-2", "4-3-3", "3-4-3"],
       "identity": [
         { "stat": "corners", "direction": "up" },
@@ -125,12 +149,20 @@
       "name": "gegenpress",
       "primitives": [
         { "primitive": "mentality", "level": "attacking" },
-        { "primitive": "pressing", "level": "high" },
+        { "primitive": "pressing", "level": "very_high" },
         { "primitive": "line_height", "level": "high" },
+        { "primitive": "line_of_engagement", "level": "very_high" },
+        { "primitive": "on_losing_the_ball", "level": "always_counter_press" },
+        { "primitive": "counter_press_length", "level": "long" },
+        { "primitive": "on_winning_the_ball", "level": "counter" },
         { "primitive": "tempo", "level": "fast" },
-        { "primitive": "passing_directness", "level": "short" }
+        { "primitive": "press_on_back_pass", "level": "on" },
+        { "primitive": "press_on_poor_touch", "level": "on" },
+        { "primitive": "press_on_facing_back", "level": "on" },
+        { "primitive": "press_on_wide", "level": "on" },
+        { "primitive": "tackling", "level": "committed" }
       ],
-      "duties": { "CM": "attack", "ST": "attack" },
+      "duties": { "CM": "support", "ST": "attack" },
       "formations": ["4-3-3", "4-2-3-1", "4-1-2-1-2"],
       "identity": [
         { "stat": "fouls", "direction": "up" },
@@ -146,10 +178,14 @@
       "name": "park_the_bus",
       "primitives": [
         { "primitive": "mentality", "level": "defensive" },
-        { "primitive": "pressing", "level": "low" },
-        { "primitive": "line_height", "level": "deep" },
-        { "primitive": "width", "level": "narrow" },
-        { "primitive": "tempo", "level": "slow" }
+        { "primitive": "pressing", "level": "very_low" },
+        { "primitive": "line_height", "level": "very_deep" },
+        { "primitive": "line_of_engagement", "level": "own_third" },
+        { "primitive": "defensive_width", "level": "very_compact" },
+        { "primitive": "on_winning_the_ball", "level": "always_keep_shape" },
+        { "primitive": "on_losing_the_ball", "level": "always_regroup" },
+        { "primitive": "tempo", "level": "slow" },
+        { "primitive": "tackling", "level": "careful" }
       ],
       "duties": {
         "CB": "defend", "LB": "defend", "RB": "defend", "DM": "defend", "CM": "defend",
