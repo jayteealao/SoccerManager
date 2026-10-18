@@ -321,9 +321,9 @@ fn a_version_three_snapshot_is_refused_by_name() {
 
 /// A snapshot taken while a player who just fouled still waits out the foul cooldown keeps
 /// that cooldown: the resumed match plays on tick for tick through the cooldown's end. It
-/// plays seed 0, the lowest whose first foul to stop play leaves its offender cooling down
-/// (the scoring match until a kick stayed on its way from its kicker along the line he sent
-/// it): in the seed-42 match since the player record came in,
+/// plays seed 2, the lowest whose first foul to stop play leaves its offender cooling down
+/// (seed 0 until every option was charged its chance of losing the ball; the scoring match
+/// until a kick stayed on its way from its kicker along the line he sent it): in the seed-42 match since the player record came in,
 /// the manager takes off the first offender whose foul stops play at that same stoppage, so
 /// nobody is left cooling down.
 #[test]
@@ -331,7 +331,7 @@ fn a_resumed_match_keeps_a_foul_cooldown_running() {
     let cooldown_match = || {
         let content = content();
         let [a, b] = default_teams(&content);
-        engine::MatchConfig::new(0, 90, &content, [&a, &b]).unwrap()
+        engine::MatchConfig::new(2, 90, &content, [&a, &b]).unwrap()
     };
     let mut sim = Simulation::new(cooldown_match()).unwrap();
     let mut waiting = None;

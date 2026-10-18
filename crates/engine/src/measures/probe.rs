@@ -20,7 +20,10 @@ use std::cell::RefCell;
 pub const KICK_KINDS: [&str; 4] = ["shot", "restart", "clear", "pass"];
 /// The option kinds, in the [`crate::measures::CHOICES`] order.
 pub const OPTION_KINDS: usize = 5;
-/// The terms of a pass's score, in the order the decision module adds them.
+/// The terms of a pass's score, in the order the decision module adds them. The pass's chance
+/// of losing the ball is split by the contest it meets: the passer's own pressed play of it
+/// (`loss_own`), the cut-outs on its way (`loss_cut`) and the receiver's touch and tackle on
+/// arrival (`loss_arrival`).
 pub const PASS_TERMS: [&str; 17] = [
     "progress",
     "vision",
@@ -31,11 +34,11 @@ pub const PASS_TERMS: [&str; 17] = [
     "directness",
     "counter",
     "recycle",
-    "loss",
+    "loss_own",
     "role_target",
     "plan_bias",
-    "pressed_cost",
-    "received_cost",
+    "loss_cut",
+    "loss_arrival",
     "offside_cost",
     "screened",
     "rest",

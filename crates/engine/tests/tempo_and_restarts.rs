@@ -114,13 +114,14 @@ fn a_throw_in_a_corner_and_a_goal_kick_are_restart_kicks() {
     );
 }
 
-/// Seed 0, the lowest whose kick-off is followed by a second kick before the ball goes dead
-/// (the shared seed 42 until tempo became patience and the mentality an appetite for risk).
+/// Seed 2, the lowest whose kick-off is followed by a second kick before the ball goes dead
+/// (seed 0 until every option was charged its chance of losing the ball; the shared seed 42
+/// until tempo became patience and the mentality an appetite for risk).
 #[test]
 fn the_kick_off_is_a_restart_kick_and_the_next_pass_is_a_pass() {
     let content = content();
     let [a, b] = default_teams(&content);
-    let mut sim = Simulation::new(MatchConfig::new(0, 5, &content, [&a, &b]).unwrap()).unwrap();
+    let mut sim = Simulation::new(MatchConfig::new(2, 5, &content, [&a, &b]).unwrap()).unwrap();
     let kicks = |s: &engine::sim::Summary| {
         (0..2)
             .map(|t| s.passes[t] + s.clearances[t] + s.restart_kicks[t] + s.shots[t])

@@ -85,12 +85,13 @@ fn edit_band(content: &Path, name: &str, edit: impl FnOnce(&mut Value)) {
     std::fs::write(&path, serde_json::to_string_pretty(&doc).unwrap()).unwrap();
 }
 
-/// A band of the equal suite no match can sit inside: fouls per team between 0 and 0.1.
+/// A band of the equal suite no match can sit inside: passes per team between 0 and 0.1 (fouls per
+/// team until matches with no foul came in).
 fn impossible_band(gates: bool) -> Value {
     json!({
         "band": "probe_fail",
         "suites": ["equal"],
-        "measure": { "kind": "mean", "per": "team", "of": ["fouls.{side}"] },
+        "measure": { "kind": "mean", "per": "team", "of": ["passes.{side}"] },
         "design": { "lo": 0.0, "hi": 0.1, "smallest_shift": 0.05 },
         "real": {
             "source": { "none": "a test band with no real counterpart" },

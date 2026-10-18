@@ -279,6 +279,39 @@ pub struct Options {
     pub nearest_opp_pos: DVec2,
 }
 
+/// The chance of losing the ball on one option, as its chooser sees it: each contest the
+/// option meets (a take-on, a tackle, a block, a cut-out, a reception under pressure), in
+/// turn, with its own chance of losing the ball at its own place. `cost` adds, for each
+/// contest, the chance that the ball is lost there first times the loss danger of that place;
+/// the option's loss term is the side's loss weight times it.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct LossChance {
+    /// The chance that the ball survives every contest met so far.
+    kept: f64,
+    /// The sum of each contest's chance of losing the ball there first x its danger.
+    cost: f64,
+}
+
+impl LossChance {
+    /// No contest met yet.
+    pub(crate) const NONE: Self = Self {
+        kept: 1.0,
+        cost: 0.0,
+    };
+
+    /// Meets a contest that loses the ball with `chance` at a place of loss danger `danger`.
+    pub(crate) fn meet(&mut self, chance: f64, danger: f64) {
+        let chance = chance.clamp(0.0, 1.0);
+        self.cost += self.kept * chance * danger;
+        self.kept *= 1.0 - chance;
+    }
+
+    /// The danger-weighted chance of losing the ball ([`LossChance`]).
+    pub(crate) fn cost(self) -> f64 {
+        self.cost
+    }
+}
+
 /// The option a carrier takes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Choice {
@@ -1030,8 +1063,13 @@ impl DecisionModule for DecisionV1 {
         // the side's own threat near the goal it attacks; each grows with the square of the
         // nearness to its goal, the second weighted by `decision.attack_danger`, so the danger
         // is 1 at the own goal line and `attack_danger` at the attacked one. A clearance's
-        // failure chance is `decision.clear_loss`, at the place it lands; a shot's is
-        // `decision.shot_loss x (1 - p)`, at the shooter's place, `p` his read of its chance.
+        // failure chance is `decision.clear_loss`, at the place it lands. A pass, a dribble and
+        // a shot pay the chance of losing the ball ([`LossChance`]) to the defenders they meet,
+        // read from the contests the engine resolves, each at its own place: a pass the
+        // passer's own pressed execution, each cut-out on its way and the receiver's touch and
+        // tackle on arrival; a dribble each take-on on its carry line and the tackles near its
+        // end; a shot each block on its path, then `decision.shot_loss x (1 - p)` at the
+        // shooter's place, `p` his read of its chance.
         // On winning the ball: inside the side's regain window a counter plays the ball
         // forward and holds it less; 0 outside it and at the default.
         let counter = counter_weight(view, team, carrier.slot);
@@ -1134,8 +1172,9 @@ impl DecisionModule for DecisionV1 {
         // (`xg.keeper_coef`), and moved by his own strike (`decision.shot_skill` x his
         // execute share, blended toward his pressure share as the press grows). The score
         // costs `shot_distance` x the distance of a central shot with that chance, over the
-        // side's reach (`shot_range` plus the final third's reach, hook `shot.range`), and a
-        // shot that does not score gives the ball away: the loss term with his read chance.
+        // side's reach (`shot_range` plus the final third's reach, hook `shot.range`), and it
+        // pays its chance of losing the ball: to a block on its path, and when it is not
+        // blocked and does not score, with his read chance.
         // The outcome reads the real chance, not his read.
         let (shot, shot_read) = if keeper {
             (None, 0.0)
@@ -1177,6 +1216,20 @@ impl DecisionModule for DecisionV1 {
             let xg = crate::sim::shot_xg(carrier.pos, side.attack_x, &t.xg, view.pitch());
             let off = crate::sim::keeper_off_line(view, side.attack_x);
             let reach = t.shot_range + plan.shot_reach_m;
+            // The chance of losing the ball to a block: each outfield opponent within his block
+            // reach of the shot's path tries once, as the shot contest does
+            // (`shots.block_chance`), and a blocked shot is lost where he stands.
+            let mut blocks = LossChance::NONE;
+            for p in players {
+                if p.team != team
+                    && p.id != their_keeper
+                    && p.active()
+                    && segment_distance(p.pos, carrier.pos, goal)
+                        < t.shots.block_reach * p.derived.knobs.block
+                {
+                    blocks.meet(t.shots.block_chance, danger(p.pos));
+                }
+            }
             let read = |off_seen: f64| {
                 let seen = crate::sim::keeper_off_xg(
                     xg,
@@ -1189,9 +1242,11 @@ impl DecisionModule for DecisionV1 {
                 );
                 let p =
                     contract::curve::shifted(seen, w.shot_skill * (2.0 * strike - 1.0), 0.0, 1.0);
+                let mut lost = blocks;
+                lost.meet(w.shot_loss * (1.0 - p), danger(carrier.pos));
                 -w.shot_distance * crate::sim::central_distance(p, &t.xg, view.pitch())
                     / reach.max(1.0)
-                    - loss(w.shot_loss * (1.0 - p), carrier.pos)
+                    - plan.loss_weight * lost.cost()
             };
             let base = w.shot_base
                 + w.shot_lane * ((lane.min(5.0) - 2.5) / 2.5)
@@ -1240,12 +1295,19 @@ impl DecisionModule for DecisionV1 {
             }
             let mut lane: f64 = 6.0;
             let mut receiver_space: f64 = 8.0;
-            for opp in players {
+            let mut marker = None;
+            for (k, opp) in players.iter().enumerate() {
                 if opp.team == team || !opp.active() {
                     continue;
                 }
                 lane = lane.min(segment_distance(opp.pos, carrier.pos, mate.pos));
-                receiver_space = receiver_space.min((opp.pos - mate.pos).length());
+                let gap = (opp.pos - mate.pos).length();
+                if gap < receiver_space {
+                    receiver_space = gap;
+                }
+                if marker.is_none_or(|(g, _)| gap < g) {
+                    marker = Some((gap, k));
+                }
             }
             #[cfg(feature = "measures")]
             crate::measures::probe::note_candidate(lane >= w.min_lane);
@@ -1300,15 +1362,49 @@ impl DecisionModule for DecisionV1 {
             } else {
                 0.0
             };
-            // The receiver's press on arrival (named mechanism): the pressure he will be under
-            // once the ball is his, each opponent's reaction and run against the ball's flight
-            // and his control time, as the passer reads it ([`crate::pressure::arrival_read`]:
-            // a weak or pressed reader pictures a moving opponent late). It costs the pass the
-            // receiver's own chance to keep the ball under that pressure (his reception's
-            // difficulty and resistance, as a pressed touch reads them) at the danger of
-            // losing it there, and it is the receiver's part of the pass's failure: a team-mate
-            // a presser reaches before the ball is controlled is as good as marked, however far
-            // the presser stood when the pass was chosen.
+            // The pass's chance of losing the ball ([`LossChance`]), in the order the ball meets
+            // its contests. First his own play of it under the pressure on the ball he feels:
+            // an outfield pass kind with a pressure stage goes astray with his penalty for it
+            // (intensity x the pass's difficulty x (1 - his pass resistance)), about halfway.
+            let mut lost = LossChance::NONE;
+            if let (execute, Some(ps)) = kind.execute()
+                && felt > 0.0
+            {
+                lost.meet(
+                    crate::pressure::penalty(
+                        felt,
+                        crate::pressure::pass_difficulty(d, kind != PassKind::Pass),
+                        crate::pressure::pass_resistance(stages, execute, ps),
+                    ),
+                    danger((carrier.pos + mate.pos) * 0.5),
+                );
+            }
+            #[cfg(feature = "measures")]
+            let own_cost = lost.cost();
+            // Then each cut-out on its way ([`cut_chance`]): a ball along the ground passes
+            // every opponent who can reach its line in time; a lofted ball goes over them.
+            if matches!(kind, PassKind::Pass | PassKind::Throw) {
+                let v0 = kick_speed(d, 0.0, t);
+                for (k, opp) in players.iter().enumerate() {
+                    if opp.team != team && opp.active() && k != their_keeper {
+                        if let Some(chance) = cut_chance(view, k, carrier.pos, mate.pos, d, v0) {
+                            lost.meet(chance, danger(opp.pos));
+                        }
+                    }
+                }
+            }
+            #[cfg(feature = "measures")]
+            let cut_cost = lost.cost() - own_cost;
+            // Then the receiver's touch and the tackle on arrival (named mechanism): the
+            // pressure he will be under once the ball is his, each opponent's reaction and run
+            // against the ball's flight and his control time, as the passer reads it
+            // ([`crate::pressure::arrival_read`]: a weak or pressed reader pictures a moving
+            // opponent late). Under it his touch fails with `decision.touch_under_pressure` x
+            // his reception penalty (his reception's difficulty and resistance, as a pressed
+            // touch reads them), and the opponent nearest the receiving point, once he gets
+            // there, wins the ball with his tackle chance against a standing receiver: a
+            // team-mate a presser reaches before the ball is controlled is as good as marked,
+            // however far the presser stood when the pass was chosen.
             let arrives = crate::pressure::arrival_read(
                 players,
                 carrier,
@@ -1318,12 +1414,12 @@ impl DecisionModule for DecisionV1 {
                 pass_time(d, t),
                 side.attack_x,
             );
-            let received_cost = if arrives > 0.0 {
+            if arrives > 0.0 {
                 let mate_stages = view.skills(j);
                 let facing_back = (1.0 - mate.facing.x * side.attack_x) / 2.0;
                 let speed_share =
                     t.pass_arrival_speed / (t.control_speed * mate.derived.knobs.receive);
-                w.pressure_choice
+                let touch = w.touch_under_pressure
                     * crate::pressure::penalty(
                         arrives,
                         crate::pressure::reception_difficulty(
@@ -1332,24 +1428,15 @@ impl DecisionModule for DecisionV1 {
                             crate::pressure::read(mate_stages),
                         ),
                         crate::pressure::reception_resistance(mate_stages),
-                    )
-                    * danger(mate.pos)
-            } else {
-                0.0
-            };
-            // The pass fails as its lane closes and as its receiver will be pressed when the
-            // ball reaches him; the ball is lost about halfway.
-            let fail = 0.5 * ((1.0 - lane / 6.0) + (arrives / crate::pressure::THRESHOLD).min(1.0));
-            // His own chance to play it under pressure: an outfield pass kind with a pressure
-            // stage pays its keep cost.
-            let pressed_cost = match kind.execute() {
-                (execute, Some(ps)) if felt > 0.0 => keep_cost(
-                    crate::pressure::pass_difficulty(d, kind != PassKind::Pass),
-                    crate::pressure::pass_resistance(stages, execute, ps),
-                    (carrier.pos + mate.pos) * 0.5,
-                ),
-                _ => 0.0,
-            };
+                    );
+                let tackle = marker.map_or(0.0, |(_, k)| {
+                    (arrives / crate::pressure::THRESHOLD).min(1.0)
+                        * crate::rules::fouls::win_chance(view.skills(k), mate_stages, t)
+                });
+                lost.meet(1.0 - (1.0 - touch) * (1.0 - tackle), danger(mate.pos));
+            }
+            #[cfg(feature = "measures")]
+            let arrival_cost = lost.cost() - own_cost - cut_cost;
             let mate_depth = mate.pos.x * attack.x;
             let offside_cost = if reads_offside && mate_depth > depth.max(0.0) {
                 OFFSIDE_READ_COST * offside_read(mate_depth - offside_line, line_read)
@@ -1370,7 +1457,7 @@ impl DecisionModule for DecisionV1 {
                 + plan.directness * (gain.max(0.0) / 45.0)
                 + counter * (gain.max(0.0) / 45.0)
                 + recycle
-                - loss(fail, (carrier.pos + mate.pos) * 0.5)
+                - plan.loss_weight * lost.cost()
                 + layoff
                 + plan.slots[mate.slot].long_ball_target * (d / 45.0)
                 + flair
@@ -1378,8 +1465,6 @@ impl DecisionModule for DecisionV1 {
                 + build_up
                 + channel_bias
                 + cross
-                - pressed_cost
-                - received_cost
                 - offside_cost
                 - screened;
             let score = if has_traits {
@@ -1431,11 +1516,11 @@ impl DecisionModule for DecisionV1 {
                     plan.directness * (gain.max(0.0) / 45.0),
                     counter * (gain.max(0.0) / 45.0),
                     recycle,
-                    -loss(fail, (carrier.pos + mate.pos) * 0.5),
+                    -plan.loss_weight * own_cost,
                     layoff + plan.slots[mate.slot].long_ball_target * (d / 45.0),
                     flair + mood_risk * forward + build_up + channel_bias + cross,
-                    -pressed_cost,
-                    -received_cost,
+                    -plan.loss_weight * cut_cost,
+                    -plan.loss_weight * arrival_cost,
                     -offside_cost,
                     -screened,
                     0.0,
@@ -1475,7 +1560,7 @@ impl DecisionModule for DecisionV1 {
                 + skill(Stage::DRIBBLE_CHOOSE)
                 + role.dribble
                 + lone_dribble
-                - loss(0.5 * (near + (1.0 - space_ahead / 10.0)), carrier.pos)
+                - plan.loss_weight * dribble_loss(view, c, nearest_opp_pos, danger).cost()
                 // The side's dribbling weight (hook `dribble.weight`), 0 at its default.
                 + plan.dribble
                 - keep_cost(
@@ -1704,7 +1789,8 @@ impl DecisionModule for DecisionV1 {
                     };
                     side + (inside - side) * cut + (-inside - side) * hug
                 };
-                let target = carrier.pos + dir_goal * 8.0 + perp * (4.0 * side);
+                let target =
+                    carrier.pos + dir_goal * DRIBBLE_AHEAD_M + perp * (DRIBBLE_DRIFT_M * side);
                 CarrierPlan::Move {
                     target: view.pitch().clamp(target, 1.0),
                 }
@@ -2059,6 +2145,151 @@ pub(crate) fn dribble_line(
         1.0
     };
     (dir_goal, perp, drift)
+}
+
+/// How far a dribble carries the ball toward goal, and how far it drifts across, in metres: the
+/// place the carrier runs to ([`dribble_line`]).
+pub(crate) const DRIBBLE_AHEAD_M: f64 = 8.0;
+pub(crate) const DRIBBLE_DRIFT_M: f64 = 4.0;
+
+/// The chance that opponent `k` cuts out a pass along the ground from `from` to `to`, `d`
+/// metres long and kicked at `v0`, as the passer sees it: the cut-out the resolver draws
+/// ([`crate::possession`]'s pass cut: `decision.pass_cut` x twice his stage share x how close
+/// the ball passes him x its pace against what he controls) at the point of the line nearest
+/// him, with the gap he leaves there after his reaction and his run for the time the ball
+/// takes to get there ([`crate::pressure::run_distance`], as the arrival read runs an
+/// opponent). `None` when the cut is off, he stands off the line's ends, or he cannot get
+/// within his stretch of it in time.
+pub(crate) fn cut_chance(
+    view: &MatchView<'_>,
+    k: usize,
+    from: DVec2,
+    to: DVec2,
+    d: f64,
+    v0: f64,
+) -> Option<f64> {
+    let t = view.tuning();
+    let scale = t.decision.pass_cut;
+    if scale <= 0.0 || d <= 0.0 {
+        return None;
+    }
+    let p = view.player(k);
+    let u = (to - from) / d;
+    let s = (p.pos - from).dot(u);
+    if s <= 0.0 || s >= d {
+        return None;
+    }
+    let off = (p.pos - (from + u * s)).length();
+    let arrival = t.pass_arrival_speed;
+    let speed = (v0 * v0 - 2.0 * t.ground_friction * s)
+        .max(arrival * arrival)
+        .sqrt();
+    let time = 2.0 * s / (v0 + speed) - crate::pressure::ARRIVAL_REACTION_S;
+    let run = crate::pressure::run_distance(time, p.derived.max_speed, p.derived.max_accel);
+    let gap = (off - run).max(0.0);
+    let knobs = &p.derived.knobs;
+    let reach = t.reach_radius * knobs.intercept;
+    let stretch = reach * crate::possession::BLOCK_STRETCH;
+    if gap >= stretch || speed <= 0.0 {
+        return None;
+    }
+    let controls = t.control_speed * knobs.receive;
+    let stage = if gap < reach && speed <= controls {
+        Stage::INTERCEPT_SEE
+    } else {
+        Stage::BLOCK_EXECUTE
+    };
+    let share = view.skills(k).share(stage);
+    let ratio = (controls / speed).min(1.0);
+    Some((scale * 2.0 * share * (1.0 - gap / stretch) * ratio * ratio).clamp(0.0, 1.0))
+}
+
+/// The chance of losing the ball on carrier `c`'s dribble, as he sees it ([`LossChance`],
+/// each loss at the loss danger `danger` gives its place): his carry line to the place a
+/// dribble takes him ([`dribble_line`]: [`DRIBBLE_AHEAD_M`] toward goal, drifting
+/// [`DRIBBLE_DRIFT_M`] away from the opponent nearest him at `nearest_opp_pos`), run at his top
+/// speed. Each goal-side opponent the line brings within the take-on stretch meets him in a
+/// take-on, with the chance the resolver draws ([`crate::possession::duel_chance`]) at the
+/// place he first comes that close, the ball lost where the defender stands; then each other
+/// opponent who can reach the line's end in the time the carry takes tries a tackle on the
+/// running carrier (the tackle module's running chance), the ball lost at the end.
+pub(crate) fn dribble_loss(
+    view: &MatchView<'_>,
+    c: usize,
+    nearest_opp_pos: DVec2,
+    danger: impl Fn(DVec2) -> f64,
+) -> LossChance {
+    let t = view.tuning();
+    let carrier = view.player(c);
+    let attack_x = view.attack_x(carrier.team);
+    let (dir_goal, perp, side) = dribble_line(view, c, nearest_opp_pos);
+    let end = view.pitch().clamp(
+        carrier.pos + dir_goal * DRIBBLE_AHEAD_M + perp * (DRIBBLE_DRIFT_M * side),
+        1.0,
+    );
+    let line = end - carrier.pos;
+    let length = line.length();
+    let speed = carrier.max_speed();
+    let mut lost = LossChance::NONE;
+    if length <= 1e-6 || speed <= 0.0 {
+        return lost;
+    }
+    let u = line / length;
+    let vel = u * speed;
+    let reach = t.tackle_reach * crate::possession::TAKE_ON_STRETCH;
+    let keeper = view.keeper(1 - carrier.team);
+    let mut met = 0u32;
+    for (i, p) in view.players().iter().enumerate() {
+        if t.decision.take_on_contest <= 0.0
+            || p.team == carrier.team
+            || !p.active()
+            || i == keeper
+            || view.tick() < p.foul_ready
+        {
+            continue;
+        }
+        let w = p.pos - carrier.pos;
+        let along = w.dot(u);
+        let across = w.dot(w) - along * along;
+        if across >= reach * reach {
+            continue;
+        }
+        let enter = (along - (reach * reach - across).sqrt()).max(0.0);
+        if enter > length {
+            continue;
+        }
+        let to = p.pos - (carrier.pos + u * enter);
+        let d = to.length();
+        if d <= 0.0 || to.x * attack_x <= 0.0 {
+            continue;
+        }
+        met |= 1u32 << i;
+        lost.meet(
+            crate::possession::duel_chance(view, c, vel, speed, i, to / d),
+            danger(p.pos),
+        );
+    }
+    let time = length / speed;
+    for (i, p) in view.players().iter().enumerate() {
+        if p.team == carrier.team
+            || !p.active()
+            || met & (1u32 << i) != 0
+            || view.tick() < p.foul_ready
+        {
+            continue;
+        }
+        let run = crate::pressure::run_distance(time, p.derived.max_speed, p.derived.max_accel);
+        if (p.pos - end).length() >= run + t.tackle_reach {
+            continue;
+        }
+        let (me, them) = (view.skills(i), view.skills(c));
+        let mut win = crate::rules::fouls::running_win_chance(me, them, t);
+        if t.tackle_dribble_win > 0.0 {
+            win += crate::rules::fouls::dribble_win_chance(me, them, t);
+        }
+        lost.meet(win, danger(end));
+    }
+    lost
 }
 
 /// The side across `perp` that points from `pos` toward the centre line: 1 or −1.
@@ -3441,6 +3672,104 @@ mod tests {
         let (a, b) = (options(-0.8), options(-1.6));
         assert_ne!(a.dribble, b.dribble);
         assert_eq!(a.shot, b.shot);
+    }
+
+    /// The chance of losing the ball, a pass: a receiver an opponent reaches before the ball is
+    /// controlled still costs the pass (his touch and the tackle on arrival), with the lane and
+    /// space terms off so that nothing else differs; with the touch off the tackle alone still
+    /// costs it.
+    #[test]
+    fn a_marked_receiver_costs_the_pass_its_chance_of_losing_the_ball() {
+        let content = crate::data::test_support::shipped_content();
+        let schema = &content.tactics;
+        let mate = [(10, DVec2::new(25.0, 2.0))];
+        let pass = |marker: DVec2, touch: f64| {
+            let tactics = crate::tactics::Tactics::defaults(schema);
+            // A deep defender keeps the receiver onside in both scenes.
+            let opps = [(13, marker), (15, DVec2::new(45.0, -25.0))];
+            scene_tuned(schema, tactics, 10.0, &mate, &opps, |w| {
+                w.lane = 0.0;
+                w.space = 0.0;
+                w.touch_under_pressure = touch;
+            })
+            .pass
+            .expect("the open team-mate is a pass")
+            .0
+        };
+        // Far: no opponent reaches the receiver before the ball is controlled.
+        let (near, far) = (DVec2::new(25.0, 3.6), DVec2::new(0.0, -30.0));
+        for touch in [0.88, 0.0] {
+            assert!(
+                pass(near, touch) < pass(far, touch) - 0.05,
+                "touch {touch}: marked {} against free {}",
+                pass(near, touch),
+                pass(far, touch)
+            );
+        }
+    }
+
+    /// The chance of losing the ball, a dribble: a free run still dribbles (the dribble is the
+    /// carrier's top option with nobody near), and two goal-side defenders on the carry line
+    /// cost the dribble more than one, which costs it more than none.
+    #[test]
+    fn a_dribble_into_goal_side_defenders_costs_the_dribble_and_a_free_run_still_dribbles() {
+        let content = crate::data::test_support::shipped_content();
+        let schema = &content.tactics;
+        // One team-mate far behind, out of passing range, so the carrier has no pass.
+        let mate = [(10, DVec2::new(-48.0, 30.0))];
+        let options = |opps: &[(usize, DVec2)]| {
+            let tactics = crate::tactics::Tactics::defaults(schema);
+            scene(schema, tactics, 0.0, &mate, opps)
+        };
+        let free = options(&[]);
+        let dribble = free.dribble.expect("a free carrier may dribble");
+        for (name, other) in [
+            ("shot", free.shot),
+            ("hold", free.hold),
+            ("clear", Some(free.clear)),
+        ] {
+            assert!(
+                other.is_none_or(|s| dribble > s),
+                "free run: dribble {dribble} against {name} {other:?}"
+            );
+        }
+        // The nearest defender, just above the carrier's line to goal, turns the carry down
+        // and across; the second stands on that line farther on.
+        let (a, b) = (DVec2::new(3.0, 2.5), DVec2::new(6.5, -1.3));
+        let one = options(&[(13, a)])
+            .dribble
+            .expect("dribble with one defender");
+        let two = options(&[(13, a), (14, b)])
+            .dribble
+            .expect("dribble with two defenders");
+        assert!(
+            one < dribble && two < one,
+            "free {dribble}, one {one}, two {two}"
+        );
+    }
+
+    /// The chance of losing the ball, a shot: a defender within his block reach of the shot's
+    /// path costs the shot its block chance, with the shot's lane term off so that nothing
+    /// else differs.
+    #[test]
+    fn a_defender_on_the_shots_path_costs_the_shot_its_block() {
+        let content = crate::data::test_support::shipped_content();
+        let schema = &content.tactics;
+        let shot = |blocker: DVec2| {
+            let tactics = crate::tactics::Tactics::defaults(schema);
+            scene_tuned(schema, tactics, 36.0, &[], &[(13, blocker)], |w| {
+                w.shot_lane = 0.0;
+            })
+            .shot
+            .expect("an outfield carrier has a shot")
+        };
+        let (on, off) = (DVec2::new(40.0, 1.8), DVec2::new(40.0, 12.0));
+        assert!(
+            shot(on) < shot(off) - 0.05,
+            "blocked path {} against open path {}",
+            shot(on),
+            shot(off)
+        );
     }
 
     /// Box runs: while a team-mate carries the ball wide in the final third, both home strikers

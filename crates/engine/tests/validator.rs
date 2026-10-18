@@ -85,9 +85,11 @@ fn engine_events(config: engine::MatchConfig) -> (Vec<engine::EngineEvent>, Stre
 /// lifted on a counter rather than with the press, seed 4 until opponents walked round the
 /// restart spot, seed 2 until tempo became patience and the mentality an appetite for risk)
 /// played through extra time and a
-/// shoot-out; and seed 15 between two generated top-flight clubs (league seed 1), the lowest
-/// that brings a second yellow since the styles became presets of primitives (seed 2 until
-/// then), with the refused substitution brought by the knockout match
+/// shoot-out; and seed 172 between two generated top-flight clubs (league seed 1), the lowest
+/// that brings a second yellow since every option was charged its chance of losing the ball
+/// (seed 15 until then, which brought the straight red too; seed 2 until the styles became
+/// presets of primitives), and seed 17 between the same clubs, the lowest that brings a
+/// straight red now, with the refused substitution brought by the knockout match
 /// (by the other streams until a kick stayed on its way from its kicker; seed 1 until opponents walked round the restart spot; seed 4, which brought both, until
 /// tempo became patience and the mentality an appetite for risk). Until the AI
 /// sides started in the style their staff picks the knockout match was seed 1 and the
@@ -120,8 +122,10 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
     );
     streams.push(("knockout seed 19".into(), (events, rules)));
     let league = engine::data::generate_league(1, 2, &content);
-    let generated = engine::MatchConfig::new(15, 90, &content, [&league[0], &league[1]]).unwrap();
-    streams.push(("generated seed 15".into(), engine_events(generated)));
+    let generated = engine::MatchConfig::new(172, 90, &content, [&league[0], &league[1]]).unwrap();
+    streams.push(("generated seed 172".into(), engine_events(generated)));
+    let red = engine::MatchConfig::new(17, 90, &content, [&league[0], &league[1]]).unwrap();
+    streams.push(("generated seed 17".into(), engine_events(red)));
     let all: Vec<&engine::EngineEvent> = streams.iter().flat_map(|(_, (e, _))| e).collect();
     let has = |f: &dyn Fn(&engine::EngineEvent) -> bool| all.iter().any(|e| f(e));
     assert!(has(&|e| e.kind == Injury), "an injury is judged");

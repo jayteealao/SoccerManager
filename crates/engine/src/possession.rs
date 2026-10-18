@@ -315,8 +315,7 @@ pub const TAKE_ON_STRETCH: f64 = 2.5;
 /// as the stance and the pace stand.
 fn take_on(view: &MatchView<'_>, c: usize, i: usize) -> Option<f64> {
     let t = view.tuning();
-    let scale = t.decision.take_on_contest;
-    if scale <= 0.0 {
+    if t.decision.take_on_contest <= 0.0 {
         return None;
     }
     let carrier = view.player(c);
@@ -339,17 +338,34 @@ fn take_on(view: &MatchView<'_>, c: usize, i: usize) -> Option<f64> {
     {
         return None;
     }
-    let line = to / d;
-    let angle = (1.0 + (carrier.vel / speed).dot(line)) / 2.0;
+    Some(duel_chance(view, c, carrier.vel, speed, i, to / d))
+}
+
+/// The chance that defender `i` wins a take-on against carrier `c` who meets him running at
+/// `vel` (speed `speed`, above 0), `line` the unit direction from the carrier to him: the
+/// contest of [`take_on`] at that meeting. The resolver reads it at the meeting as it happens;
+/// the carrier's choice reads it where his carry line would bring him to the defender
+/// ([`crate::decision`], the chance of losing the ball).
+pub(crate) fn duel_chance(
+    view: &MatchView<'_>,
+    c: usize,
+    vel: DVec2,
+    speed: f64,
+    i: usize,
+    line: DVec2,
+) -> f64 {
+    let t = view.tuning();
+    let p = view.player(i);
+    let angle = (1.0 + (vel / speed).dot(line)) / 2.0;
     // How much of a bad stance and of the closing speed counts: 1 at the neutral read, none
     // at a full read, twice at none.
     let unread = 2.0 * (1.0 - take_on_read(view.skills(i)));
     let turned = (1.0 + p.facing.dot(line)) / 2.0;
     let square = (1.0 - turned * unread).clamp(0.0, 1.0);
-    let closing = (carrier.vel - p.vel).dot(line).max(0.0);
+    let closing = (vel - p.vel).dot(line).max(0.0);
     let pace = (1.0 - unread * closing / (2.0 * p.max_speed())).clamp(0.0, 1.0);
     let contest = 2.0 * running_win_chance(view.skills(i), view.skills(c), t);
-    Some((scale * contest * angle * square * pace).clamp(0.0, 1.0))
+    (t.decision.take_on_contest * contest * angle * square * pace).clamp(0.0, 1.0)
 }
 
 /// A defender's read of a take-on, 0 to 1 (0.5 for a player rated 10): how early he sees the
