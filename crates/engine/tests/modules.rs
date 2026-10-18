@@ -644,15 +644,17 @@ fn faulty_offside_fails_the_gate_at_a_named_window() {
 
     let content = common::content();
     let [a, b] = common::default_teams(&content);
-    // Seed 0: the lowest seed whose match brings an offside call the faulty module gets
-    // wrong (seed 1 until the AI sides started in the style their staff picks; seed 2 until the player as a person joined the team shape; seed 1 until the
+    // Seed 1: the lowest seed whose match brings an offside call the faulty module gets
+    // wrong (seed 0 until the computer manager grouped its substitutions and a player going for a
+    // loose ball stopped being pushed off it; seed 1
+    // until the AI sides started in the style their staff picks; seed 2 until the player as a person joined the team shape; seed 1 until the
     // restart waits shortened the live time; seed 42 until the team
     // stands went off, when its match stopped bringing one; seed 4 until defenders could cut
     // out passes; seed 10 until a pressed carrier weighed his options by the pressure he feels; seed 14
     // until a player stepped aside from a team-mate walking at him; seed 9 until an attacker
     // read the offside line late; seed 5 until a pass from the own area looked past a screened
     // team-mate; seed 14 until a passer read the press his receiver would meet).
-    let fixture = Fixture::seed(0);
+    let fixture = Fixture::seed(1);
     let clean = gate::play_fixture(
         &fixture,
         &Inputs {

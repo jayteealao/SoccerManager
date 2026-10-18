@@ -191,7 +191,8 @@ fn a_change_run_without_power_never_passes_and_reports_its_stages_and_rules() {
 /// A flag that moves one measure by more than its band's smallest shift is reported
 /// as a move of that band, and the joint verdict fails. The flag is first shown to move the
 /// measure in two plain runs, and the same change run without the flag shows no move. The runs
-/// start from seed 8, the lowest whose 12 short matches show the move (seed 14 until a kick stayed on its way from its kicker along the line he sent it; seed 1 until a passer read the press his receiver would meet;
+/// start from seed 14, the lowest whose 12 short matches show the move (seed 8 until
+/// the computer manager grouped its substitutions and a player going for a loose ball stopped being pushed off it; seed 14 until a kick stayed on its way from its kicker along the line he sent it; seed 1 until a passer read the press his receiver would meet;
 /// seed 9 until the player record's mood and personality came in, when its 12 matches moved
 /// 0.29 cards).
 #[test]
@@ -201,7 +202,7 @@ fn a_flag_that_shifts_a_measure_fails_its_band_and_the_joint_verdict() {
     let plain = |name: &str, args: &[&str]| {
         let run = data.join(name);
         let out = calibrate_on(
-            "8",
+            "14",
             &data,
             &content,
             &run,
@@ -220,7 +221,7 @@ fn a_flag_that_shifts_a_measure_fails_its_band_and_the_joint_verdict() {
     let change = |name: &str, args: &[&str]| {
         let run = data.join(name);
         let out = calibrate_on(
-            "8",
+            "14",
             &data,
             &content,
             &run,

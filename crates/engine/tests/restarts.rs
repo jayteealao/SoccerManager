@@ -373,8 +373,9 @@ impl TickSink for Order {
 /// each of its four halves. Each starts at the tunnel on the near touchline, ends on the
 /// positions of that record, and never moves a player faster than the walk; the records stay
 /// consecutive across it, and the match plays exactly as with no one listening, so the
-/// walk-on takes no match time and no ball-in-play time. Seed 5 is the lowest knockout seed
-/// level after 90 minutes with all 22 players on through extra time (seed 1 until the running
+/// walk-on takes no match time and no ball-in-play time. Seed 2 is the lowest knockout seed
+/// level after 90 minutes with all 22 players on through extra time (seed 5 until a player
+/// going for a loose ball stopped being pushed off it; seed 1 until the running
 /// pace lifted on a counter rather than with the press; seed 9 until opponents walked round
 /// the restart spot; seed 0 until the in-possession settings came in; seed 8 until tempo
 /// became patience and the mentality an appetite for risk; seed 0 until a player stepped aside
@@ -386,7 +387,7 @@ impl TickSink for Order {
 fn each_half_opens_with_a_walk_on_that_takes_no_match_time() {
     let content = common::content();
     let [a, b] = common::default_teams(&content);
-    let config = MatchConfig::new(5, 90, &content, [&a, &b])
+    let config = MatchConfig::new(2, 90, &content, [&a, &b])
         .unwrap()
         .with_knockout();
     let dt = config.tuning.dt;

@@ -268,7 +268,8 @@ fn the_golden_file_records_the_scheme_this_build_plays() {
 }
 
 /// The fixtures that reach every subsystem: seed 42, and a knockout match without a script
-/// pack that goes to extra time and a shoot-out (seed 5, the lowest that does; seed 12 until the
+/// pack that goes to extra time and a shoot-out (seed 2, the lowest that does; seed 5 until a
+/// player going for a loose ball stopped being pushed off it; seed 12 until the
 /// AI manager's substitutions followed the situation and the styles carried rules; seed 43 until a kick stayed on
 /// its way from its kicker along the line he sent it; seed 4 until a passer read the press his receiver would meet; seed 1 until
 /// the running pace lifted on a counter rather than with the press, seed 4 until opponents
@@ -281,7 +282,7 @@ fn counter_fixtures() -> [Fixture; 2] {
         Fixture::seed(42),
         Fixture {
             pack: None,
-            ..Fixture::knockout(5)
+            ..Fixture::knockout(2)
         },
     ]
 }
