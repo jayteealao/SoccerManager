@@ -97,7 +97,8 @@
       "attack_danger": 1.963,
       "clear_loss": 0.686,
       "shot_loss": 0.724,
-      "perceive": 0.1
+      "perceive": 0.1,
+      "clear_worth": 2.0
     },
     "injury_per_tackle": 0.004,
     "injury_per_minute": 0.0002,

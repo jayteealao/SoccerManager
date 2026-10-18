@@ -611,8 +611,8 @@ pub struct DecisionWeights {
     pub take_on_contest: f64,
     #[garde(range(min = -5.0, max = 5.0))]
     pub first_touch: f64,
-    /// A clearance: the base, the bonus under pressure in the own third, and the base for
-    /// a goalkeeper.
+    /// A clearance: the base, the bonus under pressure (scaled by the danger the clearance
+    /// removes, see clear_worth), and the base for a goalkeeper.
     #[garde(range(min = -5.0, max = 5.0))]
     pub clear: f64,
     #[garde(range(min = -5.0, max = 5.0))]
@@ -685,6 +685,17 @@ pub struct DecisionWeights {
     #[serde(default)]
     #[garde(range(min = 0.0, max = 2.0))]
     pub perceive: f64,
+    /// A clearance is worth the danger it removes from the side's own goal at the clearer's
+    /// place: with `r = (1 - s)^2 / (19/27)` (the first term of the loss danger, 1 on average
+    /// over the side's own third), it scores `clear + (r - 1) x clear_worth + r x
+    /// clear_pressure x press`. Far from the own goal `r` is near 0, so the clearance loses
+    /// about `clear_worth` and an attacker near the goal he attacks does not clear. A design
+    /// value, checked against the StatsBomb open data's clearances by third (0.839 in the own
+    /// third, 0.155 in the middle, 0.005 in the final). 0 (an older file) leaves only the
+    /// pressure bonus scaled.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub clear_worth: f64,
 }
 
 fn default_attack_danger() -> f64 {
@@ -813,6 +824,7 @@ impl Default for Tuning {
                 clear_loss: 0.0,
                 shot_loss: 0.0,
                 perceive: 0.0,
+                clear_worth: 0.0,
             },
             injury_per_tackle: INJURY_PER_TACKLE,
             injury_per_minute: INJURY_PER_MINUTE,

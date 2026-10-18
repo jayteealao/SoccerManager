@@ -1065,7 +1065,7 @@ impl DecisionModule for DecisionV1 {
         // intensity he feels, his read of the press included. `pressed` is whether it passes
         // the one threshold (the carry window, the skill gate and the pressed traits read it);
         // `near` grades the pressed terms of the scores (the judgement, the take-on, the loss
-        // terms, the clear in his own third) around the threshold ([`crate::pressure::grade`]).
+        // terms, the clear's pressure bonus) around the threshold ([`crate::pressure::grade`]).
         // The lone forward's hold-up reads the intensity the observer sees (`seen_pressed`):
         // a press he feels more than it is, from his blind side, does not make him hold the
         // ball up.
@@ -1453,16 +1453,17 @@ impl DecisionModule for DecisionV1 {
             let dribble = (!pressed || gates.take_on_try || tricks).then_some(dribble);
             Some((dribble, hold))
         };
-        let own_third = carrier.pos.x * attack.x < -view.pitch().half_length() / 3.0;
+        // A clearance is worth the danger it removes from the side's own goal at the
+        // clearer's place: the first term of the loss danger, scaled to 1 on average over the
+        // side's own third (the mean of `(1 - s)^2` over `s` in 0 to 1/3 is 19/27).
+        let removed = {
+            let s = ((carrier.pos.x * side.attack_x + half) / (2.0 * half)).clamp(0.0, 1.0);
+            (1.0 - s) * (1.0 - s) * 27.0 / 19.0
+        };
         let clear = if keeper {
             w.keeper_clear
         } else {
-            w.clear
-                + if own_third {
-                    w.clear_pressure * near
-                } else {
-                    0.0
-                }
+            w.clear + (removed - 1.0) * w.clear_worth + removed * w.clear_pressure * near
         } - carry
             // A clearance gives the ball away where it lands.
             - loss(w.clear_loss, clear_landing(carrier.pos, attack, half));
@@ -3016,6 +3017,22 @@ mod tests {
         assert_eq!(clear(2.0, 0.0), clear(0.0, 0.0));
         assert!(clear(1.0, 0.686) < clear(0.0, 0.686));
         assert!(clear(2.0, 0.686) < clear(1.0, 0.686));
+    }
+
+    /// A clearance is worth the danger it removes from the own goal: the same clearance
+    /// scores lower the farther the clearer stands from his own goal, and by about
+    /// `clear_worth` near the goal he attacks; with `clear_worth` 0 and no press it scores
+    /// the same everywhere.
+    #[test]
+    fn a_clearance_is_worth_the_danger_it_removes_from_the_own_goal() {
+        let clear =
+            |x: f64, worth: f64| scene_at_loss_weight(0.0, x, &[], |w| w.clear_worth = worth).clear;
+        assert!(clear(-35.0, 2.0) > clear(-20.0, 2.0));
+        assert!(clear(-20.0, 2.0) > clear(10.0, 2.0));
+        assert!(clear(10.0, 2.0) > clear(40.0, 2.0));
+        let far = clear(40.0, 0.0) - clear(40.0, 2.0);
+        assert!(far > 1.7 && far <= 2.0, "{far}");
+        assert_eq!(clear(-35.0, 0.0), clear(40.0, 0.0));
     }
 
     /// The carrier's read of his options strays less as his vision, decisions and composure
