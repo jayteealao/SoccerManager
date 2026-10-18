@@ -2,7 +2,9 @@
 //! formation anchor tolerance in open play, and the ball's place at a restart. The anchor rule
 //! flags a player that is far from the ball, far from its anchor, and closing on neither for
 //! the grace period (idle drift); a player who moves toward where the ball was on the previous
-//! record is closing on it, however fast the ball runs away from him; while the ball waits
+//! record is closing on it, however fast the ball runs away from him; a player on a run in
+//! behind is closing for as long as real runs last, and on his way back after it while he moves
+//! toward his anchor ([`RunSpell`]); while the ball waits
 //! where it left play before it appears at a restart spot, the spot stands for the ball. A
 //! sent-off or injured player at its parking spot beside the pitch is exempt from every player
 //! rule. The player-speed rule limits each
@@ -95,6 +97,60 @@ impl BallRest {
             self.still = 0;
         }
         self.still == limit
+    }
+}
+
+/// The longest a run in behind counts as closing, in seconds: the 99th percentile of the
+/// durations of 5,850 tracked runs in behind (DFL Bundesliga, Metrica, PFF FIFA World Cup 2022
+/// and SkillCorner A-League tracking, by the shared run definitions of [`crate::run_kind`];
+/// median 3.08 s, longest 15.42 s).
+pub const MAX_RUN_S: f64 = 9.81;
+
+/// The anchor rule's run state of one player, shared by the two checkers. A run is a spell at
+/// [`crate::run_kind::RUN_SPEED`] or faster that gains depth toward the goal his side attacks.
+/// While it lasts, for at most [`MAX_RUN_S`], the player is closing: real runs in behind take
+/// forwards far from their place and from the ball. After a run he is on his way back until he
+/// is near his anchor or the ball again, and while he moves toward his anchor he is closing on
+/// it, however fast the anchor slides away. A player who stands still far from both is not.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct RunSpell {
+    ticks: u32,
+    returning: bool,
+}
+
+impl RunSpell {
+    /// The player's step from `was` (the previous record; none on the first) to `now`, on a
+    /// side that attacks `attack_x`; `anchor` is his nearer anchor and `far` is true while he is
+    /// farther than the rule's distances from both his anchor and the ball. `true` when the step
+    /// counts as closing.
+    pub(crate) fn closing(
+        &mut self,
+        was: Option<DVec2>,
+        now: DVec2,
+        attack_x: f64,
+        anchor: DVec2,
+        far: bool,
+        t: &Tuning,
+    ) -> bool {
+        let Some(was) = was else {
+            *self = Self::default();
+            return false;
+        };
+        let step = now - was;
+        let on_run = step.length() >= crate::run_kind::RUN_SPEED * t.dt && step.x * attack_x > 0.0;
+        if on_run {
+            self.ticks += 1;
+        } else {
+            self.returning |= self.ticks > 0;
+            self.ticks = 0;
+        }
+        if !far {
+            self.returning = false;
+        }
+        let live = on_run && f64::from(self.ticks) * t.dt <= MAX_RUN_S;
+        let to_anchor = (anchor - now).normalize_or_zero();
+        let back = self.returning && step.dot(to_anchor) > 1e-3;
+        live || back
     }
 }
 
@@ -226,6 +282,7 @@ impl Validator {
     pub fn check(&self, records: &[TickRecord]) -> Vec<Violation> {
         let mut out = Vec::new();
         let mut far_ticks = [0u32; PLAYER_COUNT];
+        let mut runs = [RunSpell::default(); PLAYER_COUNT];
         let mut prev_dist = [[f64::INFINITY; 2]; PLAYER_COUNT];
         let mut prev_chase: Option<(DVec2, [DVec2; PLAYER_COUNT])> = None;
         let mut prev_ball: Option<DVec2> = None;
@@ -348,33 +405,41 @@ impl Validator {
             for (i, p) in pos.iter().enumerate() {
                 if parked[i] || shootout {
                     far_ticks[i] = 0;
+                    runs[i] = RunSpell::default();
                     continue;
                 }
                 let team = i / PLAYERS_PER_TEAM;
                 let slot = i % PLAYERS_PER_TEAM;
                 // The record does not say which team has the ball, so the nearer of the
                 // slot's two anchors counts.
-                let d_anchor = [true, false].map(|has| {
-                    (*p - teams[team].anchor(slot, reference, has, &self.tuning)).length()
-                });
-                let d_anchor = d_anchor[0]
-                    .min(d_anchor[1])
-                    .min(running::kick_off_place_distance(
-                        &teams[team],
-                        slot,
-                        *p,
-                        reference,
-                    ));
+                let anchors =
+                    [true, false].map(|has| teams[team].anchor(slot, reference, has, &self.tuning));
+                let nearer = running::nearer_anchor(anchors, *p);
+                let d_anchor = (*p - nearer).length().min(running::kick_off_place_distance(
+                    &teams[team],
+                    slot,
+                    *p,
+                    reference,
+                ));
                 let d_ball = (*p - reference).length();
                 let toward_ball = prev_chase
                     .is_some_and(|(was, at)| (*p - was).length() < (at[i] - was).length() - 1e-3);
+                let far = d_ball > self.tuning.anchor_ball_distance
+                    && d_anchor > self.tuning.anchor_tolerance;
+                let on_run = runs[i].closing(
+                    prev_chase.map(|(_, at)| at[i]),
+                    *p,
+                    teams[team].attack_x,
+                    nearer,
+                    far,
+                    &self.tuning,
+                );
                 let closing = d_ball < prev_dist[i][0] - 1e-3
                     || d_anchor < prev_dist[i][1] - 1e-3
-                    || toward_ball;
+                    || toward_ball
+                    || on_run;
                 prev_dist[i] = [d_ball, d_anchor];
-                let drifting = d_ball > self.tuning.anchor_ball_distance
-                    && d_anchor > self.tuning.anchor_tolerance
-                    && !closing;
+                let drifting = far && !closing;
                 far_ticks[i] = if drifting { far_ticks[i] + 1 } else { 0 };
                 if far_ticks[i] >= self.tuning.anchor_grace_ticks {
                     out.push(Violation {

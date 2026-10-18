@@ -20,8 +20,8 @@
 use std::collections::VecDeque;
 
 use super::{
-    BallRest, MAX_BALL_REST_S, MAX_BALL_SPEED, MIN_SEPARATION, RESTART_SPOT_TOLERANCE, StreamRules,
-    Violation,
+    BallRest, MAX_BALL_REST_S, MAX_BALL_SPEED, MIN_SEPARATION, RESTART_SPOT_TOLERANCE, RunSpell,
+    StreamRules, Violation,
 };
 use crate::error::EngineError;
 use crate::math::DVec2;
@@ -175,6 +175,8 @@ pub struct RunningCheck {
     /// reads it as the ball.
     fetch_spot: Option<DVec2>,
     far_ticks: [u32; PLAYER_COUNT],
+    /// Each player's run state for the anchor rule ([RunSpell]).
+    runs: [RunSpell; PLAYER_COUNT],
     prev_dist: [[f64; 2]; PLAYER_COUNT],
     /// The ball the anchor rule read on the previous record and every player's position
     /// then: a player who moves toward where the ball was is closing on it, however fast the
@@ -253,6 +255,7 @@ impl RunningCheck {
             entries: Vec::new(),
             fetch_spot: None,
             far_ticks: [0; PLAYER_COUNT],
+            runs: [RunSpell::default(); PLAYER_COUNT],
             prev_dist: [[f64::INFINITY; 2]; PLAYER_COUNT],
             prev_chase: None,
             shootout_from: None,
@@ -546,15 +549,17 @@ impl RunningCheck {
         for (i, p) in pos.iter().enumerate() {
             if parked[i] || shootout {
                 self.far_ticks[i] = 0;
+                self.runs[i] = RunSpell::default();
                 continue;
             }
             let team = i / PLAYERS_PER_TEAM;
             let slot = i % PLAYERS_PER_TEAM;
             // The record does not say which team has the ball, so the nearer of the slot's
             // two anchors counts.
-            let d_anchor = [true, false]
-                .map(|has| (*p - teams[team].anchor(slot, reference, has, &self.tuning)).length());
-            let d_anchor = d_anchor[0].min(d_anchor[1]).min(kick_off_place_distance(
+            let anchors =
+                [true, false].map(|has| teams[team].anchor(slot, reference, has, &self.tuning));
+            let nearer = nearer_anchor(anchors, *p);
+            let d_anchor = (*p - nearer).length().min(kick_off_place_distance(
                 &teams[team],
                 slot,
                 *p,
@@ -565,12 +570,22 @@ impl RunningCheck {
             let toward_ball = self
                 .prev_chase
                 .is_some_and(|(was, at)| (*p - was).length() < (at[i] - was).length() - 1e-3);
-            let closing =
-                d_ball < prev_dist[0] - 1e-3 || d_anchor < prev_dist[1] - 1e-3 || toward_ball;
+            let far = d_ball > self.tuning.anchor_ball_distance
+                && d_anchor > self.tuning.anchor_tolerance;
+            let on_run = self.runs[i].closing(
+                self.prev_chase.map(|(_, at)| at[i]),
+                *p,
+                teams[team].attack_x,
+                nearer,
+                far,
+                &self.tuning,
+            );
+            let closing = d_ball < prev_dist[0] - 1e-3
+                || d_anchor < prev_dist[1] - 1e-3
+                || toward_ball
+                || on_run;
             self.prev_dist[i] = [d_ball, d_anchor];
-            let drifting = d_ball > self.tuning.anchor_ball_distance
-                && d_anchor > self.tuning.anchor_tolerance
-                && !closing;
+            let drifting = far && !closing;
             self.far_ticks[i] = if drifting { self.far_ticks[i] + 1 } else { 0 };
             if self.far_ticks[i] >= self.tuning.anchor_grace_ticks {
                 bad(ANCHOR_TOLERANCE, "anchor_tolerance", Some(i), d_anchor);
@@ -731,9 +746,19 @@ pub(crate) fn kick_off_place_distance(team: &Team, slot: usize, at: DVec2, ball:
     }
 }
 
+/// The nearer to `at` of a slot's two anchors (with the ball, then without): the record does
+/// not say which team has the ball. Of two at the same distance, the first.
+pub(crate) fn nearer_anchor(anchors: [DVec2; 2], at: DVec2) -> DVec2 {
+    if (at - anchors[1]).length() < (at - anchors[0]).length() {
+        anchors[1]
+    } else {
+        anchors[0]
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::super::Validator;
+    use super::super::{MAX_RUN_S, Validator};
     use super::*;
     use crate::team::test_support::bare;
 
@@ -1033,6 +1058,215 @@ mod tests {
         let standing: Vec<TickRecord> = (1..=grace + 20).map(chase(0.0)).collect();
         assert!(anchors(&standing) > 0, "a still player drifts");
         same(&teams(), &[], &standing);
+    }
+
+    /// Records of a scene for the run rule: the ball at `ball(k)` on record `k`, every player
+    /// but player 5 standing on his anchor, and player 5 at `at(k)`.
+    fn run_scene(
+        ticks: std::ops::RangeInclusive<u32>,
+        ball: impl Fn(u32) -> DVec2,
+        at: impl Fn(u32) -> DVec2,
+    ) -> Vec<TickRecord> {
+        let tuning = Tuning::default();
+        let teams = [bare(0), bare(1)];
+        ticks
+            .map(|k| {
+                let b = ball(k);
+                let mut r = record(k);
+                r.ball = [b.x as f32, b.y as f32, 0.0];
+                for (i, p) in r.players.iter_mut().enumerate() {
+                    let a =
+                        teams[i / PLAYERS_PER_TEAM].anchor(i % PLAYERS_PER_TEAM, b, true, &tuning);
+                    *p = [a.x as f32, a.y as f32];
+                }
+                let p = at(k);
+                r.players[5] = [p.x as f32, p.y as f32];
+                r
+            })
+            .collect()
+    }
+
+    /// Player 5's anchor-rule violations in `records`, after a check that the two checkers
+    /// agree; no other player breaks the rule.
+    fn run_scene_anchors(records: &[TickRecord]) -> usize {
+        same(&teams(), &[], records);
+        let out = running(&teams(), &[], records);
+        let all = out
+            .totals()
+            .find(|(rule, _)| *rule == "anchor_tolerance")
+            .unwrap()
+            .1;
+        let his = out
+            .kept()
+            .iter()
+            .filter(|v| v.rule == "anchor_tolerance" && v.player == Some(5))
+            .count();
+        assert_eq!(all, his, "only player 5 drifts");
+        his
+    }
+
+    /// A run in behind takes a forward far from his anchor and from the ball, and he is closing
+    /// while it lasts: at 8 m/s toward the goal his side attacks for the grace period and 20
+    /// ticks more, from 30 m into that half with the ball 25 m behind him and 60 m across, no
+    /// violation. The control: the same path at a jog (3 m/s, below a run's speed) breaks the
+    /// rule, and so does standing still at the run's end.
+    #[test]
+    fn a_player_on_a_run_in_behind_is_closing() {
+        let tuning = Tuning::default();
+        let (grace, dt) = (tuning.anchor_grace_ticks, tuning.dt);
+        let ax = bare(0).attack_x;
+        let ball = move |_| DVec2::new(ax * 5.0, 30.0);
+        let path =
+            move |v: f64| move |k: u32| DVec2::new(ax * (30.0 + v * dt * f64::from(k)), -30.0);
+        let n = grace + 20;
+        let far = run_scene(1..=n, ball, path(3.0));
+        for r in &far {
+            let p = DVec2::new(f64::from(r.players[5][0]), f64::from(r.players[5][1]));
+            let b = DVec2::new(f64::from(r.ball[0]), f64::from(r.ball[1]));
+            let a = [true, false].map(|has| bare(0).anchor(5, b, has, &tuning));
+            assert!((p - b).length() > tuning.anchor_ball_distance);
+            assert!((p - nearer_anchor(a, p)).length() > tuning.anchor_tolerance);
+        }
+        assert!(run_scene_anchors(&far) > 0, "a jog away from both drifts");
+        assert_eq!(
+            run_scene_anchors(&run_scene(1..=n, ball, path(8.0))),
+            0,
+            "a run is closing"
+        );
+        let end = path(8.0)(n);
+        assert!(
+            run_scene_anchors(&run_scene(1..=n, ball, move |_| end)) > 0,
+            "a still player far from both drifts"
+        );
+    }
+
+    /// The end of a run: a forward runs at `run` m/s for 1 s toward the goal his side attacks,
+    /// brakes to a stop over 1.5 s, still going forward, then walks back toward his anchor at
+    /// 1.5 m/s for the grace period, with the ball still, 60 m across. Each step of the walk
+    /// aims at his nearer anchor.
+    fn run_brake_and_back(run: f64) -> Vec<TickRecord> {
+        let tuning = Tuning::default();
+        let (grace, dt) = (tuning.anchor_grace_ticks, tuning.dt);
+        let ax = bare(0).attack_x;
+        let b = DVec2::new(ax * 5.0, 30.0);
+        let (run_ticks, brake_ticks) = ((1.0 / dt) as u32, (1.5 / dt) as u32);
+        let mut at = vec![DVec2::new(ax * 30.0, -30.0)];
+        for k in 1..=run_ticks + brake_ticks + grace {
+            let p = *at.last().unwrap();
+            let step = if k <= run_ticks {
+                DVec2::new(ax * run * dt, 0.0)
+            } else if k <= run_ticks + brake_ticks {
+                let left = f64::from(run_ticks + brake_ticks - k) / f64::from(brake_ticks);
+                DVec2::new(ax * run * left * dt, 0.0)
+            } else {
+                let a = [true, false].map(|has| bare(0).anchor(5, b, has, &tuning));
+                (nearer_anchor(a, p) - p).normalize() * 1.5 * dt
+            };
+            at.push(p + step);
+        }
+        let n = at.len() as u32 - 1;
+        run_scene(1..=n, move |_| b, move |k| at[k as usize])
+    }
+
+    /// A run in behind ends with the forward braking far from his anchor and from the ball,
+    /// then walking back: no violation, because the run is closing while it lasts. The
+    /// controls: the same path at a jog (3 m/s, no run) breaks the rule while he jogs and
+    /// brakes away from both, and standing still at the end of the run breaks it too.
+    #[test]
+    fn a_run_in_behind_its_braking_and_the_way_back_break_no_rule() {
+        let tuning = Tuning::default();
+        let run = run_brake_and_back(8.0);
+        let end = DVec2::new(
+            f64::from(run[90].players[5][0]),
+            f64::from(run[90].players[5][1]),
+        );
+        for r in &run[..120] {
+            let p = DVec2::new(f64::from(r.players[5][0]), f64::from(r.players[5][1]));
+            let b = DVec2::new(f64::from(r.ball[0]), f64::from(r.ball[1]));
+            let a = [true, false].map(|has| bare(0).anchor(5, b, has, &tuning));
+            assert!((p - b).length() > tuning.anchor_ball_distance);
+            assert!((p - nearer_anchor(a, p)).length() > tuning.anchor_tolerance);
+        }
+        assert_eq!(
+            run_scene_anchors(&run),
+            0,
+            "a run, its braking and the way back"
+        );
+        assert!(
+            run_scene_anchors(&run_brake_and_back(3.0)) > 0,
+            "a jog away from both drifts"
+        );
+        let b = DVec2::new(f64::from(run[0].ball[0]), f64::from(run[0].ball[1]));
+        let n = tuning.anchor_grace_ticks + 20;
+        assert!(
+            run_scene_anchors(&run_scene(1..=n, move |_| b, move |_| end)) > 0,
+            "a still player far from both drifts"
+        );
+    }
+
+    /// The way back after a run: a step toward the anchor is closing even when the anchor
+    /// slides away faster than he walks; a still step is not; the same step with no run
+    /// before it is not; and the way back ends once he is near his anchor or the ball.
+    #[test]
+    fn a_runner_on_his_way_back_is_closing_while_he_moves_toward_his_anchor() {
+        let tuning = Tuning::default();
+        let dt = tuning.dt;
+        let run = DVec2::new(8.0 * dt, 0.0);
+        let walk = DVec2::new(-1.5 * dt, 0.0);
+        let anchor = DVec2::new(-60.0, -30.0);
+        let ran = || {
+            let mut spell = RunSpell::default();
+            let mut at = DVec2::new(-40.0, -30.0);
+            spell.closing(None, at, 1.0, anchor, true, &tuning);
+            for _ in 0..50 {
+                assert!(spell.closing(Some(at), at + run, 1.0, anchor, true, &tuning));
+                at += run;
+            }
+            (spell, at)
+        };
+        let (mut spell, at) = ran();
+        assert!(
+            spell.closing(Some(at), at + walk, 1.0, anchor, true, &tuning),
+            "on his way back"
+        );
+        let (mut spell, at) = ran();
+        assert!(
+            !spell.closing(Some(at), at, 1.0, anchor, true, &tuning),
+            "standing still"
+        );
+        let mut fresh = RunSpell::default();
+        let at = DVec2::new(-30.0, -30.0);
+        fresh.closing(None, at, 1.0, anchor, true, &tuning);
+        assert!(
+            !fresh.closing(Some(at), at + walk, 1.0, anchor, true, &tuning),
+            "no run before"
+        );
+        let (mut spell, at) = ran();
+        assert!(
+            !spell.closing(Some(at), at + walk, 1.0, anchor, false, &tuning),
+            "near again"
+        );
+        assert!(!spell.closing(Some(at + walk), at + walk * 2.0, 1.0, anchor, true, &tuning));
+    }
+
+    /// A run counts as closing for as long as real runs last ([`MAX_RUN_S`]) and no longer.
+    #[test]
+    fn a_run_is_closing_for_at_most_the_longest_real_runs() {
+        let tuning = Tuning::default();
+        let mut spell = RunSpell::default();
+        let step = DVec2::new(8.0 * tuning.dt, 0.0);
+        let limit = (MAX_RUN_S / tuning.dt + 1e-9).floor() as u32;
+        let mut at = DVec2::new(-40.0, -30.0);
+        let anchor = DVec2::new(-60.0, -30.0);
+        assert!(!spell.closing(None, at, 1.0, anchor, true, &tuning));
+        for k in 1..=limit + 50 {
+            let next = at + step;
+            let closing = spell.closing(Some(at), next, 1.0, anchor, true, &tuning);
+            assert_eq!(closing, k <= limit, "record {k}");
+            at = next;
+        }
+        // Turning back toward the anchor behind him ends the run; the way back is closing.
+        assert!(spell.closing(Some(at), at - step, 1.0, anchor, true, &tuning));
     }
 
     #[test]
