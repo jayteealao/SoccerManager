@@ -3,7 +3,8 @@
 //! - A1: no AI decision reads a fixed minute; the tactics file holds no fixed-minute field and
 //!   refuses each old one.
 //! - A2: every style's rules load in the person's rule form, and play the same under the AI
-//!   manager and a person, with substitutions off.
+//!   manager and a person, with substitutions off; with each rule's situation planted, each
+//!   preset's rule fires and the rest of the match is the same under both.
 //! - A3: the AI manager makes no tactical change of its own.
 //! - A4: a booked heavy tackler is replaced earlier on average (slow; paired seeds).
 //! - A5: a planted need above the bar is substituted at the stoppage, with the code of its
@@ -111,6 +112,84 @@ fn a2_a_styles_rules_play_the_same_under_the_ai_and_a_person() {
         fired += ai.3;
     }
     assert!(fired > 0, "no style's rule fired");
+}
+
+/// The score and the minute that put a rule's situation on the pitch: the score its score
+/// condition names (level when it names none) and two minutes inside its time left (the
+/// second half's start when it names none). A planted scene has had no chance yet, so a run
+/// of play below a small value holds and one above it does not.
+fn situation(rule: &engine::tactics::rules::Rule) -> ([u32; 2], u32) {
+    use engine::tactics::rules::{Condition, Score};
+    let mut score = [0, 0];
+    let mut minute = 46;
+    for c in &rule.when {
+        match *c {
+            Condition::Score(Score::Leading(by)) => score = [u32::from(by), 0],
+            Condition::Score(Score::Trailing(by)) => score = [0, u32::from(by)],
+            Condition::TimeLeft { minutes } => minute = 90 - minutes as u32 + 2,
+            _ => {}
+        }
+    }
+    (score, minute)
+}
+
+/// A2 on every preset and each of its rules: with the rule's situation planted, the home side
+/// on the preset (its tactics and rules, substitutions off) plays the rest of the match alike,
+/// tick for tick, under the AI manager and under a person, and the rule fires. The control
+/// comes first: two person sides with the same rules play the same match. The comparison
+/// reads every tick's records, the applied changes and the events; the gate's state bytes
+/// hold the manager kind itself, so they differ by construction.
+#[test]
+fn a2_each_presets_rules_fire_alike_under_the_ai_and_a_person() {
+    let content = content();
+    let [a, b] = default_teams(&content);
+    let styles = content.styles.as_ref().expect("the shipped styles");
+    let mut cases = 0;
+    for (k, style) in styles.styles.iter().enumerate() {
+        let tactics = style.tactics(style.formations[0], &content.tactics);
+        for (r, rule) in style.game_state.rules.iter().enumerate() {
+            let (score, minute) = situation(rule);
+            let play = |manager: Manager| {
+                let mut config =
+                    MatchConfig::new(100 + k as u64 * 10 + r as u64, 90, &content, [&a, &b])
+                        .unwrap();
+                config.modules.manager = &engine::ai::ManagerOff;
+                let config = config
+                    .with_ai_tactics(0, tactics)
+                    .with_manager(0, manager)
+                    .with_game_state(0, style.game_state.clone());
+                let mut sim = Scene::new(config).score(score).at_minute(minute).build();
+                let mut sink = engine::VecSink::default();
+                sim.run(&mut sink).unwrap();
+                let changes = sim.applied_changes().to_vec();
+                let fired = changes
+                    .iter()
+                    .any(|c| c.team == 0 && matches!(&c.change, Change::Rule { .. }));
+                (sink.records, changes, sim.take_events(), fired)
+            };
+            let (control, person) = (play(Manager::Human), play(Manager::Human));
+            assert!(
+                control.0 == person.0 && control.1 == person.1 && control.2 == person.2,
+                "{} rule {r}: the control differs",
+                style.name
+            );
+            let ai = play(Manager::Ai);
+            assert!(
+                ai.0 == person.0,
+                "{} rule {r}: the records differ",
+                style.name
+            );
+            assert_eq!(ai.1, person.1, "{} rule {r}", style.name);
+            assert_eq!(ai.2, person.2, "{} rule {r}", style.name);
+            assert!(
+                ai.3,
+                "{} rule {r} did not fire at {score:?}, minute {minute}",
+                style.name
+            );
+            cases += 1;
+        }
+    }
+    assert!(cases >= styles.styles.len(), "every preset has a rule");
 }
 
 #[test]
