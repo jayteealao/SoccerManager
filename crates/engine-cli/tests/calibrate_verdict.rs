@@ -535,8 +535,9 @@ fn formations_checks(report: &Value) -> Vec<&Value> {
 /// A change run judges and powers each formations band once, pooled over every pairing:
 /// one verdict row per band with no pairing, a power target named with the band that set
 /// it, and per-pairing rows reported as information only. A per-pairing row outside its
-/// range with the pooled band inside does not fail the joint verdict. The runs play seed 3,
-/// the lowest whose two pairings score differently (seed 2 until a passer read the press his receiver would meet; seed 9 until tempo became patience and
+/// range with the pooled band inside does not fail the joint verdict. The runs play seed 1,
+/// the lowest whose two pairings score differently (seed 3 until clearances, shots and
+/// misreads were scored by their cost; seed 2 until a passer read the press his receiver would meet; seed 9 until tempo became patience and
 /// the mentality an appetite for risk, when both pairings scored 0.375).
 #[test]
 fn a_change_run_judges_the_formations_suite_pooled_and_reports_pairings_as_information() {
@@ -554,7 +555,7 @@ fn a_change_run_judges_the_formations_suite_pooled_and_reports_pairings_as_infor
     });
     let run = data.join("run");
     let args = ["--matches", "8", "--pilot", "4", "--base-binary", exe()];
-    let out = formations_on("3", &data, &content, &run, &args);
+    let out = formations_on("1", &data, &content, &run, &args);
     let r = report(&out, &run);
 
     // One pooled verdict per formations band.
@@ -603,7 +604,7 @@ fn a_change_run_judges_the_formations_suite_pooled_and_reports_pairings_as_infor
         .fold(f64::INFINITY, f64::min);
     assert!(
         low < pooled,
-        "the pairings differ on seed 3: {low} {pooled}"
+        "the pairings differ on seed 1: {low} {pooled}"
     );
     edit_band(&content, "goals_per_match", |b| {
         b["design"]["lo"] = ((low + pooled) / 2.0).into();
@@ -616,7 +617,7 @@ fn a_change_run_judges_the_formations_suite_pooled_and_reports_pairings_as_infor
     edit_band(&content, "ten_plus_goals_share", |b| {
         b["design"]["hi"] = 1.0.into()
     });
-    let again = formations_on("3", &data, &content, &run, &args);
+    let again = formations_on("1", &data, &content, &run, &args);
     let text = stderr(&again);
     let after = report(&again, &run);
     assert!(text.contains("0 matches played"), "{text}");
@@ -725,10 +726,10 @@ fn a_plain_run_keeps_the_formations_checks_per_pairing_unchanged() {
     let out = formations(&data, &content, &run, &["--matches", "8"]);
     let r = report(&out, &run);
     let expected = json!([
-        {"band": "goalless_share", "pairing": "4-4-2 v 4-2-3-1", "value": 1.0, "lo": 0.04, "hi": 0.12, "pass": false, "se": 0.0},
+        {"band": "goalless_share", "pairing": "4-4-2 v 4-2-3-1", "value": 0.875, "lo": 0.04, "hi": 0.12, "pass": false, "se": 0.11693},
         {"band": "goalless_share", "pairing": "4-4-2 v 4-3-3", "value": 0.5, "lo": 0.04, "hi": 0.12, "pass": false, "se": 0.17678},
-        {"band": "goals_per_match", "pairing": "4-4-2 v 4-2-3-1", "value": 0.0, "lo": 2.4, "hi": 3.2, "pass": false, "se": 0.0},
-        {"band": "goals_per_match", "pairing": "4-4-2 v 4-3-3", "value": 0.5, "lo": 2.4, "hi": 3.2, "pass": false, "se": 0.17678},
+        {"band": "goals_per_match", "pairing": "4-4-2 v 4-2-3-1", "value": 0.125, "lo": 2.4, "hi": 3.2, "pass": false, "se": 0.11693},
+        {"band": "goals_per_match", "pairing": "4-4-2 v 4-3-3", "value": 0.625, "lo": 2.4, "hi": 3.2, "pass": false, "se": 0.24606},
         {"band": "ten_plus_goals_share", "pairing": "4-4-2 v 4-2-3-1", "value": 0.0, "lo": 0.0, "hi": 0.005, "pass": true, "se": 0.0},
         {"band": "ten_plus_goals_share", "pairing": "4-4-2 v 4-3-3", "value": 0.0, "lo": 0.0, "hi": 0.005, "pass": true, "se": 0.0}
     ]);

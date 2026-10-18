@@ -259,7 +259,9 @@ fn a_running_carrier_is_easier_to_tackle_than_a_standing_one() {
 }
 
 /// A calm match on `seed` with the cross clearance on, everyone spread away, the home
-/// striker on the ball at `from`. The home side attacks `x = 52.5` in the first half.
+/// striker on the ball at `from`. The home side attacks `x = 52.5` in the first half. A pass
+/// along the x axis starts wide of the post (`y = 4.5`), so it stays a pass: an open-play kick
+/// that would go in is a shot.
 fn pass_scene(seed: u64, from: DVec2) -> Scene {
     let mut config = calm_match(90);
     config.seed = seed;
@@ -277,8 +279,8 @@ const AWAY_KEEPER: usize = 11;
 
 #[test]
 fn a_defender_clears_a_fast_pass_in_his_area() {
-    let mut sim = pass_scene(42, DVec2::new(30.0, 0.0))
-        .place(DEFENDER, DVec2::new(40.0, 1.0))
+    let mut sim = pass_scene(42, DVec2::new(30.0, 4.5))
+        .place(DEFENDER, DVec2::new(40.0, 5.5))
         .rolls(&[0.0])
         .kick(DVec2::X, 20.0, 0.0)
         .build();
@@ -297,8 +299,8 @@ fn a_defender_clears_a_fast_pass_in_his_area() {
 
 #[test]
 fn a_failed_clearance_roll_lets_the_pass_go_on() {
-    let mut sim = pass_scene(42, DVec2::new(30.0, 0.0))
-        .place(DEFENDER, DVec2::new(40.0, 1.0))
+    let mut sim = pass_scene(42, DVec2::new(30.0, 4.5))
+        .place(DEFENDER, DVec2::new(40.0, 5.5))
         .rolls(&[0.99])
         .kick(DVec2::X, 20.0, 0.0)
         .build();

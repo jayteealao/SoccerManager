@@ -34,8 +34,11 @@ fn the_shoot_bias_pack_changes_the_seeded_match() {
         shots(&scripted),
         shots(&plain)
     );
+    // Every outfield carrier has a shot since a shot has no fixed range, so the pack's bias
+    // makes each carrier shoot at once: few decisions, each one a call (over 1,000 calls
+    // while the shot was on only in range).
     let stats = scripted.plugins().stats;
-    assert!(stats.calls > 1_000, "{stats:?}");
+    assert!(stats.calls > 200, "{stats:?}");
     assert_eq!((stats.aborts, stats.denials, stats.disabled), (0, 0, 0));
     assert!(events.iter().all(|e| e.kind != EngineEventKind::Script));
     assert!(

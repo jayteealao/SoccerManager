@@ -70,7 +70,9 @@ fn engine_events(config: engine::MatchConfig) -> (Vec<engine::EngineEvent>, Stre
 /// the computer manager grouped its substitutions and a player going for a loose ball stopped being pushed off it, when seed 3 brought one instead (seed 67 the lowest since a pressed carrier weighed
 /// his options by the pressure he feels; seed 65 since defenders could cut out passes; seed 15 from the in-possession settings until then; before them seeds 1 to 5 and 9 to
 /// 28 brought it); since the styles became presets of primitives, seed 15 brings the straight
-/// red and seed 4 the refused substitution; a 10-minute match, which adds no time; a
+/// red and seed 4 the refused substitution (since clearances, shots and misreads were scored by
+/// their cost, seed 12 in place of seed 4 brings the refused substitution, seed 5 a second
+/// yellow and the generated seed 15 the straight red); a 10-minute match, which adds no time; a
 /// knockout match (seed 11, the lowest whose shoot-out scores since the styles became presets
 /// of primitives; seed 14 until then, the lowest whose shoot-out scored and that brought the
 /// refused substitution, which no other stream brought since a kick stayed on its way from its kicker
@@ -99,7 +101,7 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
     use engine::EngineEventKind::{Card, ChangeRejected, HalfTime, Injury, Substitution};
     let content = common::content();
     let [a, b] = common::default_teams(&content);
-    let seeds = [1, 2, 3, 4, 5, 9, 11, 15, 21, 28, 67];
+    let seeds = [1, 2, 3, 5, 9, 11, 12, 15, 21, 28, 67];
     let mut streams: Vec<(String, (Vec<engine::EngineEvent>, StreamRules))> =
         common::run_many(0..=seeds.len() as u64 - 1, |i| {
             let seed = seeds[i as usize];

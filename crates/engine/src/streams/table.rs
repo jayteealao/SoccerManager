@@ -615,7 +615,7 @@ const ACTION_SHIFT: u32 = 32;
 /// keeps the scheme id and updates its digest.
 pub const SCHEME_DIGESTS: [(u8, &str); 1] = [(
     1,
-    "f3dabea707f5aefd61afb649a14c3c9895229f91d3c79f634175c52411691359",
+    "94f00d0fc0864441bfa7f144444b5d51079d61144df0851f5bf76167b60be9cb",
 )];
 
 /// The SHA-256, as lowercase hex, of what fixes `scheme`: the scheme id, every row (the

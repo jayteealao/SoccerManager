@@ -350,10 +350,11 @@ fn a_cleared_cross_records_the_defender_and_the_clearance() {
     config.tuning.clearances.wide_chance = 0.5;
     let mut sim = common::spread(Scene::new(config), -30.0, -30.0)
         .traced()
-        .place(common::index(0, 9), DVec2::new(30.0, 0.0))
-        .place(DEFENDER, DVec2::new(40.0, 0.5))
+        // Wide of the post, so the pass stays a pass.
+        .place(common::index(0, 9), DVec2::new(30.0, 4.5))
+        .place(DEFENDER, DVec2::new(40.0, 5.0))
         .place(AWAY_KEEPER, DVec2::new(30.0, -25.0))
-        .ball(DVec3::new(30.0, 0.0, 0.0))
+        .ball(DVec3::new(30.0, 4.5, 0.0))
         .carrier(Some(common::index(0, 9)))
         .tick(1_001)
         .kick(DVec2::X, 20.0, 0.0)
@@ -489,8 +490,11 @@ fn a_strong_trait_against_its_instruction_records_the_override() {
     let mut sim = common::spread(Scene::new(config), -30.0, 30.0)
         .traced()
         .tick(1_001)
-        .place(ME, DVec2::new(-15.0, 0.0))
-        .ball(DVec3::new(-15.0, 0.0, 0.0))
+        // On the halfway line his first choice is to carry the ball, the moment the trait's
+        // early release breaks (at -15 m he has passed at once since clearances, shots and
+        // misreads were scored by their cost).
+        .place(ME, DVec2::new(0.0, 0.0))
+        .ball(DVec3::new(0.0, 0.0, 0.0))
         .carrier(Some(ME))
         .control_since(1_000)
         .with_trait(ME, "releases_ball_early", Some(TraitStrength::Strong))
