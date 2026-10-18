@@ -423,7 +423,8 @@ pub struct TeamPlan {
     pub channel_right: f64,
     /// Final third: added to a shot from outside the penalty area.
     pub long_shot: f64,
-    /// Final third: metres added to the range within which a shot is considered.
+    /// Final third: metres added to the distance scale of a shot's cost, so a side that reaches
+    /// farther pays less for a long shot.
     pub shot_reach_m: f64,
     /// Dribbling: added to the dribble score.
     pub dribble: f64,

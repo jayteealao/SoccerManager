@@ -484,6 +484,7 @@ impl Default for ShotTuning {
                 intercept: -1.0,
                 distance_coef: -0.1,
                 angle_coef: 1.0,
+                keeper_coef: 0.0,
             },
             save_hold: 0.333,
             parry_speed: 0.8,
@@ -513,6 +514,16 @@ pub struct XgTuning {
     pub distance_coef: f64,
     #[garde(range(min = 0.0, max = 10.0))]
     pub angle_coef: f64,
+    /// The keeper off his line, for a shot from outside the penalty area: the chance moves by
+    /// `keeper_coef x max(0, min(off, 16.5) - keeper_depth)` in log-odds, `off` the keeper's
+    /// distance off his goal line in metres. Fitted on the StatsBomb open data's open-play shots from
+    /// outside the area (five men's leagues, 2015/16, 14,364 shots with the keeper in the
+    /// freeze frame), with this model as the offset: 0.139 per metre (standard error 0.016).
+    /// Inside the area the one-on-one contest reads a keeper who comes out. 0 (an older
+    /// file) leaves the keeper out.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub keeper_coef: f64,
 }
 
 /// The weights of the scored-options decision layer (named mechanism). The ball carrier
@@ -696,6 +707,24 @@ pub struct DecisionWeights {
     #[serde(default)]
     #[garde(range(min = 0.0, max = 5.0))]
     pub clear_worth: f64,
+    /// The shooter's read of his own chance: the chance of a central shot (keeper term
+    /// included) moved by `shot_skill x (2 x strike - 1)` in log-odds, `strike` his share of
+    /// the shot's execute stage (the long-shot stage from outside the area: long shots,
+    /// technique, strength) blended toward its pressure stage (composure) as the press
+    /// grows. Fitted on the engine's own open-play shots (1,000 matches played with it at 0):
+    /// the log-odds a goal moves by per unit of `2 x strike - 1` at the same expected goals,
+    /// 0.37 (standard error 0.09). 0 (an older file) reads every shooter as the average one.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub shot_skill: f64,
+    /// The size of the shooter's misread of the keeper's distance off his line: he sees it
+    /// as `off x (1 + e)`, `e` up to `keeper_read x (1.5 - q)` either way, `q` the read
+    /// share of [`Self::perceive`]; one draw on the perceived-score stream. A design value:
+    /// no real figure sets the size of a misread. 0 (an older file) reads it exactly and
+    /// draws nothing.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 2.0))]
+    pub keeper_read: f64,
 }
 
 fn default_attack_danger() -> f64 {
@@ -825,6 +854,8 @@ impl Default for Tuning {
                 shot_loss: 0.0,
                 perceive: 0.0,
                 clear_worth: 0.0,
+                shot_skill: 0.0,
+                keeper_read: 0.0,
             },
             injury_per_tackle: INJURY_PER_TACKLE,
             injury_per_minute: INJURY_PER_MINUTE,
@@ -833,6 +864,7 @@ impl Default for Tuning {
                 intercept: -4.191,
                 distance_coef: -0.0441,
                 angle_coef: 6.3836,
+                keeper_coef: 0.0,
             },
             shots: ShotTuning::default(),
             clearances: ClearanceTuning::default(),

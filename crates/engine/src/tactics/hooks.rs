@@ -188,7 +188,7 @@ pub const HOOKS: [Hook; 48] = [
         name: "shot.range",
         kind: HookKind::Threshold,
         input: "shot_reach_m",
-        site: "decision.rs: how far from goal a carrier considers a shot",
+        site: "decision.rs: the distance scale of a shot's cost (a side reaching farther pays less for a long shot)",
     },
     Hook {
         name: "dribble.weight",

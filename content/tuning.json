@@ -98,7 +98,9 @@
       "clear_loss": 0.686,
       "shot_loss": 0.724,
       "perceive": 0.1,
-      "clear_worth": 2.0
+      "clear_worth": 2.0,
+      "shot_skill": 0.37,
+      "keeper_read": 0.5
     },
     "injury_per_tackle": 0.004,
     "injury_per_minute": 0.0002,
@@ -106,7 +108,8 @@
     "xg": {
       "intercept": -4.191,
       "distance_coef": -0.0441,
-      "angle_coef": 6.3836
+      "angle_coef": 6.3836,
+      "keeper_coef": 0.139
     },
     "shots": {
       "loft_max": 7.0,
@@ -115,7 +118,8 @@
       "quality": {
         "intercept": -1.0,
         "distance_coef": -0.1,
-        "angle_coef": 1.0
+        "angle_coef": 1.0,
+        "keeper_coef": 0.139
       },
       "save_hold": 0.333,
       "parry_speed": 0.8,

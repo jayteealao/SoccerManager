@@ -658,6 +658,62 @@ pub fn shot_xg(from: DVec2, attack_x: f64, t: &XgTuning, pitch: &Pitch) -> f64 {
     1.0 / (1.0 + math::exp(-z))
 }
 
+/// The chance `p` of a shot from `from` (the [`shot_xg`] of model `t`) with the keeper
+/// `keeper_off` metres off his goal line: from outside the penalty area it moves by
+/// `t.keeper_coef x (min(keeper_off, 16.5) - depth)` in log-odds, `depth` the keeper's place
+/// on his line ([`crate::tuning::Tuning::keeper_depth`]); past the penalty area's depth the
+/// real shots are too few to read (35 in the StatsBomb open data) and the term stays as it is
+/// there. Inside the area, with the keeper on his line, or with `keeper_coef` 0, it is `p`
+/// bit for bit.
+pub fn keeper_off_xg(
+    p: f64,
+    from: DVec2,
+    attack_x: f64,
+    keeper_off: f64,
+    depth: f64,
+    t: &XgTuning,
+    pitch: &Pitch,
+) -> f64 {
+    if t.keeper_coef == 0.0 || keeper_off <= depth || pitch.in_penalty_area(from, attack_x) {
+        return p;
+    }
+    let off = keeper_off.min(crate::pitch::PENALTY_AREA_DEPTH);
+    crate::contract::curve::shifted(p, t.keeper_coef * (off - depth).max(0.0), 0.0, 1.0)
+}
+
+/// The distance, in metres, of a shot straight in front of the goal whose [`shot_xg`] of model
+/// `t` (no keeper term) is `p`: from 0.1 m up to the pitch's length, found by halving.
+pub fn central_distance(p: f64, t: &XgTuning, pitch: &Pitch) -> f64 {
+    let central = |d: f64| {
+        let angle = 2.0 * math::atan2(GOAL_WIDTH / 2.0, d);
+        1.0 / (1.0 + math::exp(-(t.intercept + t.distance_coef * d + t.angle_coef * angle)))
+    };
+    let (mut lo, mut hi) = (0.1, pitch.length());
+    if p >= central(lo) {
+        return lo;
+    }
+    if p <= central(hi) {
+        return hi;
+    }
+    // The central chance falls as the distance grows.
+    for _ in 0..32 {
+        let mid = 0.5 * (lo + hi);
+        if central(mid) > p {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    0.5 * (lo + hi)
+}
+
+/// How far the keeper of the side defending the goal a team attacking `attack_x` aims at
+/// stands off his goal line, in metres.
+pub fn keeper_off_line(view: &crate::modules::MatchView<'_>, attack_x: f64) -> f64 {
+    let defending = if view.attack_x(0) == attack_x { 1 } else { 0 };
+    view.pitch().half_length() - view.player(view.keeper(defending)).pos.x * attack_x
+}
+
 /// The decision hook's offsets for one carrier, in force until `until`.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ScriptCache {

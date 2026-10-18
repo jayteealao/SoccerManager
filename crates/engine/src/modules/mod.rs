@@ -480,6 +480,9 @@ pub struct OptionDraft {
     /// The amplitude of each option's perceived-score draw (`decision.perceive`); 0 draws
     /// nothing.
     pub perceive: f64,
+    /// The spread of the shot's score over the carrier's misread of the keeper off his line
+    /// (`decision.keeper_read`); 0 draws nothing.
+    pub shot_read: f64,
 }
 
 /// The raw noise draws of one carrier's options, in the draft's order.
@@ -494,8 +497,8 @@ pub struct OptionDraws {
 }
 
 /// The perceived-score draws of one carrier, in order: the shot, every pass, the dribble,
-/// the hold and the clearance.
-pub const PERCEIVE_DRAWS: usize = MATES + 4;
+/// the hold, the clearance, and the shooter's read of the keeper.
+pub const PERCEIVE_DRAWS: usize = MATES + 5;
 
 /// The scored options and every pass candidate's score, in roster order.
 #[derive(Debug, Clone, Copy)]

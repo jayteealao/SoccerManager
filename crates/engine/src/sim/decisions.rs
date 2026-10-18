@@ -161,6 +161,12 @@ impl Simulation {
             }
             draws.perceive[crate::modules::MATES + 3] = self.streams.draw(key);
         }
+        // The shooter's read of the keeper off his line, on the same stream, only while it
+        // strays.
+        if draft.shot_read > 0.0 {
+            let key = Key::player(Action::PerceiveScore, carrier);
+            draws.perceive[crate::modules::MATES + 4] = self.streams.draw(key);
+        }
         let scored = decision.scored(&draft, &draws);
         if let Some(trace) = self.streams.trace_mut() {
             for &(j, score) in &scored.candidates[..scored.count] {

@@ -112,17 +112,40 @@ pub fn deflect(
     DVec3::new(dir.x * ground, dir.y * ground, up)
 }
 
-/// Shot model version 1: the logistic expected-goals and quality models, the flight check,
-/// and the linear save chance above.
+/// The chance p of model model for a shot from rom with the defending keeper where he
+/// stands: from outside the penalty area a keeper off his line raises it
+/// ([crate::sim::keeper_off_xg]).
+fn with_keeper(
+    view: &MatchView<'_>,
+    p: f64,
+    from: DVec2,
+    attack_x: f64,
+    model: &crate::tuning::XgTuning,
+) -> f64 {
+    if model.keeper_coef == 0.0 {
+        return p;
+    }
+    let off = crate::sim::keeper_off_line(view, attack_x);
+    let depth = view.tuning().keeper_depth;
+    crate::sim::keeper_off_xg(p, from, attack_x, off, depth, model, view.pitch())
+}
+
+/// Shot model version 1: the logistic expected-goals and quality models (a keeper off his
+/// line raises both for a shot from outside the area), the flight check, and the linear save
+/// chance above.
 pub struct ShotV1;
 
 impl ShotModule for ShotV1 {
     fn xg(&self, view: &MatchView<'_>, from: DVec2, attack_x: f64) -> f64 {
-        shot_xg(from, attack_x, &view.tuning().xg, view.pitch())
+        let t = view.tuning();
+        let p = shot_xg(from, attack_x, &t.xg, view.pitch());
+        with_keeper(view, p, from, attack_x, &t.xg)
     }
 
     fn quality(&self, view: &MatchView<'_>, from: DVec2, attack_x: f64) -> f64 {
-        quality(from, attack_x, view.tuning(), view.pitch())
+        let t = view.tuning();
+        let p = quality(from, attack_x, t, view.pitch());
+        with_keeper(view, p, from, attack_x, &t.shots.quality)
     }
 
     fn on_target(&self, view: &MatchView<'_>, ball: Ball, attack_x: f64) -> bool {

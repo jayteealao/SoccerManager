@@ -173,8 +173,8 @@ fn a_dribbling_instruction_moves_only_its_players_dribble_score() {
     assert_eq!(dribble(Some(7)), base);
 }
 
-/// Final third (hook `shot.range`): a carrier past the side's shot range has no shot, and the
-/// instruction that reaches farther gives the instructed carrier one, not a team-mate.
+/// Final third (hook `shot.range`): the instruction that reaches farther raises the
+/// instructed carrier's shot from past the side's shot range, not a team-mate's.
 #[test]
 fn a_final_third_instruction_moves_only_its_players_shot_range() {
     let shot = |slot: Option<usize>| {
@@ -188,9 +188,9 @@ fn a_final_third_instruction_moves_only_its_players_shot_range() {
         alone(&mut sim, 9, at);
         sim.options(9).shot
     };
-    assert_eq!(shot(None), None);
-    assert!(shot(Some(9)).is_some());
-    assert_eq!(shot(Some(10)), None);
+    let base = shot(None).expect("every outfield carrier has a shot");
+    assert!(shot(Some(9)).expect("a shot") > base);
+    assert_eq!(shot(Some(10)), Some(base));
 }
 
 /// On winning the ball (hook `regain.counter`): inside the regain window the instructed

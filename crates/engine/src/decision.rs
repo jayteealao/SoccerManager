@@ -1032,7 +1032,7 @@ impl DecisionModule for DecisionV1 {
         // nearness to its goal, the second weighted by `decision.attack_danger`, so the danger
         // is 1 at the own goal line and `attack_danger` at the attacked one. A clearance's
         // failure chance is `decision.clear_loss`, at the place it lands; a shot's is
-        // `decision.shot_loss x (1 - xG)`, at the shooter's place.
+        // `decision.shot_loss x (1 - p)`, at the shooter's place, `p` his read of its chance.
         // On winning the ball: inside the side's regain window a counter plays the ball
         // forward and holds it less; 0 outside it and at the default.
         let counter = counter_weight(view, team, carrier.slot);
@@ -1123,9 +1123,24 @@ impl DecisionModule for DecisionV1 {
                     && p.pos.x * attack.x > depth
             });
 
-        // Shot. The final third's reach (hook `shot.range`) lets a side look at shots from
-        // farther out.
-        let shot = if !keeper && goal_dist < t.shot_range + plan.shot_reach_m {
+        // The carrier's read share: his vision, decisions and composure (the pass see, choose
+        // and pressure stages).
+        let read_share = (stages.share(Stage::PASS_SEE)
+            + stages.share(Stage::PASS_CHOOSE)
+            + stages.share(Stage::PASS_PRESSURE))
+            / 3.0;
+        // Shot. There is no fixed range: every outfield carrier has a shot, scored by his own
+        // read of his chance. He reads the chance of the shot from where he stands (distance
+        // and angle), raised from outside the area by the keeper off his line as he sees him
+        // (`xg.keeper_coef`), and moved by his own strike (`decision.shot_skill` x his
+        // execute share, blended toward his pressure share as the press grows). The score
+        // costs `shot_distance` x the distance of a central shot with that chance, over the
+        // side's reach (`shot_range` plus the final third's reach, hook `shot.range`), and a
+        // shot that does not score gives the ball away: the loss term with his read chance.
+        // The outcome reads the real chance, not his read.
+        let (shot, shot_read) = if keeper {
+            (None, 0.0)
+        } else {
             let lane = players
                 .iter()
                 .filter(|p| p.team != team && p.id != their_keeper && p.active())
@@ -1136,35 +1151,66 @@ impl DecisionModule for DecisionV1 {
             } else {
                 0.0
             };
-            let choose = if view.pitch().in_penalty_area(carrier.pos, side.attack_x) {
-                Stage::SHOT_CHOOSE
+            let outside = !view.pitch().in_penalty_area(carrier.pos, side.attack_x);
+            let (choose, execute, pressure) = if outside {
+                (
+                    Stage::LONG_SHOT_CHOOSE,
+                    Stage::LONG_SHOT_EXECUTE,
+                    Stage::LONG_SHOT_PRESSURE,
+                )
             } else {
-                Stage::LONG_SHOT_CHOOSE
+                (
+                    Stage::SHOT_CHOOSE,
+                    Stage::SHOT_EXECUTE,
+                    Stage::SHOT_PRESSURE,
+                )
             };
             // Shooting from distance: outside the area, more the farther out; the side's
             // long-shot weight (hook `shot.outside_box`) acts on every shot from there.
-            let distance = if choose == Stage::LONG_SHOT_CHOOSE {
+            let distance = if outside {
                 tr(TraitKind::ShootsFromDistance) * goal_dist / t.shot_range + plan.long_shot
             } else {
                 0.0
             };
-            // A shot that does not score gives the ball away: the loss term with the shot's
-            // own expected goals, as the reported model reads it.
+            let calm_strike = stages.share(execute);
+            let strike =
+                calm_strike + near * (stages.pressed_share(execute, pressure) - calm_strike);
             let xg = crate::sim::shot_xg(carrier.pos, side.attack_x, &t.xg, view.pitch());
-            Some(
-                w.shot_base + w.shot_lane * ((lane.min(5.0) - 2.5) / 2.5)
-                    - w.shot_distance * goal_dist / t.shot_range
-                    + under_pressure
-                    + skill(choose)
-                    + role.shoot
-                    + mood_risk
-                    + distance
-                    - loss(w.shot_loss * (1.0 - xg), carrier.pos),
-            )
-        } else {
-            None
+            let off = crate::sim::keeper_off_line(view, side.attack_x);
+            let reach = t.shot_range + plan.shot_reach_m;
+            let read = |off_seen: f64| {
+                let seen = crate::sim::keeper_off_xg(
+                    xg,
+                    carrier.pos,
+                    side.attack_x,
+                    off_seen,
+                    t.keeper_depth,
+                    &t.xg,
+                    view.pitch(),
+                );
+                let p =
+                    contract::curve::shifted(seen, w.shot_skill * (2.0 * strike - 1.0), 0.0, 1.0);
+                -w.shot_distance * crate::sim::central_distance(p, &t.xg, view.pitch())
+                    / reach.max(1.0)
+                    - loss(w.shot_loss * (1.0 - p), carrier.pos)
+            };
+            let base = w.shot_base
+                + w.shot_lane * ((lane.min(5.0) - 2.5) / 2.5)
+                + under_pressure
+                + skill(choose)
+                + role.shoot
+                + mood_risk
+                + distance;
+            // His misread of the keeper (`decision.keeper_read`): half the score's spread
+            // between his far and his near read; the decision's draw places him in it.
+            let spread = w.keeper_read * (1.5 - read_share);
+            let shot_read = if spread > 0.0 && outside && off * (1.0 + spread) > t.keeper_depth {
+                0.5 * (read(off * (1.0 + spread)) - read(off * (1.0 - spread))).abs()
+            } else {
+                0.0
+            };
+            (Some(base + read(off)), shot_read)
         };
-
         // Passes.
         let mut passes = [(0usize, 0.0f64); MATES];
         let mut pass_pick = [0.0f64; MATES];
@@ -1469,12 +1515,7 @@ impl DecisionModule for DecisionV1 {
             - loss(w.clear_loss, clear_landing(carrier.pos, attack, half));
         // The carrier's read of his options (`decision.perceive`): its spread falls as his
         // vision, decisions and composure (the pass see, choose and pressure stages) rise.
-        let perceive = w.perceive
-            * (1.5
-                - (stages.share(Stage::PASS_SEE)
-                    + stages.share(Stage::PASS_CHOOSE)
-                    + stages.share(Stage::PASS_PRESSURE))
-                    / 3.0);
+        let perceive = w.perceive * (1.5 - read_share);
         OptionDraft {
             noise,
             shot,
@@ -1486,6 +1527,7 @@ impl DecisionModule for DecisionV1 {
             carry,
             nearest_opp_pos,
             perceive,
+            shot_read,
         }
     }
 
@@ -1501,7 +1543,15 @@ impl DecisionModule for DecisionV1 {
                 s
             }
         };
-        let shot = draft.shot.map(|s| seen(s + jitter(draws.shot), 0));
+        // His read of the keeper off his line: a keeper he sees farther off raises the shot.
+        let shot_read = if draft.shot_read > 0.0 {
+            map_range(-draft.shot_read, draft.shot_read, draws.perceive[MATES + 4])
+        } else {
+            0.0
+        };
+        let shot = draft
+            .shot
+            .map(|s| seen(s + shot_read + jitter(draws.shot), 0));
         let mut pass: Option<(f64, usize, f64)> = None;
         let mut candidates = [(0usize, 0.0f64); MATES];
         let drafted = draft.passes[..draft.pass_count]
@@ -3017,6 +3067,140 @@ mod tests {
         assert_eq!(clear(2.0, 0.0), clear(0.0, 0.0));
         assert!(clear(1.0, 0.686) < clear(0.0, 0.686));
         assert!(clear(2.0, 0.686) < clear(1.0, 0.686));
+    }
+
+    /// The striker's shot options of [`scene_tuned`] at `x`, with every loss weight at
+    /// `weight`, the read noise off, his shot stages at `strike`, and their keeper `off`
+    /// metres off his line.
+    fn shot_scene(
+        x: f64,
+        weight: f64,
+        strike: f64,
+        off: f64,
+        tune: impl Fn(&mut crate::tuning::Tuning),
+    ) -> (Option<f64>, f64) {
+        let content = crate::data::test_support::shipped_content();
+        let mut schema = content.tactics.clone();
+        for m in &mut schema.mentalities {
+            m.loss_weight = weight;
+        }
+        let mut config = shipped_config(7, 1).unwrap();
+        config.tuning.decision.noise = 0.0;
+        config.tuning.decision.perceive = 0.0;
+        tune(&mut config.tuning);
+        config.tactics = schema.clone();
+        let tactics = crate::tactics::Tactics::defaults(&schema);
+        let mut sim = Simulation::new(config.with_tactics(0, tactics)).unwrap();
+        let striker = 9;
+        sim.players[striker].pos = DVec2::new(x, 2.0);
+        let their_keeper = sim.keeper(1);
+        for p in sim
+            .players
+            .iter_mut()
+            .filter(|p| p.team == 1 && p.id != their_keeper)
+        {
+            p.pos = DVec2::new(-50.0, p.pos.y);
+        }
+        let ax = sim.teams[0].attack_x;
+        let half = sim.config.pitch().half_length();
+        sim.players[their_keeper].pos = DVec2::new(ax * (half - off), 0.0);
+        for stage in [
+            Stage::SHOT_EXECUTE,
+            Stage::SHOT_PRESSURE,
+            Stage::LONG_SHOT_EXECUTE,
+            Stage::LONG_SHOT_PRESSURE,
+        ] {
+            sim.stages[striker].share[stage.index()] = strike;
+        }
+        sim.carrier = Some(striker);
+        sim.tick = 100;
+        let draft = DecisionV1.options(&sim.view(), striker);
+        (draft.shot, draft.shot_read)
+    }
+
+    /// There is no fixed shot range: an outfield carrier has a shot from anywhere, and the
+    /// same shot scores lower the farther out it is.
+    #[test]
+    fn a_shot_is_an_option_from_any_distance_and_costs_more_farther_out() {
+        let shot = |x: f64| shot_scene(x, 0.5, 0.5, 3.0, |_| {}).0.expect("a shot");
+        assert!(shot(40.0) > shot(30.0));
+        assert!(shot(30.0) > shot(15.0));
+        assert!(shot(15.0) > shot(-10.0));
+    }
+
+    /// The shooter reads his own strike: with `shot_skill` a better long-shot striker scores
+    /// the same long shot higher; with `shot_skill` 0 his strike moves nothing.
+    #[test]
+    fn a_better_striker_reads_his_long_shot_higher() {
+        let shot = |strike: f64, skill: f64| {
+            shot_scene(20.0, 0.5, strike, 3.0, |t| t.decision.shot_skill = skill)
+                .0
+                .expect("a shot")
+        };
+        assert!(shot(0.8, 1.0) > shot(0.5, 1.0));
+        assert!(shot(0.5, 1.0) > shot(0.2, 1.0));
+        assert_eq!(shot(0.8, 0.0), shot(0.2, 0.0));
+    }
+
+    /// A keeper off his line raises a shot from outside the area, in the shooter's read and in
+    /// the shot's own expected goals; on his line, or with `keeper_coef` 0, he moves neither.
+    #[test]
+    fn a_keeper_off_his_line_raises_a_long_shot() {
+        let shot = |off: f64, coef: f64| {
+            shot_scene(20.0, 0.5, 0.5, off, |t| t.xg.keeper_coef = coef)
+                .0
+                .expect("a shot")
+        };
+        assert!(shot(12.0, 0.139) > shot(3.0, 0.139));
+        assert_eq!(shot(3.0, 0.139), shot(3.0, 0.0));
+        assert_eq!(shot(12.0, 0.0), shot(3.0, 0.0));
+        let t = crate::tuning::XgTuning {
+            intercept: -4.191,
+            distance_coef: -0.0441,
+            angle_coef: 6.3836,
+            keeper_coef: 0.139,
+        };
+        let pitch = crate::pitch::Pitch::DEFAULT;
+        let from = DVec2::new(25.0, 0.0);
+        let p = crate::sim::shot_xg(from, 1.0, &t, &pitch);
+        let off = |m: f64| crate::sim::keeper_off_xg(p, from, 1.0, m, 3.0, &t, &pitch);
+        assert_eq!(off(3.0), p);
+        assert!(off(10.0) > 2.0 * p, "{} against {p}", off(10.0));
+        let inside = DVec2::new(40.0, 0.0);
+        let q = crate::sim::shot_xg(inside, 1.0, &t, &pitch);
+        assert_eq!(
+            crate::sim::keeper_off_xg(q, inside, 1.0, 10.0, 3.0, &t, &pitch),
+            q
+        );
+    }
+
+    /// The shooter misreads the keeper off his line: the shot's read spread is 0 with
+    /// `keeper_read` 0 or inside the area, and positive for a long shot at a keeper off it.
+    #[test]
+    fn a_shooter_misreads_the_keeper_only_on_a_long_shot_with_keeper_read() {
+        let read = |x: f64, keeper_read: f64| {
+            shot_scene(x, 0.5, 0.5, 10.0, |t| {
+                t.xg.keeper_coef = 0.139;
+                t.decision.keeper_read = keeper_read;
+            })
+            .1
+        };
+        assert!(read(20.0, 0.5) > 0.0);
+        assert_eq!(read(20.0, 0.0), 0.0);
+        assert_eq!(read(45.0, 0.5), 0.0);
+    }
+
+    /// Mentality is the cost: a missed long shot gives the ball away, so a higher loss weight
+    /// lowers a long shot, and a loss weight of 0 (the attacking mentality) charges nothing.
+    #[test]
+    fn a_higher_loss_weight_lowers_a_long_shot() {
+        let at = |weight: f64| {
+            shot_scene(15.0, weight, 0.5, 3.0, |_| {})
+                .0
+                .expect("a shot")
+        };
+        assert!(at(0.0) > at(0.5));
+        assert!(at(0.5) > at(1.875));
     }
 
     /// A clearance is worth the danger it removes from the own goal: the same clearance
