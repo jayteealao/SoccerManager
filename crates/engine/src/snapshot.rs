@@ -74,7 +74,9 @@
 //!   taken up; the body ends with the shots the run of play reads. Version 20 drops the AI
 //!   manager's score memory: each team stores only whether a check is due (a byte) before its
 //!   game state; and each player stores, after his yellow cards, whether he took a knock (a
-//!   byte).
+//!   byte). Version 21 adds the goals with no shot to the summary, after the restart kicks, and to each
+//!   player's tally, after whether he started, the post-shot expected goals he faced as keeper
+//!   (f64) and the goals from shots he conceded (u32).
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -107,7 +109,7 @@ use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::Tuning;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 20;
+pub const VERSION: u16 = 21;
 /// The earliest layout version the strict reader still reads: version 8 has no matchday mark.
 const FIRST_READ: u16 = 8;
 /// The released builds from before the snapshot recorded its engine version: the full commit
@@ -1482,6 +1484,8 @@ fn decode_tally(r: &mut Reader<'_>) -> Decoded<crate::sim::tally::PlayerTally> {
         xg: r.f64()?,
         assists: r.u32()?,
         started: r.bool()?,
+        psxg_faced: r.f64()?,
+        shot_goals_conceded: r.u32()?,
     })
 }
 
@@ -1517,6 +1521,7 @@ fn decode_summary(r: &mut Reader<'_>) -> Decoded<Summary> {
         passes_completed: r.pair()?,
         clearances: r.pair()?,
         restart_kicks: r.pair()?,
+        goals_no_shot: r.pair()?,
         live_ticks: r.u32()?,
         possession_ticks: r.pair()?,
         extra_added_s: r.pair()?,
@@ -1584,7 +1589,7 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 20"),
+                .contains("unknown version 1; this build reads 21"),
             "{err}"
         );
     }

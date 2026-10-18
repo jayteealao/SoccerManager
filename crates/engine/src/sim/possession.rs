@@ -320,8 +320,8 @@ impl Simulation {
         false
     }
 
-    /// Player `i` deflected the shot in flight: his side touched the ball last and the shot
-    /// is over.
+    /// Player `i` deflected the ball: his side touched the ball last and the shot in flight is
+    /// over; a shot he turned stays its shooter's while the turned ball is in flight.
     pub(crate) fn deflected_by(&mut self, i: usize) {
         if self.ball.vel.z > 0.0 && self.ball.pos.z <= 0.0 {
             self.ball.pos.z = 0.001;
@@ -334,7 +334,12 @@ impl Simulation {
         self.last_touch = Some(team);
         self.last_kicker = Some(i);
         self.last_kick_dir = self.ball.vel.truncate();
+        let turned = self
+            .shot_in_flight
+            .zip(self.shooter)
+            .or(self.shot_deflected);
         self.end_shot();
+        self.shot_deflected = turned;
     }
 
     /// Player `i` lost a header and the ball glanced off him. On a pass in flight the passer

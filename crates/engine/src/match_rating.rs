@@ -1,9 +1,11 @@
 //! The match rating: one number per player per match, on 1.0 to 10.0 with one decimal.
 //!
 //! A rating is `base` plus a weighted sum of what the player did ([`PlayerTally`]): goals,
-//! shots, expected goals, passes, tackles, interceptions, blocks, clearances, saves, fouls and
-//! cards; goals conceded and a clean sheet by his position class (a keeper or a listed
-//! defender); and the result, weighted by the share of the match he played. It is clamped to
+//! shots, expected goals, passes, tackles, interceptions, blocks, clearances, fouls and cards;
+//! goals conceded and a clean sheet by his position class (a keeper or a listed defender); for
+//! a keeper, the goals he prevented (the post-shot expected goals he faced less the goals from
+//! shots he conceded) in place of the volume of his completed passes and clearances; and the
+//! result, weighted by the share of the match he played. It is clamped to
 //! `min` to `max` and rounded to a tenth. Every weight is in the tuning file's `match_rating`
 //! block, so the five-match rule can tune them without a build.
 
@@ -45,8 +47,10 @@ pub struct MatchRatingTuning {
     pub block: f64,
     #[garde(range(min = -5.0, max = 5.0))]
     pub clearance: f64,
+    /// Per goal a keeper prevented: the post-shot expected goals he faced less the goals from
+    /// shots he conceded.
     #[garde(range(min = -5.0, max = 5.0))]
-    pub save: f64,
+    pub goals_prevented: f64,
     #[garde(range(min = -5.0, max = 5.0))]
     pub foul: f64,
     #[garde(range(min = -5.0, max = 5.0))]
@@ -117,22 +121,28 @@ pub fn rating(
     let n = |c: u32| f64::from(c);
     let off_target = t.shots.saturating_sub(t.shots_on_target);
     let failed = t.passes.saturating_sub(t.passes_completed);
+    let keeper = position == Position::GK;
+    // A keeper is rated by the goals he prevented, not by how many passes he completed or
+    // balls he cleared.
+    let volume = if keeper {
+        m.goals_prevented * (t.psxg_faced - n(t.shot_goals_conceded))
+    } else {
+        m.pass_completed * n(t.passes_completed) + m.clearance * n(t.clearances)
+    };
     let mut r = m.base
         + m.goal * n(t.goals)
         + m.shot_on_target * n(t.shots_on_target)
         + m.shot_off_target * n(off_target)
         + m.xg * t.xg
-        + m.pass_completed * n(t.passes_completed)
+        + volume
         + m.pass_failed * n(failed)
         + m.tackle_won * n(t.tackles_won)
         + m.interception * n(t.interceptions)
         + m.block * n(t.blocks)
-        + m.clearance * n(t.clearances)
-        + m.save * n(t.saves)
         + m.foul * n(t.fouls)
         + m.yellow * n(t.yellow)
         + m.red * n(t.red);
-    let class = if position == Position::GK {
+    let class = if keeper {
         Some((m.conceded.keeper, m.clean_sheet.keeper))
     } else if m.defenders.contains(&position) {
         Some((m.conceded.defender, m.clean_sheet.defender))
@@ -200,14 +210,38 @@ mod tests {
     }
 
     #[test]
-    fn a_keeper_with_five_saves_and_a_clean_sheet_in_a_win() {
+    fn a_keeper_who_prevents_goals_and_keeps_a_clean_sheet_in_a_win() {
         let m = tuning();
         let t = PlayerTally {
             saves: 5,
+            psxg_faced: 1.5,
             ..played()
         };
-        // 6.0 + 5 · 0.3 + 0.5 + 0.3 = 8.3
+        // 6.0 + 1.5 · 1.0 + 0.5 + 0.3 = 8.3; the saves add nothing of their own.
         assert_eq!(rating(&t, Position::GK, Outcome::Win, FULL, &m), 83);
+        let beaten = PlayerTally {
+            psxg_faced: 1.0,
+            shot_goals_conceded: 2,
+            conceded: 2,
+            ..played()
+        };
+        // 6.0 + (1.0 − 2) · 1.0 − 2 · 0.3 − 0.3 = 4.1
+        assert_eq!(rating(&beaten, Position::GK, Outcome::Loss, FULL, &m), 41);
+    }
+
+    #[test]
+    fn a_keeper_takes_no_points_for_pass_or_clearance_volume() {
+        let m = tuning();
+        let busy = PlayerTally {
+            passes: 30,
+            passes_completed: 30,
+            clearances: 10,
+            ..played()
+        };
+        // 6.0 + 0.5 for the clean sheet, and nothing for the volume.
+        assert_eq!(rating(&busy, Position::GK, Outcome::Draw, FULL, &m), 65);
+        // 6.0 + 30 · 0.02 + 10 · 0.05 + 0.3 = 7.4 for a defender.
+        assert_eq!(rating(&busy, Position::CB, Outcome::Draw, FULL, &m), 74);
     }
 
     #[test]

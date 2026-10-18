@@ -576,6 +576,10 @@ pub struct Summary {
     /// Ticks of open play with the ball at rest and nobody controlling it.
     pub ball_idle_ticks: u32,
     pub goals: [u32; 2],
+    /// Goals with no shot of the scoring side behind them, neither in flight nor turned by a
+    /// block or a parry: an own goal (the other side kicked or turned the ball in last), or a
+    /// ball nobody kicked in.
+    pub goals_no_shot: [u32; 2],
     pub fouls: [u32; 2],
     pub offsides: [u32; 2],
     pub corners: [u32; 2],
@@ -774,6 +778,10 @@ pub struct Simulation {
     /// both, like `last_kicker`, so the snapshot never needs them.
     pub(crate) pass_in_flight: Option<usize>,
     pub(crate) shot_in_flight: Option<usize>,
+    /// The shot a block or a parry turned, while the turned ball is in flight: the shooting
+    /// side and the shooter. A goal from it is his shot's goal. Cleared with the next kick,
+    /// touch or dead ball, so the snapshot never needs it.
+    pub(crate) shot_deflected: Option<(usize, usize)>,
     /// The team in possession: the team of the last player who gained control of the ball,
     /// kept through a loose ball, a deflection and a pass in flight until a player of the
     /// other team controls it. The kick-off and each restart set it; every dead ball clears
@@ -1028,6 +1036,7 @@ impl Simulation {
             cutters_tried: 0,
             duelled: 0,
             shot_in_flight: None,
+            shot_deflected: None,
             shot_on_target: false,
             shot_quality: 0.0,
             blockers_tried: 0,
@@ -1833,13 +1842,26 @@ impl Simulation {
             }
             let team = self.players[c].team;
             self.pass_in_flight = None;
-            // A shot is always a shot; otherwise the restart taker's first kick is a restart
-            // kick, then a clearance is a clearance, and only what is left is a pass.
+            // A shot is always a shot, and so is any other open-play kick whose flight, as
+            // struck, goes in under the bar at the goal the kicker attacks: every goal of his
+            // side then comes from a recorded shot, with its expected goals and a save roll.
+            // Otherwise the restart taker's first kick is a restart kick, then a clearance is a
+            // clearance, and only what is left is a pass.
             let restart_kick = self.restart_taker.take() == Some(c);
-            if matches!(kick, Kick::Shot { .. }) {
+            let attack_x = self.teams[team].attack_x;
+            let as_shot = matches!(kick, Kick::Shot { .. })
+                || (!restart_kick && dir.x * attack_x > 0.0 && {
+                    let view = self.view();
+                    let flight = self
+                        .config
+                        .modules
+                        .ball
+                        .kick(&view, self.ball, dir, speed, loft);
+                    self.config.modules.shot.on_target(&view, flight, attack_x)
+                });
+            if as_shot {
                 self.summary.shots[team] += 1;
                 self.tally(c, tally::Count::Shot);
-                let attack_x = self.teams[team].attack_x;
                 let from = self.ball.xy();
                 let (xg, quality) = if penalty {
                     (t.shots.penalty_xg, t.shots.penalty_xg)
@@ -1973,6 +1995,7 @@ impl Simulation {
             self.shot_on_target = true;
             self.summary.shots_on_target[team] += 1;
             self.tally(c, tally::Count::ShotOnTarget);
+            self.tally_faced(1 - team, self.shot_quality);
             #[cfg(feature = "sensitivity")]
             if let Some(p) = self.probe.as_deref_mut() {
                 p.on_target();
@@ -1992,6 +2015,7 @@ impl Simulation {
         }
         self.shot_xg = 0.0;
         self.shot_in_flight = None;
+        self.shot_deflected = None;
         self.shot_on_target = false;
         self.shot_quality = 0.0;
         self.blockers_tried = 0;

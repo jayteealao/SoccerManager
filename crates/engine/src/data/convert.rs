@@ -75,6 +75,7 @@ pub const TUNING_V2: u32 = 2;
 pub const TUNING_V3: u32 = 3;
 pub const TUNING_V4: u32 = 4;
 pub const TUNING_V5: u32 = 5;
+pub const TUNING_V6: u32 = 6;
 
 /// The attribute version 2 name that version 3 renames: injury resistance (high is good)
 /// becomes injury proneness (high is bad), mirrored on the scale.
@@ -464,10 +465,7 @@ pub fn tuning_v5_to_v6(mut file: serde_json::Value) -> Result<serde_json::Value,
     let obj = file
         .as_object_mut()
         .ok_or_else(|| "the file is not an object".to_string())?;
-    obj.insert(
-        "schema_version".into(),
-        serde_json::Value::from(crate::data::TUNING_VERSION),
-    );
+    obj.insert("schema_version".into(), serde_json::Value::from(TUNING_V6));
     let decision = obj
         .get_mut("engine")
         .and_then(|e| e.get_mut("decision"))
@@ -478,6 +476,33 @@ pub fn tuning_v5_to_v6(mut file: serde_json::Value) -> Result<serde_json::Value,
         .ok_or_else(|| "engine.decision.pressure is missing".to_string())?;
     decision.insert("shot_under_pressure".into(), pressure.clone());
     decision.insert("takeon_under_pressure".into(), pressure);
+    Ok(file)
+}
+
+/// The weight per goal a keeper prevented that a converted file takes in place of the weight
+/// per save: the shipped value when the keeper rating moved to goals prevented.
+pub const GOALS_PREVENTED_V7: f64 = 1.0;
+
+/// A version 6 tuning file, as JSON, in the version 7 shape: the match rating's weight per
+/// save (`match_rating.save`) goes, and a keeper is rated by the goals he prevented
+/// (`match_rating.goals_prevented`, at [`GOALS_PREVENTED_V7`]). The rating does not change
+/// play. The caller parses and validates the result as a current file.
+pub fn tuning_v6_to_v7(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert(
+        "schema_version".into(),
+        serde_json::Value::from(crate::data::TUNING_VERSION),
+    );
+    let rating = obj
+        .get_mut("match_rating")
+        .and_then(|m| m.as_object_mut())
+        .ok_or_else(|| "match_rating is missing".to_string())?;
+    rating.remove("save");
+    rating
+        .entry("goals_prevented")
+        .or_insert_with(|| serde_json::Value::from(GOALS_PREVENTED_V7));
     Ok(file)
 }
 

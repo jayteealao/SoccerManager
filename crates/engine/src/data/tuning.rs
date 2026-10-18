@@ -26,8 +26,10 @@ use crate::tuning::Tuning;
 /// ([`crate::data::convert::tuning_v4_to_v5`]). Version 6 splits the choice model's pressure
 /// weight (`engine.decision.pressure`) into the shot's and the take-on's own weights
 /// (`shot_under_pressure`, `takeon_under_pressure`); a version 5 file converts with both at
-/// its old value ([`crate::data::convert::tuning_v5_to_v6`]).
-pub const TUNING_VERSION: u32 = 6;
+/// its old value ([`crate::data::convert::tuning_v5_to_v6`]). Version 7 rates a keeper by
+/// the goals he prevented (`match_rating.goals_prevented`) in place of a weight per save; a
+/// version 6 file converts ([`crate::data::convert::tuning_v6_to_v7`]).
+pub const TUNING_VERSION: u32 = 7;
 
 /// The tuning file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]

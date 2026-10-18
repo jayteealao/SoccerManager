@@ -344,11 +344,25 @@ impl Simulation {
         self.enter_phase(Phase::Live, Cause::KickOffTaken);
     }
 
-    /// `team` scored. The event names the player who kicked the ball last; a player of the
-    /// other club makes it an own goal. The other team kicks off once everyone is back in
-    /// place.
+    /// `team` scored. A goal from a shot of the side in flight, or from its shot a block or a
+    /// parry turned in, is the shooter's; any other goal is a goal with no shot, and the event
+    /// names the player who kicked or turned the ball last: a player of the other club makes it
+    /// an own goal. The other team kicks off once everyone is back in place.
     pub(crate) fn goal(&mut self, team: usize) {
         self.summary.goals[team] += 1;
+        // The shooter of a turned shot of this side takes the goal.
+        if let Some((side, shooter)) = self.shot_deflected
+            && side == team
+        {
+            self.last_kicker = Some(shooter);
+        }
+        let from_shot = self.shot_in_flight == Some(team)
+            || self.shot_deflected.is_some_and(|(side, _)| side == team);
+        if from_shot {
+            self.tally_shot_goal_conceded(1 - team);
+        } else {
+            self.summary.goals_no_shot[team] += 1;
+        }
         #[cfg(feature = "measures")]
         if let Some(m) = self.measures.as_deref_mut() {
             m.goal(team, self.tick);

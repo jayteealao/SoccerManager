@@ -41,6 +41,12 @@ pub struct PlayerTally {
     pub assists: u32,
     /// `true` when he was on the pitch at kick-off.
     pub started: bool,
+    /// As his side's keeper: the post-shot expected goals of the shots on target he faced,
+    /// the save line's chance that each goes in (`1 -` [`crate::shot::save_chance`] at the
+    /// shot's quality), and the goals from recorded shots he conceded. Their difference is
+    /// the goals he prevented.
+    pub psxg_faced: f64,
+    pub shot_goals_conceded: u32,
 }
 
 /// Which counter a match event adds to.
@@ -97,6 +103,22 @@ impl Simulation {
     pub(crate) fn tally_xg(&mut self, i: usize, xg: f64) {
         let p = &self.players[i];
         self.tallies[p.team][p.squad].xg += xg;
+    }
+
+    /// A shot on target at `team`'s goal, of save-line quality `quality`: its keeper faced
+    /// its chance of going in.
+    pub(crate) fn tally_faced(&mut self, team: usize, quality: f64) {
+        let k = self.keeper(team);
+        let line = crate::shot::save_chance(quality, &self.config.tuning);
+        let p = &self.players[k];
+        self.tallies[team][p.squad].psxg_faced += 1.0 - line;
+    }
+
+    /// A goal from a recorded shot against `team`: its keeper conceded it.
+    pub(crate) fn tally_shot_goal_conceded(&mut self, team: usize) {
+        let k = self.keeper(team);
+        let p = &self.players[k];
+        self.tallies[team][p.squad].shot_goals_conceded += 1;
     }
 
     /// A goal against `team`: every player of it on the pitch conceded one.

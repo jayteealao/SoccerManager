@@ -3217,6 +3217,75 @@ mod tests {
         assert!(at(0.5) > at(1.875));
     }
 
+    /// Every goal of a side comes from a recorded shot: an open-play pass whose flight goes in
+    /// under the bar is a shot, with its expected goals, and a pass wide of the goal stays a
+    /// pass.
+    #[test]
+    fn a_pass_kicked_on_target_is_a_shot() {
+        let kicked = |aim: DVec2| {
+            let mut sim = Simulation::new(shipped_config(7, 1).unwrap()).unwrap();
+            let t = sim.config.tuning.clone();
+            let c = 9;
+            let ax = sim.teams[0].attack_x;
+            let half = sim.config.pitch().half_length();
+            let at = DVec2::new(ax * (half - 12.0), 0.0);
+            for p in sim.players.iter_mut().filter(|p| p.team == 1) {
+                p.pos = DVec2::new(-ax * 40.0, p.pos.y);
+            }
+            sim.players[c].pos = at;
+            sim.ball = crate::ball::Ball::at(at);
+            sim.carrier = Some(c);
+            sim.restart_taker = None;
+            let goal = DVec2::new(ax * half, 0.0);
+            let dir = (goal + aim - at).normalize();
+            sim.apply_kick(
+                Kick::Pass {
+                    dir,
+                    speed: 25.0,
+                    loft: 0.0,
+                },
+                &t,
+                false,
+            );
+            (
+                sim.summary.shots[0],
+                sim.summary.passes[0],
+                sim.summary.xg[0] > 0.0,
+            )
+        };
+        assert_eq!(kicked(DVec2::ZERO), (1, 0, true));
+        assert_eq!(kicked(DVec2::new(0.0, 15.0)), (0, 1, false));
+    }
+
+    /// A shot a parry turns in is the shooter's goal, not a goal with no shot; a ball an
+    /// opponent turns in with no shot of the side behind it is a goal with no shot.
+    #[test]
+    fn a_parried_shot_that_goes_in_is_the_shooters_goal() {
+        let mut sim = Simulation::new(shipped_config(7, 1).unwrap()).unwrap();
+        let keeper = sim.keeper(1);
+        sim.shot_in_flight = Some(0);
+        sim.shooter = Some(9);
+        sim.deflected_by(keeper);
+        sim.goal(0);
+        assert_eq!(sim.summary.goals_no_shot, [0, 0]);
+        let scorer = sim
+            .take_events()
+            .into_iter()
+            .rev()
+            .find(|e| e.kind == crate::sim::EngineEventKind::Goal)
+            .and_then(|e| e.player);
+        assert_eq!(scorer, Some(9));
+        let mut sim = Simulation::new(shipped_config(7, 1).unwrap()).unwrap();
+        let defender = sim
+            .players
+            .iter()
+            .position(|p| p.team == 1 && p.slot == 2)
+            .unwrap();
+        sim.last_kicker = Some(defender);
+        sim.goal(0);
+        assert_eq!(sim.summary.goals_no_shot, [1, 0]);
+    }
+
     /// A clearance is worth the danger it removes from the own goal: the same clearance
     /// scores lower the farther the clearer stands from his own goal, and by about
     /// `clear_worth` near the goal he attacks; with `clear_worth` 0 and no press it scores

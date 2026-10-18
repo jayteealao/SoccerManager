@@ -162,6 +162,16 @@
       "minItems": 2,
       "maxItems": 2
     },
+    "stats.goals_no_shot": {
+      "description": "Goals with no shot of the scoring side behind them, home first: own goals and balls nobody kicked in. A goal from a shot in flight, or from a shot a block or a parry turned in, is a shot's goal.",
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
     "stats.ball_in_play_s": {
       "description": "Whole seconds with the ball in play over the whole match, the shoot-out excluded.",
       "type": "integer",

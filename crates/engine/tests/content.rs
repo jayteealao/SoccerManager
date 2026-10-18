@@ -529,6 +529,35 @@ fn a_version_5_tuning_file_converts_with_both_pressure_weights_at_its_value() {
     assert_eq!(loaded.value.engine.decision.takeon_under_pressure, -1.25);
 }
 
+/// A version 6 tuning file (a match-rating weight per save) converts to version 7 with the
+/// weight per save gone and a keeper rated by the goals he prevented, at the shipped weight;
+/// a current file that still names the weight per save is refused.
+#[test]
+fn a_version_6_tuning_file_converts_to_the_goals_prevented_keeper_rating() {
+    let mut v6 = shipped_tuning_json();
+    v6["schema_version"] = 6.into();
+    let rating = v6["match_rating"].as_object_mut().unwrap();
+    rating.remove("goals_prevented").unwrap();
+    rating.insert("save".into(), 0.3.into());
+    let bytes = serde_json::to_vec(&v6).unwrap();
+    let loaded = engine::data::load_tuning_bytes(&bytes, "tuning-v6.json").unwrap();
+    assert_eq!(loaded.converted_from, Some(6));
+    let shipped = engine::data::load_tuning_bytes(
+        &serde_json::to_vec(&shipped_tuning_json()).unwrap(),
+        "tuning.json",
+    )
+    .unwrap();
+    assert_eq!(loaded.value, shipped.value);
+    assert_eq!(loaded.value.match_rating.goals_prevented, 1.0);
+
+    let mut current = shipped_tuning_json();
+    current["match_rating"]["save"] = 0.3.into();
+    let err = engine::data::load_tuning_bytes(&serde_json::to_vec(&current).unwrap(), "t.json")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("save"), "{err}");
+}
+
 /// A version 3 tuning file (no state caps, body jobs, fatigue group weights or sprint cap)
 /// converts to version 4 with the values of the frozen copy, which are the shipped ones.
 #[test]

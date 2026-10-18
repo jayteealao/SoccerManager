@@ -321,6 +321,8 @@ impl Writer {
                 self.f64_at(|| format!("tallies[{team}][{s}].xg"), t.xg);
                 self.u32(t.assists);
                 self.u8(u8::from(t.started));
+                self.f64_at(|| format!("tallies[{team}][{s}].psxg_faced"), t.psxg_faced);
+                self.u32(t.shot_goals_conceded);
             }
         }
     }
@@ -361,6 +363,7 @@ impl Writer {
         self.pair(s.passes_completed);
         self.pair(s.clearances);
         self.pair(s.restart_kicks);
+        self.pair(s.goals_no_shot);
         self.u32(s.live_ticks);
         self.pair(s.possession_ticks);
         self.pair(s.extra_added_s);

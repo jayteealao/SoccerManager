@@ -78,6 +78,7 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         blockers_tried,
         shot_xg,
         shooter,
+        shot_deflected,
         last_pass,
         bench_mood,
         trait_acts,
@@ -189,6 +190,9 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     w.f64_at(|| "shot_xg".into(), *shot_xg);
     w.mark(Bytes, || "shooter".into());
     w.index(*shooter);
+    w.mark(Bytes, || "shot_deflected".into());
+    w.index(shot_deflected.map(|(side, _)| side));
+    w.index(shot_deflected.map(|(_, shooter)| shooter));
     w.mark(Bytes, || "last_pass".into());
     w.index(last_pass.map(|(passer, _)| passer));
     w.index(last_pass.map(|(_, receiver)| receiver));

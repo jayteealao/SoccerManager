@@ -455,7 +455,8 @@ pub fn load_attributes_bytes(
 /// converted to version 3 ([`convert::tuning_v2_to_v3`]), a version 3 file to version 4
 /// ([`convert::tuning_v3_to_v4`]), a version 4 file to version 5
 /// ([`convert::tuning_v4_to_v5`]), a version 5 file to version 6
-/// ([`convert::tuning_v5_to_v6`]), and the result is checked as a current file.
+/// ([`convert::tuning_v5_to_v6`]), a version 6 file to version 7
+/// ([`convert::tuning_v6_to_v7`]), and the result is checked as a current file.
 pub fn load_tuning_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TuningFile>, EngineError> {
     const KIND: &str = "tuning";
     match peek_version(KIND, bytes, shown)? {
@@ -466,7 +467,8 @@ pub fn load_tuning_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TuningFile>
         found @ (convert::TUNING_V2
         | convert::TUNING_V3
         | convert::TUNING_V4
-        | convert::TUNING_V5) => {
+        | convert::TUNING_V5
+        | convert::TUNING_V6) => {
             let mut json: serde_json::Value = parse(KIND, bytes, shown)?;
             if found == convert::TUNING_V2 {
                 json = convert::tuning_v2_to_v3(json)
@@ -480,9 +482,13 @@ pub fn load_tuning_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TuningFile>
                 json = convert::tuning_v4_to_v5(json)
                     .map_err(|reason| refused(KIND, shown, "engine".into(), reason))?;
             }
-            let v6 = convert::tuning_v5_to_v6(json)
-                .map_err(|reason| refused(KIND, shown, "engine".into(), reason))?;
-            let value: TuningFile = serde_json::from_value(v6)
+            if found <= convert::TUNING_V5 {
+                json = convert::tuning_v5_to_v6(json)
+                    .map_err(|reason| refused(KIND, shown, "engine".into(), reason))?;
+            }
+            let v7 = convert::tuning_v6_to_v7(json)
+                .map_err(|reason| refused(KIND, shown, "match_rating".into(), reason))?;
+            let value: TuningFile = serde_json::from_value(v7)
                 .map_err(|e| refused(KIND, shown, "converted file".into(), e.to_string()))?;
             let value = checked(KIND, shown, value, &())?;
             Ok(loaded(KIND, bytes, shown, value, found, Some(found)))
