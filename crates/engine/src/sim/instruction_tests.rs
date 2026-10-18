@@ -360,6 +360,40 @@ fn a_forward_runs_instruction_moves_only_its_players_runs() {
     assert_ne!(job(Some(10)), Job::TimedRun);
 }
 
+/// A run in behind under way goes on only while the runner stays within a pass's reach of the
+/// ball (45 m): the instructed striker, already past the onside line on his run, keeps running
+/// with the carrier 32.6 m away and stops with the carrier 47.4 m away.
+#[test]
+fn a_run_in_behind_under_way_stops_out_of_a_passs_reach() {
+    let job = |carrier_x: f64| {
+        let mut sim = Simulation::new(shipped_config(7, 1).unwrap()).unwrap();
+        instruct(&mut sim, 0, 9, "forward_runs", "run_in_behind");
+        let carrier = 6;
+        sim.players[carrier].pos = DVec2::new(carrier_x, 0.0);
+        let their_keeper = sim.keeper(1);
+        for (k, p) in sim
+            .players
+            .iter_mut()
+            .filter(|p| p.team == 1 && p.id != their_keeper)
+            .enumerate()
+        {
+            p.pos = DVec2::new(30.0, -27.0 + 6.0 * k as f64);
+        }
+        // Past the onside line at 29.5 m, so he starts no new run; 3.5 m short of his aim.
+        let on_run = DVec2::new(32.0, -6.0);
+        sim.players[9].pos = on_run;
+        sim.players[9].target = DVec2::new(35.5, -6.0);
+        sim.players[9].pace.job = Job::TimedRun;
+        sim.players[9].pace.since = 50;
+        sim.carrier = Some(carrier);
+        sim.tick = 100;
+        let view = sim.view();
+        sim.config.modules.decision.targets(&view).jobs[9]
+    };
+    assert_eq!(job(0.0), Job::TimedRun, "within reach");
+    assert_ne!(job(-15.0), Job::TimedRun, "out of reach");
+}
+
 /// Crossing, cross type and on winning the ball's pace lift reach their hooks through the
 /// carrier's and the runner's own plans: the instructed slot's plan holds the level's cross
 /// weight, early weight, loft and lift, and the plans of the side and a team-mate do not.
