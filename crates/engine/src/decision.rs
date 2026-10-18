@@ -267,8 +267,7 @@ impl Kick {
 }
 
 /// The carrier's scored options on one tick. `None` is an option the carrier does not have:
-/// no shot beyond the shooting range, no pass without an open team-mate, and no dribble or
-/// hold for a goalkeeper.
+/// no shot, dribble or hold for a goalkeeper, and no pass without an open team-mate.
 #[derive(Debug, Clone, Copy)]
 pub struct Options {
     pub shot: Option<f64>,
@@ -1132,8 +1131,9 @@ impl DecisionModule for DecisionV1 {
         // Shot. There is no fixed range: every outfield carrier has a shot, scored by his own
         // read of his chance. He reads the chance of the shot from where he stands (distance
         // and angle), raised from outside the area by the keeper off his line as he sees him
-        // (`xg.keeper_coef`), and moved by his own strike (`decision.shot_skill` x his
-        // execute share, blended toward his pressure share as the press grows). The score
+        // (`xg.keeper_coef`), moved by his own strike (`decision.shot_skill` x his execute
+        // share, blended toward his pressure share as the press grows), and cut by each
+        // opponent who may block it on its way (`shots.block_chance`). The score
         // costs `shot_distance` x the distance of a central shot with that chance, over the
         // side's reach (`shot_range` plus the final third's reach, hook `shot.range`), and a
         // shot that does not score gives the ball away: the loss term with his read chance.
@@ -1151,6 +1151,20 @@ impl DecisionModule for DecisionV1 {
             } else {
                 0.0
             };
+            // The press on the shot: each outfield opponent ahead of him within his block
+            // reach of the shot's path may block it, with the block chance the shot will meet.
+            let to_goal = goal - carrier.pos;
+            let screen = players
+                .iter()
+                .filter(|p| {
+                    p.team != team
+                        && p.id != their_keeper
+                        && p.active()
+                        && (p.pos - carrier.pos).dot(to_goal) > 0.0
+                        && segment_distance(p.pos, carrier.pos, goal)
+                            < t.shots.block_reach * p.derived.knobs.block
+                })
+                .fold(1.0, |s, _| s * (1.0 - t.shots.block_chance));
             let outside = !view.pitch().in_penalty_area(carrier.pos, side.attack_x);
             let (choose, execute, pressure) = if outside {
                 (
@@ -1188,8 +1202,8 @@ impl DecisionModule for DecisionV1 {
                     &t.xg,
                     view.pitch(),
                 );
-                let p =
-                    contract::curve::shifted(seen, w.shot_skill * (2.0 * strike - 1.0), 0.0, 1.0);
+                let p = screen
+                    * contract::curve::shifted(seen, w.shot_skill * (2.0 * strike - 1.0), 0.0, 1.0);
                 -w.shot_distance * crate::sim::central_distance(p, &t.xg, view.pitch())
                     / reach.max(1.0)
                     - loss(w.shot_loss * (1.0 - p), carrier.pos)
