@@ -174,6 +174,11 @@ pub struct RunningCheck {
     /// until a record with the restart flag or with the ball at the spot. The anchor rule
     /// reads it as the ball.
     fetch_spot: Option<DVec2>,
+    /// The last record judged: its tick, its restart flag and the ball. An event of a tick
+    /// already judged (the stream sends a tick's events after its record) names a spot that
+    /// record has already read, as [`super::Validator::check`] reads it: a restart taken on
+    /// that record, or a ball already at the spot, leaves nothing to fetch.
+    last_record: Option<(u32, bool, DVec2)>,
     far_ticks: [u32; PLAYER_COUNT],
     /// Each player's run state for the anchor rule ([RunSpell]).
     runs: [RunSpell; PLAYER_COUNT],
@@ -254,6 +259,7 @@ impl RunningCheck {
             prev_players: None,
             entries: Vec::new(),
             fetch_spot: None,
+            last_record: None,
             far_ticks: [0; PLAYER_COUNT],
             runs: [RunSpell::default(); PLAYER_COUNT],
             prev_dist: [[f64::INFINITY; 2]; PLAYER_COUNT],
@@ -308,7 +314,15 @@ impl RunningCheck {
     pub fn event(&mut self, e: &EngineEvent) {
         if let Some(spot) = e.spot {
             self.spots.push((e.tick, spot));
-            self.fetch_spot = Some(spot);
+            let fetched = self.last_record.is_some_and(|(tick, restart, ball)| {
+                tick >= e.tick
+                    && (restart
+                        || tick == super::OPENING_RECORD_TICK
+                        || (ball - spot).length() <= RESTART_SPOT_TOLERANCE)
+            });
+            if !fetched {
+                self.fetch_spot = Some(spot);
+            }
             self.rest.stopped();
         }
         if e.kind == EngineEventKind::Substitution
@@ -542,9 +556,13 @@ impl RunningCheck {
         // While the ball waits where it left play, the players set up around the restart
         // spot: the anchor rule reads the spot as the ball until the ball appears there.
         let reference = self.fetch_spot.unwrap_or(ball);
-        if r.restart || (ball - reference).length() <= RESTART_SPOT_TOLERANCE {
+        if r.restart
+            || r.tick == super::OPENING_RECORD_TICK
+            || (ball - reference).length() <= RESTART_SPOT_TOLERANCE
+        {
             self.fetch_spot = None;
         }
+        self.last_record = Some((r.tick, r.restart, ball));
 
         for (i, p) in pos.iter().enumerate() {
             if parked[i] || shootout {
@@ -1058,6 +1076,38 @@ mod tests {
         let standing: Vec<TickRecord> = (1..=grace + 20).map(chase(0.0)).collect();
         assert!(anchors(&standing) > 0, "a still player drifts");
         same(&teams(), &[], &standing);
+    }
+
+    /// The opening kick-off is taken on the step that writes the match's first record, so no
+    /// record shows the ball waiting at the centre spot: the anchor rule reads the ball from
+    /// that record on, and every player standing on his anchor breaks no rule, however long
+    /// the ball stays away from the centre. The control: the same kick-off spot named later in
+    /// the match, with the ball never at it, still stands for the ball.
+    #[test]
+    fn the_opening_kick_off_spot_does_not_stand_for_the_ball_once_play_starts() {
+        let tuning = Tuning::default();
+        let ax = bare(0).attack_x;
+        let b = DVec2::new(ax * 52.0, 20.0);
+        let on_anchor = bare(0).anchor(5, b, true, &tuning);
+        let records = run_scene(1..=tuning.anchor_grace_ticks + 20, |_| b, |_| on_anchor);
+        let config = crate::data::test_support::shipped_config(1, 90).unwrap();
+        let sim = Simulation::new(config).unwrap();
+        let kick_off = |tick: u32| {
+            let mut e = sim.event(EngineEventKind::KickOff, Some(0));
+            e.tick = tick;
+            e.spot = Some(DVec2::ZERO);
+            e
+        };
+        let anchors = |events: &[EngineEvent]| {
+            same(&teams(), events, &records);
+            running(&teams(), events, &records)
+                .totals()
+                .find(|(rule, _)| *rule == "anchor_tolerance")
+                .unwrap()
+                .1
+        };
+        assert_eq!(anchors(&[kick_off(super::super::OPENING_RECORD_TICK)]), 0);
+        assert!(anchors(&[kick_off(5)]) > 0);
     }
 
     /// Records of a scene for the run rule: the ball at `ball(k)` on record `k`, every player

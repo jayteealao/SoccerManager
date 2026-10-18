@@ -41,6 +41,10 @@ pub const MIN_SEPARATION: f64 = 0.1;
 pub const MAX_BALL_SPEED: f64 = 40.0;
 /// How far the ball may lie from the restart spot a restart event names.
 pub const RESTART_SPOT_TOLERANCE: f64 = 0.5;
+/// The tick of a match's first record. The opening kick-off is taken on the step that
+/// records it, before any record shows the ball at the spot, so the anchor rule reads that
+/// record as the kick-off's restart: the ball no longer waits at the centre spot.
+pub const OPENING_RECORD_TICK: u32 = 1;
 /// The longest a ball in play may lie still, in seconds: the median length of the 696 real
 /// dead spells of the IDSSE Bundesliga and 2. Bundesliga matches (`idsse_dead.csv`, the spells
 /// the restart waits are drawn from; shortest 1.64 s, longest 206.48 s). Half of all real
@@ -426,7 +430,10 @@ impl Validator {
             }
             // While the ball waits where it left play, the spot stands for the ball.
             let reference = fetch_spot.unwrap_or(ball);
-            if r.restart || (ball - reference).length() <= RESTART_SPOT_TOLERANCE {
+            if r.restart
+                || r.tick == OPENING_RECORD_TICK
+                || (ball - reference).length() <= RESTART_SPOT_TOLERANCE
+            {
                 fetch_spot = None;
             }
 
