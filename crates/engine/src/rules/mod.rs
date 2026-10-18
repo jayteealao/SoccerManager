@@ -364,8 +364,18 @@ impl Simulation {
             self.summary.goals_no_shot[team] += 1;
         }
         #[cfg(feature = "measures")]
-        if let Some(m) = self.measures.as_deref_mut() {
-            m.goal(team, self.tick);
+        {
+            let shot = from_shot;
+            let by = match self.last_kicker {
+                Some(k) if self.players[k].team == team => 2,
+                Some(k) if k == self.keeper(1 - team) => 0,
+                Some(_) => 1,
+                None => 3,
+            };
+            if let Some(m) = self.measures.as_deref_mut() {
+                m.goal(team, self.tick);
+                m.probe.goal(team, shot, by);
+            }
         }
         // A shot that went in is no miss.
         self.shooter = None;

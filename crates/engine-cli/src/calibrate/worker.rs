@@ -209,6 +209,10 @@ pub fn play_match(
         Some(measures) => row.with_measures(measures, &physical, &shape.finish()),
         None => row,
     };
+    #[cfg(feature = "measures")]
+    if let Some(measures) = sim.measures() {
+        write_probe(m.seed, &sim, &summary, &measures.probe);
+    }
     if let Some(path) = events_to(&row) {
         let _commentary = stages::enter(Stage::Commentary);
         let mut ids = Ids::new(&sim);
@@ -257,6 +261,61 @@ pub fn play_match(
         #[cfg(feature = "measures")]
         measures: sim.measures().cloned().map(Box::new),
     })
+}
+
+/// The decision probe of a measures build: with `SM_PROBE_OUT` set, each match appends one
+/// JSON line to that file: its seed, goals, goals with no shot, shots and clearances, every
+/// keeper who played (his rating, post-shot expected goals faced, goals from shots conceded,
+/// goals conceded, saves, completed passes and clearances), and the probe.
+#[cfg(feature = "measures")]
+fn write_probe(
+    seed: u64,
+    sim: &Simulation,
+    summary: &engine::Summary,
+    probe: &engine::measures::probe::Probe,
+) {
+    use std::io::Write as _;
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let Some(path) = std::env::var_os("SM_PROBE_OUT") else {
+        return;
+    };
+    let teams = sim.teams();
+    let keepers: Vec<_> = sim
+        .match_ratings()
+        .into_iter()
+        .filter(|r| teams[r.team].squad[r.squad].position == engine::data::team::Position::GK)
+        .map(|r| {
+            let t = &sim.tallies()[r.team][r.squad];
+            serde_json::json!({
+                "team": r.team,
+                "rating": r.rating(),
+                "psxg_faced": t.psxg_faced,
+                "shot_goals_conceded": t.shot_goals_conceded,
+                "conceded": t.conceded,
+                "saves": t.saves,
+                "passes_completed": t.passes_completed,
+                "clearances": t.clearances,
+                "minutes": t.ticks_played / engine::rules::clock::TICKS_PER_MINUTE,
+            })
+        })
+        .collect();
+    let line = serde_json::json!({
+        "seed": seed,
+        "goals": summary.goals,
+        "goals_no_shot": summary.goals_no_shot,
+        "keepers": keepers,
+        "shots": summary.shots,
+        "clearances": summary.clearances,
+        "probe": probe,
+    });
+    let _guard = LOCK.lock();
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
+        let _ = writeln!(f, "{line}");
+    }
 }
 
 /// The checker calls timed: one in this many, scaled up, so the clock costs less than the

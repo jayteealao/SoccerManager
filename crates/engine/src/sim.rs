@@ -1859,6 +1859,24 @@ impl Simulation {
                         .kick(&view, self.ball, dir, speed, loft);
                     self.config.modules.shot.on_target(&view, flight, attack_x)
                 });
+            #[cfg(feature = "measures")]
+            {
+                let kind = if as_shot {
+                    0
+                } else if restart_kick {
+                    1
+                } else if matches!(kick, Kick::Clear { .. }) {
+                    2
+                } else {
+                    3
+                };
+                let length = self.config.pitch().length();
+                let third =
+                    crate::measures::third_of(self.ball.xy().x, self.teams[team].attack_x, length);
+                if let Some(m) = self.measures.as_deref_mut() {
+                    m.probe.kick(team, kind, third);
+                }
+            }
             if as_shot {
                 self.summary.shots[team] += 1;
                 self.tally(c, tally::Count::Shot);
@@ -1885,10 +1903,27 @@ impl Simulation {
                     let distance = (self.teams[team].target_goal() - from).length();
                     let outside = !self.config.pitch().in_penalty_area(from, attack_x);
                     let open = !penalty && !restart_kick;
+                    let keeper = self.keeper(1 - team);
+                    let keeper_off_m =
+                        self.config.pitch().half_length() - self.players[keeper].pos.x * attack_x;
+                    let strike = self.view().skills(c).share(if outside {
+                        crate::contract::Stage::LONG_SHOT_EXECUTE
+                    } else {
+                        crate::contract::Stage::SHOT_EXECUTE
+                    });
                     if let Some(m) = self.measures.as_deref_mut() {
                         m.shot(team, distance);
                         if open {
                             m.open_shot(team, c, distance, outside);
+                            m.probe.shot(crate::measures::probe::ShotRow {
+                                team,
+                                distance_m: distance,
+                                outside,
+                                xg,
+                                keeper_off_m,
+                                strike,
+                                goal: false,
+                            });
                         }
                     }
                 }

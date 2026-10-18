@@ -336,6 +336,7 @@ impl Simulation {
                 }
             }
         }
+        let mut final_third = None;
         let off_plan = {
             let view = self.view();
             let draft = decision.options(&view, c);
@@ -348,6 +349,38 @@ impl Simulation {
             };
             let plain = decision.scored(&draft, &middle).options;
             let (top, top_choice) = decision.choose(&view, c, &plain, offsets);
+            // The decision probe: the carrier's plain options in the final third he attacks.
+            let pitch = view.pitch();
+            if c != view.keeper(team)
+                && crate::measures::third_of(at.x, attack_x, pitch.length()) == 2
+            {
+                let notes = crate::measures::probe::notes();
+                let terms = plain.pass.and_then(|(_, j)| {
+                    draft.passes[..draft.pass_count]
+                        .iter()
+                        .position(|&(m, _)| m == j)
+                        .map(|k| notes.terms[k])
+                });
+                let kind = |ch: Choice| match ch {
+                    Choice::Pass => 0,
+                    Choice::Shot => 1,
+                    Choice::Dribble => 2,
+                    Choice::Hold => 3,
+                    Choice::Clear => 4,
+                };
+                final_third = Some((
+                    [
+                        plain.pass.map(|p| p.0),
+                        plain.shot,
+                        plain.dribble,
+                        plain.hold,
+                        Some(plain.clear),
+                    ],
+                    kind(top_choice),
+                    terms,
+                    (notes.in_range, notes.lane_open),
+                ));
+            }
             top_choice != choice
                 || (choice == Choice::Pass && top.pass.map(|p| p.1) != o.pass.map(|p| p.1))
         };
@@ -361,6 +394,9 @@ impl Simulation {
         if let Some(m) = self.measures.as_deref_mut() {
             m.chose(team, c, k, off_plan);
             m.carrying(team, c, choice == Choice::Dribble, ahead, beside);
+            if let Some((scores, top, terms, candidates)) = final_third {
+                m.probe.final_third(team, scores, top, terms, candidates);
+            }
         }
     }
 

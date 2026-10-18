@@ -30,6 +30,7 @@
 
 pub mod defending;
 pub mod players;
+pub mod probe;
 pub mod runs;
 pub mod shape;
 pub mod transitions;
@@ -419,6 +420,8 @@ pub struct MatchMeasures {
     pub players: [std::collections::BTreeMap<usize, PlayerPressure>; 2],
     /// Each player's own counts by roster index ([`players`]).
     pub per_player: [players::PlayerCounts; players::ROSTER],
+    /// The decision probe ([`probe`]).
+    pub probe: probe::Probe,
     /// Per pressing side, the tick each press trigger of the other side last fired, while
     /// its possession lasts.
     trigger_at: [[Option<u32>; 4]; 2],
@@ -490,6 +493,7 @@ impl Default for MatchMeasures {
                 std::collections::BTreeMap::new(),
             ],
             per_player: [players::PlayerCounts::default(); players::ROSTER],
+            probe: probe::Probe::default(),
             trigger_at: [[None; 4]; 2],
             tackled: None,
             now: 0,
@@ -1015,6 +1019,7 @@ impl MatchMeasures {
 
     /// `team` gained the ball: with no chain open, an open-play chain starts.
     pub(crate) fn gained(&mut self, team: usize, tick: u32) {
+        self.probe.settle(team);
         if let Some((side, pressed, band, squad)) = self.touch.take() {
             let s = &mut self.possessing[side];
             s.touches[pressed] += 1;
@@ -1047,6 +1052,7 @@ impl MatchMeasures {
 
     /// `team` took a restart of `kind`: any open chain ends and the restart's chain starts.
     pub(crate) fn restart_taken(&mut self, kind: StoppageKind, team: usize, tick: u32) {
+        self.probe.settle(team);
         // A short goal kick's side that restarts keeps the ball, as a StatsBomb possession goes
         // on; the other side's restart ends it when play stopped.
         if let Some(k) = self.short_kick.as_mut() {
@@ -1070,6 +1076,7 @@ impl MatchMeasures {
 
     /// The ball went dead: the open chain ends and nothing stays in flight.
     pub(crate) fn dead(&mut self, tick: u32) {
+        self.probe.dead();
         // A received pass that goes dead before its side gains it is a touch lost.
         if let Some((side, pressed, band, squad)) = self.touch.take() {
             let s = &mut self.possessing[side];

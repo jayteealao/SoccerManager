@@ -1226,6 +1226,8 @@ impl DecisionModule for DecisionV1 {
             (Some(base + read(off)), shot_read)
         };
         // Passes.
+        #[cfg(feature = "measures")]
+        crate::measures::probe::start_draft();
         let mut passes = [(0usize, 0.0f64); MATES];
         let mut pass_pick = [0.0f64; MATES];
         let mut pass_count = 0;
@@ -1260,6 +1262,8 @@ impl DecisionModule for DecisionV1 {
                 lane = lane.min(segment_distance(opp.pos, carrier.pos, mate.pos));
                 receiver_space = receiver_space.min((opp.pos - mate.pos).length());
             }
+            #[cfg(feature = "measures")]
+            crate::measures::probe::note_candidate(lane >= w.min_lane);
             if lane < w.min_lane {
                 continue;
             }
@@ -1429,6 +1433,30 @@ impl DecisionModule for DecisionV1 {
             } else {
                 score
             };
+            #[cfg(feature = "measures")]
+            crate::measures::probe::note_pass(
+                pass_count,
+                [
+                    (w.progress + role.progress) * progress,
+                    skill(Stage::PASS_SEE) * forward,
+                    w.teamwork_bonus * stages.skill(kind.choose()),
+                    w.lane * (lane / 6.0),
+                    w.space * (receiver_space / 8.0),
+                    -w.distance * (d / 45.0),
+                    plan.directness * (gain.max(0.0) / 45.0),
+                    counter * (gain.max(0.0) / 45.0),
+                    recycle,
+                    -loss(fail, (carrier.pos + mate.pos) * 0.5),
+                    layoff + plan.slots[mate.slot].long_ball_target * (d / 45.0),
+                    flair + mood_risk * forward + build_up + channel_bias + cross,
+                    -pressed_cost,
+                    -received_cost,
+                    -offside_cost,
+                    -screened,
+                    0.0,
+                ],
+                score,
+            );
             passes[pass_count] = (j, score);
             pass_pick[pass_count] = recycle;
             pass_count += 1;

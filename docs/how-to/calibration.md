@@ -444,6 +444,16 @@ Each match's row then holds, per side:
 
 The measures read the match and change nothing: a seed plays the same match with or without them, and `calib.results_digest` is the same. A build without the feature prints that it has no measures as the run starts, writes zeros in the measure columns, and judges the bands of the band file only. `calib.rows.measures` in `report.json` says which build ran.
 
+### Write the decision probe
+
+A measures build also keeps a decision probe of each match: kicks by kind and third, the clearances the other side gained next, goals with and without a shot behind them, the carrier's option scores in the final third he attacks with the terms of his best pass, and every open-play shot with its expected goals, the keeper's distance off his line and the shooter's execution share. Set `SM_PROBE_OUT` to a file path and a calibration run appends one JSON line per match to it, with each keeper's rating, post-shot expected goals faced, goals from shots conceded, saves, completed passes and clearances:
+
+```bash
+SM_PROBE_OUT=runs/probe.jsonl target/release/engine-cli calibrate --suite equal --matches 200
+```
+
+The probe reads the match and changes nothing, like the other measures.
+
 ## Check and fit a tactical primitive
 
 A tactical primitive is a setting of the tactics board, such as tempo or mentality, declared in the `primitives` block of `content/tactics.json`. Each one names the statistic it should move. To check that every level step moves it, build with the `measures` feature and run the harness:
