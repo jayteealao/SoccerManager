@@ -100,7 +100,7 @@
       "perceive": 0.1,
       "clear_worth": 2.0,
       "shot_skill": 0.37,
-      "keeper_read": 0.5
+      "keeper_read": 0.4
     },
     "injury_per_tackle": 0.004,
     "injury_per_minute": 0.0002,

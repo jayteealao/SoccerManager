@@ -1257,7 +1257,12 @@ impl DecisionModule for DecisionV1 {
                 + distance;
             // His misread of the keeper (`decision.keeper_read`): half the score's spread
             // between his far and his near read; the decision's draw places him in it.
-            let spread = w.keeper_read * (1.5 - read_share);
+            let spread = keeper_misread(
+                w.keeper_read,
+                keeper_read_share(&stages),
+                near,
+                stages.share(pressure),
+            );
             let shot_read = if spread > 0.0 && outside && off * (1.0 + spread) > t.keeper_depth {
                 0.5 * (read(off * (1.0 + spread)) - read(off * (1.0 - spread))).abs()
             } else {
@@ -2151,6 +2156,24 @@ pub(crate) fn dribble_line(
 /// place the carrier runs to ([`dribble_line`]).
 pub(crate) const DRIBBLE_AHEAD_M: f64 = 8.0;
 pub(crate) const DRIBBLE_DRIFT_M: f64 = 4.0;
+
+/// A shooter's read share for the keeper's place: the mean of his vision, decisions and
+/// anticipation shares (the pass see, pass choose and intercept see stages).
+pub(crate) fn keeper_read_share(stages: &contract::Skills<'_>) -> f64 {
+    (stages.share(Stage::PASS_SEE)
+        + stages.share(Stage::PASS_CHOOSE)
+        + stages.share(Stage::INTERCEPT_SEE))
+        / 3.0
+}
+
+/// How far, as a share of the keeper's distance off his line, a shooter may misread it either
+/// way: `keeper_read x (1.5 - q)` from his read share `q` ([`keeper_read_share`]), so at
+/// `keeper_read` 0.4 an average reader (share 0.5) misreads by up to 40 percent, a top one by
+/// about 20 and a poor one by about 60; widened under the pressure on the ball he feels
+/// (`grade`, 0 to 1) by `1 + grade x (1 - composure)`, `composure` his shot's pressure share.
+pub(crate) fn keeper_misread(keeper_read: f64, q: f64, grade: f64, composure: f64) -> f64 {
+    keeper_read * (1.5 - q) * (1.0 + grade * (1.0 - composure))
+}
 
 /// The chance that opponent `k` cuts out a pass along the ground from `from` to `to`, `d`
 /// metres long and kicked at `v0`, as the passer sees it: the cut-out the resolver draws
@@ -3337,6 +3360,19 @@ mod tests {
         off: f64,
         tune: impl Fn(&mut crate::tuning::Tuning),
     ) -> (Option<f64>, f64) {
+        shot_scene_read(x, weight, strike, off, None, tune)
+    }
+
+    /// [`shot_scene`] with the striker's keeper read share (his vision, decisions and
+    /// anticipation stages) at `read` when it is set.
+    fn shot_scene_read(
+        x: f64,
+        weight: f64,
+        strike: f64,
+        off: f64,
+        read: Option<f64>,
+        tune: impl Fn(&mut crate::tuning::Tuning),
+    ) -> (Option<f64>, f64) {
         let content = crate::data::test_support::shipped_content();
         let mut schema = content.tactics.clone();
         for m in &mut schema.mentalities {
@@ -3370,10 +3406,41 @@ mod tests {
         ] {
             sim.stages[striker].share[stage.index()] = strike;
         }
+        if let Some(read) = read {
+            for stage in [Stage::PASS_SEE, Stage::PASS_CHOOSE, Stage::INTERCEPT_SEE] {
+                sim.stages[striker].share[stage.index()] = read;
+            }
+        }
         sim.carrier = Some(striker);
         sim.tick = 100;
         let draft = DecisionV1.options(&sim.view(), striker);
         (draft.shot, draft.shot_read)
+    }
+
+    /// The misread of the keeper's place follows the shooter's read: `keeper_read` 0.4 gives
+    /// an average reader (share 0.5) up to 40 percent, a top one (share 1) 20 and a poor one
+    /// (share 0) 60, and pressure on the ball widens it unless his composure is full. In a
+    /// scene, a long shot's read spread falls as his vision, decisions and anticipation rise.
+    #[test]
+    fn a_better_reader_misreads_the_keeper_less_and_pressure_widens_it() {
+        let e = |q: f64| keeper_misread(0.4, q, 0.0, 0.5);
+        assert!((e(0.5) - 0.4).abs() < 1e-12);
+        assert!((e(1.0) - 0.2).abs() < 1e-12);
+        assert!((e(0.0) - 0.6).abs() < 1e-12);
+        assert!(keeper_misread(0.4, 0.5, 1.0, 0.5) > e(0.5));
+        assert_eq!(keeper_misread(0.4, 0.5, 1.0, 1.0), e(0.5));
+        let spread = |read: f64| {
+            shot_scene_read(20.0, 0.5, 0.5, 10.0, Some(read), |t| {
+                t.xg.keeper_coef = 0.139;
+                t.decision.keeper_read = 0.4;
+            })
+            .1
+        };
+        let (poor, average, top) = (spread(0.1), spread(0.5), spread(0.9));
+        assert!(
+            poor > average && average > top && top > 0.0,
+            "poor {poor}, average {average}, top {top}"
+        );
     }
 
     /// There is no fixed shot range: an outfield carrier has a shot from anywhere, and the

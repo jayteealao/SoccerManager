@@ -718,10 +718,13 @@ pub struct DecisionWeights {
     #[garde(range(min = 0.0, max = 5.0))]
     pub shot_skill: f64,
     /// The size of the shooter's misread of the keeper's distance off his line: he sees it
-    /// as `off x (1 + e)`, `e` up to `keeper_read x (1.5 - q)` either way, `q` the read
-    /// share of [`Self::perceive`]; one draw on the perceived-score stream. A design value:
-    /// no real figure sets the size of a misread. 0 (an older file) reads it exactly and
-    /// draws nothing.
+    /// as `off x (1 + e)`, `e` up to `keeper_read x (1.5 - q) x (1 + grade x (1 - c))`
+    /// either way, `q` his read share for the keeper (vision, decisions and anticipation),
+    /// `grade` the pressure on the ball he feels and `c` his shot's composure share; one draw
+    /// on the perceived-score stream. At 0.4 an average reader misreads by up to 40 percent,
+    /// a top one about 20 and a poor one about 60: the real lob choice blurs the keeper's
+    /// distance by a logistic scale of 0.396 in its log (342 lobs in 29,819 StatsBomb
+    /// open-play shots). 0 (an older file) reads it exactly and draws nothing.
     #[serde(default)]
     #[garde(range(min = 0.0, max = 2.0))]
     pub keeper_read: f64,
@@ -855,7 +858,7 @@ impl Default for Tuning {
                 perceive: 0.1,
                 clear_worth: 2.0,
                 shot_skill: 0.37,
-                keeper_read: 0.5,
+                keeper_read: 0.4,
             },
             injury_per_tackle: INJURY_PER_TACKLE,
             injury_per_minute: INJURY_PER_MINUTE,
