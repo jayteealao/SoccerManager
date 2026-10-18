@@ -600,7 +600,14 @@ impl Simulation {
             self.ball.vel.truncate().length() > _t.pass_arrival_speed,
         );
         #[cfg(feature = "measures")]
+        let in_box = {
+            let (ball, pitch) = (self.ball.xy(), self.config.pitch());
+            let attack = [self.teams[0].attack_x, self.teams[1].attack_x];
+            move |side: usize| pitch.in_penalty_area(ball, attack[side])
+        };
+        #[cfg(feature = "measures")]
         if let Some(m) = self.measures.as_deref_mut() {
+            m.probe.box_reached(in_box);
             if self.pass_in_flight == Some(team) {
                 if self.last_kicker == Some(i) {
                     m.self_regained(team, keeper, fast);

@@ -11,6 +11,9 @@
 //!   each term of the best pass ([`PASS_TERMS`]).
 //! - Every open-play shot: its expected goals, the keeper's distance off his line, the
 //!   shooter's execution share and his read of the chance, and whether it scored.
+//! - Balls into the box: each kick that is not a shot or a clearance, by its kind
+//!   ([`BOX_KINDS`]), and those that the next player to gain the ball gains inside the
+//!   penalty area the kicker's side attacks, as a StatsBomb pass ends there.
 //!
 //! Every count is per side, home first.
 
@@ -18,6 +21,9 @@ use std::cell::RefCell;
 
 /// Kick kinds, in [`Probe::kicks`] order.
 pub const KICK_KINDS: [&str; 4] = ["shot", "restart", "clear", "pass"];
+/// The kinds of kick the box count reads, in [`Probe::box_kicks`] order: an open-play lofted
+/// pass, a lofted restart kick, and a pass or restart kick along the ground.
+pub const BOX_KINDS: [&str; 3] = ["open_high", "restart_high", "ground"];
 /// The option kinds, in the [`crate::measures::CHOICES`] order.
 pub const OPTION_KINDS: usize = 5;
 /// The terms of a pass's score, in the order the decision module adds them. The pass's chance
@@ -84,6 +90,11 @@ pub struct Probe {
     pub goals_no_shot: [[u32; 4]; 2],
     pub final_third: [FinalThird; 2],
     pub shots: Vec<ShotRow>,
+    /// Per side and box kind ([`BOX_KINDS`]): the kicks, and those gained inside the box.
+    pub box_kicks: [[u32; 3]; 2],
+    pub into_box: [[u32; 3]; 2],
+    #[serde(skip)]
+    box_pending: Option<(usize, usize)>,
     #[serde(skip)]
     clear_pending: Option<usize>,
     #[serde(skip)]
@@ -95,6 +106,7 @@ impl Probe {
     /// clearance in progress for the kicker's side and the open shot; a clearance opens a new one.
     pub(crate) fn kick(&mut self, team: usize, kind: usize, third: usize) {
         self.settle(team);
+        self.box_pending = None;
         self.kicks[team][kind][third] += 1;
         if kind == 2 {
             self.clear_pending = Some(team);
@@ -132,9 +144,26 @@ impl Probe {
         self.shot_open = None;
     }
 
-    /// The ball went dead: the open shot is over.
+    /// The ball went dead: the open shot is over, and the kick in flight ended outside the box.
     pub(crate) fn dead(&mut self) {
         self.shot_open = None;
+        self.box_pending = None;
+    }
+
+    /// `team` kicked a kick of box kind `kind` ([`BOX_KINDS`]).
+    pub(crate) fn box_kick(&mut self, team: usize, kind: usize) {
+        self.box_kicks[team][kind] += 1;
+        self.box_pending = Some((team, kind));
+    }
+
+    /// The ball was gained, `in_box(team)` when inside the penalty area that `team` attacks:
+    /// the kick in flight counts into the box when its side's test holds.
+    pub(crate) fn box_reached(&mut self, in_box: impl Fn(usize) -> bool) {
+        if let Some((team, kind)) = self.box_pending.take()
+            && in_box(team)
+        {
+            self.into_box[team][kind] += 1;
+        }
     }
 
     /// The carrier of `team` in the final third he attacks, at a decision: his options'
@@ -233,6 +262,25 @@ mod tests {
         assert_eq!(p.kicks[0][2][0], 1);
         assert_eq!(p.clear_resolved, [1, 1]);
         assert_eq!(p.clear_lost, [1, 0]);
+    }
+
+    /// A kick into the box counts when the ball is gained inside the penalty area its side
+    /// attacks, and not when the ball goes dead or is gained outside it.
+    #[test]
+    fn a_kick_counts_into_the_box_when_the_ball_is_gained_there() {
+        let mut p = Probe::default();
+        p.kick(0, 3, 2);
+        p.box_kick(0, 0);
+        p.box_reached(|team| team == 0);
+        p.kick(1, 1, 2);
+        p.box_kick(1, 1);
+        p.dead();
+        p.box_reached(|_| true);
+        p.kick(0, 3, 1);
+        p.box_kick(0, 2);
+        p.box_reached(|_| false);
+        assert_eq!(p.box_kicks, [[1, 0, 1], [0, 1, 0]]);
+        assert_eq!(p.into_box, [[1, 0, 0], [0, 0, 0]]);
     }
 
     /// A goal with its side's shot open marks that shot scored; one with none counts by who

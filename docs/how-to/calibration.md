@@ -446,7 +446,7 @@ The measures read the match and change nothing: a seed plays the same match with
 
 ### Write the decision probe
 
-A measures build also keeps a decision probe of each match: kicks by kind and third, the clearances the other side gained next, goals with and without a shot behind them, the carrier's option scores in the final third he attacks with the terms of his best pass, and every open-play shot with its expected goals, the keeper's distance off his line and the shooter's execution share. Set `SM_PROBE_OUT` to a file path and a calibration run appends one JSON line per match to it, with each keeper's rating, post-shot expected goals faced, goals from shots conceded, saves, completed passes and clearances:
+A measures build also keeps a decision probe of each match: kicks by kind and third, the clearances the other side gained next, goals with and without a shot behind them, the carrier's option scores in the final third he attacks with the terms of his best pass, every open-play shot with its expected goals, the keeper's distance off his line and the shooter's execution share, and the balls into the box: each pass and restart kick by kind (an open-play lofted pass, a lofted restart kick, a kick along the ground) and those the next player to gain the ball gains inside the penalty area the kicker's side attacks, as a StatsBomb pass ends there. Set `SM_PROBE_OUT` to a file path and a calibration run appends one JSON line per match to it, with each keeper's rating, post-shot expected goals faced, goals from shots conceded, saves, completed passes and clearances:
 
 ```bash
 SM_PROBE_OUT=runs/probe.jsonl target/release/engine-cli calibrate --suite equal --matches 200

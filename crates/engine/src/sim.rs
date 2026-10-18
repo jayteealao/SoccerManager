@@ -1875,6 +1875,15 @@ impl Simulation {
                     crate::measures::third_of(self.ball.xy().x, self.teams[team].attack_x, length);
                 if let Some(m) = self.measures.as_deref_mut() {
                     m.probe.kick(team, kind, third);
+                    if kind == 1 || kind == 3 {
+                        let lofted = loft > 0.0;
+                        let box_kind = match (lofted, kind) {
+                            (true, 3) => 0,
+                            (true, _) => 1,
+                            _ => 2,
+                        };
+                        m.probe.box_kick(team, box_kind);
+                    }
                 }
             }
             if as_shot {
