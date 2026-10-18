@@ -19,7 +19,7 @@ pub const SQUAD_MAX: usize = crate::data::team::MAX_SQUAD;
 /// Player slots per action in the dense key index: two squads, then the match key.
 pub(crate) const SLOTS_PER_ACTION: usize = 2 * SQUAD_MAX + 1;
 
-/// Every possible key: 48 actions times 81 player slots.
+/// Every possible key: 49 actions times 81 player slots.
 pub const KEY_COUNT: usize = Action::ALL.len() * SLOTS_PER_ACTION;
 
 /// The part of the engine a draw belongs to; the number is its stream-id code.
@@ -136,11 +136,14 @@ pub enum Action {
     /// Whether a tackled player who was not injured takes a knock: one draw after each tackle
     /// injury roll that did not injure, against a multiple of that roll's chance.
     KnockTackle,
+    /// The carrier's read of one option's score: one draw per option he reads, while the
+    /// read strays (`decision.perceive`).
+    PerceiveScore,
 }
 
 impl Action {
     /// Every action in table order.
-    pub const ALL: [Action; 48] = [
+    pub const ALL: [Action; 49] = [
         Action::ShotScore,
         Action::PassScore,
         Action::DribbleScore,
@@ -189,6 +192,7 @@ impl Action {
         Action::PassWeight,
         Action::TakeOn,
         Action::KnockTackle,
+        Action::PerceiveScore,
     ];
 
     /// The action's table row.
@@ -232,7 +236,7 @@ use PlayerKind::{Actor, Match};
 use Subsystem::{Ball, Decision, Fatigue, Kick, Laws, Shootout};
 
 /// The stream-id table, one row per draw call in match play, in [`Action`] order.
-pub const TABLE: [Row; 48] = [
+pub const TABLE: [Row; 49] = [
     row(
         Action::ShotScore,
         Decision,
@@ -453,6 +457,14 @@ pub const TABLE: [Row; 48] = [
         Fatigue,
         5,
         "knock_tackle",
+        Actor,
+        Unscripted,
+    ),
+    row(
+        Action::PerceiveScore,
+        Decision,
+        9,
+        "perceive_score",
         Actor,
         Unscripted,
     ),
@@ -700,8 +712,8 @@ mod tests {
         assert_eq!(count(Class::Injury), 2);
         // The restart wait and the quick restart are unscripted draws (25 before them, with the
         // pace sprint and the trait override), as are the pass cut, the pass weight and the
-        // take-on, and the knock.
-        assert_eq!(count(Class::Unscripted), 31);
+        // take-on, the knock, and the carrier's read of his options.
+        assert_eq!(count(Class::Unscripted), 32);
         let mut codes: Vec<(u8, u8)> = TABLE.iter().map(|r| (r.subsystem as u8, r.code)).collect();
         codes.sort_unstable();
         codes.dedup();

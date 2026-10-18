@@ -653,6 +653,42 @@ pub struct DecisionWeights {
     /// supporting): `teamwork_bonus · (2 · share − 1)`, 0 at rating 10.
     #[garde(range(min = 0.0, max = 5.0))]
     pub teamwork_bonus: f64,
+    /// The loss danger's weight at the attacked goal line: an option's loss term reads
+    /// `(1 - s)^2 + attack_danger s^2` at the place the ball would be lost (`s` 0 at the
+    /// side's own goal line, 1 at the attacked one). The first term is the threat a loss hands
+    /// the opponent, the second the threat the side gives up. Set from the StatsBomb open data
+    /// (five men's leagues, 2015/16): the xG a side makes within 15 s of an open-play pass
+    /// near the goal it attacks is 1.96 times the xG the opponent makes within 15 s of a loss
+    /// near the side's own goal (fits `b s^2` and `a (1 - s)^2`). An older file without it
+    /// loads 1, the even shape.
+    #[serde(default = "default_attack_danger")]
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub attack_danger: f64,
+    /// A clearance gives the ball away: it loses `loss_weight x clear_loss x danger` at the
+    /// place it lands. The StatsBomb open data's clearances go to the opponent 0.686 of the
+    /// time. 0 (an older file) leaves the clearance free.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub clear_loss: f64,
+    /// A shot that does not score gives the ball away as a lost pass does: it loses
+    /// `loss_weight x shot_loss x (1 - xG) x danger` at the shooter's place, with the shot's
+    /// own xG. In the StatsBomb open data the opponent has the ball next after 0.724 of the
+    /// open-play shots that do not score. 0 (an older file) leaves the shot without a loss term.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub shot_loss: f64,
+    /// The carrier's read of his options: each option's score strays by up to
+    /// `perceive x (1.5 - q)` either side, `q` the mean share of his pass see, choose and
+    /// pressure stages (vision, decisions and composure leading), one draw per option from
+    /// its own stream, after the option noise. No real figure sets it; it is the option
+    /// noise's own size. 0 (an older file) draws nothing.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 2.0))]
+    pub perceive: f64,
+}
+
+fn default_attack_danger() -> f64 {
+    1.0
 }
 
 /// Seconds between the ball going dead and the restart, per restart kind. Play restarts
@@ -773,6 +809,10 @@ impl Default for Tuning {
                 carry_s: 0.0,
                 carry_cost: 0.0,
                 teamwork_bonus: 0.1,
+                attack_danger: 1.0,
+                clear_loss: 0.0,
+                shot_loss: 0.0,
+                perceive: 0.0,
             },
             injury_per_tackle: INJURY_PER_TACKLE,
             injury_per_minute: INJURY_PER_MINUTE,

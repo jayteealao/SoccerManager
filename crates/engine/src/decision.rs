@@ -538,6 +538,14 @@ pub(crate) const THROW_LOFT: f64 = 2.0;
 pub(crate) const CLEARANCE_DISTANCE: f64 = 55.0;
 pub(crate) const CLEARANCE_LOFT: f64 = 6.0;
 
+/// Where a clearance from `from` lands for a side attacking along `attack`: its full length
+/// toward the attacked goal, on the pitch.
+fn clear_landing(from: DVec2, attack: DVec2, half: f64) -> DVec2 {
+    let mut land = from + attack * CLEARANCE_DISTANCE;
+    land.x = land.x.clamp(-half, half);
+    land
+}
+
 /// The ground speed of a kick that reaches a team-mate `d` metres away at the pass arrival
 /// speed. A ground pass decelerates by friction the whole way. A lofted pass flies for
 /// `2 * loft / g` seconds with no friction, so it needs less speed: the flight covers
@@ -1017,22 +1025,21 @@ impl DecisionModule for DecisionV1 {
             }
         };
 
-        // Risk appetite (hook `option.loss_danger`): a pass, a dribble or a hold loses
-        // `loss_weight x failure chance x danger`. Losing the ball at `at` hands the opponent
-        // the threat of that place near the side's own goal and gives up the side's own threat
-        // near the goal it attacks; each grows with the square of the nearness to its goal, so
-        // the danger is 1 at either goal line and 0.5 at halfway. A shot has no loss term: a
-        // missed shot gives the ball back at the opponent's own goal line, where it threatens
-        // nothing, and the shot spends the side's threat instead of losing it. (Counted as a
-        // loss at the shooter's feet, it held back every shot but the closest, so the shots
-        // left were twice as good and goals rose by half.)
+        // Risk appetite (hook `option.loss_danger`): a pass, a dribble, a hold, a clearance
+        // and a shot lose `loss_weight x failure chance x danger`. Losing the ball at `at`
+        // hands the opponent the threat of that place near the side's own goal and gives up
+        // the side's own threat near the goal it attacks; each grows with the square of the
+        // nearness to its goal, the second weighted by `decision.attack_danger`, so the danger
+        // is 1 at the own goal line and `attack_danger` at the attacked one. A clearance's
+        // failure chance is `decision.clear_loss`, at the place it lands; a shot's is
+        // `decision.shot_loss x (1 - xG)`, at the shooter's place.
         // On winning the ball: inside the side's regain window a counter plays the ball
         // forward and holds it less; 0 outside it and at the default.
         let counter = counter_weight(view, team, carrier.slot);
         let half = view.pitch().half_length();
         let danger = |at: DVec2| {
             let s = ((at.x * side.attack_x + half) / (2.0 * half)).clamp(0.0, 1.0);
-            (1.0 - s) * (1.0 - s) + s * s
+            (1.0 - s) * (1.0 - s) + w.attack_danger * s * s
         };
         let loss = |fail: f64, at: DVec2| plan.loss_weight * fail.clamp(0.0, 1.0) * danger(at);
 
@@ -1141,6 +1148,9 @@ impl DecisionModule for DecisionV1 {
             } else {
                 0.0
             };
+            // A shot that does not score gives the ball away: the loss term with the shot's
+            // own expected goals, as the reported model reads it.
+            let xg = crate::sim::shot_xg(carrier.pos, side.attack_x, &t.xg, view.pitch());
             Some(
                 w.shot_base + w.shot_lane * ((lane.min(5.0) - 2.5) / 2.5)
                     - w.shot_distance * goal_dist / t.shot_range
@@ -1148,7 +1158,8 @@ impl DecisionModule for DecisionV1 {
                     + skill(choose)
                     + role.shoot
                     + mood_risk
-                    + distance,
+                    + distance
+                    - loss(w.shot_loss * (1.0 - xg), carrier.pos),
             )
         } else {
             None
@@ -1452,7 +1463,17 @@ impl DecisionModule for DecisionV1 {
                 } else {
                     0.0
                 }
-        } - carry;
+        } - carry
+            // A clearance gives the ball away where it lands.
+            - loss(w.clear_loss, clear_landing(carrier.pos, attack, half));
+        // The carrier's read of his options (`decision.perceive`): its spread falls as his
+        // vision, decisions and composure (the pass see, choose and pressure stages) rise.
+        let perceive = w.perceive
+            * (1.5
+                - (stages.share(Stage::PASS_SEE)
+                    + stages.share(Stage::PASS_CHOOSE)
+                    + stages.share(Stage::PASS_PRESSURE))
+                    / 3.0);
         OptionDraft {
             noise,
             shot,
@@ -1463,21 +1484,33 @@ impl DecisionModule for DecisionV1 {
             clear,
             carry,
             nearest_opp_pos,
+            perceive,
         }
     }
 
     fn scored(&self, draft: &OptionDraft, draws: &OptionDraws) -> Scored {
         let noise = draft.noise;
         let jitter = |u: f64| map_range(-noise, noise, u);
-        let shot = draft.shot.map(|s| s + jitter(draws.shot));
+        // The perceived-score draw: each option's own, added after its noise.
+        let perceive = draft.perceive;
+        let seen = |s: f64, i: usize| {
+            if perceive > 0.0 {
+                s + map_range(-perceive, perceive, draws.perceive[i])
+            } else {
+                s
+            }
+        };
+        let shot = draft.shot.map(|s| seen(s + jitter(draws.shot), 0));
         let mut pass: Option<(f64, usize, f64)> = None;
         let mut candidates = [(0usize, 0.0f64); MATES];
         let drafted = draft.passes[..draft.pass_count]
             .iter()
             .zip(&draws.passes)
             .zip(&draft.pass_pick);
-        for (candidate, ((&(j, s), &u), &pick)) in candidates.iter_mut().zip(drafted) {
-            let score = s + jitter(u);
+        for (k, (candidate, ((&(j, s), &u), &pick))) in
+            candidates.iter_mut().zip(drafted).enumerate()
+        {
+            let score = seen(s + jitter(u), 1 + k);
             *candidate = (j, score);
             if pass.is_none_or(|(best, ..)| score > best) {
                 pass = Some((score, j, pick));
@@ -1486,12 +1519,12 @@ impl DecisionModule for DecisionV1 {
         let pass = pass.map(|(s, j, pick)| (s - pick - draft.carry, j));
         let (dribble, hold) = match draft.dribble_hold {
             Some((dribble, hold)) => (
-                dribble.map(|d| d + jitter(draws.dribble_hold.0)),
-                Some(hold + jitter(draws.dribble_hold.1)),
+                dribble.map(|d| seen(d + jitter(draws.dribble_hold.0), MATES + 1)),
+                Some(seen(hold + jitter(draws.dribble_hold.1), MATES + 2)),
             ),
             None => (None, None),
         };
-        let clear = draft.clear + jitter(draws.clear);
+        let clear = seen(draft.clear + jitter(draws.clear), MATES + 3);
         Scored {
             options: Options {
                 shot,
@@ -2729,6 +2762,7 @@ pub const DECISION_V1_CARD: ModuleCard = ModuleCard {
         Action::PaceSprint,
         Action::TraitOverride,
         Action::PassWeight,
+        Action::PerceiveScore,
     ],
 };
 
@@ -2803,8 +2837,21 @@ mod tests {
         mates: &[(usize, DVec2)],
         opps: &[(usize, DVec2)],
     ) -> Options {
+        scene_tuned(schema, tactics, x, mates, opps, |_| {})
+    }
+
+    /// [`scene`] with the decision weights changed by `tune` first.
+    fn scene_tuned(
+        schema: &crate::data::tactics::TacticsSchema,
+        tactics: crate::tactics::Tactics,
+        x: f64,
+        mates: &[(usize, DVec2)],
+        opps: &[(usize, DVec2)],
+        tune: impl Fn(&mut crate::tuning::DecisionWeights),
+    ) -> Options {
         let mut config = shipped_config(7, 1).unwrap();
         config.tuning.decision.noise = 0.0;
+        tune(&mut config.tuning.decision);
         config.tactics = schema.clone();
         let mut sim = Simulation::new(config.with_tactics(0, tactics)).unwrap();
         let striker = 9;
@@ -2878,24 +2925,119 @@ mod tests {
         }
     }
 
-    /// A shot has no loss term: no loss weight, risk-averse or risk-seeking, moves the shot
-    /// score of a scene.
-    #[test]
-    fn no_loss_weight_moves_the_shot_score() {
+    /// The options of [`scene_tuned`] with every loss weight at `weight`.
+    fn scene_at_loss_weight(
+        weight: f64,
+        x: f64,
+        mates: &[(usize, DVec2)],
+        tune: impl Fn(&mut crate::tuning::DecisionWeights),
+    ) -> Options {
         let content = crate::data::test_support::shipped_content();
-        let shot = |weight: f64| {
-            let mut schema = content.tactics.clone();
-            for m in &mut schema.mentalities {
-                m.loss_weight = weight;
-            }
-            let tactics = crate::tactics::Tactics::defaults(&schema);
-            scene(&schema, tactics, 40.0, &[], &[])
-                .shot
-                .expect("inside the shooting range")
-        };
-        for weight in [-2.0, 0.0, 0.5, 3.0] {
-            assert_eq!(shot(weight), shot(0.0), "loss weight {weight}");
+        let mut schema = content.tactics.clone();
+        for m in &mut schema.mentalities {
+            m.loss_weight = weight;
         }
+        let tactics = crate::tactics::Tactics::defaults(&schema);
+        scene_tuned(&schema, tactics, x, mates, &[], |w| {
+            w.perceive = 0.0;
+            tune(w);
+        })
+    }
+
+    /// A shot that does not score gives the ball away: with `shot_loss` the shot loses the
+    /// loss term at the shooter's place, so a higher loss weight lowers it, and a poorer
+    /// chance (farther out) loses more; with `shot_loss` 0 no loss weight moves it.
+    #[test]
+    fn a_missed_shot_loses_the_ball_as_a_lost_pass_does() {
+        let shot = |weight: f64, x: f64, shot_loss: f64| {
+            scene_at_loss_weight(weight, x, &[], |w| w.shot_loss = shot_loss)
+                .shot
+                .expect("a shot is an option")
+        };
+        for weight in [-2.0, 0.5, 3.0] {
+            assert_eq!(
+                shot(weight, 40.0, 0.0),
+                shot(0.0, 40.0, 0.0),
+                "loss weight {weight}"
+            );
+        }
+        assert_eq!(shot(0.0, 40.0, 0.724), shot(0.0, 40.0, 0.0));
+        assert!(shot(1.0, 40.0, 0.724) < shot(0.0, 40.0, 0.724));
+        assert!(shot(2.0, 40.0, 0.724) < shot(1.0, 40.0, 0.724));
+        // With an even danger shape, so the place weighs alike at both distances.
+        let even = |weight: f64, x: f64| {
+            scene_at_loss_weight(weight, x, &[], |w| {
+                w.shot_loss = 0.724;
+                w.attack_danger = 1.0;
+            })
+            .shot
+            .expect("a shot is an option")
+        };
+        let cost = |x: f64| even(0.0, x) - even(1.0, x);
+        assert!(
+            cost(32.0) > cost(46.0),
+            "the poorer chance loses more: {} against {}",
+            cost(32.0),
+            cost(46.0)
+        );
+    }
+
+    /// The attacked end weighs `attack_danger`: the same loss near the goal the side attacks
+    /// costs more as `attack_danger` rises.
+    #[test]
+    fn a_loss_near_the_attacked_goal_costs_attack_danger_times_more() {
+        let cost = |k: f64| {
+            let at = |weight: f64| {
+                scene_at_loss_weight(weight, 44.0, &[], |w| {
+                    w.shot_loss = 0.724;
+                    w.attack_danger = k;
+                })
+                .shot
+                .expect("a shot is an option")
+            };
+            at(0.0) - at(1.0)
+        };
+        assert!(cost(1.0) > 0.0);
+        assert!(
+            cost(1.963) > 1.5 * cost(1.0),
+            "{} against {}",
+            cost(1.963),
+            cost(1.0)
+        );
+    }
+
+    /// A clearance gives the ball away where it lands: with `clear_loss` a higher loss weight
+    /// lowers its score; with `clear_loss` 0 it does not.
+    #[test]
+    fn a_clearance_pays_the_loss_where_it_lands() {
+        let clear = |weight: f64, clear_loss: f64| {
+            scene_at_loss_weight(weight, -30.0, &[], |w| w.clear_loss = clear_loss).clear
+        };
+        assert_eq!(clear(2.0, 0.0), clear(0.0, 0.0));
+        assert!(clear(1.0, 0.686) < clear(0.0, 0.686));
+        assert!(clear(2.0, 0.686) < clear(1.0, 0.686));
+    }
+
+    /// The carrier's read of his options strays less as his vision, decisions and composure
+    /// rise, and not at all with `perceive` 0.
+    #[test]
+    fn a_better_reader_reads_his_options_with_a_smaller_spread() {
+        let spread = |share: f64, perceive: f64| {
+            let mut config = shipped_config(7, 1).unwrap();
+            config.tuning.decision.perceive = perceive;
+            let mut sim = Simulation::new(config).unwrap();
+            let c = 9;
+            for stage in [Stage::PASS_SEE, Stage::PASS_CHOOSE, Stage::PASS_PRESSURE] {
+                sim.stages[c].share[stage.index()] = share;
+            }
+            sim.carrier = Some(c);
+            sim.tick = 100;
+            DecisionV1.options(&sim.view(), c).perceive
+        };
+        assert_eq!(spread(0.5, 0.0), 0.0);
+        assert!(spread(0.9, 0.1) < spread(0.5, 0.1));
+        assert!(spread(0.5, 0.1) < spread(0.1, 0.1));
+        assert!(spread(0.9, 0.1) > 0.0);
     }
 
     /// A higher loss weight lowers a risky forward pass (a narrow lane to a marked receiver)

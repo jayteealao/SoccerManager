@@ -477,6 +477,9 @@ pub struct OptionDraft {
     /// The carry cost subtracted from the best pass after the pick.
     pub carry: f64,
     pub nearest_opp_pos: DVec2,
+    /// The amplitude of each option's perceived-score draw (`decision.perceive`); 0 draws
+    /// nothing.
+    pub perceive: f64,
 }
 
 /// The raw noise draws of one carrier's options, in the draft's order.
@@ -486,7 +489,13 @@ pub struct OptionDraws {
     pub passes: [f64; MATES],
     pub dribble_hold: (f64, f64),
     pub clear: f64,
+    /// The perceived-score draws ([`PERCEIVE_DRAWS`]).
+    pub perceive: [f64; PERCEIVE_DRAWS],
 }
+
+/// The perceived-score draws of one carrier, in order: the shot, every pass, the dribble,
+/// the hold and the clearance.
+pub const PERCEIVE_DRAWS: usize = MATES + 4;
 
 /// The scored options and every pass candidate's score, in roster order.
 #[derive(Debug, Clone, Copy)]

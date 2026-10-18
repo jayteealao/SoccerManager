@@ -93,7 +93,11 @@
       "lone_dribble": -0.5,
       "carry_s": 0.0,
       "carry_cost": 0.0,
-      "teamwork_bonus": 0.1
+      "teamwork_bonus": 0.1,
+      "attack_danger": 1.963,
+      "clear_loss": 0.686,
+      "shot_loss": 0.724,
+      "perceive": 0.1
     },
     "injury_per_tackle": 0.004,
     "injury_per_minute": 0.0002,

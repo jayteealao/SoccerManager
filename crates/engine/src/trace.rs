@@ -215,6 +215,7 @@ pub fn is_chance(action: Action) -> bool {
         | Action::DribbleScore
         | Action::HoldScore
         | Action::ClearScore
+        | Action::PerceiveScore
         | Action::PassAim
         | Action::ClearAim
         | Action::ShotAim
@@ -410,6 +411,7 @@ pub fn points_of(action: Action) -> &'static [Point] {
         | Action::DribbleScore
         | Action::HoldScore
         | Action::ClearScore
+        | Action::PerceiveScore
         | Action::ClearWide
         | Action::ClearAim => &[Point::Carrier],
         // Open-play passes, and corner and free-kick deliveries (`restart_pass`).

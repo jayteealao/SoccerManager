@@ -55,6 +55,7 @@ pub const MOVED_KEYS: &[Action] = &[
     Action::PassCut,
     Action::PassWeight,
     Action::TakeOn,
+    Action::PerceiveScore,
 ];
 
 /// What one module is.

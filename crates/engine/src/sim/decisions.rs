@@ -144,6 +144,23 @@ impl Simulation {
             draws.dribble_hold = (dribble, hold);
         }
         draws.clear = self.streams.draw(Key::player(Action::ClearScore, carrier));
+        // The perceived-score draws, from their own stream, only while the read strays.
+        if draft.perceive > 0.0 {
+            let key = Key::player(Action::PerceiveScore, carrier);
+            if draft.shot.is_some() {
+                draws.perceive[0] = self.streams.draw(key);
+            }
+            for k in 0..draft.pass_count {
+                draws.perceive[1 + k] = self.streams.draw(key);
+            }
+            if let Some((dribble, _)) = draft.dribble_hold {
+                if dribble.is_some() {
+                    draws.perceive[crate::modules::MATES + 1] = self.streams.draw(key);
+                }
+                draws.perceive[crate::modules::MATES + 2] = self.streams.draw(key);
+            }
+            draws.perceive[crate::modules::MATES + 3] = self.streams.draw(key);
+        }
         let scored = decision.scored(&draft, &draws);
         if let Some(trace) = self.streams.trace_mut() {
             for &(j, score) in &scored.candidates[..scored.count] {
@@ -321,6 +338,7 @@ impl Simulation {
                 passes: [0.5; crate::modules::MATES],
                 dribble_hold: (0.5, 0.5),
                 clear: 0.5,
+                perceive: [0.5; crate::modules::PERCEIVE_DRAWS],
             };
             let plain = decision.scored(&draft, &middle).options;
             let (top, top_choice) = decision.choose(&view, c, &plain, offsets);
