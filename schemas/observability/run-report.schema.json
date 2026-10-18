@@ -33,7 +33,7 @@
       "required": ["limit", "matches", "substitutions", "per_team", "count_shares", "minute_quartiles", "reasons"]
     },
     "calib.styles": {
-      "description": "A change run's sample of the styles suite: one match per ordered pairing of the named styles on the changed engine, report only.",
+      "description": "A change run's sample of the styles suite: one match per ordered pairing of the named styles on the changed engine, report only. Its gate block (gate: pass, dominant, identity_flags, pairings_outside, violations, unplayed) judges the sample whole and reports only.",
       "type": "object",
       "required": ["matches_per_pairing", "matches", "played", "violations", "styles", "pairings", "dominant", "identity_flags", "wall_ms"]
     },

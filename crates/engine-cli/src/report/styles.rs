@@ -1,8 +1,13 @@
 //! The report of the styles suite: every ordered pairing of two distinct named styles,
 //! played with identical squads. Per style it gives the points per match, the share of all
 //! points, the styles it loses to clearly, the dominance flag and the identity flags; per
-//! ordered pairing the points of each side. The report only describes: no band, verdict or
-//! exit code reads it.
+//! ordered pairing the points of each side. No band, verdict or exit code reads it.
+//!
+//! Its gate block judges the suite whole: it passes when no style is dominant, no identity
+//! statistic is flagged, every ordered pairing that played averages between [`SHOTS_MIN`] and
+//! [`SHOTS_MAX`] shots a match (both sides together, the bounds included), the running checker
+//! found no violation and every planned match played; otherwise it names each failing item.
+//! The block reports; the CLI's exit code stays as it is.
 //!
 //! A style loses clearly to another when the 95 percent interval of the mean points
 //! difference over their matches, in both home orders, lies wholly below zero. A style is
@@ -53,6 +58,12 @@ pub type ProbeSide = [(f64, f64); PROBE.len()];
 
 /// A style that takes more than this share of all the points is flagged.
 pub const SHARE_CAP: f64 = 0.20;
+
+/// The fewest shots a match, both sides together, the gate allows an ordered pairing.
+pub const SHOTS_MIN: f64 = 4.0;
+
+/// The most shots a match, both sides together, the gate allows an ordered pairing.
+pub const SHOTS_MAX: f64 = 40.0;
 
 /// The two-sided 95 percent normal quantile.
 pub const Z95: f64 = 1.96;
@@ -170,6 +181,99 @@ pub struct StylesReport {
     pub identity_flags: Vec<String>,
     /// The suite's wall time, in milliseconds.
     pub wall_ms: u64,
+    /// The gate over the whole suite.
+    pub gate: StylesGate,
+}
+
+/// The gate of the styles suite: `pass`, and each item that fails it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct StylesGate {
+    pub pass: bool,
+    /// The styles flagged as dominant.
+    pub dominant: Vec<String>,
+    /// Each flagged identity statistic, as `style: stat`.
+    pub identity_flags: Vec<String>,
+    /// Each ordered pairing that played and averages outside [`SHOTS_MIN`] to [`SHOTS_MAX`]
+    /// shots a match.
+    pub pairings_outside: Vec<PairingShots>,
+    /// The running checker's violations over the suite.
+    pub violations: usize,
+    /// Planned matches that did not play to full time.
+    pub unplayed: u32,
+}
+
+/// One ordered pairing's shots a match, both sides together.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PairingShots {
+    pub home: String,
+    pub away: String,
+    pub shots_per_match: f64,
+}
+
+/// The gate over a report's rows.
+pub fn gate(
+    dominant: &[String],
+    identity_flags: &[String],
+    pairings: &[PairingRow],
+    violations: usize,
+    planned: u32,
+    played: u32,
+) -> StylesGate {
+    let pairings_outside: Vec<PairingShots> = pairings
+        .iter()
+        .filter(|p| p.matches > 0 && !(SHOTS_MIN..=SHOTS_MAX).contains(&p.shots_per_match))
+        .map(|p| PairingShots {
+            home: p.home.clone(),
+            away: p.away.clone(),
+            shots_per_match: p.shots_per_match,
+        })
+        .collect();
+    let unplayed = planned.saturating_sub(played);
+    StylesGate {
+        pass: dominant.is_empty()
+            && identity_flags.is_empty()
+            && pairings_outside.is_empty()
+            && violations == 0
+            && unplayed == 0,
+        dominant: dominant.to_vec(),
+        identity_flags: identity_flags.to_vec(),
+        pairings_outside,
+        violations,
+        unplayed,
+    }
+}
+
+/// The gate as one console line: `styles gate: pass`, or `styles gate: fail` and each
+/// failing item.
+pub fn gate_line(g: &StylesGate) -> String {
+    if g.pass {
+        return "styles gate: pass".into();
+    }
+    let mut items = Vec::new();
+    if !g.dominant.is_empty() {
+        items.push(format!("dominant {}", g.dominant.join(", ")));
+    }
+    if !g.identity_flags.is_empty() {
+        items.push(format!("identity {}", g.identity_flags.join(", ")));
+    }
+    if !g.pairings_outside.is_empty() {
+        let list: Vec<String> = g
+            .pairings_outside
+            .iter()
+            .map(|p| format!("{} v {} {:.2}", p.home, p.away, p.shots_per_match))
+            .collect();
+        items.push(format!(
+            "shots a match outside {SHOTS_MIN} to {SHOTS_MAX}: {}",
+            list.join(", ")
+        ));
+    }
+    if g.violations > 0 {
+        items.push(format!("{} rule violations", g.violations));
+    }
+    if g.unplayed > 0 {
+        items.push(format!("{} matches unplayed", g.unplayed));
+    }
+    format!("styles gate: fail: {}", items.join("; "))
 }
 
 /// The mean of `xs`, 0 when empty.
@@ -348,7 +452,7 @@ pub fn build(
             });
         }
     }
-    let dominant = styles
+    let dominant: Vec<String> = styles
         .iter()
         .filter(|r| r.dominant)
         .map(|r| r.style.clone())
@@ -361,17 +465,27 @@ pub fn build(
                 format!("{}: {}{against}", r.style, i.stat)
             })
         })
-        .collect();
+        .collect::<Vec<String>>();
+    let played = u32::try_from(matches.len()).unwrap_or(u32::MAX);
+    let gate = gate(
+        &dominant,
+        &identity_flags,
+        &pairings,
+        violations,
+        planned,
+        played,
+    );
     StylesReport {
         matches_per_pairing,
         matches: planned,
-        played: u32::try_from(matches.len()).unwrap_or(u32::MAX),
+        played,
         violations,
         styles,
         pairings,
         dominant,
         identity_flags,
         wall_ms,
+        gate,
     }
 }
 
@@ -403,6 +517,8 @@ pub fn render(r: &StylesReport) -> String {
     };
     out.push_str(&format!("dominant: {}\n", list(&r.dominant)));
     out.push_str(&format!("identity flags: {}\n", list(&r.identity_flags)));
+    out.push_str(&gate_line(&r.gate));
+    out.push('\n');
     for p in r.pairings.iter().filter(|p| !p.probe.is_empty()) {
         out.push_str(&format!(
             "{} v {}: {} matches, {:.2} shots and {:.2} goals a match\n",
@@ -519,6 +635,81 @@ mod tests {
         let one = vec![game([0, 1], [0, 3])];
         assert!(!clear_loss(&one, 0, 1));
         assert!(!clear_loss(&one, 1, 0));
+    }
+
+    fn pairing(home: &str, away: &str, matches: u32, shots: f64) -> PairingRow {
+        PairingRow {
+            home: home.into(),
+            away: away.into(),
+            matches,
+            home_points_per_match: 1.0,
+            away_points_per_match: 1.0,
+            goals_per_match: 2.0,
+            shots_per_match: shots,
+            probe: Vec::new(),
+        }
+    }
+
+    /// The gate passes a clean suite, takes the shots bounds as inside, and names each
+    /// failing item: a degenerate pairing, a flagged identity, a dominant style, a violation,
+    /// an unplayed match. A pairing that did not play is not judged.
+    #[test]
+    fn the_gate_names_each_failing_item() {
+        let clean = vec![
+            pairing("a", "b", 10, 24.0),
+            pairing("b", "a", 10, SHOTS_MAX),
+            pairing("a", "c", 10, SHOTS_MIN),
+            pairing("c", "c", 0, 0.0),
+        ];
+        let g = gate(&[], &[], &clean, 0, 30, 30);
+        assert!(g.pass, "{g:?}");
+        assert_eq!(gate_line(&g), "styles gate: pass");
+
+        let mut degenerate = clean.clone();
+        degenerate.push(pairing("c", "a", 10, 41.0));
+        degenerate.push(pairing("b", "c", 10, 3.9));
+        let g = gate(&[], &[], &degenerate, 0, 50, 50);
+        assert!(!g.pass);
+        let named: Vec<(&str, &str)> = g
+            .pairings_outside
+            .iter()
+            .map(|p| (p.home.as_str(), p.away.as_str()))
+            .collect();
+        assert_eq!(named, [("c", "a"), ("b", "c")]);
+        assert!(gate_line(&g).contains("c v a 41.00"), "{}", gate_line(&g));
+
+        let g = gate(&[], &["a: passes".into()], &clean, 0, 30, 30);
+        assert!(!g.pass && gate_line(&g).contains("identity a: passes"));
+        let g = gate(&["b".into()], &[], &clean, 0, 30, 30);
+        assert!(!g.pass && gate_line(&g).contains("dominant b"));
+        let g = gate(&[], &[], &clean, 2, 30, 30);
+        assert!(!g.pass && gate_line(&g).contains("2 rule violations"));
+        let g = gate(&[], &[], &clean, 0, 30, 29);
+        assert!(!g.pass && gate_line(&g).contains("1 matches unplayed"));
+    }
+
+    /// The report carries the gate of its own rows: a balanced, quiet table with every
+    /// identity moved fails only on the identity flags it has.
+    #[test]
+    fn the_report_carries_its_gate() {
+        let matches = table(5, |h, w| {
+            if (h + 1) % STYLES == w {
+                [2, 1]
+            } else if (w + 1) % STYLES == h {
+                [1, 2]
+            } else {
+                [0, 0]
+            }
+        });
+        let names: Vec<String> = (0..STYLES).map(|s| format!("s{s}")).collect();
+        let identities = vec![Vec::new(); STYLES];
+        let planned = u32::try_from(matches.len()).unwrap();
+        let r = build(&names, &identities, 5, planned, &matches, 0, 1);
+        assert!(r.dominant.is_empty());
+        // The planted table has no shots: every pairing is below the floor.
+        assert_eq!(r.gate.pairings_outside.len(), STYLES * (STYLES - 1));
+        assert!(!r.gate.pass);
+        assert!(render(&r).contains("styles gate: fail: shots a match outside"));
     }
 
     /// An identity statistic moved in the style's direction is not flagged; one that is not

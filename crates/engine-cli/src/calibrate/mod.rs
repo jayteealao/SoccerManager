@@ -818,7 +818,9 @@ fn styles_alone(
         played = report.played,
         dominant = report.dominant.len(),
         identity_flags = report.identity_flags.len(),
-        violations = report.violations
+        violations = report.violations,
+        gate_pass = report.gate.pass,
+        pairings_outside = report.gate.pairings_outside.len()
     );
     Ok(0)
 }

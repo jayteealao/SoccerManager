@@ -52,6 +52,16 @@ fn check_styles(styles: &Value, per: u64) {
     }
     assert_eq!(seen.len(), PAIRINGS, "every ordered pairing once");
     assert!(styles["dominant"].is_array() && styles["identity_flags"].is_array());
+    let gate = &styles["gate"];
+    assert!(gate["pass"].is_boolean(), "{gate}");
+    assert_eq!(gate["dominant"], styles["dominant"]);
+    assert_eq!(gate["identity_flags"], styles["identity_flags"]);
+    assert_eq!(gate["violations"], styles["violations"]);
+    assert_eq!(gate["unplayed"], 0);
+    for p in gate["pairings_outside"].as_array().unwrap() {
+        let shots = p["shots_per_match"].as_f64().unwrap();
+        assert!(!(4.0..=40.0).contains(&shots), "{p}");
+    }
 }
 
 /// AC-34: one match per ordered pairing plays 56 matches, each pairing once, and reports
@@ -75,6 +85,29 @@ fn the_styles_suite_plays_every_ordered_pairing_and_reports() {
     assert_eq!(printed, report);
     assert!(stderr(&out).contains("dominant:"), "{}", stderr(&out));
     assert!(stderr(&out).contains("identity flags:"), "{}", stderr(&out));
+    assert!(stderr(&out).contains("styles gate: "), "{}", stderr(&out));
+}
+
+/// The styles gate on the shipped presets: 200 matches per ordered pairing on seed 9
+/// (11,200 full matches), no dominant style, no identity flag, every ordered pairing between
+/// 4 and 40 shots a match, no violation and every match played. Slow; run with
+/// `--ignored`.
+#[test]
+#[ignore = "plays 11,200 full matches"]
+fn the_styles_gate_passes_on_the_shipped_presets() {
+    let data = temp("engine-cli-styles", "gate");
+    let run = data.join("run");
+    let out = bin(&data)
+        .args(["calibrate", "--seed", "9", "--suite", "styles"])
+        .args(["--matches", "200"])
+        .arg("--out")
+        .arg(&run)
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0), "stderr: {}", stderr(&out));
+    let styles = &report_of(&run)["calib.styles"];
+    check_styles(styles, 200);
+    assert_eq!(styles["gate"]["pass"], true, "{}", styles["gate"]);
 }
 
 /// The styles suite runs alone: not beside a base engine or a paired flag.
