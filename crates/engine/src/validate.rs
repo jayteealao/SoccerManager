@@ -67,6 +67,16 @@ impl BallRest {
         (MAX_BALL_REST_S / t.dt).round() as u32
     }
 
+    /// A spell that starts inside a stoppage: placed when its restart record came before the
+    /// first record.
+    pub(crate) fn dead(placed: bool) -> Self {
+        Self {
+            dead: true,
+            placed,
+            still: 0,
+        }
+    }
+
     /// An event naming a restart spot: play has stopped.
     pub(crate) fn stopped(&mut self) {
         self.dead = true;
@@ -230,6 +240,9 @@ pub struct Validator {
     half_times: Vec<u32>,
     /// The roster slot each substitution names, with its tick.
     entries: Vec<(u32, usize)>,
+    /// The ball-rest state the first record starts in: a match resumed while play was
+    /// stopped starts inside that stoppage, whose event came before its records.
+    rest_at_start: BallRest,
 }
 
 impl Validator {
@@ -242,6 +255,7 @@ impl Validator {
             shootout_from: None,
             half_times: Vec::new(),
             entries: Vec::new(),
+            rest_at_start: BallRest::default(),
         }
     }
 
@@ -279,7 +293,17 @@ impl Validator {
             shootout_from,
             half_times,
             entries,
+            rest_at_start: BallRest::default(),
         }
+    }
+
+    /// The validator of records that start while play is stopped, as a match resumed from a
+    /// snapshot taken at a stoppage does: the ball-rest rule counts no rest until the ball
+    /// first moves after its restart record. placed is 	rue when that record came before
+    /// the first record.
+    pub fn starting_in_stoppage(mut self, placed: bool) -> Self {
+        self.rest_at_start = BallRest::dead(placed);
+        self
     }
 
     /// Returns every violation in `records`, in tick order.
@@ -296,7 +320,7 @@ impl Validator {
         let mut fetch_spot: Option<DVec2> = None;
         let mut next_spot = 0;
         let mut shape = 0;
-        let mut rest = BallRest::default();
+        let mut rest = self.rest_at_start;
         let rest_limit = BallRest::limit_ticks(&self.tuning);
         let mut next_stop = 0;
         for r in records {
@@ -762,5 +786,36 @@ mod tests {
         assert_eq!(out.len(), 1, "{out:?}");
         assert_eq!(out[0].rule, "ball_rest");
         assert_eq!(out[0].tick, 100 + limit);
+    }
+
+    /// Records that start inside a stoppage, as a match resumed from a snapshot taken while
+    /// play is stopped: the still ball rests nothing until it moves after its restart record,
+    /// whether that record comes in the records or came before them. The same records read as
+    /// a match in play break the rule.
+    #[test]
+    fn records_that_start_in_a_stoppage_rest_nothing_until_the_restart_is_taken() {
+        let t = Tuning::default();
+        let limit = BallRest::limit_ticks(&t);
+        let still: Vec<TickRecord> = (1..=limit + 200).map(record).collect();
+        let in_play = Validator::new(t.clone(), [bare(0), bare(1)]);
+        assert_eq!(in_play.check(&still).len(), 1);
+
+        // The restart record came before the first record.
+        let placed = Validator::new(t.clone(), [bare(0), bare(1)]).starting_in_stoppage(true);
+        assert!(placed.check(&still).is_empty());
+        // Taken at tick 100: a new rest counts from there.
+        let mut taken = still.clone();
+        for r in &mut taken[99..] {
+            r.ball = [0.5, 0.0, 0.0];
+        }
+        let out = placed.check(&taken);
+        assert_eq!(out.len(), 1, "{out:?}");
+        assert_eq!(out[0].tick, 100 + limit);
+
+        // The restart record is in the records, at tick 50.
+        let waiting = Validator::new(t.clone(), [bare(0), bare(1)]).starting_in_stoppage(false);
+        let mut appears = still;
+        appears[49].restart = true;
+        assert!(waiting.check(&appears).is_empty());
     }
 }
