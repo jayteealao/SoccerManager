@@ -20,8 +20,8 @@
 use std::collections::VecDeque;
 
 use super::{
-    BallRest, MAX_BALL_REST_S, MAX_BALL_SPEED, MIN_SEPARATION, RESTART_SPOT_TOLERANCE, RunSpell,
-    StreamRules, Violation,
+    BallRest, JOB_NEAR_M, MAX_BALL_REST_S, MAX_BALL_SPEED, MIN_SEPARATION, RESTART_SPOT_TOLERANCE,
+    RunSpell, StreamRules, Violation, job_closing, job_distance,
 };
 use crate::error::EngineError;
 use crate::math::DVec2;
@@ -182,7 +182,7 @@ pub struct RunningCheck {
     far_ticks: [u32; PLAYER_COUNT],
     /// Each player's run state for the anchor rule ([RunSpell]).
     runs: [RunSpell; PLAYER_COUNT],
-    prev_dist: [[f64; 2]; PLAYER_COUNT],
+    prev_dist: [[f64; 3]; PLAYER_COUNT],
     /// The ball the anchor rule read on the previous record and every player's position
     /// then: a player who moves toward where the ball was is closing on it, however fast the
     /// ball runs away from him.
@@ -262,7 +262,7 @@ impl RunningCheck {
             last_record: None,
             far_ticks: [0; PLAYER_COUNT],
             runs: [RunSpell::default(); PLAYER_COUNT],
-            prev_dist: [[f64::INFINITY; 2]; PLAYER_COUNT],
+            prev_dist: [[f64::INFINITY; 3]; PLAYER_COUNT],
             prev_chase: None,
             shootout_from: None,
             restarts: Vec::new(),
@@ -584,12 +584,14 @@ impl RunningCheck {
                 reference,
             ));
             let d_ball = (*p - reference).length();
+            let d_job = job_distance(&pos, &parked, i, teams, nearer, &self.tuning);
             let prev_dist = self.prev_dist[i];
             let toward_ball = self
                 .prev_chase
                 .is_some_and(|(was, at)| (*p - was).length() < (at[i] - was).length() - 1e-3);
             let far = d_ball > self.tuning.anchor_ball_distance
-                && d_anchor > self.tuning.anchor_tolerance;
+                && d_anchor > self.tuning.anchor_tolerance
+                && d_job > JOB_NEAR_M;
             let on_run = self.runs[i].closing(
                 self.prev_chase.map(|(_, at)| at[i]),
                 *p,
@@ -598,11 +600,24 @@ impl RunningCheck {
                 self.max_step,
                 &self.tuning,
             );
+            let toward_job = self.prev_chase.is_some_and(|(_, at)| {
+                job_closing(
+                    &at,
+                    *p,
+                    prev_dist[2],
+                    &parked,
+                    i,
+                    teams,
+                    nearer,
+                    &self.tuning,
+                )
+            });
             let closing = d_ball < prev_dist[0] - 1e-3
                 || d_anchor < prev_dist[1] - 1e-3
+                || toward_job
                 || toward_ball
                 || on_run;
-            self.prev_dist[i] = [d_ball, d_anchor];
+            self.prev_dist[i] = [d_ball, d_anchor, d_job];
             let drifting = far && !closing;
             self.far_ticks[i] = if drifting { self.far_ticks[i] + 1 } else { 0 };
             if self.far_ticks[i] >= self.tuning.anchor_grace_ticks {
@@ -1187,6 +1202,44 @@ mod tests {
         assert!(
             run_scene_anchors(&run_scene(1..=n, ball, move |_| end)) > 0,
             "a still player far from both drifts"
+        );
+    }
+
+    /// The rule judges a player by his job: far from his anchor and from the ball, a marker
+    /// standing 1.5 m from a still opponent is on his job and breaks no rule, and the opponent
+    /// he stands by, far from his own anchor, is on his job too. The control: the same marker
+    /// on the same spot with nobody near him, stuck far from his place and from every job
+    /// target, breaks it.
+    #[test]
+    fn a_far_marker_on_a_still_runner_is_on_his_job_and_a_stuck_player_is_not() {
+        let tuning = Tuning::default();
+        let n = tuning.anchor_grace_ticks + 20;
+        let ax = bare(0).attack_x;
+        let b = DVec2::new(ax * 5.0, 30.0);
+        let spot = DVec2::new(ax * 38.0, -30.0);
+        let stuck = run_scene(1..=n, move |_| b, move |_| spot);
+        for r in &stuck {
+            let a = [true, false].map(|has| bare(0).anchor(5, b, has, &tuning));
+            assert!((spot - b).length() > tuning.anchor_ball_distance);
+            assert!((spot - nearer_anchor(a, spot)).length() > tuning.anchor_tolerance);
+            let nearest = (PLAYERS_PER_TEAM..PLAYER_COUNT)
+                .map(|j| {
+                    (DVec2::new(f64::from(r.players[j][0]), f64::from(r.players[j][1])) - spot)
+                        .length()
+                })
+                .fold(f64::INFINITY, f64::min);
+            assert!(nearest > super::super::JOB_NEAR_M, "nobody near him");
+        }
+        assert!(run_scene_anchors(&stuck) > 0, "a stuck player drifts");
+        let runner = PLAYERS_PER_TEAM + 9;
+        let mut marking = stuck.clone();
+        for r in &mut marking {
+            r.players[runner] = [(spot.x + 1.5) as f32, spot.y as f32];
+        }
+        assert_eq!(
+            run_scene_anchors(&marking),
+            0,
+            "a marker on a still runner is on his job"
         );
     }
 

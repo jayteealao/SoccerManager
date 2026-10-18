@@ -1,7 +1,11 @@
 //! The tick-stream validator: pitch bounds, player separation, ball speed, player speed,
 //! formation anchor tolerance in open play, and the ball's place at a restart. The anchor rule
-//! flags a player that is far from the ball, far from its anchor, and closing on neither for
-//! the grace period (idle drift); a player who moves toward where the ball was on the previous
+//! judges a player by his job: it flags a player that is far from the ball, far from its
+//! anchor, far from every job target the records show (`job_distance`: an opponent he may
+//! track, mark or press, and for a back-line player the goal-side cover spot of a central
+//! opponent in his half), and closing on none of them for the grace period (idle drift); his
+//! own step toward where a job target stood counts as closing on it, not the target coming to
+//! him (`job_closing`); a player who moves toward where the ball was on the previous
 //! record is closing on it, however fast the ball runs away from him; a player on a run in
 //! behind is closing for as long as real runs last, and on his way back after it while he moves
 //! toward his anchor ([`RunSpell`]); while the ball waits
@@ -172,6 +176,73 @@ impl RunSpell {
     }
 }
 
+/// How near, in metres, a player stands to a job's target when he is doing that job: the
+/// distance from which an opponent adds no pressure ([`crate::pressure::FAR_M`]), so a player
+/// that close to a man is on him.
+pub const JOB_NEAR_M: f64 = crate::pressure::FAR_M;
+
+/// The anchor rule's job targets, shared by the two checkers: the distance from player `i`
+/// (at `pos[i]`, his nearer anchor at `anchor`) to the nearest target
+/// of a job the records show he may be doing. Each opponent on the pitch is one (the runner he
+/// tracks, the man he marks or presses). For a back-line player, so is the cover spot of each
+/// opponent in his side's half inside the central channel (`cover_channel`): the point on the
+/// line from that opponent to his own goal's centre at the depth of his anchor, where the
+/// engine's goal-side cover places him. Parked players are no target. The ball, his other job
+/// target, the rule reads apart.
+pub(crate) fn job_distance(
+    pos: &[DVec2; PLAYER_COUNT],
+    parked: &[bool; PLAYER_COUNT],
+    i: usize,
+    teams: &[Team; 2],
+    anchor: DVec2,
+    t: &Tuning,
+) -> f64 {
+    let team = i / PLAYERS_PER_TEAM;
+    let side = &teams[team];
+    let half = side.pitch().half_length();
+    let depth = |at: DVec2| at.x * side.attack_x + half;
+    let covers = side.in_back_line(i % PLAYERS_PER_TEAM);
+    let goal = side.own_goal();
+    let hold = depth(anchor).max(0.5);
+    let me = pos[i];
+    let mut nearest = f64::INFINITY;
+    for (j, &at) in pos.iter().enumerate() {
+        if j / PLAYERS_PER_TEAM == team || parked[j] {
+            continue;
+        }
+        nearest = nearest.min((at - me).length());
+        let reach = depth(at);
+        if covers && at.y.abs() <= t.cover_channel && reach < half && reach > 1e-6 {
+            let share = (hold / reach).min(1.0);
+            let spot = DVec2::new(
+                goal.x + side.attack_x * hold,
+                goal.y + (at.y - goal.y) * share,
+            );
+            nearest = nearest.min((spot - me).length());
+        }
+    }
+    nearest
+}
+
+/// `true` when player `i`'s step to `now` closes on a job target where it stood on the record
+/// before (`before`, the previous positions, where he stood `was_m` from his nearest target):
+/// his own move counts, not a target coming to him.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn job_closing(
+    before: &[DVec2; PLAYER_COUNT],
+    now: DVec2,
+    was_m: f64,
+    parked: &[bool; PLAYER_COUNT],
+    i: usize,
+    teams: &[Team; 2],
+    anchor: DVec2,
+    t: &Tuning,
+) -> bool {
+    let mut moved = *before;
+    moved[i] = now;
+    job_distance(&moved, parked, i, teams, anchor, t) < was_m - 1e-3
+}
+
 /// One rule violation.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Violation {
@@ -315,7 +386,7 @@ impl Validator {
         let mut out = Vec::new();
         let mut far_ticks = [0u32; PLAYER_COUNT];
         let mut runs = [RunSpell::default(); PLAYER_COUNT];
-        let mut prev_dist = [[f64::INFINITY; 2]; PLAYER_COUNT];
+        let mut prev_dist = [[f64::INFINITY; 3]; PLAYER_COUNT];
         let mut prev_chase: Option<(DVec2, [DVec2; PLAYER_COUNT])> = None;
         let mut prev_ball: Option<DVec2> = None;
         let mut prev_players: Option<([DVec2; PLAYER_COUNT], [bool; PLAYER_COUNT])> = None;
@@ -457,10 +528,12 @@ impl Validator {
                     reference,
                 ));
                 let d_ball = (*p - reference).length();
+                let d_job = job_distance(&pos, &parked, i, teams, nearer, &self.tuning);
                 let toward_ball = prev_chase
                     .is_some_and(|(was, at)| (*p - was).length() < (at[i] - was).length() - 1e-3);
                 let far = d_ball > self.tuning.anchor_ball_distance
-                    && d_anchor > self.tuning.anchor_tolerance;
+                    && d_anchor > self.tuning.anchor_tolerance
+                    && d_job > JOB_NEAR_M;
                 let on_run = runs[i].closing(
                     prev_chase.map(|(_, at)| at[i]),
                     *p,
@@ -469,11 +542,24 @@ impl Validator {
                     max_step,
                     &self.tuning,
                 );
+                let toward_job = prev_chase.is_some_and(|(_, at)| {
+                    job_closing(
+                        &at,
+                        *p,
+                        prev_dist[i][2],
+                        &parked,
+                        i,
+                        teams,
+                        nearer,
+                        &self.tuning,
+                    )
+                });
                 let closing = d_ball < prev_dist[i][0] - 1e-3
                     || d_anchor < prev_dist[i][1] - 1e-3
+                    || toward_job
                     || toward_ball
                     || on_run;
-                prev_dist[i] = [d_ball, d_anchor];
+                prev_dist[i] = [d_ball, d_anchor, d_job];
                 let drifting = far && !closing;
                 far_ticks[i] = if drifting { far_ticks[i] + 1 } else { 0 };
                 if far_ticks[i] >= self.tuning.anchor_grace_ticks {
