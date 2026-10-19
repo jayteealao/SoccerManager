@@ -760,9 +760,10 @@ fn default_attack_danger() -> f64 {
 /// threat at the end of its carry, a clearance the threat where it lands and a shot its read
 /// chance, each less the threat at the carrier's place (a hold keeps it); the danger of a loss
 /// at a place is `(1 - s)^2` plus the threat there, the threat the side gives up (a shot's
-/// loss reads the same danger at the shooter's place). Each value counts with the default
-/// mentality's loss weight (`TeamPlan::value_weight`), so at the default the value an option
-/// reaches and its chance of losing the ball count alike. `decision.progress` and
+/// loss reads the same danger at the shooter's place). Each value counts with `weight`, the loss
+/// weight of the default mentality (balanced, 0.5), so at the default the value an option reaches
+/// and its chance of losing the ball count alike and a mentality's loss weight alone moves the
+/// appetite for risk away from it. `decision.progress` and
 /// `decision.attack_danger` are read only with it off.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
@@ -778,6 +779,9 @@ pub struct ThreatTuning {
     /// The unit, in xG; 0 turns the threat off.
     #[garde(range(min = 0.0, max = 1.0))]
     pub unit: f64,
+    /// The weight of an option's threat value: the default mentality's loss weight.
+    #[garde(range(min = 0.0, max = 4.0))]
+    pub weight: f64,
 }
 
 impl ThreatTuning {
@@ -789,6 +793,7 @@ impl ThreatTuning {
             angle_coef: 2.633,
             angle2_coef: -0.787,
             unit: 0.0159,
+            weight: 0.5,
         }
     }
 

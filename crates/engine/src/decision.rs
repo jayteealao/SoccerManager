@@ -1270,7 +1270,7 @@ impl DecisionModule for DecisionV1 {
                     - plan.loss_weight * lost.cost();
                 // Its value: the chance he reads, against the threat of his place.
                 if threat_on {
-                    score + plan.value_weight * (p / w.threat.unit - here)
+                    score + w.threat.weight * (p / w.threat.unit - here)
                 } else {
                     score
                 }
@@ -1490,7 +1490,7 @@ impl DecisionModule for DecisionV1 {
             // Its value: with the threat on, the threat at the receiver against the threat
             // here, and the role's own weight on progress; with it off, its progress.
             let value = if threat_on {
-                plan.value_weight * (threat(mate.pos) - here) + role.progress * progress
+                w.threat.weight * (threat(mate.pos) - here) + role.progress * progress
             } else {
                 (w.progress + role.progress) * progress
             };
@@ -1615,7 +1615,7 @@ impl DecisionModule for DecisionV1 {
                 + lone_dribble
                 - plan.loss_weight * dribble_loss(view, c, nearest_opp_pos, danger).cost()
                 // Its value: the threat at the end of its carry against the threat here.
-                + plan.value_weight * (threat(dribble_end(view, c, nearest_opp_pos)) - here)
+                + w.threat.weight * (threat(dribble_end(view, c, nearest_opp_pos)) - here)
                 // The side's dribbling weight (hook `dribble.weight`), 0 at its default.
                 + plan.dribble
                 - keep_cost(
@@ -1681,7 +1681,7 @@ impl DecisionModule for DecisionV1 {
             // A clearance gives the ball away where it lands.
             - loss(w.clear_loss, clear_landing(carrier.pos, attack, half))
             // Its value: the threat where it lands against the threat here.
-            + plan.value_weight * (threat(clear_landing(carrier.pos, attack, half)) - here);
+            + w.threat.weight * (threat(clear_landing(carrier.pos, attack, half)) - here);
         // The carrier's read of his options (`decision.perceive`): its spread falls as his
         // vision, decisions and composure (the pass see, choose and pressure stages) rise.
         let perceive = w.perceive * (1.5 - read_share);

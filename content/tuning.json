@@ -106,7 +106,8 @@
         "distance_coef": -0.04525,
         "angle_coef": 2.633,
         "angle2_coef": -0.787,
-        "unit": 0.0159
+        "unit": 0.0159,
+        "weight": 0.5
       }
     },
     "injury_per_tackle": 0.004,

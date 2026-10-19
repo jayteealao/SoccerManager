@@ -395,11 +395,6 @@ pub struct TeamPlan {
     /// How much a lost ball's danger counts against each option's gain: the mentality's
     /// appetite for risk.
     pub loss_weight: f64,
-    /// The weight of an option's threat value ([`crate::tuning::ThreatTuning`]): the loss
-    /// weight of the tactics file's default mentality, so that at the default the value an
-    /// option reaches and its chance of losing the ball count alike, and the mentality's loss
-    /// weight alone moves the risk appetite away from it.
-    pub value_weight: f64,
     /// The fewest outfield players who stay goal-side of the ball while the team has it.
     pub rest_defence: usize,
     /// The sizes of the stand options; `None` takes no option.
@@ -652,10 +647,6 @@ impl TeamPlan {
             directness: ins.passing_directness.levels[level(DIRECTNESS)].value,
             time_wasting: ins.time_wasting.levels[level(TIME_WASTING)].value,
             loss_weight: mentality.loss_weight,
-            value_weight: schema
-                .mentality_index(&schema.ai.mentality)
-                .and_then(|m| schema.mentalities.get(m))
-                .map_or(mentality.loss_weight, |m| m.loss_weight),
             rest_defence: usize::from(mentality.rest_defence),
             sizes: schema.stand_options,
             rest: schema.rest_defence,
@@ -710,7 +701,6 @@ impl TeamPlan {
             time_wasting: 1.0,
             pace_lift: false,
             loss_weight: 0.0,
-            value_weight: 0.0,
             rest_defence: 0,
             sizes: None,
             rest: None,
