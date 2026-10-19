@@ -165,7 +165,7 @@ impl GameStateSchema {
 }
 
 /// A side's rules and instructions as written.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GameStateFile {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -182,7 +182,7 @@ impl GameStateFile {
 }
 
 /// One rule as written.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RuleFile {
     pub when: Vec<ConditionFile>,
@@ -211,8 +211,12 @@ pub struct ConditionFile {
     pub below: Option<f64>,
 }
 
+// A written condition's values are read from JSON, which holds no NaN, so they compare as
+// equal to themselves.
+impl Eq for ConditionFile {}
+
 /// One action as written: a primitive and its level, choice or state, or a formation.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ActionFile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -225,7 +229,7 @@ pub struct ActionFile {
 
 /// One player instruction as written: a formation slot (0 to 10), a primitive of the
 /// override list and its level or choice.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct InstructionFile {
     pub slot: u8,
@@ -358,7 +362,7 @@ pub fn resolve(
 
 /// The index of primitive `name` and of its level, choice or state `level`; a refusal names
 /// `at` and lists the primitive's levels. A style preset's settings resolve through it too.
-pub(crate) fn level_of(
+pub fn level_of(
     schema: &TacticsSchema,
     name: &str,
     level: &str,

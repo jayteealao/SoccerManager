@@ -74,14 +74,15 @@ export function createPendingList({ homeTeamId = null } = {}) {
     },
 
     /// The socket refused a change before it was queued. The chip is Rejected at once, with
-    /// the socket's reason, and stays until the manager dismisses it.
-    rejectedAtQueue(reject, label, kind) {
+    /// the socket's reason, and stays until the manager dismisses it; it keeps the change it
+    /// was refused for, so the manager can send it again.
+    rejectedAtQueue(reject, label, kind, detail = null) {
       local += 1;
       const chip = {
         queue_id: `local-${local}`,
         kind,
         label,
-        detail: null,
+        detail,
         state: 'rejected',
         reason: reject.reason,
         queued_tick: null,
@@ -175,12 +176,14 @@ export function createPendingList({ homeTeamId = null } = {}) {
         );
     },
 
-    /// Every chip ever queued, as the test hook reads it, at `renderedTick`.
+    /// Every chip ever queued, as the test hook reads it, at `renderedTick`. `engine_verdict`
+    /// is the engine's verdict as soon as it arrived, whatever tick the pitch shows.
     all(renderedTick) {
       return chips.map((chip) => ({
         ...view(chip, renderedTick),
         dismissed: chip.dismissed,
         cancelled: chip.cancelled,
+        engine_verdict: chip.verdict ?? (chip.state === 'rejected' ? 'rejected' : null),
       }));
     },
 

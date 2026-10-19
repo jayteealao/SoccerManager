@@ -46,8 +46,8 @@ use stream::{
 use crate::cli::ServeOpts;
 use crate::matchday::{self, Matchday, Round};
 use crate::stream_run::{
-    Drive, PageChange, carry_page_changes, drive, hello_game_state, hello_substitutions,
-    hello_tactics, hello_teams,
+    Drive, PageChange, carry_page_changes, drive, hello_game_state, hello_styles,
+    hello_substitutions, hello_tactics, hello_teams,
 };
 
 /// The team the page manages.
@@ -312,6 +312,7 @@ impl<'a> Serving<'a> {
                 .collect(),
             bench_size: usize::from(config.tactics.ai.bench_size),
             tactics: config.tactics.clone(),
+            formation: config.teams[HOME].tactics.formation,
         }));
         let state = Arc::new(MatchState::default());
         let mut gated = GatedSnapshots::new(
@@ -445,7 +446,7 @@ impl<'a> Serving<'a> {
                     events: Arc::clone(&events),
                     queue: Queue::new(admitted_kinds(&self.loaded.content.rules)),
                     pre_match: if self.sim.is_some() {
-                        Arc::new(PreMatch::none())
+                        Arc::new(PreMatch::reading(self.loaded.content.tactics.clone()))
                     } else {
                         Arc::clone(&self.pre_match)
                     },
@@ -774,6 +775,7 @@ fn hello_for(
         ground_length: config.pitch().length(),
         ground_width: config.pitch().width(),
         game_state: hello_game_state(sim),
+        styles: hello_styles(sim),
     }
 }
 
@@ -781,12 +783,29 @@ fn hello_for(
 /// socket checked the lineup and the patch's indices before it stored them.
 pub(crate) fn with_page_setup(config: MatchConfig, setup: PageSetup) -> MatchConfig {
     let config = config.with_setup(HOME, setup.lineup, setup.bench);
-    match setup.patch {
+    let config = match setup.patch {
         Some(patch) => {
             let tactics =
                 patch.applied_to(config.teams[HOME].tactics, &setup.lineup, &config.tactics);
             config.with_tactics(HOME, tactics)
         }
+        None => config,
+    };
+    // The other primitives the page moved, then its rules and player instructions; with
+    // neither the match is the one the patch alone makes.
+    let config = if setup.levels.is_empty() {
+        config
+    } else {
+        let tactics = setup
+            .levels
+            .iter()
+            .fold(config.teams[HOME].tactics, |t, &(p, l)| {
+                t.with_level(usize::from(p), l, &config.tactics)
+            });
+        config.with_tactics(HOME, tactics)
+    };
+    match setup.game_state {
+        Some(state) => config.with_game_state(HOME, state),
         None => config,
     }
 }

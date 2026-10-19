@@ -144,7 +144,7 @@ test('every Tactics stub is inert and hidden, and every live control is named', 
     'cannot play group',
     'tactic column',
     'sharpness column',
-    'tab: roles',
+    'tab: set-pieces',
   ]) {
     assert.ok(root.querySelector(`[data-stub="${note}"]`), note);
   }

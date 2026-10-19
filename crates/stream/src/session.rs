@@ -45,6 +45,9 @@ pub struct MatchState {
     scores: AtomicU64,
     /// The newest tick frame the socket thread has flushed to the stream.
     sent_tick: AtomicU32,
+    /// The home side's formation in force plus one, 0 before the simulation thread names it:
+    /// the formation a player instruction's position check reads.
+    home_formation: AtomicU32,
 }
 
 impl MatchState {
@@ -71,6 +74,18 @@ impl MatchState {
     pub fn scores(&self) -> [u32; 2] {
         let packed = self.scores.load(Ordering::Relaxed);
         [(packed >> 32) as u32, packed as u32]
+    }
+
+    /// The home side's formation in force, once the simulation thread has named it.
+    pub fn home_formation(&self) -> Option<u8> {
+        let stored = self.home_formation.load(Ordering::Relaxed);
+        stored.checked_sub(1).and_then(|f| u8::try_from(f).ok())
+    }
+
+    /// Names the home side's formation in force. The simulation thread is the only writer.
+    pub fn set_home_formation(&self, formation: u8) {
+        self.home_formation
+            .store(u32::from(formation) + 1, Ordering::Relaxed);
     }
 
     pub fn set_scores(&self, scores: [u32; 2]) {

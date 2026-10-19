@@ -316,10 +316,10 @@ mod tests {
 
     #[test]
     fn a_refusal_names_both_versions() {
-        let reason = refusal(&request("none", "?v=9"), "none").unwrap();
+        let reason = refusal(&request("none", "?v=10"), "none").unwrap();
         assert_eq!(
             reason,
-            format!("protocol version 9; this build speaks {PROTOCOL_VERSION}")
+            format!("protocol version 10; this build speaks {PROTOCOL_VERSION}")
         );
         let current = format!("?v={PROTOCOL_VERSION}");
         assert!(refusal(&request("none", &current), "none").is_none());

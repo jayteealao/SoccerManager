@@ -1,8 +1,8 @@
-# Match stream protocol, version 8
+# Match stream protocol, version 9
 
 The engine serves one viewer over a WebSocket on `127.0.0.1`. The port is chosen by the
 operating system at every run and written to `engine.port` inside the runtime data folder.
-A page connects to `ws://127.0.0.1:<port>/?v=8`.
+A page connects to `ws://127.0.0.1:<port>/?v=9`.
 
 Version 2 changed the meaning of `ticks_expected` from the exact tick count to the most ticks
 the match can last, because the time added at the end of each half is known only when the
@@ -96,6 +96,15 @@ removed and none changed meaning, and the tick frames are unchanged.
 
 A test in `crates/protocol/tests/document.rs` holds this document to the code: every message
 the implementation names must appear below with every one of its fields.
+
+Version 9 carries the tactics board. Every addition is optional and left out when empty, so a
+protocol 8 client and file read as before. queue-change gained two kinds, instructions
+(primitives set to levels by name) and game-state (a side's game plans and player
+instructions, replaced whole); both apply on the tick the engine reads them, with no wait for
+a stoppage, except a formation a game plan sets, which still waits. set-lineup gained
+levels and game_state for the same choices before kick-off. The hello gained styles,
+the style presets, and each hello team's setup gained levels, the level of every
+primitive.
 
 ## Connecting
 
@@ -245,6 +254,18 @@ file's `hidden.words`. No number for a hidden value is ever sent, in this messag
 | `roles` | array of 11 objects | one `{ role, duty }` per slot, in slot order |
 | `role` | integer | an index into `tactics.roles` |
 | `duty` | integer | an index into `tactics.duties` |
+| `levels` | array of integers | one level index per entry of `tactics.primitives`, in that order: the level, choice or state the side starts on. Absent before version 9 and when the engine has no primitives |
+
+From version 9 the `hello` also carries `styles` when the content folder has a styles file.
+It is absent otherwise. Each entry is one preset, by name:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `name` | string | the style's name in the styles file; the page owns its display text |
+| `primitives` | array | `{ "primitive", "level" }` pairs by name: the levels the preset sets; every other primitive stays at its default |
+| `formations` | array of strings | the formations the style suits, by name |
+| `rules` | array | the preset's game plans, in the written form of a `game-state` change |
+| `player_instructions` | array | the preset's player instructions, in the same written form |
 
 A viewer draws its markers from the two kit colours. It must not use either colour as it
 arrives: a team file may hold pure black or pure white, so a viewer pulls the lightness of
@@ -276,7 +297,7 @@ One `match-event` row. The same object is written to
 | `team.id` | string | the club the event belongs to: the offender's club on `offside`, `foul`, and `card`, the club that restarts play on a restart, the injured player's club on `injury`, the club that changes on `substitution`, `ai-decision`, and `tactics-change`, the player's club on `trait-override`; absent at half-time and full time |
 | `home.score` | integer | the score after the event |
 | `away.score` | integer | the score after the event |
-| `change.kind` | enumeration | `tactics` or `substitution`; change events only |
+| `change.kind` | enumeration | `tactics` or `substitution`; change events only. An `instructions` or `game-state` change reports as `tactics` |
 | `change.queued_tick` | integer | the tick the change was queued on |
 | `change.queue_id` | string | the identifier the acknowledgement returned |
 | `change.rejected_reason` | string | present only on a refused change |
@@ -575,8 +596,8 @@ the manager has not yet watched.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `change.kind` | string | `tactics` or `substitution`; any other value is refused by name |
-| `detail` | object | `{ "patch": … }` for `tactics`, `{ "off": …, "on": … }` for `substitution`; see below |
+| `change.kind` | string | `tactics`, `substitution`, `instructions` or `game-state`; any other value is refused by name |
+| `detail` | object | `{ "patch": … }` for `tactics`, `{ "off": …, "on": … }` for `substitution`, `{ "levels": […] }` for `instructions`, `{ "game_state": { … } }` for `game-state`; see below |
 
 `detail` for a substitution:
 
@@ -607,6 +628,31 @@ while the engine is paused is queued on the first tick after `start`, so it neve
 the resume tick. The football rules (the limit, the windows, a player not on the pitch)
 are the engine's and arrive as a `rejected` verdict with the reasons listed under **event**.
 
+`detail` for an `instructions` change (version 9) is `{ "levels": [ … ] }`, at least one
+entry, each by the names of the hello's `tactics`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `primitive` | string | the name of an entry of `tactics.primitives` |
+| `level` | string | the name of one of its levels, choices or states |
+
+`detail` for a `game-state` change (version 9) is `{ "game_state": { "rules": [ … ],
+"instructions": [ … ] } }`, in the same written form as a tactics file's game state: each
+rule is `{ "when": [conditions], "set": [actions] }`, and each player instruction is `{
+"slot", "primitive", "level" }`. It replaces the side's game plans and player instructions
+whole.
+
+Both kinds apply on the tick the engine reads them: the verdict is a `tactics-change` event
+with `change.state` `applied` and `change.applied_tick` that tick, and players take the new
+level up over the tactics file's take-up time. A formation a game plan sets waits for the next
+stoppage, as a tactics change does. A detail the socket cannot read is refused at once: an
+unknown primitive or level, an empty level list (`a level change names at least one
+primitive`), or a game state that does not read (a reason that starts `cannot read the game
+state`). The engine then refuses, as a `rejected` verdict, a level out of range, more rules
+than `game_state.max_rules`, a player instruction off the override list or given twice, and
+one for a slot whose position it does not reach in the side's formation or in a formation a
+rule sets (`the player instruction does not reach the position of slot <n>`).
+
 ### set-lineup
 
 Sent before the first `start`, once or more; the last lineup accepted before kick-off
@@ -617,12 +663,15 @@ stands. The same object shape as the hello's `setup`, as indices:
 | `lineup` | array of 11 integers | squad indices in slot order; slot 0 is the goalkeeper |
 | `bench` | array of integers | squad indices of the named substitutes, at most `tactics.ai.bench_size` |
 | `patch` | object | optional pre-match tactics, the same shape as a tactics change's patch; applied before kick-off |
+| `levels` | array | optional, version 9: `{ "primitive", "level" }` pairs by name, as an `instructions` change writes them; applied before kick-off, after the patch |
+| `game_state` | object | optional, version 9: the side's game plans and player instructions, as a `game-state` change writes them; applied before kick-off |
 
 It is acknowledged, or refused with the first fault in this order: `<n> starters; a match
 needs 11`, `squad index <i> is not in the squad of <n>`, `squad index <i> is placed twice`,
 `<n> substitutes; the bench holds <size>`, `slot 0 needs a goalkeeper`, a patch index the
 tactics file does not hold, or `squad index <i> has a pre-match role and is not in the
-lineup`. After kick-off it is refused with `the match has started; a lineup can be set only
+lineup`. A bad `levels` or `game_state` is refused with the same reasons as the change kinds.
+After kick-off it is refused with `the match has started; a lineup can be set only
 before kick-off`.
 
 ### seen
@@ -836,7 +885,7 @@ All numbers are little-endian. The frame count counts tick and text frames only.
 offset 4 was the protocol version, which is also 3, so every older file reads as format 3; a
 format-3 file still says 3 there, and its `hello` names the protocol of its frames.
 
-A reader reads frames of protocol 3, 4, 5, 6, 7 and 8: the tick frames are the same. Protocol 3 and 4
+A reader reads frames of protocol 3, 4, 5, 6, 7, 8 and 9: the tick frames are the same. Protocol 3 and 4
 differ only in the scale of the `hello`'s ratings. A page doubles a protocol 3 `hello`'s
 ratings into tenths before any screen shows them, and keeps the stored frame as it is, so the
 file writes back byte for byte. A protocol 3 or 4 `hello` carries `player.injury_resistance`
@@ -884,10 +933,12 @@ Each entry of the change log holds `order` (from 0), `team`, `source` (`manager`
 managed by hand, `ai` for the computer manager, `rule` for a side's game-state rules),
 `queued_tick` and `queue_number` (the change's queue identifier), `tick` (the tick it applied
 on), `stoppage` (the stoppage it applied at, or `none` for a rule change that applied whole on
-its own tick), and `change`: `{ "substitution": { "off", "on" } }` with squad indexes, `{
+its own tick and for an `instructions` or `game-state` change), and `change`: `{ "substitution": { "off", "on" } }` with squad indexes, `{
 "tactics": { "formation", "mentality", "instructions", "roles": [{ "squad", "role", "duty" }] }
-}`, where a null leaves that setting as it is, or `{ "rule": { "active" } }`, the rules that
-hold after the change (bit `k` for the side's rule `k`). Only applied changes are in the log. A rejected change's
+}`, where a null leaves that setting as it is, `{ "rule": { "active" } }`, the rules that
+hold after the change (bit `k` for the side's rule `k`), `{ "instructions": { "levels": [{
+"primitive", "level" }] } }`, primitives set by name, or `{ "game_state": { "game_state": {
+"rules", "instructions" } } }`, a side's game plans and player instructions replaced whole. Only applied changes are in the log. A rejected change's
 verdict stays in the text frames.
 
 ### Re-simulation

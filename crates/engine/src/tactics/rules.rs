@@ -101,6 +101,10 @@ impl Condition {
     }
 }
 
+// A condition's values come from the range-checked written form (or a range-checked change),
+// so they are finite and compare as equal to themselves.
+impl Eq for Condition {}
+
 /// What a rule sets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
@@ -112,7 +116,7 @@ pub enum Action {
 }
 
 /// One rule: when every condition holds, every action applies.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Rule {
     pub when: Vec<Condition>,
     pub set: Vec<Action>,
@@ -143,7 +147,7 @@ pub struct PlayerInstruction {
 }
 
 /// A side's rules, in priority order, and its player instructions.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct GameState {
     pub rules: Vec<Rule>,
     pub instructions: Vec<PlayerInstruction>,
@@ -222,6 +226,24 @@ impl Tactics {
             None => {}
         }
         self
+    }
+
+    /// The level, choice or state of primitive `primitive` in these tactics: the inverse of
+    /// [`Tactics::with_level`]. `None` for a primitive the tactics do not store.
+    pub fn level(&self, primitive: usize, schema: &TacticsSchema) -> Option<u8> {
+        let p = schema.primitives.get(primitive)?;
+        if p.is_setting() {
+            let k = settings(schema).position(|s| s.name == p.name)?;
+            return self.settings.get(k).copied();
+        }
+        match p.levels.as_deref() {
+            Some("mentalities") => Some(self.mentality),
+            Some(block) => block
+                .strip_prefix("instructions.")
+                .and_then(|name| INSTRUCTIONS.iter().position(|n| *n == name))
+                .map(|i| self.instructions[i]),
+            None => None,
+        }
     }
 }
 

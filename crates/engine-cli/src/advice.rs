@@ -87,8 +87,9 @@ fn pick(change: &Change, code: AiCode) -> AdvicePick {
             on: None,
             patch: Some(patch_wire(patch)),
         },
-        // The computer manager proposes no rule change; the side's rules make their own.
-        Change::Rule { .. } => AdvicePick {
+        // The computer manager proposes no rule, level or game-state change; the side's rules
+        // make their own, and the board makes the others.
+        Change::Rule { .. } | Change::Instructions(_) | Change::GameState(_) => AdvicePick {
             code: code.code().into(),
             kind: "rule".into(),
             off: None,

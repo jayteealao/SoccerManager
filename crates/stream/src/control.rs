@@ -30,12 +30,14 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 
+use engine::data::game_state;
 use engine::data::tactics::TacticsSchema;
+use engine::tactics::rules::GameState;
 use engine::{Change, RoleDuty, TacticsPatch};
 use protocol::command::Verdict;
 use protocol::{
-    Ack, ChangeDetail, ChangeKind, ChangeOutcome, ChangeState, ClientCommand, MatchEvent,
-    PatchWire, Queue, Reject, ServerMessage, SetLineup,
+    Ack, ChangeDetail, ChangeKind, ChangeOutcome, ChangeState, ClientCommand, LevelWire,
+    MatchEvent, PatchWire, Queue, Reject, ServerMessage, SetLineup,
 };
 
 use crate::StreamError;
@@ -312,6 +314,9 @@ pub struct LineupRules {
     pub bench_size: usize,
     /// The tactics file, for the indices a pre-match patch names.
     pub tactics: TacticsSchema,
+    /// The home side's formation before any pre-match patch: the formation a pre-match
+    /// player instruction's position check reads when the patch names none.
+    pub formation: u8,
 }
 
 /// The lineup the page chose, held until kick-off.
@@ -322,6 +327,11 @@ pub struct PageSetup {
     pub bench: Vec<usize>,
     /// Pre-match tactics, applied before kick-off.
     pub patch: Option<TacticsPatch>,
+    /// Pre-match levels of the other primitives, as primitive and level indices, applied
+    /// after the patch.
+    pub levels: Vec<(u8, u8)>,
+    /// Pre-match rules and player instructions, in place of the side's own.
+    pub game_state: Option<GameState>,
 }
 
 /// The pre-match state a session shares with the code that builds the match after `start`.
@@ -329,6 +339,8 @@ pub struct PageSetup {
 pub struct PreMatch {
     rules: Option<LineupRules>,
     chosen: Mutex<Option<PageSetup>>,
+    /// The tactics file a session that takes no lineup reads level and rule names by.
+    names: Option<TacticsSchema>,
 }
 
 impl PreMatch {
@@ -337,12 +349,31 @@ impl PreMatch {
         Self {
             rules: Some(rules),
             chosen: Mutex::new(None),
+            names: None,
         }
     }
 
-    /// A session that takes no lineup: every `set-lineup` is refused.
+    /// A session that takes no lineup: every `set-lineup` is refused, and so is every level
+    /// or game-state change, which has no tactics file to read names by.
     pub fn none() -> Self {
         Self::default()
+    }
+
+    /// A session that takes no lineup and reads the names of level and game-state changes by
+    /// `tactics`: a resumed match.
+    pub fn reading(tactics: TacticsSchema) -> Self {
+        Self {
+            names: Some(tactics),
+            ..Self::default()
+        }
+    }
+
+    /// The tactics file the session reads names by.
+    pub fn tactics(&self) -> Option<&TacticsSchema> {
+        self.rules
+            .as_ref()
+            .map(|r| &r.tactics)
+            .or(self.names.as_ref())
     }
 
     /// The lineup the page chose, if it chose one. The computer manager's setup stands
@@ -479,15 +510,58 @@ pub fn tactics_patch(wire: &PatchWire) -> TacticsPatch {
     }
 }
 
-/// A read change detail as the engine's change.
-pub fn engine_change(detail: &ChangeDetail) -> Change {
-    match detail {
+/// A read change detail as the engine's change. A level change and a game-state change name
+/// primitives, levels, conditions and formations, which are read by `tactics`; a player
+/// instruction is checked against the positions of `formations` (the side's formation in
+/// force, when known) and of every formation a rule sets. The refusal is the reason in words.
+pub fn engine_change(
+    detail: &ChangeDetail,
+    tactics: Option<&TacticsSchema>,
+    formations: &[u8],
+) -> Result<Change, String> {
+    let names = || tactics.ok_or_else(|| "this session reads no level or rule by name".to_string());
+    Ok(match detail {
         ChangeDetail::Patch(wire) => Change::Tactics(tactics_patch(wire)),
         ChangeDetail::Swap { off, on } => Change::Substitution {
             off: usize::from(*off),
             on: usize::from(*on),
         },
+        ChangeDetail::Levels(levels) => Change::Instructions(read_levels(levels, names()?)?),
+        ChangeDetail::GameState(value) => {
+            Change::GameState(read_game_state(value, names()?, formations)?)
+        }
+    })
+}
+
+/// Levels by name as primitive and level indices; a level change names at least one.
+pub fn read_levels(levels: &[LevelWire], tactics: &TacticsSchema) -> Result<Vec<(u8, u8)>, String> {
+    if levels.is_empty() {
+        return Err("a level change names at least one primitive".into());
     }
+    levels
+        .iter()
+        .enumerate()
+        .map(|(k, l)| {
+            game_state::level_of(tactics, &l.primitive, &l.level, &format!("levels[{k}]"))
+                .map_err(|(_, reason)| reason)
+        })
+        .collect()
+}
+
+/// Rules and player instructions in their written form, resolved against `tactics` as a
+/// tactic standing in `formations` resolves them.
+pub fn read_game_state(
+    value: &serde_json::Value,
+    tactics: &TacticsSchema,
+    formations: &[u8],
+) -> Result<GameState, String> {
+    game_state::from_value(value, tactics, formations).map_err(|(at, reason)| {
+        if at == "game_state" {
+            format!("cannot read the game state: {reason}")
+        } else {
+            reason
+        }
+    })
 }
 
 /// The structural check of a page lineup: eleven starters, every index in the squad, no
@@ -539,10 +613,26 @@ pub fn check_lineup(rules: &LineupRules, set: &SetLineup) -> Result<PageSetup, S
             ));
         }
     }
+    let levels = if set.levels.is_empty() {
+        Vec::new()
+    } else {
+        read_levels(&set.levels, &rules.tactics)?
+    };
+    let formation = patch
+        .as_ref()
+        .and_then(|p| p.formation)
+        .unwrap_or(rules.formation);
+    let game_state = set
+        .game_state
+        .as_ref()
+        .map(|value| read_game_state(value, &rules.tactics, &[formation]))
+        .transpose()?;
     Ok(PageSetup {
         lineup,
         bench: set.bench.iter().map(|&i| usize::from(i)).collect(),
         patch,
+        levels,
+        game_state,
     })
 }
 
@@ -729,12 +819,22 @@ impl CommandContext {
             Some(Ok(detail)) => Some(detail),
             None => None,
         };
+        // A level or game-state change is read by name before the queue gives it an
+        // identifier, so a bad name is refused by name and takes none.
+        let formations: Vec<u8> = self.state.home_formation().into_iter().collect();
+        let engine = match &detail {
+            Some(detail) => match engine_change(detail, self.pre_match.tactics(), &formations) {
+                Ok(change) => Some(change),
+                Err(reason) => return refused(reason),
+            },
+            None => None,
+        };
         match self.queue.submit(&change.kind, change.detail.clone(), tick) {
             Verdict::Ack(ack) => {
-                if let (Some(detail), Some(queue_id)) = (&detail, &ack.queue_id) {
+                if let (Some(change), Some(queue_id)) = (engine, &ack.queue_id) {
                     self.inbox.push(Admitted {
                         queue_id: queue_id.clone(),
-                        change: engine_change(detail),
+                        change,
                         tick,
                     });
                 }
@@ -772,6 +872,7 @@ mod tests {
             keepers,
             bench_size: 7,
             tactics: content.tactics,
+            formation: 0,
         }
     }
 
@@ -802,6 +903,8 @@ mod tests {
             lineup,
             bench,
             patch: None,
+            game_state: None,
+            levels: Vec::new(),
         }))
         .unwrap()
     }
@@ -1233,6 +1336,8 @@ mod tests {
                 }],
                 ..PatchWire::default()
             }),
+            game_state: None,
+            levels: Vec::new(),
         }))
         .unwrap();
         let (answer, _) = ctx.handle(&with_role).unwrap();

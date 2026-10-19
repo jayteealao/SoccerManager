@@ -22,6 +22,7 @@ use crate::modules::SubRequest;
 use crate::rules::{Phase, Stoppage};
 use crate::sim::{EngineEventKind, EventDetail, Simulation};
 use crate::tactics::TacticsPatch;
+use crate::tactics::rules::GameState;
 use crate::team::PLAYERS_PER_TEAM;
 
 /// What a queued change does. Players are named by squad index (their place in the team
@@ -41,15 +42,32 @@ pub enum Change {
     Rule {
         active: u8,
     },
+    /// Primitives set to new levels, choices or states: each pair names a primitive (an index
+    /// into the tactics file's primitives) and its level. The base tactics take them on the
+    /// tick the change is queued, and the players take them up over time; nothing waits for a
+    /// stoppage.
+    Instructions(Vec<(u8, u8)>),
+    /// The side's game-state rules and player instructions replaced whole, on the tick the
+    /// change is queued. When the rules that hold, or what they set, move, a rule change
+    /// follows, whose formation waits for a stoppage.
+    GameState(GameState),
 }
 
 impl Change {
-    /// A rule change is a tactics change: it waits for the stoppages that admit tactics.
+    /// A rule, level or game-state change is a tactics change.
     pub fn kind(&self) -> ChangeKind {
         match self {
-            Change::Tactics(_) | Change::Rule { .. } => ChangeKind::Tactics,
+            Change::Tactics(_)
+            | Change::Rule { .. }
+            | Change::Instructions(_)
+            | Change::GameState(_) => ChangeKind::Tactics,
             Change::Substitution { .. } => ChangeKind::Substitution,
         }
+    }
+
+    /// `true` for a change that applies on the tick it is queued and never waits in the queue.
+    pub fn at_once(&self) -> bool {
+        matches!(self, Change::Instructions(_) | Change::GameState(_))
     }
 }
 
@@ -214,6 +232,10 @@ pub enum RejectReason {
         squad: usize,
     },
     OutOfRange,
+    /// A player instruction names a slot whose position the instruction does not reach.
+    NotForPosition {
+        slot: u8,
+    },
 }
 
 impl RejectReason {
@@ -246,6 +268,9 @@ impl RejectReason {
                  file does not hold"
                     .into()
             }
+            RejectReason::NotForPosition { slot } => {
+                format!("the player instruction does not reach the position of slot {slot}")
+            }
         }
     }
 }
@@ -261,6 +286,10 @@ impl Simulation {
         self.queue.next += 1;
         self.summary.changes_queued += 1;
         tracing::debug!(signal = "change.queued", tick = self.tick, team, kind = change.kind().code(), queue_id = %id);
+        if change.at_once() {
+            self.apply_at_once(QueuedChange { id, team, change });
+            return id;
+        }
         self.queue.pending.push(QueuedChange { id, team, change });
         id
     }
@@ -364,7 +393,10 @@ impl Simulation {
                             }
                         }
                     }
-                    Change::Tactics(_) | Change::Rule { .. } => keep.push(q),
+                    Change::Tactics(_)
+                    | Change::Rule { .. }
+                    | Change::Instructions(_)
+                    | Change::GameState(_) => keep.push(q),
                 }
             }
             self.queue.pending = keep;
@@ -392,7 +424,10 @@ impl Simulation {
                         changed = true;
                         self.verdict(&q, now, Some(stoppage.kind), None);
                     }
-                    Change::Substitution { .. } => keep.push(q),
+                    // A level or game-state change applied when it was queued and never waits.
+                    Change::Substitution { .. }
+                    | Change::Instructions(_)
+                    | Change::GameState(_) => keep.push(q),
                 }
             }
             self.queue.pending = keep;

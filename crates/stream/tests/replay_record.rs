@@ -220,10 +220,10 @@ fn every_damaged_or_inconsistent_file_is_refused_by_name() {
 
     // Frames of another protocol version.
     let mut protocol = bytes.clone();
-    protocol[6..8].copy_from_slice(&9u16.to_le_bytes());
+    protocol[6..8].copy_from_slice(&10u16.to_le_bytes());
     let err = refused(&dir, "protocol.smfx", &protocol);
     assert!(
-        err.contains("frames protocol version 9; this build reads 3, 4, 5, 6, 7 and 8"),
+        err.contains("frames protocol version 10; this build reads 3, 4, 5, 6, 7, 8 and 9"),
         "{err}"
     );
 

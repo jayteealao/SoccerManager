@@ -303,3 +303,175 @@ fn a_sides_rules_play_the_same_under_a_person_and_the_computer() {
     assert_eq!(person.0, computer.0);
     assert_eq!(person.2, computer.2);
 }
+
+/// The levels of `action`s as an at-once change.
+fn levels(actions: &[Action]) -> Change {
+    Change::Instructions(
+        actions
+            .iter()
+            .map(|a| match *a {
+                Action::Level { primitive, level } => (primitive, level),
+                Action::Formation(_) => unreachable!("a level"),
+            })
+            .collect(),
+    )
+}
+
+/// A person's level change applies on the tick it is queued: the base and the tactics in
+/// force take it, nothing waits, the verdict names no stoppage, and the players take it up
+/// over time.
+#[test]
+fn a_level_change_applies_on_the_tick_it_is_queued() {
+    let mut sim = with_state(|_| GameState::default());
+    let before = sim.teams[0].tactics;
+    let tempo = level_of(&sim.config, "tempo", "very_fast");
+    let mentality = level_of(&sim.config, "mentality", "attacking");
+    let change = levels(&[tempo, mentality]);
+    let id = sim.queue_change(0, change.clone());
+    assert!(sim.queue.pending.is_empty(), "nothing waits");
+    let schema = sim.config.tactics.clone();
+    let want = before
+        .with_level(
+            usize::from(tempo_index(&tempo)),
+            level_index(&tempo),
+            &schema,
+        )
+        .with_level(
+            usize::from(tempo_index(&mentality)),
+            level_index(&mentality),
+            &schema,
+        );
+    assert_ne!(want, before);
+    assert_eq!(sim.teams[0].tactics, want);
+    assert_eq!(sim.teams[0].base, want);
+    assert_eq!(sim.teams[0].tactics.formation, before.formation);
+    assert_eq!(sim.applied.len(), 1);
+    assert_eq!(sim.applied[0].id, id);
+    assert_eq!(sim.applied[0].change, change);
+    assert_eq!(sim.applied[0].stoppage, None);
+    assert_eq!(sim.applied[0].tick, sim.tick + 1);
+    let (taken, on) = sim.teams[0]
+        .take_up_share()
+        .expect("a shape stage below its top delays someone");
+    assert!(taken < on);
+    assert_eq!(sim.summary.changes_queued, 1);
+    assert_eq!(sim.summary.changes_applied, 1);
+}
+
+fn tempo_index(a: &Action) -> u8 {
+    match *a {
+        Action::Level { primitive, .. } => primitive,
+        Action::Formation(_) => unreachable!("a level"),
+    }
+}
+
+fn level_index(a: &Action) -> u8 {
+    match *a {
+        Action::Level { level, .. } => level,
+        Action::Formation(_) => unreachable!("a level"),
+    }
+}
+
+/// A level the tactics file does not hold is refused and leaves the side as it was.
+#[test]
+fn a_level_out_of_range_is_refused() {
+    let mut sim = with_state(|_| GameState::default());
+    let before = sim.teams[0].clone();
+    sim.queue_change(0, Change::Instructions(vec![(0, 9)]));
+    sim.queue_change(0, Change::Instructions(vec![(250, 0)]));
+    sim.queue_change(0, Change::Instructions(Vec::new()));
+    assert!(sim.applied.is_empty());
+    assert_eq!(sim.summary.changes_rejected, 3);
+    assert_eq!(sim.teams[0].tactics, before.tactics);
+    assert_eq!(sim.teams[0].base, before.base);
+    assert!(sim.teams[0].take_up.is_none());
+}
+
+/// A new game state applies on its tick; a rule in it that holds and sets a formation brings
+/// a rule change whose levels apply at once and whose formation waits for a stoppage.
+#[test]
+fn a_game_state_change_applies_at_once_and_its_formation_waits() {
+    let mut sim = with_state(|_| GameState::default());
+    let f433 = sim.config.tactics.formation_index("4-3-3").unwrap() as u8;
+    let formation = sim.teams[0].tactics.formation;
+    assert_ne!(formation, f433);
+    let state = GameState {
+        rules: vec![Rule {
+            when: vec![Condition::TimeLeft { minutes: 200.0 }],
+            set: vec![
+                Action::Formation(f433),
+                level_of(&sim.config, "mentality", "attacking"),
+            ],
+        }],
+        instructions: Vec::new(),
+    };
+    sim.queue_change(0, Change::GameState(state.clone()));
+    assert_eq!(sim.teams[0].game_state, state);
+    assert_eq!(sim.teams[0].rules_active, 1);
+    assert_eq!(sim.applied.len(), 1);
+    assert_eq!(sim.applied[0].change, Change::GameState(state));
+    assert_eq!(
+        sim.teams[0].tactics.formation, formation,
+        "the formation waits"
+    );
+    assert_eq!(sim.teams[0].tactics, expected(&sim, 1));
+    assert_eq!(sim.queue.pending.len(), 1);
+    assert_eq!(sim.queue.pending[0].change, Change::Rule { active: 1 });
+    while !sim.is_over() && sim.applied.len() < 2 {
+        sim.step();
+    }
+    assert_eq!(sim.applied[1].change, Change::Rule { active: 1 });
+    assert!(sim.applied[1].stoppage.is_some());
+    assert_eq!(sim.teams[0].tactics.formation, f433);
+}
+
+/// A player instruction for a slot whose position it does not reach is refused by name: the
+/// forward runs of a centre-back.
+#[test]
+fn a_player_instruction_outside_its_positions_is_refused() {
+    let mut sim = with_state(|_| GameState::default());
+    let runs = level_of(&sim.config, "forward_runs", "run_in_behind");
+    let state = |slot: u8| GameState {
+        rules: Vec::new(),
+        instructions: vec![crate::tactics::rules::PlayerInstruction {
+            slot,
+            primitive: tempo_index(&runs),
+            level: level_index(&runs),
+        }],
+    };
+    let schema = sim.config.tactics.clone();
+    let shape = &schema.formations[usize::from(sim.teams[0].base.formation)];
+    let back = shape
+        .slots
+        .iter()
+        .position(|s| s.position.code() == "CB")
+        .expect("a centre-back") as u8;
+    let striker = shape
+        .slots
+        .iter()
+        .position(|s| s.position.code() == "ST")
+        .expect("a striker") as u8;
+    sim.queue_change(0, Change::GameState(state(back)));
+    assert_eq!(sim.summary.changes_rejected, 1);
+    assert!(sim.teams[0].game_state.is_empty());
+    let rejected = sim
+        .events
+        .iter()
+        .rev()
+        .find_map(|e| match e.detail {
+            Some(crate::sim::EventDetail::Change { reason, .. }) => reason,
+            _ => None,
+        })
+        .expect("a reason");
+    assert_eq!(
+        rejected,
+        crate::tactics::change::RejectReason::NotForPosition { slot: back }
+    );
+    sim.queue_change(0, Change::GameState(state(striker)));
+    assert_eq!(sim.teams[0].game_state, state(striker));
+    assert!(sim.teams[0].own[usize::from(striker)].is_some());
+    assert!(
+        sim.queue.pending.is_empty(),
+        "no rule moved, nothing follows"
+    );
+}

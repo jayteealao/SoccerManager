@@ -174,6 +174,8 @@ The change file is a JSON array. Each change is queued before the step that star
 
 A change the engine rejects, for example a bench place the team does not have, is not in the change log. Its verdict is in the text frames.
 
+The change log of a served match also holds the tactics board's changes: an `instructions` entry with the primitives it set by name, and a `game_state` entry with the side's game plans and player instructions. Both apply on the tick they were queued, with stoppage `none`, and `resimulate` queues them again on that tick. See the protocol reference, section "Record".
+
 Output: one JSON line with `fixture`, `frames`, `ticks`, `bytes`, `hash`, `format` (4), `inputs_bytes` (the total size of the input files), and `changes_applied`.
 
 Exit codes: 0 when the match reaches full time; 1; 2 when it does not.

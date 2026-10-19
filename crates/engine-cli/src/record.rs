@@ -120,6 +120,7 @@ pub fn run(content_dir: Option<&Path>, opts: &RecordOpts) -> anyhow::Result<i32>
         ground_length: sim.config().pitch().length(),
         ground_width: sim.config().pitch().width(),
         game_state: hello_game_state(&sim),
+        styles: None,
     };
     messages.send(protocol::Frame::Text(
         serde_json::to_string(&ServerMessage::Hello(Box::new(hello)))

@@ -205,6 +205,8 @@ A style in `styles.json` is a preset of tactical primitives. To change one, or t
 5. Play the styles gate on your folder, as in [Run the styles gate](calibration.md#run-the-styles-gate), and read whether your style shows its identity and whether any style now dominates.
 
 No engine code names a style, so a new style needs no build. The computer manager picks among every style in the file by its staff advice; to keep a style out of its pick, remove it from the file.
+
+Every style in the file also shows in the style picker of the Tactics screen's Phases tab, in the file's order. Picking it sets each primitive to the style's level (and the default for one it leaves out) and replaces the game plans with its rules; the player's own instructions, the formation and the duties stay. The picker shows the style's name in words: a name the page has no words for reads as the name with its underscores as spaces, so give a new style a plain name such as `quick_wings`. A row whose level differs from the picked style shows a mark.
 ## Compare two models with a flag
 
 Use a feature flag to decide between the current model and a candidate on the realism bands.

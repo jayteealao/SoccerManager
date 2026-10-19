@@ -559,6 +559,25 @@ fn change(w: &mut Writer, change: &Change) {
             w.u8(2);
             w.u8(*active);
         }
+        // Applied when queued, so never waiting; written for completeness.
+        Change::Instructions(levels) => {
+            w.u8(3);
+            w.count(levels.len());
+            for (primitive, level) in levels {
+                w.u8(*primitive);
+                w.u8(*level);
+            }
+        }
+        Change::GameState(state) => {
+            w.u8(4);
+            w.count(state.rules.len());
+            w.count(state.instructions.len());
+            for ins in &state.instructions {
+                w.u8(ins.slot);
+                w.u8(ins.primitive);
+                w.u8(ins.level);
+            }
+        }
     }
 }
 
@@ -676,5 +695,9 @@ fn reject_reason(w: &mut Writer, reason: &Option<RejectReason>) {
             w.u8(*squad as u8);
         }
         Some(RejectReason::OutOfRange) => w.u8(7),
+        Some(RejectReason::NotForPosition { slot }) => {
+            w.u8(8);
+            w.u8(*slot);
+        }
     }
 }

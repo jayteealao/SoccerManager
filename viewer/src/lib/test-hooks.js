@@ -184,6 +184,22 @@ export function install(session, target = globalThis, door = () => null) {
     squadMood: () => Object.fromEntries(session.squad.map((p) => [p['player.id'], p['player.mood'] ?? null])),
     /// The hello's home squad `player.id`s, in squad order.
     squadIds: () => session.squad.map((p) => p['player.id']),
+    /// The tactics board: every primitive's level by name, the style on show and the
+    /// primitives that differ from it, the game plans and player instructions, the live strip
+    /// and the Not applied banner.
+    board: () => {
+      const d = session.dugout;
+      const prims = Array.isArray(d.schema?.primitives) ? d.schema.primitives : [];
+      return {
+        levels: Object.fromEntries(prims.map((p, i) => [p.name, d.levels[i] ?? null])),
+        style: d.style,
+        changes: d.styleChanges().map((i) => prims[i]?.name),
+        presets: d.presets.map((p) => p.name),
+        game_state: structuredClone(d.gameState),
+        live: d.liveStrip.map((c) => ({ ...c })),
+        refused: d.refused ? { ...d.refused, detail: undefined } : null,
+      };
+    },
     dugout: () => ({
       phase: session.dugout.phase,
       lead_holding: session.lead.holding,

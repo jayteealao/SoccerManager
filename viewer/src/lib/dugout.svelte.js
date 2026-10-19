@@ -11,7 +11,11 @@
 // The assistant's picks arrive as `advice` messages. Each shows when playback reaches its
 // tick; Accept queues the pick like any other change, and nothing is sent until then.
 
+import { fold, levelLabel, liveChips, refusal } from './board-live.js';
+import { styleWords } from './board-words.js';
 import { LineupEditor } from './lineup-editor.js';
+import { changesFrom, initialPick, presetGameState, presetLevels, presetsOf } from './presets.js';
+import { levelWire, merge, prematchLevels, withLevel } from './primitives.js';
 import { benchModel, lineupModel } from './lineups.js';
 import { createPendingList } from './pending.js';
 import { signal } from './signal.js';
@@ -70,6 +74,16 @@ export class Dugout {
   /// null.
   outOfPosition = $state.raw(null);
   otherBench = $state.raw({ players: [], used: 0, limit: 0, text: '' });
+  /// The tactics board: the level of every primitive in the tactics file's order, and the
+  /// side's game plans and player instructions in their written form, as the board shows
+  /// them (the draft before kick-off; during play what the engine applied).
+  levels = $state.raw([]);
+  gameState = $state.raw({ rules: [], instructions: [] });
+  /// The style the picker shows, by name, or null for a tactic that matches none (Custom).
+  style = $state(null);
+  /// The live strip's chips at the rendered tick, and the change the engine did not take.
+  liveStrip = $state.raw([]);
+  refused = $state.raw(null);
 
   /// `send(command)` sends one client command and returns `false` when no socket takes it;
   /// `onStart(message, patch)` runs when the engine accepts the lineup.
@@ -96,6 +110,14 @@ export class Dugout {
     this.accepted = new Set();
     this.stateKey = '';
     this.benchKey = '';
+    this.presets = [];
+    this.baseLevels = [];
+    this.draftLevels = [];
+    this.confirmedLevels = [];
+    this.baseGameState = { rules: [], instructions: [] };
+    this.draftGameState = this.baseGameState;
+    this.confirmedGameState = this.baseGameState;
+    this.boardKey = '';
   }
 
   /// The hello: the squad, the computer manager's setup, and the tactics file. A stored match
@@ -139,6 +161,20 @@ export class Dugout {
     this.phase = 'pre-match';
     this.base = tacticsOf(this.setup);
     this.tactics = tacticsOf(this.setup);
+    this.presets = presetsOf(hello);
+    this.baseLevels = merge(this.schema, this.base, this.setup.levels);
+    this.draftLevels = [...this.baseLevels];
+    this.confirmedLevels = [...this.baseLevels];
+    const own = hello.game_state?.[0] ?? null;
+    this.baseGameState = { rules: own?.rules ?? [], instructions: own?.instructions ?? [] };
+    this.draftGameState = this.baseGameState;
+    this.confirmedGameState = this.baseGameState;
+    this.levels = [...this.baseLevels];
+    this.gameState = this.baseGameState;
+    this.style = initialPick(this.schema, this.levels, this.presets);
+    this.liveStrip = [];
+    this.refused = null;
+    this.boardKey = '';
     this.editor = new LineupEditor({
       schema: this.schema,
       squad: this.squad,
@@ -162,7 +198,10 @@ export class Dugout {
     this.phase = 'live';
     this.confirmed = copyTactics(this.base);
     this.tactics = copyTactics(this.base);
+    this.confirmedLevels = [...this.baseLevels];
+    this.confirmedGameState = this.baseGameState;
     this.refreshPicker();
+    this.refreshBoard();
     this.bump();
   }
 
@@ -208,6 +247,7 @@ export class Dugout {
         duty: r.duty,
       })),
     };
+    this.refreshBoard();
     this.bump();
   }
 
@@ -227,6 +267,7 @@ export class Dugout {
         t.roles[slot] = { role: edit.role.role, duty: edit.role.duty };
       }
       this.tactics = t;
+      this.refreshBoard();
       this.bump();
       return;
     }
@@ -262,6 +303,14 @@ export class Dugout {
     if (patch) {
       command.patch = patch;
     }
+    const levels = prematchLevels(this.schema, this.baseLevels, this.draftLevels);
+    if (levels.length > 0) {
+      command.levels = levels;
+    }
+    const plans = JSON.stringify(this.draftGameState) !== JSON.stringify(this.baseGameState);
+    if (plans) {
+      command.game_state = this.draftGameState;
+    }
     const sent = this.request(
       command,
       () => this.startMatch(message, patch),
@@ -290,7 +339,10 @@ export class Dugout {
       this.rosters[1],
     ];
     this.tactics = copyTactics(this.confirmed);
+    this.confirmedLevels = [...this.draftLevels];
+    this.confirmedGameState = this.draftGameState;
     this.rowKey = '';
+    this.refreshBoard();
     this.onStart(message, patch);
     signal('viewer.kick_off', {
       lineup: message.lineup,
@@ -325,6 +377,7 @@ export class Dugout {
       waiting.onReject(message);
     }
     this.refreshChips();
+    this.refreshBoard();
   }
 
   /// Queues one change. The chip appears on the engine's acknowledgement; a refusal runs
@@ -333,20 +386,154 @@ export class Dugout {
     if (!this.live) {
       return false;
     }
+    const kept = detail.patch ?? detail;
     const sent = this.request(
       { type: 'queue-change', 'change.kind': kind, detail },
-      (ack) => this.pending.queued(ack, label, kind, detail.patch ?? detail),
+      (ack) => this.pending.queued(ack, label, kind, kept),
       (reject) => {
-        this.pending.rejectedAtQueue(reject, label, kind);
+        this.pending.rejectedAtQueue(reject, label, kind, kept);
         onRefused(reject);
       }
     );
     if (!sent) {
-      this.pending.rejectedAtQueue({ reason: 'The engine is not connected.' }, label, kind);
+      this.pending.rejectedAtQueue({ reason: 'The engine is not connected.' }, label, kind, kept);
       onRefused(null);
     }
     this.refreshChips();
     return sent;
+  }
+
+  // ---- The tactics board --------------------------------------------------------------------
+
+  /// `true` while the board's controls take a change: before kick-off and during play.
+  get boardEditable() {
+    return this.preMatch || this.live;
+  }
+
+  /// Sets primitive `index` to `level`. Before kick-off it changes the draft (the mentality
+  /// and the team instructions the same draft the Shapes tab edits); during play it sends one
+  /// level change, which applies at once.
+  setLevel(index, level) {
+    this.setLevels([[index, level]]);
+  }
+
+  /// Sets every `[index, level]` of `list` that differs from the board, as one change.
+  setLevels(list) {
+    const moved = list.filter(([i, level]) => this.levels[i] !== level);
+    if (moved.length === 0 || !this.boardEditable) {
+      return false;
+    }
+    if (this.preMatch) {
+      let tactics = this.tactics;
+      let levels = this.draftLevels;
+      for (const [i, level] of moved) {
+        ({ tactics, levels } = withLevel(this.schema, tactics, levels, i, level));
+      }
+      this.tactics = tactics;
+      this.draftLevels = levels;
+      this.refreshBoard();
+      this.bump();
+      return true;
+    }
+    const label =
+      moved.length === 1 ? levelLabel(this.schema, moved[0][0], moved[0][1]) : `${moved.length} team instructions`;
+    return this.queue('instructions', { levels: moved.map(([i, l]) => levelWire(this.schema, i, l)) }, label);
+  }
+
+  /// Replaces the game plans and player instructions with `gameState`, in their written
+  /// form: the draft before kick-off; during play one game-state change, which applies at once.
+  setGameState(gameState, label = 'Game plans') {
+    if (!this.boardEditable) {
+      return false;
+    }
+    if (this.preMatch) {
+      this.draftGameState = gameState;
+      this.refreshBoard();
+      this.bump();
+      return true;
+    }
+    return this.queue('game-state', { game_state: gameState }, label);
+  }
+
+  /// Picks the style `name`: every team instruction and the game plans take the preset's,
+  /// the player instructions stay, and neither the formation nor the duties change.
+  pickStyle(name) {
+    const preset = this.presets.find((p) => p.name === name);
+    if (!preset || !this.boardEditable) {
+      return false;
+    }
+    const want = presetLevels(this.schema, preset);
+    this.style = name;
+    this.setLevels(want.map((level, i) => [i, level]));
+    const plans = presetGameState(preset, this.gameState);
+    if (JSON.stringify(plans.rules) !== JSON.stringify(this.gameState.rules)) {
+      this.setGameState(plans, `Game plans of ${styleWords(name).name}`);
+    }
+    this.refreshBoard();
+    this.bump();
+    return true;
+  }
+
+  /// The primitives that differ from the style on show, as indices.
+  styleChanges() {
+    const preset = this.presets.find((p) => p.name === this.style);
+    return preset ? changesFrom(this.schema, this.levels, preset) : [];
+  }
+
+  /// Sends a change the engine did not take again, and drops its banner.
+  retry(queueId) {
+    const chip = this.pending.get(queueId, this.renderedTick);
+    if (!chip?.detail || !this.live) {
+      return false;
+    }
+    this.pending.dismiss(queueId);
+    const detail = chip.kind === 'tactics' ? { patch: chip.detail } : chip.detail;
+    this.queue(chip.kind, detail, chip.label);
+    this.refreshBoard();
+    return true;
+  }
+
+  /// Drops the Not applied banner.
+  dismissRefusal(queueId) {
+    this.pending.dismiss(queueId);
+    this.refreshChips();
+    this.refreshBoard();
+  }
+
+  /// Brings the board's levels, game state, live strip and banner to the draft before
+  /// kick-off, or to what the engine applied during play.
+  refreshBoard() {
+    if (!this.schema) {
+      return;
+    }
+    const chips = this.pending.all(this.renderedTick);
+    let levels;
+    let gameState;
+    if (this.phase === 'live') {
+      const lineup = this.homeRows.map((r) => r.squad);
+      const shown = fold(
+        this.schema,
+        { tactics: this.confirmed, levels: this.confirmedLevels, gameState: this.confirmedGameState },
+        chips,
+        lineup
+      );
+      levels = shown.levels;
+      gameState = shown.gameState;
+    } else {
+      levels = merge(this.schema, this.tactics, this.draftLevels);
+      gameState = this.draftGameState;
+    }
+    const strip = this.phase === 'live' ? liveChips(this.schema, chips, this.renderedTick) : [];
+    const refused = this.phase === 'live' ? refusal(this.schema, chips, levels) : null;
+    const key = JSON.stringify([levels, gameState, strip, refused]);
+    if (key === this.boardKey) {
+      return;
+    }
+    this.boardKey = key;
+    this.levels = levels;
+    this.gameState = gameState;
+    this.liveStrip = strip;
+    this.refused = refused;
   }
 
   /// A substitution from the picker: squad `off` for squad `on`. With `formation`, a new
@@ -474,11 +661,13 @@ export class Dugout {
   /// A `tactics-change` event or a `change-state` message.
   onChangeEvent(event) {
     this.pending.onChangeEvent(event);
+    this.refreshBoard();
   }
 
   onChangeState(note) {
     this.pending.onChangeState(note);
     this.refreshChips();
+    this.refreshBoard();
   }
 
   // ---- Once per rendered tick ---------------------------------------------------------------
@@ -515,6 +704,7 @@ export class Dugout {
       this.tacticsKey = tacticsKey;
       this.tactics = tactics;
     }
+    this.refreshBoard();
   }
 
   /// The Touchline's player state and the other bench, redrawn only when a figure it shows
@@ -576,13 +766,13 @@ export class Dugout {
   /// waiting. A refused change drops out, so its control returns to the value in force.
   tacticsView() {
     const lineup = this.homeRows.map((r) => r.squad);
-    let tactics = copyTactics(this.confirmed);
-    for (const chip of this.pending.all(Number.MAX_SAFE_INTEGER)) {
-      if (chip.kind === 'tactics' && chip.state !== 'rejected' && !chip.cancelled && chip.detail) {
-        tactics = applyPatch(tactics, chip.detail, lineup, this.schema);
-      }
-    }
-    return tactics;
+    // The level changes the board sent move the mentality and the team instructions too.
+    return fold(
+      this.schema,
+      { tactics: this.confirmed, levels: this.confirmedLevels, gameState: this.confirmedGameState },
+      this.pending.all(Number.MAX_SAFE_INTEGER),
+      lineup
+    ).tactics;
   }
 
   // ---- The read-only views the test hook returns ---------------------------------------------

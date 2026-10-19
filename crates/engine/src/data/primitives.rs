@@ -440,6 +440,11 @@ impl Primitive {
         }
     }
 
+    /// The number of the primitive's levels, choices or states.
+    pub fn level_count(&self, schema: &TacticsSchema) -> usize {
+        self.level_names(schema).len()
+    }
+
     /// The index of the default among [`Primitive::level_names`].
     pub fn default_index(&self, schema: &TacticsSchema) -> Option<usize> {
         self.level_names(schema)

@@ -268,6 +268,11 @@ pub struct TeamSetup {
     pub instructions: Vec<u8>,
     /// One role and duty per slot, in slot order.
     pub roles: Vec<SlotRole>,
+    /// The level, choice or state of every primitive of `tactics.primitives`, in that order:
+    /// each an index into the primitive's levels, choices or states. Written from protocol 9;
+    /// a setup without it, as from an earlier build, reads as empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub levels: Vec<u8>,
 }
 
 /// The substitution limits of the loaded rule pack.
@@ -364,6 +369,12 @@ pub struct Hello {
     /// build, reads as no rules on either side.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub game_state: Option<[Option<serde_json::Value>; 2]>,
+    /// The style presets the engine loaded, as the styles file writes them, each with its
+    /// primitives by name, its rules and its player instructions: the presets the tactics
+    /// board offers. Written only when the engine loaded some; a hello without it, as from an
+    /// earlier build, offers none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub styles: Option<serde_json::Value>,
 }
 
 /// The length of a ground that a hello does not name, in metres.
@@ -660,15 +671,19 @@ pub struct Jump {
     pub tick: u32,
 }
 
-/// A change a client queues for a later stoppage.
+/// A change a client queues. A tactics change and a substitution wait for a stoppage; a level
+/// change and a game-state change apply on the next tick.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QueueChange {
-    /// `tactics` or `substitution`. Any other value is refused by name.
+    /// `tactics`, `substitution`, `instructions` or `game-state`. Any other value is refused
+    /// by name.
     #[serde(rename = "change.kind")]
     pub kind: String,
-    /// `{ "patch": … }` for a tactics change, `{ "off": …, "on": … }` for a substitution.
-    /// [`QueueChange::detail_typed`] reads it.
+    /// `{ "patch": … }` for a tactics change, `{ "off": …, "on": … }` for a substitution,
+    /// `{ "levels": [{ "primitive": …, "level": … }] }` for a level change (names, not
+    /// indices), and `{ "game_state": { "rules": …, "instructions": … } }` for a game-state
+    /// change, in the form a tactic writes them. [`QueueChange::detail_typed`] reads it.
     #[serde(default)]
     pub detail: serde_json::Value,
 }
@@ -712,6 +727,26 @@ struct SwapDetail {
     on: u16,
 }
 
+/// One primitive at one level, choice or state, both by the names of the hello's `tactics`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LevelWire {
+    pub primitive: String,
+    pub level: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LevelsDetail {
+    levels: Vec<LevelWire>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GameStateDetail {
+    game_state: serde_json::Value,
+}
+
 /// A queued change's detail, read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChangeDetail {
@@ -721,6 +756,10 @@ pub enum ChangeDetail {
         off: u16,
         on: u16,
     },
+    /// Primitives at new levels, by name.
+    Levels(Vec<LevelWire>),
+    /// A side's rules and player instructions in their written form, whole.
+    GameState(serde_json::Value),
 }
 
 impl QueueChange {
@@ -736,6 +775,10 @@ impl QueueChange {
                     on: d.on,
                 }
             }),
+            "instructions" => serde_json::from_value::<LevelsDetail>(self.detail.clone())
+                .map(|d| ChangeDetail::Levels(d.levels)),
+            "game-state" => serde_json::from_value::<GameStateDetail>(self.detail.clone())
+                .map(|d| ChangeDetail::GameState(d.game_state)),
             _ => return None,
         };
         Some(read.map_err(|e| format!("cannot read the {} change: {e}", self.kind)))
@@ -753,6 +796,14 @@ pub struct SetLineup {
     /// kick-off.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub patch: Option<PatchWire>,
+    /// Pre-match levels of the other primitives, by name, applied after the patch. Written
+    /// only when the page moved some.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub levels: Vec<LevelWire>,
+    /// Pre-match rules and player instructions, in the form a tactic writes them, in place of
+    /// the side's own. Written only when the page set some.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub game_state: Option<serde_json::Value>,
 }
 
 /// Withdraws a queued change before a stoppage takes it.
@@ -882,6 +933,7 @@ mod tests {
                         mentality: 2,
                         instructions: vec![1, 1, 1, 1, 1, 0],
                         roles: vec![SlotRole { role: 0, duty: 1 }; 11],
+                        levels: Vec::new(),
                     }),
                     formation: "4-4-2".into(),
                 },
@@ -908,6 +960,7 @@ mod tests {
             ground_length: DEFAULT_GROUND_LENGTH,
             ground_width: DEFAULT_GROUND_WIDTH,
             game_state: None,
+            styles: None,
         }
     }
 
@@ -951,6 +1004,71 @@ mod tests {
             queue_change("formation", serde_json::Value::Null).detail_typed(),
             None
         );
+
+        let levels = queue_change(
+            "instructions",
+            serde_json::json!({"levels": [{"primitive": "tempo", "level": "fast"}]}),
+        );
+        assert_eq!(
+            levels.detail_typed(),
+            Some(Ok(ChangeDetail::Levels(vec![LevelWire {
+                primitive: "tempo".into(),
+                level: "fast".into()
+            }])))
+        );
+        let state = serde_json::json!({"instructions": [{"slot": 9, "primitive": "dribbling", "level": "dribble_often"}]});
+        let game_state = queue_change("game-state", serde_json::json!({"game_state": state}));
+        assert_eq!(
+            game_state.detail_typed(),
+            Some(Ok(ChangeDetail::GameState(state)))
+        );
+        let Some(Err(fault)) = queue_change(
+            "instructions",
+            serde_json::json!({"levels": [{"primitive": "tempo", "step": 1}]}),
+        )
+        .detail_typed() else {
+            panic!("an unknown field is refused");
+        };
+        assert!(
+            fault.starts_with("cannot read the instructions change"),
+            "{fault}"
+        );
+    }
+
+    #[test]
+    fn the_board_fields_are_omitted_when_empty_and_read_back() {
+        let lineup = SetLineup {
+            lineup: (0..11).collect(),
+            bench: vec![11],
+            patch: None,
+            levels: Vec::new(),
+            game_state: None,
+        };
+        let plain = serde_json::to_string(&lineup).unwrap();
+        assert!(
+            !plain.contains("levels") && !plain.contains("game_state"),
+            "{plain}"
+        );
+        let full = SetLineup {
+            levels: vec![LevelWire {
+                primitive: "crossing".into(),
+                level: "cross_often".into(),
+            }],
+            game_state: Some(serde_json::json!({"rules": []})),
+            ..lineup
+        };
+        let back: SetLineup = serde_json::from_str(&serde_json::to_string(&full).unwrap()).unwrap();
+        assert_eq!(back, full);
+        let mut hello = hello();
+        let json = serde_json::to_string(&hello).unwrap();
+        assert!(
+            !json.contains("styles") && !json.contains("\"levels\""),
+            "{json}"
+        );
+        hello.styles = Some(serde_json::json!({"styles": []}));
+        hello.teams[0].setup.as_mut().unwrap().levels = vec![2, 0, 1];
+        let back: Hello = serde_json::from_str(&serde_json::to_string(&hello).unwrap()).unwrap();
+        assert_eq!(back, hello);
     }
 
     #[test]
@@ -995,6 +1113,8 @@ mod tests {
                 mentality: Some(3),
                 ..PatchWire::default()
             }),
+            game_state: None,
+            levels: Vec::new(),
         });
         let json = serde_json::to_string(&command).unwrap();
         assert!(json.starts_with("{\"type\":\"set-lineup\""), "{json}");
@@ -1091,6 +1211,8 @@ mod tests {
                 lineup: vec![0; 11],
                 bench: Vec::new(),
                 patch: None,
+                game_state: None,
+                levels: Vec::new(),
             }),
             ClientCommand::Seen(Seen { tick: 1_200 }),
             ClientCommand::CancelChange(CancelChange {

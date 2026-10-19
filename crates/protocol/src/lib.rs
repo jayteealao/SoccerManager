@@ -19,10 +19,10 @@ pub use frame::{Frame, TickFrame};
 pub use message::{
     Advice, AdvicePick, CancelChange, ChangeDetail, ChangeStateNote, ClientCommand, Condition,
     Confidence, DEFAULT_GROUND_LENGTH, DEFAULT_GROUND_WIDTH, GroundEvent, GroundKind,
-    GroundProgress, Hello, HiddenWord, Jump, Matchday, MatchdayFixture, PatchWire, QueueChange,
-    RatingWire, Ratings, RoleWire, RosterEntry, Seen, ServerMessage, SetLineup, SetSpeed, Side,
-    SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup, TraitWire, WalkOn,
-    WalkPathWire,
+    GroundProgress, Hello, HiddenWord, Jump, LevelWire, Matchday, MatchdayFixture, PatchWire,
+    QueueChange, RatingWire, Ratings, RoleWire, RosterEntry, Seen, ServerMessage, SetLineup,
+    SetSpeed, Side, SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup, TraitWire,
+    WalkOn, WalkPathWire,
 };
 
 /// The protocol version a client must ask for. A client that asks for another version is
@@ -147,7 +147,21 @@ pub use message::{
 /// on a tick frame now marks the tick the ball appears at its restart spot, which can come
 /// seconds after the event that stopped play, while the ball is fetched. No field was removed
 /// and the tick frames are unchanged, so a protocol 7 replay still reads; it has no walk-on.
-pub const PROTOCOL_VERSION: u16 = 8;
+///
+/// Version 9 puts every tactical primitive on the wire. `queue-change` takes two more kinds,
+/// both applied on the next tick with no stoppage: `instructions` (primitives at new levels,
+/// by name) and `game-state` (a side's rules and player instructions, whole, in the form a
+/// tactic writes them). The hello gains `styles` (the style presets the engine loaded) and a
+/// team setup `levels` (every primitive's level in the order of `tactics.primitives`);
+/// `set-lineup` gains `levels` and `game_state` for the pre-match tactic. Every added field
+/// is optional and omitted when empty, no field was removed and the tick frames are
+/// unchanged, so a protocol 8 replay still reads.
+pub const PROTOCOL_VERSION: u16 = 9;
+
+/// The protocol version before every primitive was on the wire: no `instructions` or
+/// `game-state` change, no styles in the hello and no levels in a team setup. Replay readers
+/// still read its frames.
+pub const PROTOCOL_V8: u16 = 8;
 
 /// The protocol version before ratings moved to tenths. Replay readers still read its
 /// frames; a hello of this version carries ratings on the 1 to 100 scale.
@@ -611,6 +625,7 @@ mod tests {
                 ground_length: DEFAULT_GROUND_LENGTH,
                 ground_width: DEFAULT_GROUND_WIDTH,
                 game_state: None,
+                styles: None,
             })),
             ServerMessage::Event(Box::new(MatchEvent::play(
                 "",
@@ -714,6 +729,8 @@ mod tests {
                 lineup: Vec::new(),
                 bench: Vec::new(),
                 patch: None,
+                game_state: None,
+                levels: Vec::new(),
             }),
             ClientCommand::Seen(Seen { tick: 0 }),
             ClientCommand::CancelChange(CancelChange {

@@ -116,14 +116,19 @@ pub fn run(content_dir: Option<&Path>, opts: &ResimulateOpts) -> anyhow::Result<
         .filter(|c| c.source == ChangeSource::Manager)
         .collect();
     manager_changes.sort_by_key(|c| (c.queued_tick, c.queue_number));
+    let schema = sim.config().tactics.clone();
     let planned: Vec<Planned> = manager_changes
         .iter()
-        .map(|c| Planned::Exact {
-            tick: c.queued_tick,
-            team: c.team,
-            change: c.change.to_change(),
+        .map(|c| {
+            Ok(Planned::Exact {
+                tick: c.queued_tick,
+                team: c.team,
+                change: c.change.to_change(&schema).map_err(|reason| {
+                    anyhow::anyhow!("the record's change {} cannot be read: {reason}", c.order)
+                })?,
+            })
         })
-        .collect();
+        .collect::<anyhow::Result<_>>()?;
 
     let stored: Vec<(u32, &[u8])> = fixture
         .frames

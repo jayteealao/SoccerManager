@@ -928,9 +928,16 @@ fn encode(sim: &Simulation, w: &mut Writer) {
     w.u32(sim.carrying);
     w.u32(sim.chase_seen);
     w.u32(sim.queue.next);
-    // A queue holds far fewer than 4 billion changes.
-    w.u32(sim.queue.pending.len() as u32);
-    for q in &sim.queue.pending {
+    // A queue holds far fewer than 4 billion changes. A level or game-state change applies
+    // when it is queued and never waits, so none is written.
+    let waiting: Vec<_> = sim
+        .queue
+        .pending
+        .iter()
+        .filter(|q| !q.change.at_once())
+        .collect();
+    w.u32(waiting.len() as u32);
+    for q in waiting {
         w.u8(q.team as u8);
         w.u32(q.id.tick);
         w.u32(q.id.n);
@@ -958,6 +965,7 @@ fn encode(sim: &Simulation, w: &mut Writer) {
                 w.u8(2);
                 w.u8(*active);
             }
+            Change::Instructions(_) | Change::GameState(_) => {}
         }
     }
     for at in sim.queue.admitted {

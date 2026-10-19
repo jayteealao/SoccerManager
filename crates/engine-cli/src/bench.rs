@@ -178,6 +178,7 @@ fn measure_stream(
         ground_length: config.pitch().length(),
         ground_width: config.pitch().width(),
         game_state: hello_game_state(&sim),
+        styles: None,
     };
 
     let server = Server::bind(&data, &match_id)?;

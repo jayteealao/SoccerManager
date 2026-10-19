@@ -23,15 +23,16 @@
 import { liftHello } from './scale.js';
 
 /// The protocol version of the frames this page receives and writes.
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 9;
 /// The frame protocols this page reads from a file. Protocol 4 changed only the scale of the
 /// hello's ratings, protocol 5 only the hello's squad entries and one added message,
-/// protocols 6 and 7 only optional fields, and protocol 8 only the added `walk-on` message, so
-/// a protocol 3, 4, 5, 6 or 7 file still plays; its hello is lifted when read (`liftHello`),
-/// and a file before protocol 8 has no walk-on.
-export const READS_PROTOCOLS = Object.freeze([3, 4, 5, 6, 7, 8]);
+/// protocols 6 and 7 only optional fields, protocol 8 only the added `walk-on` message, and
+/// protocol 9 only optional fields (the hello's styles, each side's levels), so a protocol 3,
+/// 4, 5, 6, 7 or 8 file still plays; its hello is lifted when read (`liftHello`), and a file
+/// before protocol 8 has no walk-on.
+export const READS_PROTOCOLS = Object.freeze([3, 4, 5, 6, 7, 8, 9]);
 
-/// The protocols this page reads, as words: "3, 4, 5, 6, 7 and 8".
+/// The protocols this page reads, as words: "3, 4, 5, 6, 7, 8 and 9".
 function readsWords() {
   return `${READS_PROTOCOLS.slice(0, -1).join(', ')} and ${READS_PROTOCOLS.at(-1)}`;
 }

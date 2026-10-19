@@ -6,9 +6,10 @@ use crate::contract::Stage;
 use crate::modules::proposal::Proposal;
 use crate::player::Status;
 use crate::sim::Simulation;
-use crate::tactics::change::{Change, ChangeId};
-use crate::tactics::rules::{self, Situation};
+use crate::tactics::change::{Change, ChangeId, QueuedChange, RejectReason};
+use crate::tactics::rules::{self, Action, Condition, GameState, Situation};
 use crate::team::PLAYERS_PER_TEAM;
+use crate::team::own_plans;
 use crate::{TICKS_PER_SECOND, ticks_for_minutes};
 
 impl Simulation {
@@ -174,6 +175,91 @@ impl Simulation {
         self.timeline.push((now, self.teams.clone()));
     }
 
+    /// Applies a change that never waits, on the tick it was queued: new levels for the base
+    /// tactics, or a new game state. The settings take effect at once and each player takes
+    /// them up after his delay; the formation a new rule sets waits for a stoppage in the
+    /// rule change that follows. A refused change leaves the side as it was.
+    pub(crate) fn apply_at_once(&mut self, q: QueuedChange) {
+        let now = self.tick + 1;
+        let result = match &q.change {
+            Change::Instructions(levels) => self.set_levels(q.team, levels, now),
+            Change::GameState(state) => self.replace_game_state(q.team, state, now),
+            _ => Err(RejectReason::OutOfRange),
+        };
+        match result {
+            Ok(follow) => {
+                self.verdict(&q, now, None, None);
+                self.timeline.push((now, self.teams.clone()));
+                if let Some(active) = follow {
+                    self.rule_change(q.team, active);
+                }
+            }
+            Err(reason) => self.verdict(&q, now, None, Some(reason)),
+        }
+    }
+
+    /// Sets each primitive of `levels` in `team`'s base tactics and puts the tactics in force
+    /// with the active rules applied, in the formation and roles in force.
+    fn set_levels(
+        &mut self,
+        team: usize,
+        levels: &[(u8, u8)],
+        now: u32,
+    ) -> Result<Option<u8>, RejectReason> {
+        let schema = self.config.tactics.clone();
+        if levels.is_empty() || !levels.iter().all(|&(p, l)| level_in_range(&schema, p, l)) {
+            return Err(RejectReason::OutOfRange);
+        }
+        let side = &self.teams[team];
+        let base = levels.iter().fold(side.base, |t, &(p, l)| {
+            t.with_level(usize::from(p), l, &schema)
+        });
+        let target = rules::effective(&base, &side.game_state.rules, side.rules_active, &schema);
+        let at_once = rules::at_once(&target, &side.tactics);
+        let changed = at_once != side.tactics;
+        self.teams[team].base = base;
+        if changed {
+            let tuning = std::sync::Arc::clone(&self.tuning);
+            let at = self.take_up_ticks(team, now);
+            self.teams[team].begin_take_up(at_once, at, now, &schema, &tuning);
+        }
+        Ok(None)
+    }
+
+    /// Gives `team` the rules and player instructions of `state` in place of its own. The
+    /// players' own plans follow at once; when the rules that hold, or what they set, moved,
+    /// the rule change to the rules that now hold follows (`Some`).
+    fn replace_game_state(
+        &mut self,
+        team: usize,
+        state: &GameState,
+        now: u32,
+    ) -> Result<Option<u8>, RejectReason> {
+        let schema = self.config.tactics.clone();
+        check_game_state(state, &schema, self.teams[team].base.formation)?;
+        let tuning = std::sync::Arc::clone(&self.tuning);
+        let side = &self.teams[team];
+        let before = rules::effective(
+            &side.base,
+            &side.game_state.rules,
+            side.rules_active,
+            &schema,
+        );
+        let was_active = side.rules_active;
+        let side = &mut self.teams[team];
+        side.game_state = state.clone();
+        let plan = side.take_up.as_ref().map_or(side.plan, |t| t.next);
+        side.own = own_plans(&plan, &side.game_state, &schema, &tuning);
+        let active = if state.rules.is_empty() {
+            0
+        } else {
+            state.active(&self.situation(team, now))
+        };
+        let side = &self.teams[team];
+        let after = rules::effective(&side.base, &state.rules, active, &schema);
+        Ok((active != was_active || after != before).then_some(active))
+    }
+
     /// The tick each player of `team` takes a change on tick `now` up on: after the tactics
     /// file's take-up time scaled by how far his shape stage (keeping to instructions) falls
     /// short of its top: at once at the top, the whole time at the bottom.
@@ -191,4 +277,83 @@ impl Simulation {
             now + delay.max(0.0) as u32
         })
     }
+}
+
+/// `true` when primitive `p` has a level, choice or state `l`.
+fn level_in_range(schema: &crate::data::tactics::TacticsSchema, p: u8, l: u8) -> bool {
+    schema
+        .primitives
+        .get(usize::from(p))
+        .is_some_and(|prim| usize::from(l) < prim.level_count(schema))
+}
+
+/// The engine's own check of a game state a change brings: no more rules than the tactics
+/// file allows, every index in range, every value finite, and each player instruction on the
+/// override list, once per slot and primitive, for a slot whose position it reaches in the
+/// side's formation and in every formation a rule sets.
+fn check_game_state(
+    state: &GameState,
+    schema: &crate::data::tactics::TacticsSchema,
+    formation: u8,
+) -> Result<(), RejectReason> {
+    if state.is_empty() {
+        return Ok(());
+    }
+    let block = schema.game_state.as_ref().ok_or(RejectReason::OutOfRange)?;
+    if state.rules.len() > usize::from(block.max_rules) {
+        return Err(RejectReason::OutOfRange);
+    }
+    let finite = |c: &Condition| match *c {
+        Condition::TimeLeft { minutes } => minutes.is_finite(),
+        Condition::RunOfPlay { value, .. } => value.is_finite(),
+        Condition::TeamEnergy { below } => below.is_finite(),
+        _ => true,
+    };
+    let mut formations = vec![formation];
+    for rule in &state.rules {
+        if rule.when.is_empty() || rule.set.is_empty() || !rule.when.iter().all(finite) {
+            return Err(RejectReason::OutOfRange);
+        }
+        for action in &rule.set {
+            match *action {
+                Action::Level { primitive, level } => {
+                    if !level_in_range(schema, primitive, level) {
+                        return Err(RejectReason::OutOfRange);
+                    }
+                }
+                Action::Formation(f) => {
+                    if usize::from(f) >= schema.formations.len() {
+                        return Err(RejectReason::OutOfRange);
+                    }
+                    formations.push(f);
+                }
+            }
+        }
+    }
+    for (k, ins) in state.instructions.iter().enumerate() {
+        if usize::from(ins.slot) >= PLAYERS_PER_TEAM
+            || !level_in_range(schema, ins.primitive, ins.level)
+            || state.instructions[..k]
+                .iter()
+                .any(|o| o.slot == ins.slot && o.primitive == ins.primitive)
+        {
+            return Err(RejectReason::OutOfRange);
+        }
+        let name = &schema.primitives[usize::from(ins.primitive)].name;
+        let entry = block.override_of(name).ok_or(RejectReason::OutOfRange)?;
+        if entry.positions.is_empty() {
+            continue;
+        }
+        let reaches = formations.iter().all(|&f| {
+            schema.formations.get(usize::from(f)).is_none_or(|shape| {
+                entry
+                    .positions
+                    .contains(&shape.slots[usize::from(ins.slot)].position)
+            })
+        });
+        if !reaches {
+            return Err(RejectReason::NotForPosition { slot: ins.slot });
+        }
+    }
+    Ok(())
 }
