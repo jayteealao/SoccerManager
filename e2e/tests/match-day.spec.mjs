@@ -7,13 +7,14 @@ import { kickOff, openMatch, playUntil, scoreBug, setSpeed, showMatch, until } f
 
 let fixture;
 
-// Seed 6 scores in a ten-minute match: the lowest seed that still scores in ten minutes now
-// that each AI side starts in a named style with its lineup and bench by position rating
-// (seed 1 until then; seed 2 before players carried their traits and weaker foot).
+// Seed 3 scores in a ten-minute match: the lowest seed that still scores in ten minutes now
+// that each option is valued by the threat of the place it reaches and its chance of losing
+// the ball (seed 6 until then; seed 1 before each AI side started in a named style with its
+// lineup and bench by position rating; seed 2 before players carried their traits and weaker foot).
 test.beforeAll(() => {
   const dir = tempDir('fixture');
   fixture = path.join(dir, 'match.smfx');
-  const run = runEngine(['record', '--seed', '6', '--minutes', '10', '--out', fixture], { dataDir: dir });
+  const run = runEngine(['record', '--seed', '3', '--minutes', '10', '--out', fixture], { dataDir: dir });
   expect(run.code, run.stderr).toBe(0);
 });
 
