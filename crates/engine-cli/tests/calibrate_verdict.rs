@@ -536,8 +536,9 @@ fn formations_checks(report: &Value) -> Vec<&Value> {
 /// A change run judges and powers each formations band once, pooled over every pairing:
 /// one verdict row per band with no pairing, a power target named with the band that set
 /// it, and per-pairing rows reported as information only. A per-pairing row outside its
-/// range with the pooled band inside does not fail the joint verdict. The runs play seed 1,
-/// the lowest whose two pairings score differently (seed 3 until clearances, shots and
+/// range with the pooled band inside does not fail the joint verdict. The runs play seed 0,
+/// the lowest whose two pairings score differently (seed 1 until the computer manager's substitutions read the
+/// threat a player's actions add, when both pairings scored 0.125; seed 3 until clearances, shots and
 /// misreads were scored by their cost; seed 2 until a passer read the press his receiver would meet; seed 9 until tempo became patience and
 /// the mentality an appetite for risk, when both pairings scored 0.375).
 #[test]
@@ -556,7 +557,7 @@ fn a_change_run_judges_the_formations_suite_pooled_and_reports_pairings_as_infor
     });
     let run = data.join("run");
     let args = ["--matches", "8", "--pilot", "4", "--base-binary", exe()];
-    let out = formations_on("1", &data, &content, &run, &args);
+    let out = formations_on("0", &data, &content, &run, &args);
     let r = report(&out, &run);
 
     // One pooled verdict per formations band.
@@ -605,7 +606,7 @@ fn a_change_run_judges_the_formations_suite_pooled_and_reports_pairings_as_infor
         .fold(f64::INFINITY, f64::min);
     assert!(
         low < pooled,
-        "the pairings differ on seed 1: {low} {pooled}"
+        "the pairings differ on seed 0: {low} {pooled}"
     );
     edit_band(&content, "goals_per_match", |b| {
         b["design"]["lo"] = ((low + pooled) / 2.0).into();
@@ -618,7 +619,7 @@ fn a_change_run_judges_the_formations_suite_pooled_and_reports_pairings_as_infor
     edit_band(&content, "ten_plus_goals_share", |b| {
         b["design"]["hi"] = 1.0.into()
     });
-    let again = formations_on("1", &data, &content, &run, &args);
+    let again = formations_on("0", &data, &content, &run, &args);
     let text = stderr(&again);
     let after = report(&again, &run);
     assert!(text.contains("0 matches played"), "{text}");
