@@ -85,11 +85,12 @@ fn engine_events(config: engine::MatchConfig) -> (Vec<engine::EngineEvent>, Stre
 /// lifted on a counter rather than with the press, seed 4 until opponents walked round the
 /// restart spot, seed 2 until tempo became patience and the mentality an appetite for risk)
 /// played through extra time and a
-/// shoot-out; and seed 172 between two generated top-flight clubs (league seed 1), the lowest
-/// that brings a second yellow since every option was charged its chance of losing the ball
-/// (seed 15 until then, which brought the straight red too; seed 2 until the styles became
-/// presets of primitives), and seed 17 between the same clubs, the lowest that brings a
-/// straight red now, and the knockout seed 14, the lowest that brings a refused change since a
+/// shoot-out; and seed 39 between two generated top-flight clubs (league seed 1), the lowest
+/// that brings a second yellow since every option was valued by the real threat of its place
+/// (seed 172 from every option being charged its chance of losing the ball until then; seed 15
+/// before, which brought the straight red too; seed 2 until the styles became
+/// presets of primitives), and seed 13 between the same clubs, the lowest that brings a
+/// straight red now (seed 17 until every option was valued by the real threat of its place), and the knockout seed 14, the lowest that brings a refused change since a
 /// shooter read the keeper's place with his attributes (the knockout match brought it until
 /// then)
 /// (by the other streams until a kick stayed on its way from its kicker; seed 1 until opponents walked round the restart spot; seed 4, which brought both, until
@@ -128,10 +129,10 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
         .with_knockout();
     streams.push(("knockout seed 14".into(), engine_events(refused)));
     let league = engine::data::generate_league(1, 2, &content);
-    let generated = engine::MatchConfig::new(172, 90, &content, [&league[0], &league[1]]).unwrap();
-    streams.push(("generated seed 172".into(), engine_events(generated)));
-    let red = engine::MatchConfig::new(17, 90, &content, [&league[0], &league[1]]).unwrap();
-    streams.push(("generated seed 17".into(), engine_events(red)));
+    let generated = engine::MatchConfig::new(39, 90, &content, [&league[0], &league[1]]).unwrap();
+    streams.push(("generated seed 39".into(), engine_events(generated)));
+    let red = engine::MatchConfig::new(13, 90, &content, [&league[0], &league[1]]).unwrap();
+    streams.push(("generated seed 13".into(), engine_events(red)));
     let all: Vec<&engine::EngineEvent> = streams.iter().flat_map(|(_, (e, _))| e).collect();
     let has = |f: &dyn Fn(&engine::EngineEvent) -> bool| all.iter().any(|e| f(e));
     assert!(has(&|e| e.kind == Injury), "an injury is judged");

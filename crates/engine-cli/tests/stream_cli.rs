@@ -263,7 +263,7 @@ fn a_drop_before_the_first_stoppage_goes_back_to_kick_off() {
         .args([
             "serve",
             "--seed",
-            "0",
+            "2",
             "--minutes",
             "2",
             "--reconnect-wait",
@@ -295,7 +295,8 @@ fn a_drop_before_the_first_stoppage_goes_back_to_kick_off() {
             Incoming::Closed => panic!("the match closed before it resumed"),
         }
     };
-    // Seed 0, the lowest that does, first stops play after the drop (seed 1 until clearances,
+    // Seed 2, the lowest that does, first stops play after the drop (seed 0 until every option was
+    // valued by the real threat of its place; seed 1 until clearances,
     // shots and misreads were scored by their cost; seed 2 until the styles
     // became presets of primitives; seed 0 until a kick stayed on its way from its kicker along
     // the line he sent it; seed 20 until the running pace lifted on a counter rather than with
