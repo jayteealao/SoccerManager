@@ -10,6 +10,7 @@
 //! writes no byte, so the hashed bytes do not depend on it.
 
 use crate::canon::{self, Writer};
+use crate::math::DVec2;
 use crate::player::Player;
 use crate::rules::{Phase, Referee};
 use crate::sim::{EngineEvent, EventDetail, Simulation};
@@ -80,6 +81,7 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         shooter,
         shot_deflected,
         last_pass,
+        value_from,
         bench_mood,
         trait_acts,
         carrying,
@@ -196,6 +198,13 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     w.mark(Bytes, || "last_pass".into());
     w.index(last_pass.map(|(passer, _)| passer));
     w.index(last_pass.map(|(_, receiver)| receiver));
+    w.mark(Bytes, || "value_from".into());
+    w.index(value_from.map(|(player, _)| player));
+    w.mark(Floats, || "value_from.at".into());
+    w.v2_at(
+        &|| "value_from.at".into(),
+        value_from.map_or(DVec2::ZERO, |(_, at)| at),
+    );
     w.mark(Floats, || "bench_mood".into());
     for (team, mood) in bench_mood.iter().enumerate() {
         w.f64_at(|| format!("bench_mood[{team}]"), *mood);

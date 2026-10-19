@@ -1,5 +1,5 @@
 {
-  "schema_version": 7,
+  "schema_version": 8,
   "engine": {
     "dt": 0.02,
     "decision_interval_ticks": 1,
@@ -1087,19 +1087,10 @@
     }
   },
   "match_rating": {
-    "base": 6.0,
+    "base": 6.66,
     "min": 1.0,
     "max": 10.0,
-    "goal": 1.0,
-    "shot_on_target": 0.15,
-    "shot_off_target": -0.05,
-    "xg": 0.5,
-    "pass_completed": 0.02,
-    "pass_failed": -0.04,
-    "tackle_won": 0.1,
-    "interception": 0.1,
-    "block": 0.15,
-    "clearance": 0.05,
+    "value_added": 5.1,
     "goals_prevented": 1.0,
     "foul": -0.05,
     "yellow": -0.5,

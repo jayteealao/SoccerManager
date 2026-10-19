@@ -28,8 +28,11 @@ use crate::tuning::Tuning;
 /// (`shot_under_pressure`, `takeon_under_pressure`); a version 5 file converts with both at
 /// its old value ([`crate::data::convert::tuning_v5_to_v6`]). Version 7 rates a keeper by
 /// the goals he prevented (`match_rating.goals_prevented`) in place of a weight per save; a
-/// version 6 file converts ([`crate::data::convert::tuning_v6_to_v7`]).
-pub const TUNING_VERSION: u32 = 7;
+/// version 6 file converts ([`crate::data::convert::tuning_v6_to_v7`]). Version 8 rates an
+/// outfield player by the threat his actions added (`match_rating.value_added`) in place of
+/// the weights per goal, shot, pass, tackle, interception, block and clearance; a version 7
+/// file converts ([`crate::data::convert::tuning_v7_to_v8`]).
+pub const TUNING_VERSION: u32 = 8;
 
 /// The tuning file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]

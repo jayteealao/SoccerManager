@@ -260,9 +260,10 @@ fn plants() -> Vec<(&'static str, AiCode, Plant)> {
             "a low rating",
             AiCode::SubForm,
             Box::new(move |s: Scene| {
+                // Half an expected goal of threat given away (the balls he lost) and six
+                // fouls: a rating about 3.8.
                 s.player_tally(i, |t| {
-                    t.passes = 60;
-                    t.passes_completed = 10;
+                    t.value_added = -0.5;
                     t.fouls = 6;
                 })
             }),

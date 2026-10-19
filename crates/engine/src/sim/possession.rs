@@ -54,6 +54,8 @@ impl Simulation {
             }
             if blocked {
                 self.tally(i, Count::Block);
+                let at = self.ball.xy();
+                self.value_won(i, at);
                 let angle = self.streams.draw(Key::player(Action::BlockDeflect, p));
                 self.ball.vel =
                     self.config
@@ -206,6 +208,8 @@ impl Simulation {
                 self.keeper_beaten = false;
                 self.summary.clearances[cross.team] += 1;
                 self.tally(i, Count::Clearance);
+                let at = self.ball.xy();
+                self.value_won(i, at);
                 return true;
             }
         }
@@ -248,6 +252,8 @@ impl Simulation {
                 self.gain(i, t);
             } else {
                 self.tally(i, Count::Block);
+                let at = self.ball.xy();
+                self.value_won(i, at);
                 #[cfg(feature = "measures")]
                 if self.measures.is_some() {
                     self.measure_action(i);
@@ -311,6 +317,8 @@ impl Simulation {
             }
             if won {
                 self.tally(i, Count::TackleWon);
+                let at = self.ball.xy();
+                self.value_won(i, at);
                 self.mood_event(i, crate::sim::mood::MoodEvent::DuelWon);
                 self.mood_event(c, crate::sim::mood::MoodEvent::DuelLost);
                 self.gain(i, t);
@@ -338,8 +346,13 @@ impl Simulation {
             .shot_in_flight
             .zip(self.shooter)
             .or(self.shot_deflected);
+        let xg = self.shot_xg;
         self.end_shot();
         self.shot_deflected = turned;
+        // A turned shot keeps its expected goals for the value of its goal.
+        if turned.is_some() {
+            self.shot_xg = xg;
+        }
     }
 
     /// Player `i` lost a header and the ball glanced off him. On a pass in flight the passer
@@ -561,6 +574,8 @@ impl Simulation {
                     match outcome {
                         Tackle::Win => {
                             self.tally(i, Count::TackleWon);
+                            let at = self.ball.xy();
+                            self.value_won(i, at);
                             self.mood_event(i, crate::sim::mood::MoodEvent::DuelWon);
                             self.mood_event(c, crate::sim::mood::MoodEvent::DuelLost);
                             self.gain(i, t);
@@ -628,6 +643,8 @@ impl Simulation {
                 p.gained(team, at, tick);
             }
         }
+        let at = self.ball.xy();
+        self.value_gain(i, at);
         match self.pass_in_flight.take() {
             Some(passing) if passing == team => {
                 self.summary.passes_completed[team] += 1;
@@ -638,6 +655,7 @@ impl Simulation {
             }
             Some(_) => {
                 self.tally(i, Count::Interception);
+                self.value_won(i, at);
                 #[cfg(feature = "measures")]
                 if self.measures.is_some() {
                     self.measure_action(i);

@@ -330,6 +330,8 @@ impl Simulation {
         self.ball = Ball::at(DVec2::ZERO);
         self.carrier = Some(kicker);
         self.control_since = self.tick;
+        // A kick-off opens a new spell on the ball; nobody's spell before it is judged.
+        self.value_from = Some((kicker, DVec2::ZERO));
         self.last_touch = Some(team);
         self.possession_phase = Some(team);
         self.slide_reset();
@@ -383,6 +385,9 @@ impl Simulation {
             && self.players[k].team == team
         {
             self.tally(k, crate::sim::tally::Count::Goal);
+            if from_shot {
+                self.value_goal(k, self.shot_xg);
+            }
             self.mood_event(k, crate::sim::mood::MoodEvent::Goal);
             if let Some((passer, receiver)) = self.last_pass
                 && receiver == k
@@ -1039,6 +1044,8 @@ impl Simulation {
         self.enter_phase(Phase::Live, Cause::RestartTaken);
         self.carrier = Some(dead.taker);
         self.control_since = self.tick;
+        let at = self.ball.xy();
+        self.value_gain(dead.taker, at);
         self.last_touch = Some(dead.team);
         self.possession_phase = Some(dead.team);
         self.end_acts_on_restart(dead.team);

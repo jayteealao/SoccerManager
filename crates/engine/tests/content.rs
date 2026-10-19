@@ -558,6 +558,49 @@ fn a_version_6_tuning_file_converts_to_the_goals_prevented_keeper_rating() {
     assert!(err.contains("save"), "{err}");
 }
 
+/// A version 7 tuning file (match-rating weights per goal, shot, pass, tackle, interception,
+/// block and clearance) converts to version 8 with those weights gone and an outfield player
+/// rated by the threat his actions added, at the shipped weight and base; a current file that
+/// still names a volume weight is refused.
+#[test]
+fn a_version_7_tuning_file_converts_to_the_value_added_rating() {
+    let mut v7 = shipped_tuning_json();
+    v7["schema_version"] = 7.into();
+    let rating = v7["match_rating"].as_object_mut().unwrap();
+    rating.remove("value_added").unwrap();
+    rating.insert("base".into(), 6.0.into());
+    for (key, weight) in [
+        ("goal", 1.0),
+        ("shot_on_target", 0.15),
+        ("shot_off_target", -0.05),
+        ("xg", 0.5),
+        ("pass_completed", 0.02),
+        ("pass_failed", -0.04),
+        ("tackle_won", 0.1),
+        ("interception", 0.1),
+        ("block", 0.15),
+        ("clearance", 0.05),
+    ] {
+        rating.insert(key.into(), weight.into());
+    }
+    let bytes = serde_json::to_vec(&v7).unwrap();
+    let loaded = engine::data::load_tuning_bytes(&bytes, "tuning-v7.json").unwrap();
+    assert_eq!(loaded.converted_from, Some(7));
+    let shipped = engine::data::load_tuning_bytes(
+        &serde_json::to_vec(&shipped_tuning_json()).unwrap(),
+        "tuning.json",
+    )
+    .unwrap();
+    assert_eq!(loaded.value, shipped.value);
+
+    let mut current = shipped_tuning_json();
+    current["match_rating"]["pass_completed"] = 0.02.into();
+    let err = engine::data::load_tuning_bytes(&serde_json::to_vec(&current).unwrap(), "t.json")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("pass_completed"), "{err}");
+}
+
 /// A version 3 tuning file (no state caps, body jobs, fatigue group weights or sprint cap)
 /// converts to version 4 with the values of the frozen copy, which are the shipped ones.
 #[test]

@@ -323,6 +323,10 @@ impl Writer {
                 self.u8(u8::from(t.started));
                 self.f64_at(|| format!("tallies[{team}][{s}].psxg_faced"), t.psxg_faced);
                 self.u32(t.shot_goals_conceded);
+                self.f64_at(
+                    || format!("tallies[{team}][{s}].value_added"),
+                    t.value_added,
+                );
             }
         }
     }

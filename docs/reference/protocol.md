@@ -506,7 +506,7 @@ Each entry of `ratings`:
 | Field | Type | Meaning |
 |---|---|---|
 | `player.id` | string | the player |
-| `rating` | float | his match rating, 1.0 to 10.0 with one decimal: 6.0 plus what he did, weighted by the `match_rating` tuning |
+| `rating` | float | his match rating, 1.0 to 10.0 with one decimal: the base plus the threat his actions added (for a keeper, the goals he prevented), his cards, his side's goals conceded and the result, weighted by the `match_rating` tuning |
 
 ### walk-on
 

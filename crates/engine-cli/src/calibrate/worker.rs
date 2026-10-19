@@ -299,11 +299,45 @@ fn write_probe(
             })
         })
         .collect();
+    // Every player who played, with the counts the rating read before it moved to the threat
+    // added, so a run can compare the two ratings on the same matches.
+    let players: Vec<_> = sim
+        .match_ratings()
+        .into_iter()
+        .map(|r| {
+            let t = &sim.tallies()[r.team][r.squad];
+            serde_json::json!({
+                "team": r.team,
+                "position": teams[r.team].squad[r.squad].position,
+                "rating": r.rating(),
+                "ticks": t.ticks_played,
+                "value_added": t.value_added,
+                "goals": t.goals,
+                "shots": t.shots,
+                "shots_on_target": t.shots_on_target,
+                "xg": t.xg,
+                "passes": t.passes,
+                "passes_completed": t.passes_completed,
+                "tackles_won": t.tackles_won,
+                "interceptions": t.interceptions,
+                "blocks": t.blocks,
+                "clearances": t.clearances,
+                "fouls": t.fouls,
+                "yellow": t.yellow,
+                "red": t.red,
+                "conceded": t.conceded,
+                "psxg_faced": t.psxg_faced,
+                "shot_goals_conceded": t.shot_goals_conceded,
+            })
+        })
+        .collect();
     let line = serde_json::json!({
         "seed": seed,
         "goals": summary.goals,
         "goals_no_shot": summary.goals_no_shot,
         "keepers": keepers,
+        "players": players,
+        "ticks": sim.tick(),
         "shots": summary.shots,
         "clearances": summary.clearances,
         "probe": probe,

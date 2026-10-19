@@ -850,6 +850,10 @@ pub struct Simulation {
     /// The last completed open-play pass as `(passer, receiver)` while his side keeps the
     /// ball, for the assist. Every dead ball clears it, like `last_kicker`.
     pub(crate) last_pass: Option<(usize, usize)>,
+    /// The open spell on the ball for the match rating's value added: the player whose spell it
+    /// is and where it began ([`tally`]). A shot closes it; the next player to take the ball
+    /// closes it for him.
+    pub(crate) value_from: Option<(usize, DVec2)>,
     /// Each side's bench mood: the side's mood events and the drift with a swing of 1, which
     /// a substitute enters at ([`mood`]).
     pub(crate) bench_mood: [f64; 2],
@@ -1069,6 +1073,7 @@ impl Simulation {
             shot_xg: 0.0,
             shooter: None,
             last_pass: None,
+            value_from: None,
             bench_mood: [0.0; 2],
             walk_on_due: false,
             chances: Vec::new(),
@@ -1929,6 +1934,7 @@ impl Simulation {
                 self.summary.xg[team] += xg;
                 self.record_chance(team, xg);
                 self.tally_xg(c, xg);
+                self.value_shot(c, from, xg);
                 #[cfg(feature = "sensitivity")]
                 if self.probe.is_some() {
                     self.probe_shot(c, team, from, attack_x, penalty, xg);

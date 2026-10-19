@@ -76,7 +76,10 @@
 //!   game state; and each player stores, after his yellow cards, whether he took a knock (a
 //!   byte). Version 21 adds the goals with no shot to the summary, after the restart kicks, and to each
 //!   player's tally, after whether he started, the post-shot expected goals he faced as keeper
-//!   (f64) and the goals from shots he conceded (u32).
+//!   (f64) and the goals from shots he conceded (u32). Version 22 adds the match rating's value
+//!   added: after the restart taker, the open spell on the ball (the player's index, then where
+//!   it began as two f64), and to each player's tally, after the shot goals he conceded, the
+//!   threat his actions added (f64).
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -109,7 +112,7 @@ use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::Tuning;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 21;
+pub const VERSION: u16 = 22;
 /// The earliest layout version the strict reader still reads: version 8 has no matchday mark.
 const FIRST_READ: u16 = 8;
 /// The released builds from before the snapshot recorded its engine version: the full commit
@@ -869,6 +872,11 @@ fn encode(sim: &Simulation, w: &mut Writer) {
     w.index(sim.last_touch);
     w.u8(u8::from(sim.keeper_beaten));
     w.index(sim.restart_taker);
+    w.index(sim.value_from.map(|(player, _)| player));
+    w.v2_at(
+        &String::new,
+        sim.value_from.map_or(DVec2::ZERO, |(_, at)| at),
+    );
     w.summary(&sim.summary);
     w.tallies(&sim.tallies);
     for (t, team) in sim.teams.iter().enumerate() {
@@ -1203,6 +1211,9 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
     sim.last_touch = r.index(2)?;
     sim.keeper_beaten = r.bool()?;
     sim.restart_taker = r.index(PLAYERS)?;
+    let spell = r.index(PLAYERS)?;
+    let at = r.v2()?;
+    sim.value_from = spell.map(|player| (player, at));
     sim.summary = decode_summary(r)?;
     for t in 0..2 {
         let n = r.u32()? as usize;
@@ -1486,6 +1497,7 @@ fn decode_tally(r: &mut Reader<'_>) -> Decoded<crate::sim::tally::PlayerTally> {
         started: r.bool()?,
         psxg_faced: r.f64()?,
         shot_goals_conceded: r.u32()?,
+        value_added: r.f64()?,
     })
 }
 
@@ -1589,7 +1601,7 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 21"),
+                .contains("unknown version 1; this build reads 22"),
             "{err}"
         );
     }

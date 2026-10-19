@@ -17,7 +17,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | File | Schema version | Holds |
 |---|---|---|
 | `attributes.json` | 4 | The attribute schema: 30 to 50 names in four groups, each with its job in play (two of them hidden values), the stage tables that blend them for every action, and the skill gates |
-| `tuning.json` | 6 | Engine constants, the attribute contract with the state caps, the body jobs and consistency, decision weights, injury rates, the generator's world spread, fatigue curve, stream buffer, the hidden values' words and the match rating |
+| `tuning.json` | 8 | Engine constants, the attribute contract with the state caps, the body jobs and consistency, decision weights, injury rates, the generator's world spread, fatigue curve, stream buffer, the hidden values' words and the match rating |
 | `rules/default.json` | 4 | The rule pack |
 | `tactics.json` | 8 | Ten formations, mentalities, team instructions, roles, duties, the AI manager's settings, and the tactical primitives: what each setting of the tactics board moves, where play reads it, how its levels were fitted to real teams, and the frame of game-state rules and player instructions |
 | `signatures.json` | 3 | The real-team signature table: for each statistic a tactical primitive moves, its spread across real club seasons, the five quintiles and each quintile's median. No match reads it; the primitives harness fits the levels to it. Written by `engine-cli signatures`, never by hand |
@@ -31,7 +31,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `sensitivity.json` | 1 | The sensitivity rules: one rule per attribute job and per body job, the thresholds they are judged by, the size of a run, and the five-match rule. Only the sensitivity run and the rules stage of a change run read it; the content hash does not |
 | `gate-proof.json` | 1 | The gate proof: the broken copies of the engine that `engine-cli calibrate proof` plays, and the pass and fail rates of the last proof with the gate it measured. No match reads it; neither the content hash nor the old engine's cache key includes it |
 
-Every file starts with `"schema_version"`. A file with another version is refused, except `realism-bands.json`, which also reads versions 4, 3 and 2: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files are read in version 3 and in versions 2 and 1, and `tactics.json` in version 3 and in versions 2 and 1; an older version converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 5 and in versions 4, 3, 2 and 1, and `tuning.json` in version 7 and in versions 6, 5, 4, 3 and 2; an older version converts on load with the contract tables of the build that introduced it, copies compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. A version 2 tuning file converts through version 3; a version 3 file gains the state caps, the body jobs, `fatigue.group_weights` and `fatigue.sprint_cap` from the second copy; a version 4 file gains `engine.contract.consistency`, `hidden`, `match_rating` and `generator.world.hidden` from the third copy; a version 5 file's `engine.decision.pressure` becomes both `shot_under_pressure` and `takeon_under_pressure`, with its value; a version 6 file's `match_rating.save` goes and `match_rating.goals_prevented` takes 1.0, the shipped weight. A version 1 to 4 attribute file converts to version 5 the same way (see [Version 4 files](#version-4-files) and [Version 2 files](#version-2-files)). Any other version is refused the same way.
+Every file starts with `"schema_version"`. A file with another version is refused, except `realism-bands.json`, which also reads versions 4, 3 and 2: `content refused: rules rules/default.json: schema_version 7; this build reads 4`. Team files are read in version 3 and in versions 2 and 1, and `tactics.json` in version 3 and in versions 2 and 1; an older version converts on load (see [teams/*.json](#teamsjson) and [tactics.json](#tacticsjson)). `attributes.json` is read in version 5 and in versions 4, 3, 2 and 1, and `tuning.json` in version 8 and in versions 7, 6, 5, 4, 3 and 2; an older version converts on load with the contract tables of the build that introduced it, copies compiled into it that tuning the shipped files never changes, so a replay that embeds an old file plays the same way however the shipped tables move. A version 2 tuning file converts through version 3; a version 3 file gains the state caps, the body jobs, `fatigue.group_weights` and `fatigue.sprint_cap` from the second copy; a version 4 file gains `engine.contract.consistency`, `hidden`, `match_rating` and `generator.world.hidden` from the third copy; a version 5 file's `engine.decision.pressure` becomes both `shot_under_pressure` and `takeon_under_pressure`, with its value; a version 6 file's `match_rating.save` goes and `match_rating.goals_prevented` takes 1.0, the shipped weight; a version 7 file's match-rating weights per goal, shot, expected goal, pass, tackle, interception, block and clearance go, and `match_rating.value_added` takes 5.1 and `match_rating.base` 6.66, the shipped values. A version 1 to 4 attribute file converts to version 5 the same way (see [Version 4 files](#version-4-files) and [Version 2 files](#version-2-files)). Any other version is refused the same way.
 
 ## attributes.json
 
@@ -446,14 +446,19 @@ A schema whose hidden attribute has no word bands, or bands not falling from the
 
 ### match_rating
 
-Every player who played gets a match rating at full time, from 1.0 to 10.0 with one decimal: `base` plus each count of what he did times its weight, plus the class weights below, kept to `min` to `max`.
+Every player who played gets a match rating at full time, from 1.0 to 10.0 with one decimal: `base` plus, for an outfield player, the threat his actions added times `value_added`, or for a keeper the goals he prevented times `goals_prevented`, plus his fouls and cards and the class weights below, kept to `min` to `max`. No weight counts how many passes, shots, tackles or clearances a player made.
+
+The threat added reads the real threat of a place, the same one the decisions read (`engine.decision.threat`): the expected goals a side makes within 15 seconds of having the ball there. A player's spell on the ball runs from where he takes it to where the next player takes it:
+
+- a spell that ends with a team-mate (a completed pass, or a carry and a pass) adds the threat where the team-mate takes the ball less the threat where the spell began;
+- a spell that ends with the other side (a lost ball, a cut-out pass, a ball played out) loses the threat where it began;
+- a shot adds its expected goals less the threat where his spell began, and its goal adds the rest of a goal;
+- a tackle won, an interception, a block, or a clearance of the other side's ball adds the threat the other side had at that place.
 
 | Field | Meaning | Default |
 |---|---|---|
-| base, min, max | the rating of a player who did nothing, and its bounds | 6.0, 1.0, 10.0 |
-| goal, shot_on_target, shot_off_target, xg | per goal, per shot on or off target, per expected goal of his shots | 1.0, 0.15, −0.05, 0.5 |
-| pass_completed, pass_failed | per open-play pass a team-mate controlled next (not for a keeper), and per other pass | 0.02, −0.04 |
-| tackle_won, interception, block, clearance | per ball won, pass intercepted, shot blocked, clearance (not for a keeper) | 0.1, 0.1, 0.15, 0.05 |
+| base, min, max | the rating of a player who did nothing, and its bounds | 6.66, 1.0, 10.0 |
+| value_added | for an outfield player, per expected goal of threat his actions added; with `base`, fitted so that the outfield mean and spread stay as they were with the old count weights (7.24 and 1.28 over 200 equal matches) | 5.1 |
 | goals_prevented | for a keeper, per goal he prevented: the post-shot expected goals of the shots on target he faced (each shot's chance of going in on the save line, `1 −` the save chance at its quality) less the goals from shots he conceded; a design value | 1.0 |
 | foul, yellow, red | per foul and card | −0.05, −0.5, −1.5 |
 | conceded.keeper, conceded.defender | per goal his side conceded while he played, for a keeper and a listed defender | −0.3, −0.15 |

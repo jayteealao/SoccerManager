@@ -76,6 +76,7 @@ pub const TUNING_V3: u32 = 3;
 pub const TUNING_V4: u32 = 4;
 pub const TUNING_V5: u32 = 5;
 pub const TUNING_V6: u32 = 6;
+pub const TUNING_V7: u32 = 7;
 
 /// The attribute version 2 name that version 3 renames: injury resistance (high is good)
 /// becomes injury proneness (high is bad), mirrored on the scale.
@@ -491,10 +492,7 @@ pub fn tuning_v6_to_v7(mut file: serde_json::Value) -> Result<serde_json::Value,
     let obj = file
         .as_object_mut()
         .ok_or_else(|| "the file is not an object".to_string())?;
-    obj.insert(
-        "schema_version".into(),
-        serde_json::Value::from(crate::data::TUNING_VERSION),
-    );
+    obj.insert("schema_version".into(), serde_json::Value::from(TUNING_V7));
     let rating = obj
         .get_mut("match_rating")
         .and_then(|m| m.as_object_mut())
@@ -503,6 +501,56 @@ pub fn tuning_v6_to_v7(mut file: serde_json::Value) -> Result<serde_json::Value,
     rating
         .entry("goals_prevented")
         .or_insert_with(|| serde_json::Value::from(GOALS_PREVENTED_V7));
+    Ok(file)
+}
+
+/// The match rating's weights that version 8 drops: an outfield player is rated by the threat
+/// his actions added, not by how many goals, shots, passes, tackles, interceptions, blocks and
+/// clearances he made.
+pub const RATING_VOLUME_V7: [&str; 10] = [
+    "goal",
+    "shot_on_target",
+    "shot_off_target",
+    "xg",
+    "pass_completed",
+    "pass_failed",
+    "tackle_won",
+    "interception",
+    "block",
+    "clearance",
+];
+
+/// The weight per expected goal of threat added, and the base, that a converted file takes:
+/// the shipped values when the outfield rating moved to the threat added.
+pub const VALUE_ADDED_V8: f64 = 5.1;
+pub const RATING_BASE_V8: f64 = 6.66;
+
+/// A version 7 tuning file, as JSON, in the version 8 shape: the volume weights of the match
+/// rating ([`RATING_VOLUME_V7`]) go, an outfield player is rated by the threat his actions
+/// added (`match_rating.value_added`, at [`VALUE_ADDED_V8`]), and the base takes
+/// [`RATING_BASE_V8`], which was fitted with that weight. The rating moves only the AI
+/// manager's form need of a substitution. The caller parses and validates the result as a
+/// current file.
+pub fn tuning_v7_to_v8(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert(
+        "schema_version".into(),
+        serde_json::Value::from(crate::data::TUNING_VERSION),
+    );
+    let rating = obj
+        .get_mut("match_rating")
+        .and_then(|m| m.as_object_mut())
+        .ok_or_else(|| "match_rating is missing".to_string())?;
+    for key in RATING_VOLUME_V7 {
+        rating.remove(key);
+    }
+    rating.insert(
+        "value_added".into(),
+        serde_json::Value::from(VALUE_ADDED_V8),
+    );
+    rating.insert("base".into(), serde_json::Value::from(RATING_BASE_V8));
     Ok(file)
 }
 
