@@ -100,7 +100,14 @@
       "perceive": 0.1,
       "clear_worth": 2.0,
       "shot_skill": 0.37,
-      "keeper_read": 0.4
+      "keeper_read": 0.4,
+      "threat": {
+        "intercept": -3.161,
+        "distance_coef": -0.04525,
+        "angle_coef": 2.633,
+        "angle2_coef": -0.787,
+        "unit": 0.0159
+      }
     },
     "injury_per_tackle": 0.004,
     "injury_per_minute": 0.0002,

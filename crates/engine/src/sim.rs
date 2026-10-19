@@ -662,6 +662,32 @@ pub fn shot_xg(from: DVec2, attack_x: f64, t: &XgTuning, pitch: &Pitch) -> f64 {
     1.0 / (1.0 + math::exp(-z))
 }
 
+/// The real threat of the place `at` for a team attacking `attack_x` on `pitch`, in the
+/// threat's unit ([`crate::tuning::ThreatTuning`]): the logistic of the distance to the goal
+/// centre and the angle the goal mouth subtends (with its square), read as [`shot_xg`] reads a shot's place,
+/// over `t.unit`. 0 with the threat off.
+pub fn place_threat(
+    at: DVec2,
+    attack_x: f64,
+    t: &crate::tuning::ThreatTuning,
+    pitch: &Pitch,
+) -> f64 {
+    if !t.on() {
+        return 0.0;
+    }
+    let x = pitch.half_length() * attack_x;
+    let half = GOAL_WIDTH / 2.0;
+    let a = DVec2::new(x, half) - at;
+    let b = DVec2::new(x, -half) - at;
+    let angle = math::atan2(a.perp_dot(b), a.dot(b)).abs();
+    let distance = (pitch.goal_centre(attack_x) - at).length();
+    let z = t.intercept
+        + t.distance_coef * distance
+        + t.angle_coef * angle
+        + t.angle2_coef * angle * angle;
+    1.0 / (1.0 + math::exp(-z)) / t.unit
+}
+
 /// The chance `p` of a shot from `from` (the [`shot_xg`] of model `t`) with the keeper
 /// `keeper_off` metres off his goal line: from outside the penalty area it moves by
 /// `t.keeper_coef x (min(keeper_off, 16.5) - depth)` in log-odds, `depth` the keeper's place

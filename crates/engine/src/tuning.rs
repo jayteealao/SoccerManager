@@ -533,8 +533,9 @@ pub struct XgTuning {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct DecisionWeights {
-    /// A pass: forward progress (-1 to 1 over 40 m), the open lane (up to 6 m), the space
-    /// around the receiver (up to 8 m), and the distance (up to 45 m, a cost).
+    /// A pass: forward progress (-1 to 1 over 40 m; read only with the threat off, see
+    /// [`ThreatTuning`]), the open lane (up to 6 m), the space around the receiver (up to
+    /// 8 m), and the distance (up to 45 m, a cost).
     #[garde(range(min = -5.0, max = 5.0))]
     pub progress: f64,
     #[garde(range(min = -5.0, max = 5.0))]
@@ -664,7 +665,8 @@ pub struct DecisionWeights {
     /// supporting): `teamwork_bonus · (2 · share − 1)`, 0 at rating 10.
     #[garde(range(min = 0.0, max = 5.0))]
     pub teamwork_bonus: f64,
-    /// The loss danger's weight at the attacked goal line: an option's loss term reads
+    /// The loss danger's weight at the attacked goal line, read only with the threat off
+    /// ([`ThreatTuning`], which reads the real threat of the place instead): an option's loss term reads
     /// `(1 - s)^2 + attack_danger s^2` at the place the ball would be lost (`s` 0 at the
     /// side's own goal line, 1 at the attacked one). The first term is the threat a loss hands
     /// the opponent, the second the threat the side gives up. Set from the StatsBomb open data
@@ -728,10 +730,81 @@ pub struct DecisionWeights {
     #[serde(default)]
     #[garde(range(min = 0.0, max = 2.0))]
     pub keeper_read: f64,
+    /// The real threat of a place ([`ThreatTuning`]): with it on, every option is valued by
+    /// the threat of the place it reaches against the threat of the carrier's place, on the
+    /// loss danger's scale, and the danger's second term reads the same threat. An older file
+    /// without it loads it off.
+    #[serde(default = "ThreatTuning::off")]
+    #[garde(dive)]
+    pub threat: ThreatTuning,
 }
 
 fn default_attack_danger() -> f64 {
     1.0
+}
+
+/// The real threat of a place (named mechanism): the open-play xG a side makes within 15 s of
+/// having the ball there, `1 / (1 + exp(-(intercept + distance_coef d + angle_coef a +
+/// angle2_coef a^2)))`, `d` the distance in metres to the centre of the goal the side attacks
+/// and `a` the angle in radians its mouth subtends, read as a shot's xG reads its place; the
+/// square makes it level off near the goal mouth (within 6 m, 0.204 real and fitted), where a
+/// straight angle term would run to 0.89 on the goal line. Fitted on the StatsBomb open data
+/// (five men's leagues, 2015/16, 1,551 matches): 2.30 million receptions and carry ends, a
+/// fractional logistic fit (central box 0.091 real, 0.088 fitted; wide box 0.039 and 0.032;
+/// wide final third 0.011 and 0.012; middle third 0.0049 and 0.0050). Read in units of
+/// `unit` xG, the threat a loss at the side's own goal line hands the opponent (the loss
+/// danger's unit, 0.0159 in the same data), so the threat and the chance of losing the ball
+/// share one scale.
+///
+/// With it on (`unit` above 0): a pass is worth the threat at its receiver, a dribble the
+/// threat at the end of its carry, a clearance the threat where it lands and a shot its read
+/// chance, each less the threat at the carrier's place (a hold keeps it); the danger of a loss
+/// at a place is `(1 - s)^2` plus the threat there, the threat the side gives up (a shot's
+/// loss reads the same danger at the shooter's place). Each value counts with the default
+/// mentality's loss weight (`TeamPlan::value_weight`), so at the default the value an option
+/// reaches and its chance of losing the ball count alike. `decision.progress` and
+/// `decision.attack_danger` are read only with it off.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct ThreatTuning {
+    #[garde(range(min = -10.0, max = 10.0))]
+    pub intercept: f64,
+    #[garde(range(min = -2.0, max = 0.0))]
+    pub distance_coef: f64,
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub angle_coef: f64,
+    #[garde(range(min = -10.0, max = 0.0))]
+    pub angle2_coef: f64,
+    /// The unit, in xG; 0 turns the threat off.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub unit: f64,
+}
+
+impl ThreatTuning {
+    /// The shipped fit.
+    pub fn shipped() -> Self {
+        Self {
+            intercept: -3.161,
+            distance_coef: -0.04525,
+            angle_coef: 2.633,
+            angle2_coef: -0.787,
+            unit: 0.0159,
+        }
+    }
+
+    /// Off, with the shipped fit kept: an older file plays with the progress term and the
+    /// even danger shape.
+    pub fn off() -> Self {
+        Self {
+            unit: 0.0,
+            ..Self::shipped()
+        }
+    }
+
+    /// `true` when the threat values options.
+    pub fn on(&self) -> bool {
+        self.unit > 0.0
+    }
 }
 
 /// Seconds between the ball going dead and the restart, per restart kind. Play restarts
@@ -859,6 +932,7 @@ impl Default for Tuning {
                 clear_worth: 2.0,
                 shot_skill: 0.37,
                 keeper_read: 0.4,
+                threat: ThreatTuning::shipped(),
             },
             injury_per_tackle: INJURY_PER_TACKLE,
             injury_per_minute: INJURY_PER_MINUTE,

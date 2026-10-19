@@ -1062,7 +1062,8 @@ impl DecisionModule for DecisionV1 {
         // hands the opponent the threat of that place near the side's own goal and gives up
         // the side's own threat near the goal it attacks; each grows with the square of the
         // nearness to its goal, the second weighted by `decision.attack_danger`, so the danger
-        // is 1 at the own goal line and `attack_danger` at the attacked one. A clearance's
+        // is 1 at the own goal line and `attack_danger` at the attacked one (with the threat
+        // off; with it on, the second is the real threat of the place, below). A clearance's
         // failure chance is `decision.clear_loss`, at the place it lands. A pass, a dribble and
         // a shot pay the chance of losing the ball ([`LossChance`]) to the defenders they meet,
         // read from the contests the engine resolves, each at its own place: a pass the
@@ -1074,9 +1075,29 @@ impl DecisionModule for DecisionV1 {
         // forward and holds it less; 0 outside it and at the default.
         let counter = counter_weight(view, team, carrier.slot);
         let half = view.pitch().half_length();
-        let danger = |at: DVec2| {
+        // The real threat of a place (named mechanism, `decision.threat`): the xG a side makes
+        // within 15 s of having the ball there, in the loss danger's unit; 0 everywhere with
+        // it off. Every option is valued by the threat of the place it reaches less the
+        // threat here (a hold keeps it): a pass at its receiver, a dribble at its carry's end,
+        // a clearance where it lands, a shot by its read chance. With it on the danger's second
+        // term, the threat the side gives up, is the same threat, so the value and the chance
+        // of losing the ball share one scale; with it off the danger is the even shape
+        // weighted by `decision.attack_danger` and a pass is worth its progress.
+        let threat_on = w.threat.on();
+        let threat =
+            |at: DVec2| crate::sim::place_threat(at, side.attack_x, &w.threat, view.pitch());
+        let here = threat(carrier.pos);
+        let handed = |at: DVec2| {
             let s = ((at.x * side.attack_x + half) / (2.0 * half)).clamp(0.0, 1.0);
-            (1.0 - s) * (1.0 - s) + w.attack_danger * s * s
+            (1.0 - s) * (1.0 - s)
+        };
+        let danger = |at: DVec2| {
+            if threat_on {
+                handed(at) + threat(at)
+            } else {
+                let s = ((at.x * side.attack_x + half) / (2.0 * half)).clamp(0.0, 1.0);
+                handed(at) + w.attack_danger * s * s
+            }
         };
         let loss = |fail: f64, at: DVec2| plan.loss_weight * fail.clamp(0.0, 1.0) * danger(at);
 
@@ -1244,9 +1265,15 @@ impl DecisionModule for DecisionV1 {
                     contract::curve::shifted(seen, w.shot_skill * (2.0 * strike - 1.0), 0.0, 1.0);
                 let mut lost = blocks;
                 lost.meet(w.shot_loss * (1.0 - p), danger(carrier.pos));
-                -w.shot_distance * crate::sim::central_distance(p, &t.xg, view.pitch())
+                let score = -w.shot_distance * crate::sim::central_distance(p, &t.xg, view.pitch())
                     / reach.max(1.0)
-                    - plan.loss_weight * lost.cost()
+                    - plan.loss_weight * lost.cost();
+                // Its value: the chance he reads, against the threat of his place.
+                if threat_on {
+                    score + plan.value_weight * (p / w.threat.unit - here)
+                } else {
+                    score
+                }
             };
             let base = w.shot_base
                 + w.shot_lane * ((lane.min(5.0) - 2.5) / 2.5)
@@ -1460,7 +1487,14 @@ impl DecisionModule for DecisionV1 {
             } else {
                 0.0
             };
-            let score = (w.progress + role.progress) * progress
+            // Its value: with the threat on, the threat at the receiver against the threat
+            // here, and the role's own weight on progress; with it off, its progress.
+            let value = if threat_on {
+                plan.value_weight * (threat(mate.pos) - here) + role.progress * progress
+            } else {
+                (w.progress + role.progress) * progress
+            };
+            let score = value
                 + skill(Stage::PASS_SEE) * forward
                 + w.teamwork_bonus * stages.skill(kind.choose())
                 + w.lane * (lane / 6.0)
@@ -1519,7 +1553,7 @@ impl DecisionModule for DecisionV1 {
             crate::measures::probe::note_pass(
                 pass_count,
                 [
-                    (w.progress + role.progress) * progress,
+                    value,
                     skill(Stage::PASS_SEE) * forward,
                     w.teamwork_bonus * stages.skill(kind.choose()),
                     w.lane * (lane / 6.0),
@@ -1580,6 +1614,8 @@ impl DecisionModule for DecisionV1 {
                 + role.dribble
                 + lone_dribble
                 - plan.loss_weight * dribble_loss(view, c, nearest_opp_pos, danger).cost()
+                // Its value: the threat at the end of its carry against the threat here.
+                + plan.value_weight * (threat(dribble_end(view, c, nearest_opp_pos)) - here)
                 // The side's dribbling weight (hook `dribble.weight`), 0 at its default.
                 + plan.dribble
                 - keep_cost(
@@ -1643,7 +1679,9 @@ impl DecisionModule for DecisionV1 {
             w.clear + (removed - 1.0) * w.clear_worth + removed * w.clear_pressure * near
         } - carry
             // A clearance gives the ball away where it lands.
-            - loss(w.clear_loss, clear_landing(carrier.pos, attack, half));
+            - loss(w.clear_loss, clear_landing(carrier.pos, attack, half))
+            // Its value: the threat where it lands against the threat here.
+            + plan.value_weight * (threat(clear_landing(carrier.pos, attack, half)) - here);
         // The carrier's read of his options (`decision.perceive`): its spread falls as his
         // vision, decisions and composure (the pass see, choose and pressure stages) rise.
         let perceive = w.perceive * (1.5 - read_share);
@@ -2171,6 +2209,18 @@ pub(crate) fn dribble_line(
 pub(crate) const DRIBBLE_AHEAD_M: f64 = 8.0;
 pub(crate) const DRIBBLE_DRIFT_M: f64 = 4.0;
 
+/// The place player `c`'s dribble carries him to, as he reads it before he picks it: along
+/// his [`dribble_line`], [`DRIBBLE_AHEAD_M`] toward goal and [`DRIBBLE_DRIFT_M`] away from the
+/// opponent nearest him at `nearest_opp_pos`, inside the pitch.
+pub(crate) fn dribble_end(view: &MatchView<'_>, c: usize, nearest_opp_pos: DVec2) -> DVec2 {
+    let carrier = view.player(c);
+    let (dir_goal, perp, side) = dribble_line(view, c, nearest_opp_pos);
+    view.pitch().clamp(
+        carrier.pos + dir_goal * DRIBBLE_AHEAD_M + perp * (DRIBBLE_DRIFT_M * side),
+        1.0,
+    )
+}
+
 /// A shooter's read share for the keeper's place: the mean of his vision, decisions and
 /// anticipation shares (the pass see, pass choose and intercept see stages).
 pub(crate) fn keeper_read_share(stages: &contract::Skills<'_>) -> f64 {
@@ -2259,11 +2309,7 @@ pub(crate) fn dribble_loss(
     let t = view.tuning();
     let carrier = view.player(c);
     let attack_x = view.attack_x(carrier.team);
-    let (dir_goal, perp, side) = dribble_line(view, c, nearest_opp_pos);
-    let end = view.pitch().clamp(
-        carrier.pos + dir_goal * DRIBBLE_AHEAD_M + perp * (DRIBBLE_DRIFT_M * side),
-        1.0,
-    );
+    let end = dribble_end(view, c, nearest_opp_pos);
     let line = end - carrier.pos;
     let length = line.length();
     let speed = carrier.max_speed();
@@ -3271,7 +3317,9 @@ mod tests {
         }
     }
 
-    /// The options of [`scene_tuned`] with every loss weight at `weight`.
+    /// The options of [`scene_tuned`] with every loss weight at `weight` and the threat off:
+    /// with it on, the default mentality's loss weight also weighs each option's value, so
+    /// these scenes, which read the loss terms alone, turn it off.
     fn scene_at_loss_weight(
         weight: f64,
         x: f64,
@@ -3286,6 +3334,7 @@ mod tests {
         let tactics = crate::tactics::Tactics::defaults(&schema);
         scene_tuned(&schema, tactics, x, mates, &[], |w| {
             w.perceive = 0.0;
+            w.threat = crate::tuning::ThreatTuning::off();
             tune(w);
         })
     }
@@ -3310,11 +3359,13 @@ mod tests {
         assert_eq!(shot(0.0, 40.0, 0.724), shot(0.0, 40.0, 0.0));
         assert!(shot(1.0, 40.0, 0.724) < shot(0.0, 40.0, 0.724));
         assert!(shot(2.0, 40.0, 0.724) < shot(1.0, 40.0, 0.724));
-        // With an even danger shape, so the place weighs alike at both distances.
+        // With an even danger shape (the threat off), so the place weighs alike at both
+        // distances.
         let even = |weight: f64, x: f64| {
             scene_at_loss_weight(weight, x, &[], |w| {
                 w.shot_loss = 0.724;
                 w.attack_danger = 1.0;
+                w.threat = crate::tuning::ThreatTuning::off();
             })
             .shot
             .expect("a shot is an option")
@@ -3328,8 +3379,8 @@ mod tests {
         );
     }
 
-    /// The attacked end weighs `attack_danger`: the same loss near the goal the side attacks
-    /// costs more as `attack_danger` rises.
+    /// With the threat off, the attacked end weighs `attack_danger`: the same loss near the
+    /// goal the side attacks costs more as `attack_danger` rises.
     #[test]
     fn a_loss_near_the_attacked_goal_costs_attack_danger_times_more() {
         let cost = |k: f64| {
@@ -3337,6 +3388,7 @@ mod tests {
                 scene_at_loss_weight(weight, 44.0, &[], |w| {
                     w.shot_loss = 0.724;
                     w.attack_danger = k;
+                    w.threat = crate::tuning::ThreatTuning::off();
                 })
                 .shot
                 .expect("a shot is an option")
@@ -3787,6 +3839,87 @@ mod tests {
                 pass(far, touch)
             );
         }
+    }
+
+    /// The threat value, both ways: from outside the area a free team-mate in the box is worth
+    /// the pass, the carrier's top option, though a defender near the lane gives it some
+    /// chance of losing the ball; the same team-mate marked is not, and his pass scores below
+    /// the free one's.
+    #[test]
+    fn a_free_team_mate_in_the_box_is_worth_a_pass_and_a_marked_one_is_not() {
+        let content = crate::data::test_support::shipped_content();
+        let schema = &content.tactics;
+        let receiver = DVec2::new(44.0, 2.0);
+        let options = |marker: Option<DVec2>| {
+            let tactics = crate::tactics::Tactics::defaults(schema);
+            // A deep defender keeps the receiver onside; another stands 2.5 m off the
+            // lane's middle, near enough to cut the pass out now and then.
+            let mut opps = vec![(15, DVec2::new(50.0, -25.0)), (14, DVec2::new(34.5, 4.5))];
+            if let Some(m) = marker {
+                opps.push((13, m));
+            }
+            scene_tuned(schema, tactics, 25.0, &[(10, receiver)], &opps, |w| {
+                w.perceive = 0.0;
+            })
+        };
+        let top = |o: &Options| {
+            [o.shot, o.dribble, o.hold, Some(o.clear)]
+                .into_iter()
+                .flatten()
+                .fold(f64::NEG_INFINITY, f64::max)
+        };
+        let free = options(None);
+        let (free_pass, j) = free.pass.expect("the free team-mate in the box is a pass");
+        assert_eq!(j, 10);
+        assert!(
+            free_pass > top(&free),
+            "free: pass {free_pass} against the best other option {}",
+            top(&free)
+        );
+        let marked = options(Some(receiver + DVec2::new(1.0, 0.0)));
+        let marked_pass = marked.pass.map_or(f64::NEG_INFINITY, |(s, _)| s);
+        assert!(
+            marked_pass < top(&marked) && marked_pass < free_pass - 0.5,
+            "marked: pass {marked_pass} against the best other option {} and the free pass \
+             {free_pass}",
+            top(&marked)
+        );
+    }
+
+    /// The real threat of a place: the central box is worth more than the wide box, which is
+    /// worth more than the edge of the area out wide, then midfield, then the own third; it
+    /// levels off at the goal mouth, and is 0 with the threat off.
+    #[test]
+    fn the_threat_of_a_place_falls_away_from_the_goal_and_levels_off_at_its_mouth() {
+        let t = crate::tuning::Tuning::default();
+        let pitch = crate::pitch::Pitch::default();
+        let at = |x: f64, y: f64| {
+            crate::sim::place_threat(DVec2::new(x, y), 1.0, &t.decision.threat, &pitch)
+        };
+        let central_box = at(42.0, 0.0);
+        let wide_box = at(42.0, 15.0);
+        let wide_final = at(30.0, 28.0);
+        let midfield = at(0.0, 0.0);
+        let own_third = at(-35.0, 0.0);
+        assert!(
+            central_box > wide_box
+                && wide_box > wide_final
+                && wide_final > midfield
+                && midfield > own_third
+                && own_third > 0.0,
+            "{central_box} {wide_box} {wide_final} {midfield} {own_third}"
+        );
+        // In units of the loss danger: about 0.09 xG in the central box is about 5.5 units.
+        assert!((4.0..8.0).contains(&central_box), "{central_box}");
+        // The goal mouth: no higher than the threat 2 m out, well under a goal.
+        assert!(
+            at(52.4, 0.0) <= at(50.5, 0.0) + 1e-9 && at(52.4, 0.0) < 0.3 / t.decision.threat.unit
+        );
+        let off = crate::tuning::ThreatTuning::off();
+        assert_eq!(
+            crate::sim::place_threat(DVec2::new(42.0, 0.0), 1.0, &off, &pitch),
+            0.0
+        );
     }
 
     /// The chance of losing the ball, a dribble: a free run still dribbles (the dribble is the
