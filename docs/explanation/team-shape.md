@@ -90,7 +90,11 @@ The stands come back with the later work on off-ball decisions: the table is see
 
 ## Styles and the AI manager's pick
 
-`content/styles.json` holds eight named styles: possession, low block, high press, counter-attack, direct, wing play, gegenpress and park the bus. A style sets a mentality, the team instruction levels, duty hints by position, and a list of formations that suit it. It also names two or three statistics that should show it, each with a direction: a possession side should have more of the ball, a low block should concede less expected goals.
+`content/styles.json` holds eight named styles: possession, low block, high press, counter-attack, direct, wing play, gegenpress and park the bus. A style is a preset of tactical primitives: a list of primitive settings in the same form as a game-state rule's actions (the mentality is one of them), duty hints by position, a list of formations that suit it, and its own game-state rules. It also names two or three statistics that should show it, each with a direction: a possession side should have more of the ball, a low block should concede less expected goals.
+
+Each preset sets only the primitives that the style's common football definition names, and leaves every other primitive at its default. A possession side plays slowly and short, builds up from the back and works the ball into the box; a high press presses high with a high line and turns on its triggers; park the bus defends deep and compact with every outfield player on a defend duty. The table was written from these definitions once, before any gate result, and no level is changed afterwards to win a gate. A gate that fails sends the cause to a general mechanism, never to a preset.
+
+No engine code names a style. The engine reads only primitive levels, through the same hooks that a person's settings and rules use, so a style is something the content says, not something the engine knows. A source test reads the eight names from the shipped styles file and fails if any engine source file contains one. The same preset is a starting point for a person: a person who picks it gets the same levels and rules and can change any of them.
 
 ### The staff advice
 
@@ -120,6 +124,16 @@ The real substitutions are the benchmark. With three substitutions in three wind
 `engine-cli calibrate --suite styles` plays every ordered pairing of two different styles, with the same squad on both sides, and a formation drawn from each style's list. It reports each style's points per match, the styles it loses to clearly, and a dominance flag: a style with no clear loss, or with more than a fifth of all points, would be a style with no weakness. It also flags an identity statistic that a style does not move in its direction. Every change run plays a small sample, one match per ordered pairing, and reports it beside the verdict; the suite judges no band. See [Run the styles suite](../how-to/calibration.md#run-the-styles-suite).
 
 The suite tests presets only. The AI adapts during a match only through its style's rules, and it does not remember which styles worked; that comes with later work on the AI manager.
+
+### The styles gate
+
+The suite ends with one gate over the whole table. It passes when no style is dominant, every style moves each of its identity statistics in its direction, every ordered pairing averages between 4 and 40 shots a match (both sides together), the running checker finds no rule broken and every planned match played. The gate reports; it does not change the exit code or any band. It is measured at 200 matches per ordered pairing, so that every pair of styles meets 400 times and a clear loss can show.
+
+The shipped presets do not pass it yet. One style takes more than a fifth of all the points, some styles do not show their identity statistics against the pooled mean (for example a low block that does not concede less expected goals than the other styles), and many pairings average more than 40 shots a match. These are recorded with their numbers and left to the work that owns their causes: the engine's shot volume, the empty box (team-mates seldom arrive in the box, which waits for the off-ball runs), and closing down and jockeying, which set how a side defends. No preset, rate or bar was changed to pass the gate.
+
+### What the gates check together
+
+The end of this work also checks that the stronger of two sides wins at least half its matches, that the core realism bands are no worse than before the tactical primitives (or are recorded as misses), that the match checker finds no violation, and that every primitive moves its signature statistic in its direction. Where a band is worse, the record names it with its numbers and its cause.
 
 ## Tactical primitives
 
@@ -171,7 +185,16 @@ Two style pairings play far more shots than real matches: a high press against i
 
 Mentality used to add a flat bonus to shots and forward passes. It is now only how much the side fears losing the ball: a pass, a dribble or a hold loses the mentality's loss weight times its chance of failing times the danger of losing the ball there. A ball lost near the own goal hands the opponent a chance, and one lost near the other goal gives up the side's own, so the danger is highest at either end. An attacking mentality fears a loss least, and its weight can go below 0, so it seeks risk. The mentality also sets how many players stay behind the ball. Where the block stands belongs to the line height, which moves the block only while the other team has the ball.
 
-A shot carries no loss term. A missed shot hands the ball back at the opponent's own goal line, where it threatens nothing, and the shot spends the side's threat instead of losing it. Counted as a loss at the shooter's feet, the term held back every shot but the closest ones, so the shots left were twice as good and goals rose by half.
+### How the carrier weighs an option
+
+Every option the carrier has (a pass, a dribble, a shot, a clearance or holding the ball) is weighed on one scale, the expected goals of the real threat of a place: the chance that a side scores within 15 seconds of having the ball there, fitted on StatsBomb open data. It is highest in the middle of the box and levels off at the goal mouth.
+
+- **What an option is worth** is the threat of the place it reaches less the threat where the ball is now: a pass at its receiver, a dribble where its carry ends, a clearance where it lands. A shot is worth the shooter's own read of its chance. The value counts at half weight, the weight at which a balanced mentality fears a loss, so at the default the value and the risk weigh alike.
+- **What it risks** is its chance of losing the ball, read from the contests play itself resolves: for a pass, the cut-out of each opponent who can reach its line and the receiver's touch and tackle on arrival; for a dribble, the take-on of each goal-side defender near its line and the tackle of anyone who can reach its end; for a shot, each block on its path and the chance that the ball comes back. Each loss is charged at the danger of its place: the threat the other side gains there, plus the side's own threat given up.
+- **A shot has no fixed range.** A good long shooter considers shots from farther out, the cost of a far shot keeps it for when nothing better is open, and the shooter judges the keeper's distance off his line with an error set by his vision, decisions and anticipation and widened by the pressure he feels.
+- **A clearance** is worth the danger it removes from the side's own goal, so far from that goal it is worth almost nothing.
+
+Mentality acts only through how much a loss counts, so an attacking side takes the riskier option more often, never through a bonus of its own.
 
 ## Game-state rules and player instructions
 

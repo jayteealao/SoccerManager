@@ -189,6 +189,22 @@ To remove an attribute that the engine does not require, remove it from `attribu
 
 The schema holds 30 to 50 attributes. The engine requires 4 attributes by name, because play reads them directly: `pace`, `technique`, `agility`, and `consistency`. It refuses a schema without one of them. The sensitivity rules refuse a job that has no rule: add a rule for the new job to `sensitivity.json` before you run them.
 
+## Make or change a style preset
+
+A style in `styles.json` is a preset of tactical primitives. To change one, or to add one, work in your own content folder:
+
+1. Open `styles.json` and find the style, or copy one as a starting point and give it a new name.
+2. Edit its `primitives` list. Each entry is `{ "primitive": <name>, "level": <name> }`: a primitive of `tactics.json` and one of its levels, choices or states (`on` or `off`). Include one `mentality` entry. A primitive you leave out stays at its default. Set only what the style's football definition names; a preset that sets everything hides which settings make the style.
+3. Edit its `duties` (a duty hint by position), `formations` (one or more formations of `tactics.json`), `identity` (two or three statistics, each with the direction the style should move it) and `rules` (one to six game-state rules, in the form a person writes; see [the data-file reference](../reference/data-files.md#stylesjson)).
+4. Load the content to check the file. A primitive, level, formation, duty or rule condition the engine does not know, a primitive set twice, a preset without a mentality, and a preset with no rules or more than six are refused by name:
+
+   ```bash
+   engine-cli --content-dir my-content calibrate --suite styles --seed 9 --matches 1 --out runs/styles-check
+   ```
+
+5. Play the styles gate on your folder, as in [Run the styles gate](calibration.md#run-the-styles-gate), and read whether your style shows its identity and whether any style now dominates.
+
+No engine code names a style, so a new style needs no build. The computer manager picks among every style in the file by its staff advice; to keep a style out of its pick, remove it from the file.
 ## Compare two models with a flag
 
 Use a feature flag to decide between the current model and a candidate on the realism bands.

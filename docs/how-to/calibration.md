@@ -271,6 +271,29 @@ target/release/engine-cli calibrate --suite styles --style-pairing "counter_atta
 
 Each pairing then prints its shots and goals a match, and a `home:` and an `away:` line: per side, its shots, goals, xG per shot and shot distance, its possessions and turnovers, where it loses the ball (its own, the middle or the final third), its fast breaks and the time from a regain to a shot, its pressures and what it does in the 5 to 10 seconds after a loss, its offsides, and where the ball spends its time. The same figures are in `calib.styles.pairings[].probe`. To find what drives a pairing, change one setting of one style in a copy of the content folder (`--content-dir`) and play the pairing again: the other figures stay on the same matches.
 
+### Run the styles gate
+
+The gate judges the whole table at once. Run it at 200 matches per ordered pairing, the size at which every pair of styles has played 400 matches and a clear loss can show (11,200 matches):
+
+```bash
+target/release/engine-cli calibrate --suite styles --seed 9 --matches 200 --out runs/styles-gate-9
+```
+
+The table on standard error ends with one line:
+
+```text
+styles gate: pass
+```
+
+or, when an item fails, `styles gate: fail: ` and each failing item. Read each item this way:
+
+- a dominant style: it loses clearly to no style, or takes more than 20 percent of the points;
+- an identity flag (`style: stat`): the style's sides do not move that statistic in its direction;
+- a pairing outside the range (`home v away` and its shots a match): both sides together average under 4 or over 40 shots a match;
+- violations: the running checker found a rule broken in one of the suite's matches;
+- unplayed: a planned match did not play.
+
+The same items are in `calib.styles.gate` of `report.json`, with `pass`. The gate never changes the exit code. To find the cause of a failing item, play the pairings it names with `--style-pairing` in a `measures` build, as above, and change one setting at a time in a copy of the content folder. A change to a preset that only makes the gate pass is not a fix: look for the mechanism that makes the pairing play unlike a real match.
 Every change run (`--base` or `--base-binary`) also plays a small sample: one match per ordered pairing, 56 matches, on the changed engine only, after its verdict. The same table prints on standard error, the report holds it under `calib.styles`, and `calib.stages.styles` gives its time. With one match per ordered pairing, a style shows a clear loss only when it loses both matches against another, so the sample flags styles as dominant by chance: read it for the pairings' goals and shots and the rule violations, not for the flags. The sample never changes the verdict.
 
 ## Accept a not-sure band
