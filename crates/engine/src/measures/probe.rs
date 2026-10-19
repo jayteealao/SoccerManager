@@ -14,6 +14,9 @@
 //! - Balls into the box: each kick that is not a shot or a clearance, by its kind
 //!   ([`BOX_KINDS`]), and those that the next player to gain the ball gains inside the
 //!   penalty area the kicker's side attacks, as a StatsBomb pass ends there.
+//! - Passes into the box at the final-third decisions ([`BoxOptions`]): how often a team-mate
+//!   is in or arriving in the box, the candidates to him, their kinds and terms, and the best
+//!   box pass's score against the top option's.
 //!
 //! Every count is per side, home first.
 
@@ -80,6 +83,35 @@ pub struct FinalThird {
     pub lane_open: u32,
 }
 
+/// The pass kinds a box pass is counted by, in [`BoxOptions::kinds`] order.
+pub const BOX_PASS_KINDS: [&str; 4] = ["pass", "chip", "cross", "keeper"];
+
+/// The carrier's passes into the box he attacks, at his final-third decisions: to a team-mate
+/// in that penalty area, or arriving in it (his place one second on, at his velocity, inside
+/// it). Each pass goes to the team-mate's place at the kick: the engine has no through ball.
+#[derive(Debug, Clone, Copy, PartialEq, Default, serde::Serialize)]
+pub struct BoxOptions {
+    /// Decisions with an outfield team-mate in the box, and those with none in it but one
+    /// arriving.
+    pub mate_in: u32,
+    pub mate_arriving: u32,
+    /// Team-mates in or arriving in the box within passing range, and those of them with a
+    /// lane open.
+    pub in_range: u32,
+    pub lane_open: u32,
+    /// The drafted passes to them, by kind ([`BOX_PASS_KINDS`]), and the sums of their terms
+    /// ([`PASS_TERMS`]).
+    pub kinds: [u32; 4],
+    pub terms: [f64; 17],
+    /// Decisions with a box pass drafted; the sum of the best box pass's plain score minus the
+    /// top option's; those where a box pass is the best pass; and those where the top choice
+    /// is that pass.
+    pub with_pass: u32,
+    pub gap: f64,
+    pub best_pass: u32,
+    pub top: u32,
+}
+
 /// The decision probe ([module docs](self)).
 #[derive(Debug, Clone, PartialEq, Default, serde::Serialize)]
 pub struct Probe {
@@ -93,6 +125,8 @@ pub struct Probe {
     /// Per side and box kind ([`BOX_KINDS`]): the kicks, and those gained inside the box.
     pub box_kicks: [[u32; 3]; 2],
     pub into_box: [[u32; 3]; 2],
+    /// Per side: the carrier's passes into the box at his final-third decisions.
+    pub box_options: [BoxOptions; 2],
     #[serde(skip)]
     box_pending: Option<(usize, usize)>,
     #[serde(skip)]
@@ -194,6 +228,50 @@ impl Probe {
             }
         }
     }
+
+    /// The box passes of the same final-third decision of `team`: whether a team-mate is in
+    /// the box (`mate`: 0 none, 1 arriving, 2 in it), the draft's notes, the plain value of
+    /// each drafted pass (`values`, draft order), the best pass's draft index, the top
+    /// option's plain score, and whether the top choice is the pass.
+    pub(crate) fn box_options(
+        &mut self,
+        team: usize,
+        mate: u8,
+        notes: &DraftNotes,
+        values: &[f64],
+        best: Option<usize>,
+        (top, top_is_pass): (f64, bool),
+    ) {
+        let b = &mut self.box_options[team];
+        match mate {
+            2 => b.mate_in += 1,
+            1 => b.mate_arriving += 1,
+            _ => {}
+        }
+        b.in_range += notes.box_in_range;
+        b.lane_open += notes.box_lane_open;
+        let mut best_box: Option<f64> = None;
+        for (k, &v) in values.iter().enumerate() {
+            if !notes.boxed[k] {
+                continue;
+            }
+            b.kinds[usize::from(notes.kinds[k]).min(3)] += 1;
+            for (sum, t) in b.terms.iter_mut().zip(notes.terms[k]) {
+                *sum += t;
+            }
+            best_box = Some(best_box.map_or(v, |m: f64| m.max(v)));
+        }
+        if let Some(v) = best_box {
+            b.with_pass += 1;
+            b.gap += v - top;
+            if let Some(k) = best
+                && notes.boxed[k]
+            {
+                b.best_pass += 1;
+                b.top += u32::from(top_is_pass);
+            }
+        }
+    }
 }
 
 /// The pass terms of the last option draft, noted by the decision module as it scores each
@@ -204,6 +282,13 @@ pub struct DraftNotes {
     pub terms: [[f64; 17]; crate::modules::MATES],
     pub in_range: u32,
     pub lane_open: u32,
+    /// Per drafted pass: whether its team-mate is in or arriving in the attacked box, and its
+    /// kind ([`BOX_PASS_KINDS`]).
+    pub boxed: [bool; crate::modules::MATES],
+    pub kinds: [u8; crate::modules::MATES],
+    /// The team-mates in or arriving in the box within range, and those with a lane open.
+    pub box_in_range: u32,
+    pub box_lane_open: u32,
 }
 
 impl Default for DraftNotes {
@@ -212,6 +297,10 @@ impl Default for DraftNotes {
             terms: [[0.0; 17]; crate::modules::MATES],
             in_range: 0,
             lane_open: 0,
+            boxed: [false; crate::modules::MATES],
+            kinds: [0; crate::modules::MATES],
+            box_in_range: 0,
+            box_lane_open: 0,
         }
     }
 }
@@ -225,19 +314,28 @@ pub(crate) fn start_draft() {
     NOTES.with(|n| *n.borrow_mut() = DraftNotes::default());
 }
 
-/// A team-mate in passing range; `open` when his lane passes the narrowest lane.
-pub(crate) fn note_candidate(open: bool) {
+/// A team-mate in passing range; `open` when his lane passes the narrowest lane, `boxed`
+/// when he is in or arriving in the attacked box.
+pub(crate) fn note_candidate(open: bool, boxed: bool) {
     NOTES.with(|n| {
         let mut n = n.borrow_mut();
         n.in_range += 1;
         n.lane_open += u32::from(open);
+        n.box_in_range += u32::from(boxed);
+        n.box_lane_open += u32::from(boxed && open);
     });
 }
 
-/// The terms of the pass at draft index `k`; the last term is the rest of `score`.
-pub(crate) fn note_pass(k: usize, mut terms: [f64; 17], score: f64) {
+/// The terms of the pass at draft index `k`, its kind and whether its team-mate is in or
+/// arriving in the box; the last term is the rest of `score`.
+pub(crate) fn note_pass(k: usize, mut terms: [f64; 17], score: f64, boxed: bool, kind: u8) {
     terms[16] = score - terms[..16].iter().sum::<f64>();
-    NOTES.with(|n| n.borrow_mut().terms[k] = terms);
+    NOTES.with(|n| {
+        let mut n = n.borrow_mut();
+        n.terms[k] = terms;
+        n.boxed[k] = boxed;
+        n.kinds[k] = kind;
+    });
 }
 
 /// The notes of the last draft.
@@ -309,14 +407,39 @@ mod tests {
     #[test]
     fn the_noted_pass_terms_add_up_to_its_score() {
         start_draft();
-        note_candidate(true);
-        note_candidate(false);
+        note_candidate(true, false);
+        note_candidate(false, true);
         let mut terms = [0.0; 17];
         terms[0] = 0.5;
         terms[13] = -0.25;
-        note_pass(0, terms, 1.0);
+        note_pass(0, terms, 1.0, false, 0);
         let n = notes();
         assert_eq!((n.in_range, n.lane_open), (2, 1));
+        assert_eq!((n.box_in_range, n.box_lane_open), (1, 0));
         assert!((n.terms[0].iter().sum::<f64>() - 1.0).abs() < 1e-12);
+    }
+
+    /// A box pass counts by its kind and terms; the gap reads the best box pass against the
+    /// top option, and the top counts only when that pass is the best and the choice.
+    #[test]
+    fn a_box_pass_counts_its_kind_terms_and_gap_to_the_top_option() {
+        start_draft();
+        note_candidate(true, true);
+        note_candidate(true, false);
+        let mut terms = [0.0; 17];
+        terms[0] = 0.25;
+        note_pass(0, terms, 0.25, true, 2);
+        note_pass(1, [0.0; 17], 0.5, false, 0);
+        let n = notes();
+        let mut p = Probe::default();
+        p.box_options(0, 2, &n, &[0.25, 0.5], Some(1), (0.75, true));
+        p.box_options(0, 1, &n, &[0.25, 0.5], Some(0), (0.25, true));
+        let b = p.box_options[0];
+        assert_eq!((b.mate_in, b.mate_arriving), (1, 1));
+        assert_eq!((b.in_range, b.lane_open), (2, 2));
+        assert_eq!(b.kinds, [0, 0, 2, 0]);
+        assert!((b.terms[0] - 0.5).abs() < 1e-12);
+        assert_eq!((b.with_pass, b.best_pass, b.top), (2, 1, 1));
+        assert!((b.gap - (-0.5)).abs() < 1e-12);
     }
 }

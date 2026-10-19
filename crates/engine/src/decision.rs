@@ -1314,8 +1314,15 @@ impl DecisionModule for DecisionV1 {
                     marker = Some((gap, k));
                 }
             }
+            // The decision probe: a team-mate in the box he attacks, or arriving in it (his
+            // place one second on).
             #[cfg(feature = "measures")]
-            crate::measures::probe::note_candidate(lane >= w.min_lane);
+            let boxed = view.pitch().in_penalty_area(mate.pos, side.attack_x)
+                || view
+                    .pitch()
+                    .in_penalty_area(mate.pos + mate.vel, side.attack_x);
+            #[cfg(feature = "measures")]
+            crate::measures::probe::note_candidate(lane >= w.min_lane, boxed);
             if lane < w.min_lane {
                 continue;
             }
@@ -1531,6 +1538,13 @@ impl DecisionModule for DecisionV1 {
                     0.0,
                 ],
                 score,
+                boxed,
+                match kind {
+                    PassKind::Pass => 0,
+                    PassKind::Chip => 1,
+                    PassKind::Cross => 2,
+                    PassKind::Throw | PassKind::Kick => 3,
+                },
             );
             passes[pass_count] = (j, score);
             pass_pick[pass_count] = recycle;

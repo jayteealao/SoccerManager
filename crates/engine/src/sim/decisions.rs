@@ -337,6 +337,7 @@ impl Simulation {
             }
         }
         let mut final_third = None;
+        let mut box_pass = None;
         let off_plan = {
             let view = self.view();
             let draft = decision.options(&view, c);
@@ -368,14 +369,57 @@ impl Simulation {
                     Choice::Hold => 3,
                     Choice::Clear => 4,
                 };
+                let scores = [
+                    plain.pass.map(|p| p.0),
+                    plain.shot,
+                    plain.dribble,
+                    plain.hold,
+                    Some(plain.clear),
+                ];
+                // The box passes: a team-mate in the box he attacks (2) or arriving in it (1),
+                // each drafted pass's plain value, and the best pass's draft index.
+                let mate = view
+                    .players()
+                    .iter()
+                    .enumerate()
+                    .filter(|&(j, p)| {
+                        p.team == team && j != c && j != view.keeper(team) && p.active()
+                    })
+                    .map(|(_, p)| {
+                        if pitch.in_penalty_area(p.pos, attack_x) {
+                            2u8
+                        } else if pitch.in_penalty_area(p.pos + p.vel, attack_x) {
+                            1
+                        } else {
+                            0
+                        }
+                    })
+                    .max()
+                    .unwrap_or(0);
+                let values: Vec<f64> = draft.passes[..draft.pass_count]
+                    .iter()
+                    .zip(&draft.pass_pick)
+                    .map(|(&(_, s), &pick)| s - pick - draft.carry)
+                    .collect();
+                let best = plain.pass.and_then(|(_, j)| {
+                    draft.passes[..draft.pass_count]
+                        .iter()
+                        .position(|&(m, _)| m == j)
+                });
+                let top_score = scores
+                    .iter()
+                    .flatten()
+                    .fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+                box_pass = Some((
+                    mate,
+                    notes,
+                    values,
+                    best,
+                    top_score,
+                    top_choice == Choice::Pass,
+                ));
                 final_third = Some((
-                    [
-                        plain.pass.map(|p| p.0),
-                        plain.shot,
-                        plain.dribble,
-                        plain.hold,
-                        Some(plain.clear),
-                    ],
+                    scores,
                     kind(top_choice),
                     terms,
                     (notes.in_range, notes.lane_open),
@@ -396,6 +440,10 @@ impl Simulation {
             m.carrying(team, c, choice == Choice::Dribble, ahead, beside);
             if let Some((scores, top, terms, candidates)) = final_third {
                 m.probe.final_third(team, scores, top, terms, candidates);
+            }
+            if let Some((mate, notes, values, best, top, is_pass)) = box_pass {
+                m.probe
+                    .box_options(team, mate, &notes, &values, best, (top, is_pass));
             }
         }
     }
