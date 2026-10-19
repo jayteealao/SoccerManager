@@ -89,7 +89,9 @@ fn engine_events(config: engine::MatchConfig) -> (Vec<engine::EngineEvent>, Stre
 /// that brings a second yellow since every option was charged its chance of losing the ball
 /// (seed 15 until then, which brought the straight red too; seed 2 until the styles became
 /// presets of primitives), and seed 17 between the same clubs, the lowest that brings a
-/// straight red now, with the refused substitution brought by the knockout match
+/// straight red now, and the knockout seed 14, the lowest that brings a refused change since a
+/// shooter read the keeper's place with his attributes (the knockout match brought it until
+/// then)
 /// (by the other streams until a kick stayed on its way from its kicker; seed 1 until opponents walked round the restart spot; seed 4, which brought both, until
 /// tempo became patience and the mentality an appetite for risk). Until the AI
 /// sides started in the style their staff picks the knockout match was seed 1 and the
@@ -121,6 +123,10 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
         "the knockout match reached a shoot-out with a scored kick"
     );
     streams.push(("knockout seed 19".into(), (events, rules)));
+    let refused = engine::MatchConfig::new(14, 90, &content, [&a, &b])
+        .unwrap()
+        .with_knockout();
+    streams.push(("knockout seed 14".into(), engine_events(refused)));
     let league = engine::data::generate_league(1, 2, &content);
     let generated = engine::MatchConfig::new(172, 90, &content, [&league[0], &league[1]]).unwrap();
     streams.push(("generated seed 172".into(), engine_events(generated)));
