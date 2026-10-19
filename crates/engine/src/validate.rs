@@ -374,7 +374,7 @@ impl Validator {
 
     /// The validator of records that start while play is stopped, as a match resumed from a
     /// snapshot taken at a stoppage does: the ball-rest rule counts no rest until the ball
-    /// first moves after its restart record. placed is 	rue when that record came before
+    /// first moves after its restart record. `placed` is `true` when that record came before
     /// the first record.
     pub fn starting_in_stoppage(mut self, placed: bool) -> Self {
         self.rest_at_start = BallRest::dead(placed);
