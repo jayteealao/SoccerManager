@@ -27,8 +27,9 @@ pub use crate::tactics::planned::{PlannedChange, PlannedWhat};
 use crate::trace::TraceRecord;
 
 /// The version of the gate's file layout and report. Version 2 follows state inventory
-/// version 2: a change to the inventory needs a higher gate schema.
-pub const GATE_SCHEMA: u16 = 7;
+/// version 2: a change to the inventory needs a higher gate schema. Version 8 moves the
+/// knockout fixture to the lowest seed that still ends in a shoot-out.
+pub const GATE_SCHEMA: u16 = 8;
 /// The version of the state inventory the hashes are computed over. Version 5 added the
 /// player as a person: each player's mood, each bench's mood, the trait acts, the override
 /// event, and the shot, pass, carry and chase state the new choices of play read. Version 6
@@ -166,9 +167,11 @@ pub const SEEDS: [u64; 20] = [
 ];
 
 /// The seed of the knockout fixture: the lowest seed from 1 to 10,000 whose knockout match
-/// with the sample script pack ends in a penalty shoot-out on the engine the golden file was
-/// first written with. A later result change keeps it and regenerates the hashes.
-pub const KNOCKOUT_SEED: u64 = 2;
+/// with the sample script pack ends in a penalty shoot-out. A later result change keeps it and
+/// regenerates the hashes, unless the match no longer reaches a shoot-out; then the seed moves
+/// to the lowest one that does on that engine. Seed 2 held until the value-added rating
+/// changed the AI's substitutions.
+pub const KNOCKOUT_SEED: u64 = 1;
 
 /// The script pack the knockout fixture runs.
 pub const KNOCKOUT_PACK: &str = "sample";

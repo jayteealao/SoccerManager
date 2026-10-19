@@ -699,13 +699,15 @@ pub fn note_points(seen: &mut std::collections::BTreeSet<Point>, records: &[Trac
 /// `crates/engine/tests/trace.rs` that forces it and checks its record. The shipped teams
 /// carry no traits, so no gate match meets an override's moment. Since the player as a
 /// person changed play, the gate matches reach an offside. Since the AI sides start in the
-/// style their staff picks, no gate match has a change the rule pack refuses.
+/// style their staff picks, no gate match has a change the rule pack refuses. Since the
+/// value-added rating changed the AI's substitutions, no gate match has a sending-off.
 #[cfg(feature = "scenario")]
 pub const SCENE_ONLY: &[Point] = &[
     Point::CrossClear,
     Point::Abandoned,
     Point::TraitOverride,
     Point::ChangeRejected,
+    Point::SendOff,
 ];
 
 /// Checks the partition: the points the gate matches reached plus [`SCENE_ONLY`] are
