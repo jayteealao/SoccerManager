@@ -1,0 +1,28 @@
+{
+  "refusal": "vibes is not a signature statistic",
+  "primitive": {
+    "name": "planted",
+    "kind": "graded",
+    "levels": "instructions.tempo",
+    "default": "normal",
+    "inputs": [
+      {
+        "input": "patience",
+        "hook": "pass.recycle"
+      }
+    ],
+    "signature": [
+      {
+        "stat": "vibes",
+        "direction": "up"
+      }
+    ],
+    "data": {
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England"
+      ],
+      "row": "tempo"
+    }
+  }
+}

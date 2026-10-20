@@ -6,8 +6,8 @@
 //! A strong trait can also override an instruction it goes against. At a moment of play (a
 //! release of the ball, the start of a carry, a new opposing carrier, his side gaining the
 //! ball, a loose ball near a keeper), when the player carries the trait strong, his team holds
-//! the conflicting instruction for him, he is under pressure (an active opponent within
-//! [`crate::contract::PRESSED_M`]) or his mood is at or below `traits.low_mood`, and the
+//! the conflicting instruction for him, he is pressed (his pressure intensity passes the
+//! threshold of [`crate::pressure`]) or his mood is at or below `traits.low_mood`, and the
 //! trait's choice differs from the one play took, one draw on his `trait_override` key below
 //! the trait's chance makes the trait's choice win. Nothing else enters: no count of earlier
 //! overrides, no time since the last one, no phase of play, no score or minute test. An

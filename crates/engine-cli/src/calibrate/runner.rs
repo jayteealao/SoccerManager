@@ -506,6 +506,8 @@ fn play_unit(
                     commentary: u.commentary,
                     teams: &teams,
                     formations,
+                    tactics: None,
+                    game_state: None,
                     red_card,
                     key: keyed.key,
                     seed,

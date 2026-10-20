@@ -14,6 +14,7 @@ use crate::contract::states::GROUP_COUNT;
 use crate::contract::{self, Gates, Stage, StageValues, stages::Blend};
 use crate::data::attributes::{AttributeSchema, MAX_ATTRIBUTES};
 use crate::math::DVec2;
+use crate::pace::Pace;
 use crate::rating::{MIN_TENTHS, Rating};
 use crate::tuning::Tuning;
 
@@ -76,6 +77,14 @@ pub struct Derived {
     pub knobs: Knobs,
     /// The skill gates.
     pub gates: Gates,
+    /// His work rate as a share from 0 to 1: how often an URGENT job of his gets a sprint.
+    pub work_share: f64,
+    /// The mean share of his determination and professionalism: how a tired player saves
+    /// energy ([`crate::pace`]).
+    pub tired_mix: f64,
+    /// The mean share of his decisions and flair: how often he restarts quickly when the rule
+    /// allows it ([`crate::rules::restart::quick_chance`]).
+    pub quick_share: f64,
     /// The skills that act on an occasion without leading a stage: flair, determination,
     /// eccentricity.
     pub occasion: contract::OccasionSkills,
@@ -90,10 +99,18 @@ pub struct Knobs {
     pub receive: f64,
     /// His reach to a loose ball and how far ahead he reads a run (intercept see).
     pub intercept: f64,
-    /// How far he presses from (press choose).
+    /// How far he presses from: his work rate alone, on the press strength and spread
+    /// ([`Blend::press_effort_share`]). How well he presses (his aim) is the press choose
+    /// stage, which positioning leads.
     pub press: f64,
-    /// How closely he keeps his place out of possession (shape execute).
+    /// How closely he keeps his place, in and out of possession (shape execute).
     pub shape: f64,
+    /// How far the cover defender leads a carrier's run, and how closely a back-line player
+    /// steps up or drops with his line (cover execute).
+    pub cover: f64,
+    /// Who takes a recovery run first when goal-side cover is missing (recovery run execute);
+    /// the stage's share sets how often the run is a sprint.
+    pub recovery_run: f64,
     /// His reach to block a shot (block execute).
     pub block: f64,
     /// How high he reaches in the air (aerial reach execute).
@@ -115,6 +132,8 @@ impl Knobs {
         intercept: 1.0,
         press: 1.0,
         shape: 1.0,
+        cover: 1.0,
+        recovery_run: 1.0,
         block: 1.0,
         aerial_reach: 1.0,
         claim_reach: 1.0,
@@ -180,6 +199,8 @@ impl Derived {
             }
         };
         let aerial_reach = knob(A::AerialReach, Stage::AERIAL_REACH_EXECUTE);
+        let (work_share, tired_mix) = blend.pace_shares(a);
+        let quick_share = blend.quick_share(a);
         let max_accel = c.accel.anchor * knob(A::Sprint, Stage::SPRINT_EXECUTE);
         // Agility owns stopping: the turn factor scales the braking anchor. With no hooks a
         // player brakes with his acceleration, as before.
@@ -199,8 +220,13 @@ impl Derived {
             knobs: Knobs {
                 receive: knob(A::Receive, Stage::RECEIVE_EXECUTE),
                 intercept: knob(A::Intercept, Stage::INTERCEPT_SEE),
-                press: knob(A::Press, Stage::PRESS_CHOOSE),
+                press: contract::factor(
+                    c.actions.of(A::Press).spread(),
+                    blend.press_effort_share(a, c),
+                ),
                 shape: knob(A::Shape, Stage::SHAPE_EXECUTE),
+                cover: knob(A::Cover, Stage::COVER_EXECUTE),
+                recovery_run: knob(A::RecoveryRun, Stage::RECOVERY_RUN_EXECUTE),
                 block: knob(A::Block, Stage::BLOCK_EXECUTE),
                 aerial_reach,
                 claim_reach: knob(A::Claim, Stage::CLAIM_EXECUTE),
@@ -215,6 +241,9 @@ impl Derived {
                 take_on_penalty: penalty(&g.take_on),
                 take_on_short: (g.take_on.technique_try - gate_drop - technique).max(0.0),
             },
+            work_share,
+            tired_mix,
+            quick_share,
             occasion,
         };
         (derived, stages)
@@ -272,11 +301,16 @@ pub struct Player {
     pub status: Status,
     /// Yellow cards shown to the player in this match.
     pub yellow: u8,
+    /// He took a knock in a tackle in this match: it changes nothing in play; the AI manager
+    /// reads it when it weighs a substitution.
+    pub knock: bool,
     /// The first tick the player may attempt a tackle again after a foul.
     pub foul_ready: u32,
     /// The first tick after a concentration lapse; until then the player holds where he
     /// stands.
     pub lapse_until: u32,
+    /// His job, its grade, and the pace steering arrives at ([`crate::pace`]).
+    pub pace: Pace,
 }
 
 impl Player {
@@ -344,8 +378,10 @@ pub(crate) mod test_support {
             facing: DVec2::X,
             status: Status::OnPitch,
             yellow: 0,
+            knock: false,
             foul_ready: 0,
             lapse_until: 0,
+            pace: Pace::OFF,
         }
     }
 }

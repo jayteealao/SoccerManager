@@ -23,8 +23,16 @@ use crate::tuning::Tuning;
 /// (`engine.contract.consistency`), the words of the hidden values (`hidden`), the match
 /// rating (`match_rating`), and the spread of the hidden values in the generator
 /// (`generator.world.hidden`); a version 4 file converts
-/// ([`crate::data::convert::tuning_v4_to_v5`]).
-pub const TUNING_VERSION: u32 = 5;
+/// ([`crate::data::convert::tuning_v4_to_v5`]). Version 6 splits the choice model's pressure
+/// weight (`engine.decision.pressure`) into the shot's and the take-on's own weights
+/// (`shot_under_pressure`, `takeon_under_pressure`); a version 5 file converts with both at
+/// its old value ([`crate::data::convert::tuning_v5_to_v6`]). Version 7 rates a keeper by
+/// the goals he prevented (`match_rating.goals_prevented`) in place of a weight per save; a
+/// version 6 file converts ([`crate::data::convert::tuning_v6_to_v7`]). Version 8 rates an
+/// outfield player by the threat his actions added (`match_rating.value_added`) in place of
+/// the weights per goal, shot, pass, tackle, interception, block and clearance; a version 7
+/// file converts ([`crate::data::convert::tuning_v7_to_v8`]).
+pub const TUNING_VERSION: u32 = 8;
 
 /// The tuning file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]

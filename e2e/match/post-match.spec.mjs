@@ -273,8 +273,13 @@ for (const skin of SKINS) {
           5 * 60_000
         );
         await waitForGrounds(page, Number.MAX_SAFE_INTEGER, 180_000);
-        // The whole match's expected goals, as the full-time screen shows them.
-        await expect(page.locator('.strip:visible')).toContainText('0.11 – 0.22');
+        // The whole match's expected goals, as the full-time screen shows them: the engine's
+        // last stats message, at two decimals, not a figure copied from one build's play.
+        const xg = await hook(page, () => window.__touchline.matchDay().stats?.['stats.xg'] ?? null);
+        expect(xg, 'a stats message reached the page by full time').not.toBeNull();
+        await expect(page.locator('.strip:visible')).toContainText(
+          `${Number(xg[0]).toFixed(2)} – ${Number(xg[1]).toFixed(2)}`
+        );
         expect(await hook(page, () => window.__touchline.report().next)).toEqual({ offered: true, ready: false });
         await expect(action(page)).toHaveText('New match');
         await expect(action(page)).toBeDisabled();

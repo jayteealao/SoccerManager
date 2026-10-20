@@ -21,6 +21,12 @@
 //! communication moved to the mental group, the new and changed stage tables, and a
 //! consistency degree per action.
 //!
+//! A version 4 attribute file takes the version 5 changes from a fifth frozen copy
+//! (`contract/frozen-v5.json`): the press stage led by positioning, the shape stage led by
+//! teamwork with concentration and consistency, the new cover and recovery-run stages, work
+//! rate's job moved to the recovery run, determination's job made an occasion, and the two new
+//! consistency degrees.
+//!
 //! A version 1 or 2 team file converts to version 3 with values from related attributes
 //! ([`team_v2_to_v3`]): each new performance attribute is the mean of the attributes it grows
 //! from ([`V3_RELATED`]), an outfield player's communication is the mean of the old mental
@@ -40,8 +46,7 @@ use crate::data::attributes::{
     ATTRIBUTES_VERSION, ActionTables, AttributeDef, AttributeSchema, Direction, Group, Job,
 };
 use crate::data::tactics::{
-    AiTuning, Duty, Formation, Instructions, Mentality, Offset, PreferredActions, Role,
-    TacticsSchema, Teammates,
+    Duty, Formation, Instructions, Offset, PreferredActions, Role, Teammates,
 };
 use crate::data::team::{
     Club, Foot, MAX_SQUAD, PlayerEntry, Position, Side, TEAM_VERSION, TeamFile,
@@ -52,16 +57,26 @@ use crate::rating::{MAX_TENTHS, MIN_TENTHS, Rating};
 /// The team file versions the converters read.
 pub const TEAM_V1: u32 = 1;
 pub const TEAM_V2: u32 = 2;
-/// The tactics file version the converter reads.
+/// The tactics file versions the converters read.
 pub const TACTICS_V1: u32 = 1;
+pub const TACTICS_V2: u32 = 2;
+pub const TACTICS_V3: u32 = 3;
+pub const TACTICS_V4: u32 = 4;
+pub const TACTICS_V5: u32 = 5;
+pub const TACTICS_V6: u32 = 6;
+pub const TACTICS_V7: u32 = 7;
 /// The attribute file versions the converters read.
 pub const ATTRIBUTES_V1: u32 = 1;
 pub const ATTRIBUTES_V2: u32 = 2;
 pub const ATTRIBUTES_V3: u32 = 3;
+pub const ATTRIBUTES_V4: u32 = 4;
 /// The tuning file versions the converters read.
 pub const TUNING_V2: u32 = 2;
 pub const TUNING_V3: u32 = 3;
 pub const TUNING_V4: u32 = 4;
+pub const TUNING_V5: u32 = 5;
+pub const TUNING_V6: u32 = 6;
+pub const TUNING_V7: u32 = 7;
 
 /// The attribute version 2 name that version 3 renames: injury resistance (high is good)
 /// becomes injury proneness (high is bad), mirrored on the scale.
@@ -266,12 +281,12 @@ struct FrozenV4 {
 
 /// A version 3 attribute file in the version 4 shape: each version 4 attribute it lacks is
 /// appended in [`V4_ADDED`] order, communication moves to the mental group, each frozen table
-/// replaces or adds its stage, and each missing consistency degree is added. The caller
-/// validates the result as a current file.
+/// replaces or adds its stage, and each missing consistency degree is added. The version 5
+/// step follows ([`attributes_v4_to_v5`]); the caller validates the result as a current file.
 pub fn attributes_v3_to_v4(mut file: AttributeSchema) -> AttributeSchema {
     let mut frozen: FrozenV4 =
         serde_json::from_str(FROZEN_V4).expect("the fourth frozen copy parses; a test checks it");
-    file.schema_version = ATTRIBUTES_VERSION;
+    file.schema_version = ATTRIBUTES_V4;
     for name in V4_ADDED {
         if file.index(name).is_none()
             && let Some(def) = frozen.attributes.remove(name)
@@ -287,6 +302,41 @@ pub fn attributes_v3_to_v4(mut file: AttributeSchema) -> AttributeSchema {
     for (action, stages) in frozen.tables {
         let tables = file.actions.entry(action).or_default();
         tables.extend(stages);
+    }
+    for (action, degree) in frozen.consistency_degrees {
+        file.consistency_degrees.entry(action).or_insert(degree);
+    }
+    file
+}
+
+/// The version 5 changes as they first shipped: the re-weighted press and shape stages, the
+/// cover and recovery-run stages, the jobs of work rate and determination, and the two new
+/// consistency degrees. Never edited: tuning the shipped file leaves it alone.
+pub const FROZEN_V5: &str = include_str!("../contract/frozen-v5.json");
+
+/// The fifth frozen copy's parts.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenV5 {
+    tables: ActionTables,
+    jobs: BTreeMap<String, Job>,
+    consistency_degrees: BTreeMap<ActionKind, f64>,
+}
+
+/// A version 4 attribute file in the version 5 shape: each frozen table replaces or adds its
+/// stage, each frozen job replaces the job of an attribute the file holds, and each missing
+/// consistency degree is added. The caller validates the result as a current file.
+pub fn attributes_v4_to_v5(mut file: AttributeSchema) -> AttributeSchema {
+    let frozen: FrozenV5 =
+        serde_json::from_str(FROZEN_V5).expect("the fifth frozen copy parses; a test checks it");
+    file.schema_version = ATTRIBUTES_VERSION;
+    for (action, stages) in frozen.tables {
+        file.actions.entry(action).or_default().extend(stages);
+    }
+    for def in &mut file.attributes {
+        if let Some(job) = frozen.jobs.get(&def.name) {
+            def.job = job.clone();
+        }
     }
     for (action, degree) in frozen.consistency_degrees {
         file.consistency_degrees.entry(action).or_insert(degree);
@@ -386,10 +436,7 @@ pub fn tuning_v4_to_v5(mut file: serde_json::Value) -> Result<serde_json::Value,
     let obj = file
         .as_object_mut()
         .ok_or_else(|| "the file is not an object".to_string())?;
-    obj.insert(
-        "schema_version".into(),
-        serde_json::Value::from(crate::data::TUNING_VERSION),
-    );
+    obj.insert("schema_version".into(), serde_json::Value::from(TUNING_V5));
     obj.insert("hidden".into(), frozen.hidden);
     obj.insert("match_rating".into(), frozen.match_rating);
     let contract = obj
@@ -408,6 +455,102 @@ pub fn tuning_v4_to_v5(mut file: serde_json::Value) -> Result<serde_json::Value,
     for (k, v) in frozen.world {
         world.insert(k, v);
     }
+    Ok(file)
+}
+
+/// A version 5 tuning file, as JSON, in the version 6 shape: the one pressure weight of the
+/// choice model (`engine.decision.pressure`) becomes the shot's and the take-on's own weights,
+/// each with the old value, so play does not change. The caller parses and validates the
+/// result as a current file.
+pub fn tuning_v5_to_v6(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert("schema_version".into(), serde_json::Value::from(TUNING_V6));
+    let decision = obj
+        .get_mut("engine")
+        .and_then(|e| e.get_mut("decision"))
+        .and_then(|d| d.as_object_mut())
+        .ok_or_else(|| "engine.decision is missing".to_string())?;
+    let pressure = decision
+        .remove("pressure")
+        .ok_or_else(|| "engine.decision.pressure is missing".to_string())?;
+    decision.insert("shot_under_pressure".into(), pressure.clone());
+    decision.insert("takeon_under_pressure".into(), pressure);
+    Ok(file)
+}
+
+/// The weight per goal a keeper prevented that a converted file takes in place of the weight
+/// per save: the shipped value when the keeper rating moved to goals prevented.
+pub const GOALS_PREVENTED_V7: f64 = 1.0;
+
+/// A version 6 tuning file, as JSON, in the version 7 shape: the match rating's weight per
+/// save (`match_rating.save`) goes, and a keeper is rated by the goals he prevented
+/// (`match_rating.goals_prevented`, at [`GOALS_PREVENTED_V7`]). The rating does not change
+/// play. The caller parses and validates the result as a current file.
+pub fn tuning_v6_to_v7(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert("schema_version".into(), serde_json::Value::from(TUNING_V7));
+    let rating = obj
+        .get_mut("match_rating")
+        .and_then(|m| m.as_object_mut())
+        .ok_or_else(|| "match_rating is missing".to_string())?;
+    rating.remove("save");
+    rating
+        .entry("goals_prevented")
+        .or_insert_with(|| serde_json::Value::from(GOALS_PREVENTED_V7));
+    Ok(file)
+}
+
+/// The match rating's weights that version 8 drops: an outfield player is rated by the threat
+/// his actions added, not by how many goals, shots, passes, tackles, interceptions, blocks and
+/// clearances he made.
+pub const RATING_VOLUME_V7: [&str; 10] = [
+    "goal",
+    "shot_on_target",
+    "shot_off_target",
+    "xg",
+    "pass_completed",
+    "pass_failed",
+    "tackle_won",
+    "interception",
+    "block",
+    "clearance",
+];
+
+/// The weight per expected goal of threat added, and the base, that a converted file takes:
+/// the shipped values when the outfield rating moved to the threat added.
+pub const VALUE_ADDED_V8: f64 = 5.1;
+pub const RATING_BASE_V8: f64 = 6.66;
+
+/// A version 7 tuning file, as JSON, in the version 8 shape: the volume weights of the match
+/// rating ([`RATING_VOLUME_V7`]) go, an outfield player is rated by the threat his actions
+/// added (`match_rating.value_added`, at [`VALUE_ADDED_V8`]), and the base takes
+/// [`RATING_BASE_V8`], which was fitted with that weight. The rating moves only the AI
+/// manager's form need of a substitution. The caller parses and validates the result as a
+/// current file.
+pub fn tuning_v7_to_v8(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert(
+        "schema_version".into(),
+        serde_json::Value::from(crate::data::TUNING_VERSION),
+    );
+    let rating = obj
+        .get_mut("match_rating")
+        .and_then(|m| m.as_object_mut())
+        .ok_or_else(|| "match_rating is missing".to_string())?;
+    for key in RATING_VOLUME_V7 {
+        rating.remove(key);
+    }
+    rating.insert(
+        "value_added".into(),
+        serde_json::Value::from(VALUE_ADDED_V8),
+    );
+    rating.insert("base".into(), serde_json::Value::from(RATING_BASE_V8));
     Ok(file)
 }
 
@@ -753,57 +896,395 @@ pub struct DutyV1 {
     pub risk: f64,
 }
 
-/// A version 1 tactics file. Everything but roles and duties has the current shape. It is
-/// checked after conversion, as a current file.
+/// A mentality in a version 1 or 2 tactics file: flat offsets on the carrier's shoot,
+/// forward-pass and hold scores in place of the loss weight.
+#[derive(Debug, Clone, PartialEq, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct MentalityV2 {
+    pub name: String,
+    pub block_depth: f64,
+    pub shoot: f64,
+    pub progress: f64,
+    pub hold: f64,
+    #[serde(default)]
+    pub rest_defence: u8,
+}
+
+/// A version 1 tactics file. Everything but roles, duties and mentalities has the version 2
+/// shape. It is checked after conversion, as a current file.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TacticsV1 {
     pub schema_version: u32,
     pub formations: Vec<Formation>,
-    pub mentalities: Vec<Mentality>,
+    pub mentalities: Vec<MentalityV2>,
     pub instructions: Instructions,
     pub roles: Vec<RoleV1>,
     pub duties: Vec<DutyV1>,
-    pub ai: AiTuning,
+    /// The AI block as the file holds it; a later conversion drops what a later version
+    /// dropped.
+    pub ai: serde_json::Value,
 }
 
-/// A version 1 tactics file in the current shape, with values that keep today's play: the
-/// role's shoot, dribble, and progress offsets become its preferred actions, its positions
-/// in and out of possession move nothing, teammates treat it as before, and every duty
-/// scales its role by 1. The caller validates the result as a current file.
-pub fn tactics_v1_to_v2(file: TacticsV1) -> TacticsSchema {
-    TacticsSchema {
-        schema_version: crate::data::tactics::TACTICS_VERSION,
-        formations: file.formations,
-        mentalities: file.mentalities,
-        instructions: file.instructions,
-        roles: file
-            .roles
-            .into_iter()
-            .map(|r| Role {
-                name: r.name,
-                positions: r.positions,
-                attributes: r.attributes,
-                in_possession: Offset::default(),
-                out_of_possession: Offset::default(),
-                preferred_actions: PreferredActions {
-                    shoot: r.shoot,
-                    dribble: r.dribble,
-                    progress: r.progress,
-                },
-                teammates: Teammates::default(),
-            })
-            .collect(),
-        duties: file
-            .duties
-            .into_iter()
-            .map(|d| Duty {
-                name: d.name,
-                depth: d.depth,
-                risk: d.risk,
-                scale: 1.0,
-            })
-            .collect(),
-        ai: file.ai,
+/// A version 1 tactics file in the version 2 shape, as JSON, with values that keep the play
+/// of version 2: the role's shoot, dribble, and progress offsets become its preferred actions,
+/// its positions in and out of possession move nothing, teammates treat it as before, and
+/// every duty scales its role by 1. [`tactics_v2_to_v3`] lifts the result.
+pub fn tactics_v1_to_v2(file: TacticsV1) -> serde_json::Value {
+    let roles: Vec<Role> = file
+        .roles
+        .into_iter()
+        .map(|r| Role {
+            name: r.name,
+            positions: r.positions,
+            attributes: r.attributes,
+            in_possession: Offset::default(),
+            out_of_possession: Offset::default(),
+            preferred_actions: PreferredActions {
+                shoot: r.shoot,
+                dribble: r.dribble,
+                progress: r.progress,
+            },
+            teammates: Teammates::default(),
+            options: Default::default(),
+        })
+        .collect();
+    let duties: Vec<Duty> = file
+        .duties
+        .into_iter()
+        .map(|d| Duty {
+            name: d.name,
+            depth: d.depth,
+            risk: d.risk,
+            scale: 1.0,
+        })
+        .collect();
+    serde_json::json!({
+        "schema_version": TACTICS_V2,
+        "formations": file.formations,
+        "mentalities": file.mentalities,
+        "instructions": file.instructions,
+        "roles": roles,
+        "duties": duties,
+        "ai": file.ai,
+    })
+}
+
+/// The copy of the version 3 additions compiled into the build: tempo's levels, the loss
+/// weight of each mentality by its place, and the primitive entries.
+pub const FROZEN_TACTICS_V3: &str = include_str!("frozen-tactics-v3.json");
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenTacticsV3 {
+    tempo: serde_json::Value,
+    loss_weight: Vec<f64>,
+    primitives: serde_json::Value,
+}
+
+/// A version 2 tactics file, as JSON, in the version 3 shape: tempo takes the five patience
+/// levels of the frozen copy, each mentality drops its block depth (the line height owns
+/// where the block stands) and its flat shoot, progress and hold offsets and takes the frozen
+/// loss weight of its place in the list (the first mentality the first
+/// weight, the last the last, the rest by their share of the way between), and the file
+/// takes the frozen primitive entries. The caller parses and checks the result as a current
+/// file.
+pub fn tactics_v2_to_v3(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let frozen: FrozenTacticsV3 = serde_json::from_str(FROZEN_TACTICS_V3)
+        .expect("the frozen tactics copy parses; a test checks it");
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert("schema_version".into(), serde_json::Value::from(TACTICS_V3));
+    obj.insert("primitives".into(), frozen.primitives);
+    obj.get_mut("instructions")
+        .and_then(|i| i.as_object_mut())
+        .ok_or_else(|| "instructions is missing".to_string())?
+        .insert("tempo".into(), frozen.tempo);
+    let mentalities = obj
+        .get_mut("mentalities")
+        .and_then(|m| m.as_array_mut())
+        .ok_or_else(|| "mentalities is missing".to_string())?;
+    let n = mentalities.len();
+    let last = frozen.loss_weight.len() - 1;
+    for (i, m) in mentalities.iter_mut().enumerate() {
+        let m = m
+            .as_object_mut()
+            .ok_or_else(|| format!("mentalities[{i}] is not an object"))?;
+        for key in ["block_depth", "shoot", "progress", "hold"] {
+            m.remove(key);
+        }
+        // The place along the list, 0 for the first and the last weight for the last.
+        let place = if n > 1 {
+            ((i * last) as f64 / (n - 1) as f64).round() as usize
+        } else {
+            last / 2
+        };
+        m.insert(
+            "loss_weight".into(),
+            serde_json::Value::from(frozen.loss_weight[place]),
+        );
     }
+    Ok(file)
+}
+
+/// The copy of the version 4 additions compiled into the build: the five levels of width and
+/// of passing directness, and the primitive entries version 4 adds.
+pub const FROZEN_TACTICS_V4: &str = include_str!("frozen-tactics-v4.json");
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenTacticsV4 {
+    width: serde_json::Value,
+    passing_directness: serde_json::Value,
+    primitives: Vec<serde_json::Value>,
+}
+
+/// A version 3 tactics file, as JSON, in the version 4 shape: width and passing directness
+/// take the five levels of the frozen copy, and the file takes each frozen primitive entry it
+/// does not hold by name. The caller parses and checks the result as a current file.
+pub fn tactics_v3_to_v4(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let frozen: FrozenTacticsV4 = serde_json::from_str(FROZEN_TACTICS_V4)
+        .expect("the frozen tactics copy parses; a test checks it");
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert("schema_version".into(), serde_json::Value::from(TACTICS_V4));
+    let instructions = obj
+        .get_mut("instructions")
+        .and_then(|i| i.as_object_mut())
+        .ok_or_else(|| "instructions is missing".to_string())?;
+    instructions.insert("width".into(), frozen.width);
+    instructions.insert("passing_directness".into(), frozen.passing_directness);
+    let primitives = obj
+        .entry("primitives")
+        .or_insert_with(|| serde_json::Value::Array(Vec::new()))
+        .as_array_mut()
+        .ok_or_else(|| "primitives is not a list".to_string())?;
+    for entry in frozen.primitives {
+        if !primitives.iter().any(|p| p["name"] == entry["name"]) {
+            primitives.push(entry);
+        }
+    }
+    Ok(file)
+}
+
+/// The tempo level names of version 5, by the names earlier files gave the same levels: the
+/// version 3 and 4 names (very direct to very patient) and the version 1 and 2 names (slower,
+/// normal, faster). A name not in the list is kept.
+const TEMPO_NAMES_V5: [(&str, &str); 8] = [
+    ("very_direct", "very_fast"),
+    ("direct", "fast"),
+    ("balanced", "normal"),
+    ("patient", "slow"),
+    ("very_patient", "very_slow"),
+    ("faster", "fast"),
+    ("normal", "normal"),
+    ("slower", "slow"),
+];
+
+fn tempo_name_v5(name: &mut serde_json::Value) {
+    if let Some(new) = name
+        .as_str()
+        .and_then(|old| TEMPO_NAMES_V5.iter().find(|(o, _)| *o == old))
+        .map(|(_, new)| *new)
+    {
+        *name = serde_json::Value::from(new);
+    }
+}
+
+/// The copy of the version 5 additions compiled into the build: the primitive entries version
+/// 5 adds (on winning the ball, on losing the ball, counter-press length).
+pub const FROZEN_TACTICS_V5: &str = include_str!("frozen-tactics-v5.json");
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenTacticsV5 {
+    primitives: Vec<serde_json::Value>,
+}
+
+/// A version 4 tactics file, as JSON, in the version 5 shape: the tempo levels take their
+/// version 5 names (very fast to very slow) in the tempo block, its default, and the default
+/// and fit records of the primitive whose levels are the tempo block, with values and order
+/// unchanged; and the file takes each frozen primitive entry it does not hold by name. The
+/// caller parses and checks the result as a current file.
+pub fn tactics_v4_to_v5(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let frozen: FrozenTacticsV5 = serde_json::from_str(FROZEN_TACTICS_V5)
+        .expect("the frozen tactics copy parses; a test checks it");
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    let primitives = obj
+        .entry("primitives")
+        .or_insert_with(|| serde_json::Value::Array(Vec::new()))
+        .as_array_mut()
+        .ok_or_else(|| "primitives is not a list".to_string())?;
+    for entry in frozen.primitives {
+        if !primitives.iter().any(|p| p["name"] == entry["name"]) {
+            primitives.push(entry);
+        }
+    }
+    obj.insert("schema_version".into(), serde_json::Value::from(TACTICS_V5));
+    let tempo = obj
+        .get_mut("instructions")
+        .and_then(|i| i.get_mut("tempo"))
+        .and_then(|t| t.as_object_mut())
+        .ok_or_else(|| "instructions.tempo is missing".to_string())?;
+    if let Some(default) = tempo.get_mut("default") {
+        tempo_name_v5(default);
+    }
+    if let Some(levels) = tempo.get_mut("levels").and_then(|l| l.as_array_mut()) {
+        for level in levels {
+            if let Some(name) = level.get_mut("name") {
+                tempo_name_v5(name);
+            }
+        }
+    }
+    if let Some(primitives) = obj.get_mut("primitives").and_then(|p| p.as_array_mut()) {
+        for entry in primitives
+            .iter_mut()
+            .filter(|p| p["levels"] == "instructions.tempo")
+        {
+            if let Some(default) = entry.get_mut("default") {
+                tempo_name_v5(default);
+            }
+            if let Some(fits) = entry.get_mut("fits").and_then(|f| f.as_array_mut()) {
+                for fit in fits {
+                    if let Some(level) = fit.get_mut("level") {
+                        tempo_name_v5(level);
+                    }
+                }
+            }
+        }
+    }
+    Ok(file)
+}
+
+/// The copy of the version 6 additions compiled into the build: the outer pressing and
+/// line-height levels and the primitive entries version 6 adds (pressing, line height, line of
+/// engagement, defensive width, force the opponent, tackling, the offside trap, stop short goal
+/// kicks and the four press triggers).
+pub const FROZEN_TACTICS_V6: &str = include_str!("frozen-tactics-v6.json");
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenTacticsV6 {
+    outer_levels: BTreeMap<String, [serde_json::Value; 2]>,
+    primitives: Vec<serde_json::Value>,
+}
+
+/// A version 5 tactics file, as JSON, in the version 6 shape: a pressing or line-height block
+/// with three levels takes the frozen lowest level before them and the frozen highest after,
+/// so its levels, their values and its default keep their names and the default plays the
+/// same; and the file takes each frozen primitive entry it does not hold by name. The caller
+/// parses and checks the result as a current file.
+pub fn tactics_v5_to_v6(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let frozen: FrozenTacticsV6 = serde_json::from_str(FROZEN_TACTICS_V6)
+        .expect("the frozen tactics copy parses; a test checks it");
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert("schema_version".into(), serde_json::Value::from(TACTICS_V6));
+    for (block, [lowest, highest]) in frozen.outer_levels {
+        let levels = obj
+            .get_mut("instructions")
+            .and_then(|i| i.get_mut(block.as_str()))
+            .and_then(|b| b.get_mut("levels"))
+            .and_then(|l| l.as_array_mut())
+            .ok_or_else(|| format!("instructions.{block}.levels is missing"))?;
+        if levels.len() == 3 {
+            levels.insert(0, lowest);
+            levels.push(highest);
+        }
+    }
+    let primitives = obj
+        .entry("primitives")
+        .or_insert_with(|| serde_json::Value::Array(Vec::new()))
+        .as_array_mut()
+        .ok_or_else(|| "primitives is not a list".to_string())?;
+    for entry in frozen.primitives {
+        if !primitives.iter().any(|p| p["name"] == entry["name"]) {
+            primitives.push(entry);
+        }
+    }
+    Ok(file)
+}
+
+/// The copy of the version 7 addition compiled into the build: the game-state block (the
+/// rule limits, the condition kinds, the run-of-play window, the take-up time and the player
+/// override list).
+pub const FROZEN_TACTICS_V7: &str = include_str!("frozen-tactics-v7.json");
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenTacticsV7 {
+    game_state: serde_json::Value,
+}
+
+/// A version 6 tactics file, as JSON, in the version 7 shape: it takes the frozen
+/// game-state block when it holds none. No level or value changes, so the file plays the
+/// same. The caller parses and checks the result as a current file.
+pub fn tactics_v6_to_v7(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let frozen: FrozenTacticsV7 = serde_json::from_str(FROZEN_TACTICS_V7)
+        .expect("the frozen tactics copy parses; a test checks it");
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert("schema_version".into(), serde_json::Value::from(TACTICS_V7));
+    obj.entry("game_state").or_insert(frozen.game_state);
+    Ok(file)
+}
+
+/// The AI fields version 8 drops: the minutes of the AI manager's own tactics changes, its
+/// check interval, and its fatigue minutes and energy.
+pub const TACTICS_V8_DROPPED_AI: [&str; 6] = [
+    "trailing_minute",
+    "leading_minute",
+    "check_interval_s",
+    "fatigue_energy",
+    "fatigue_from_minute",
+    "keep_for_injury_until_minute",
+];
+
+/// The copy of the version 8 addition compiled into the build: the AI manager's substitution
+/// weights and threshold.
+pub const FROZEN_TACTICS_V8: &str = include_str!("frozen-tactics-v8.json");
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenTacticsV8 {
+    ai_substitutions: serde_json::Value,
+    time_wasting_primitive: serde_json::Value,
+}
+
+/// A version 7 tactics file, as JSON, in the version 8 shape: the AI block loses the fields
+/// version 8 drops ([`TACTICS_V8_DROPPED_AI`]) and takes the frozen substitution block when it
+/// holds none, and the primitives take the frozen time-wasting entry when they list none. No
+/// level or value changes. The caller parses and checks the result as a current
+/// file.
+pub fn tactics_v7_to_v8(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let frozen: FrozenTacticsV8 = serde_json::from_str(FROZEN_TACTICS_V8)
+        .expect("the frozen tactics copy parses; a test checks it");
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert(
+        "schema_version".into(),
+        serde_json::Value::from(crate::data::tactics::TACTICS_VERSION),
+    );
+    let ai = obj
+        .get_mut("ai")
+        .and_then(|a| a.as_object_mut())
+        .ok_or_else(|| "ai is missing".to_string())?;
+    for field in TACTICS_V8_DROPPED_AI {
+        ai.remove(field);
+    }
+    ai.entry("substitutions").or_insert(frozen.ai_substitutions);
+    // Time wasting becomes a primitive over its instruction's two levels, last in the list.
+    if let Some(list) = obj.get_mut("primitives").and_then(|p| p.as_array_mut())
+        && !list.iter().any(|p| p["name"] == "time_wasting")
+    {
+        list.push(frozen.time_wasting_primitive);
+    }
+    Ok(file)
 }

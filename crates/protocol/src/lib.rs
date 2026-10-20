@@ -19,9 +19,10 @@ pub use frame::{Frame, TickFrame};
 pub use message::{
     Advice, AdvicePick, CancelChange, ChangeDetail, ChangeStateNote, ClientCommand, Condition,
     Confidence, DEFAULT_GROUND_LENGTH, DEFAULT_GROUND_WIDTH, GroundEvent, GroundKind,
-    GroundProgress, Hello, HiddenWord, Jump, Matchday, MatchdayFixture, PatchWire, QueueChange,
-    RatingWire, Ratings, RoleWire, RosterEntry, Seen, ServerMessage, SetLineup, SetSpeed, Side,
-    SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup, TraitWire,
+    GroundProgress, Hello, HiddenWord, Jump, LevelWire, Matchday, MatchdayFixture, PatchWire,
+    QueueChange, RatingWire, Ratings, RoleWire, RosterEntry, Seen, ServerMessage, SetLineup,
+    SetSpeed, Side, SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup, TraitWire,
+    WalkOn, WalkPathWire,
 };
 
 /// The protocol version a client must ask for. A client that asks for another version is
@@ -126,6 +127,11 @@ pub use message::{
 /// older message still reads; no field was removed and the tick frames are unchanged. A hidden
 /// value is never part of a level.
 ///
+/// The hello's `tactics` may also carry the tactics file's optional stand table (`stands`),
+/// stand-option sizes (`stand_options`), rest-defence guard (`rest_defence`), each role's
+/// `options` and each mentality's `rest_defence`. They are additive within version 6: a
+/// reader that knows none of them ignores them.
+///
 /// Version 7 sends the player as a person: a squad entry gains `player.positions` (his rating
 /// at each of the ten positions, in tenths, by code), `player.strong_foot` (`left` or
 /// `right`), `player.weaker_foot` (the weaker foot as a whole percent of the strong one),
@@ -135,7 +141,27 @@ pub use message::{
 /// each wire slot's mood now as a word key, never a number. Every added field
 /// is optional, so a protocol 6 message still reads and a reader shows the fields it lacks as
 /// unknown; no field was removed and the tick frames are unchanged.
-pub const PROTOCOL_VERSION: u16 = 7;
+///
+/// Version 8 adds the `walk-on` message: before the first tick of each half the server sends
+/// the players' walk from the tunnel to their places, which is not match time. The restart tag
+/// on a tick frame now marks the tick the ball appears at its restart spot, which can come
+/// seconds after the event that stopped play, while the ball is fetched. No field was removed
+/// and the tick frames are unchanged, so a protocol 7 replay still reads; it has no walk-on.
+///
+/// Version 9 puts every tactical primitive on the wire. `queue-change` takes two more kinds,
+/// both applied on the next tick with no stoppage: `instructions` (primitives at new levels,
+/// by name) and `game-state` (a side's rules and player instructions, whole, in the form a
+/// tactic writes them). The hello gains `styles` (the style presets the engine loaded) and a
+/// team setup `levels` (every primitive's level in the order of `tactics.primitives`);
+/// `set-lineup` gains `levels` and `game_state` for the pre-match tactic. Every added field
+/// is optional and omitted when empty, no field was removed and the tick frames are
+/// unchanged, so a protocol 8 replay still reads.
+pub const PROTOCOL_VERSION: u16 = 9;
+
+/// The protocol version before every primitive was on the wire: no `instructions` or
+/// `game-state` change, no styles in the hello and no levels in a team setup. Replay readers
+/// still read its frames.
+pub const PROTOCOL_V8: u16 = 8;
 
 /// The protocol version before ratings moved to tenths. Replay readers still read its
 /// frames; a hello of this version carries ratings on the 1 to 100 scale.
@@ -154,6 +180,10 @@ pub const PROTOCOL_V5: u16 = 5;
 /// The protocol version before the person: a squad entry carries no position ratings, feet,
 /// traits or personality. Replay readers still read its frames.
 pub const PROTOCOL_V6: u16 = 6;
+
+/// The protocol version before the walk-on: no `walk-on` message, and the restart tag on the
+/// tick the event stopped play. Replay readers still read its frames.
+pub const PROTOCOL_V7: u16 = 7;
 
 /// Errors this crate returns.
 #[derive(Debug, Error)]
@@ -284,6 +314,9 @@ pub const MESSAGES: &[MessageSpec] = &[
             "knockout",
             "ground.length",
             "ground.width",
+            "levels",
+            "game_state",
+            "styles",
         ],
     },
     MessageSpec {
@@ -328,6 +361,9 @@ pub const MESSAGES: &[MessageSpec] = &[
             "script.hook",
             "script.outcome",
             "script.detail",
+            "trait.name",
+            "trait.cause",
+            "trait.instruction",
         ],
     },
     MessageSpec {
@@ -418,6 +454,21 @@ pub const MESSAGES: &[MessageSpec] = &[
         fields: &["tick", "ratings"],
     },
     MessageSpec {
+        name: "walk-on",
+        direction: Direction::ServerToClient,
+        encoding: Encoding::JsonText,
+        fields: &[
+            "period",
+            "first_tick",
+            "speed",
+            "ticks",
+            "paths",
+            "player",
+            "from",
+            "to",
+        ],
+    },
+    MessageSpec {
         name: "ack",
         direction: Direction::ServerToClient,
         encoding: Encoding::JsonText,
@@ -470,13 +521,17 @@ pub const MESSAGES: &[MessageSpec] = &[
             "squad",
             "role",
             "duty",
+            "levels",
+            "primitive",
+            "level",
+            "game_state",
         ],
     },
     MessageSpec {
         name: "set-lineup",
         direction: Direction::ClientToServer,
         encoding: Encoding::JsonText,
-        fields: &["lineup", "bench", "patch"],
+        fields: &["lineup", "bench", "patch", "levels", "game_state"],
     },
     MessageSpec {
         name: "seen",
@@ -530,6 +585,7 @@ mod tests {
             ServerMessage::GroundEvent(_) => "ground-event",
             ServerMessage::GroundProgress(_) => "ground-progress",
             ServerMessage::Ratings(_) => "ratings",
+            ServerMessage::WalkOn(_) => "walk-on",
         }
     }
 
@@ -578,6 +634,8 @@ mod tests {
                 knockout: false,
                 ground_length: DEFAULT_GROUND_LENGTH,
                 ground_width: DEFAULT_GROUND_WIDTH,
+                game_state: None,
+                styles: None,
             })),
             ServerMessage::Event(Box::new(MatchEvent::play(
                 "",
@@ -658,6 +716,13 @@ mod tests {
                 tick: 0,
                 ratings: Vec::new(),
             }),
+            ServerMessage::WalkOn(WalkOn {
+                period: 0,
+                first_tick: 0,
+                speed: 0.0,
+                ticks: 0,
+                paths: Vec::new(),
+            }),
         ]
     }
 
@@ -674,6 +739,8 @@ mod tests {
                 lineup: Vec::new(),
                 bench: Vec::new(),
                 patch: None,
+                game_state: None,
+                levels: Vec::new(),
             }),
             ClientCommand::Seen(Seen { tick: 0 }),
             ClientCommand::CancelChange(CancelChange {

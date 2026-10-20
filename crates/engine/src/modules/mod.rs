@@ -23,7 +23,7 @@ pub mod viewer;
 
 use std::fmt;
 
-use crate::ai::{AiCode, AiState, Setup};
+use crate::ai::{AiCode, Setup};
 use crate::ball::Ball;
 use crate::data::Loaded;
 use crate::data::attributes::AttributeSchema;
@@ -173,6 +173,21 @@ pub trait PreMatchModule: Send + Sync + 'static {
         tactics: &TacticsSchema,
         attrs: &AttributeSchema,
     ) -> Setup;
+    /// The tactics an AI-managed `team` (`side` 0 home of the match with `seed`) starts with
+    /// from the staff advice on the named `styles`, with the picked style's game-state rules
+    /// and player instructions, or `None` to keep its setup. The advice
+    /// draws from its own seeded generator, never a match stream, and nothing keeps it.
+    fn advise(
+        &self,
+        _team: &Team,
+        _styles: &crate::data::styles::Styles,
+        _tactics: &TacticsSchema,
+        _attrs: &AttributeSchema,
+        _seed: u64,
+        _side: usize,
+    ) -> Option<(Tactics, crate::tactics::rules::GameState)> {
+        None
+    }
 }
 
 /// What happens when a period's time, added time included, has run out.
@@ -223,19 +238,30 @@ pub trait ClockModule: Send + Sync + 'static {
     fn shootout_decided(&self, view: &MatchView<'_>, scores: [u32; 2], taken: [u32; 2]) -> bool;
 }
 
-/// Restarts and dead balls: the taker, the wait, where each player stands while the ball
-/// is dead, when the restart may be taken, and the kick-off positions. It draws nothing.
+/// Restarts and dead balls: the taker, the wait, where each player stands and what job he
+/// has while the ball is dead, when the visible steps are done, and the kick-off positions.
+/// The loop draws the `RestartWait` key for [`RestartsModule::extra_ticks`] and the
+/// `QuickRestart` key against [`RestartsModule::quick_chance`].
 pub trait RestartsModule: Send + Sync + 'static {
     /// The player of `team` who takes a restart of `kind` at `spot`.
     fn taker(&self, view: &MatchView<'_>, kind: StoppageKind, team: usize, spot: DVec2) -> usize;
-    /// Ticks a restart of `kind` by `team` waits before it may be taken.
+    /// Ticks a restart of `kind` by `team` waits before it may be taken, without a wait table.
     fn delay_ticks(&self, view: &MatchView<'_>, kind: StoppageKind, team: usize) -> u32;
+    /// The drawn extra of a restart of `kind` by `team`, in ticks, given the uniform draw `u`;
+    /// 0 without a wait table.
+    fn extra_ticks(&self, view: &MatchView<'_>, kind: StoppageKind, team: usize, u: f64) -> u32;
+    /// The chance that the taker of `dead` restarts quickly, with no drawn extra.
+    fn quick_chance(&self, view: &MatchView<'_>, dead: &DeadBall) -> f64;
+    /// The job of player `i` while `dead` waits, which sets his pace.
+    fn job(&self, view: &MatchView<'_>, dead: &DeadBall, i: usize) -> crate::pace::Job;
     /// Ticks a shoot-out kick waits before it may be taken.
     fn shootout_delay_ticks(&self, view: &MatchView<'_>) -> u32;
-    /// Where player `i` stands while `dead` waits.
+    /// The point player `i` steers to while `dead` waits: where he stands, or a point on his
+    /// way there round the distance the law keeps him from the spot.
     fn target(&self, view: &MatchView<'_>, dead: &DeadBall, i: usize) -> DVec2;
-    /// `true` when `dead` may be taken at tick `now`.
-    fn ready(&self, view: &MatchView<'_>, dead: &DeadBall, now: u32) -> bool;
+    /// `true` when the visible steps of `dead` are done at tick `now`: the taker at the ball
+    /// and every player the law moves moved (at a shoot-out kick, also its delay passed).
+    fn steps_done(&self, view: &MatchView<'_>, dead: &DeadBall, now: u32) -> bool;
     /// Where the player in `slot` of `team` stands for a kick-off by `kicking`.
     fn kick_off_position(
         &self,
@@ -330,6 +356,14 @@ pub struct Contest {
     pub chance: f64,
 }
 
+/// A defender's try to cut out the pass in flight as it passes him: his chance, and whether he
+/// controls the ball (an interception) or only blocks it (a deflection).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PassCut {
+    pub chance: f64,
+    pub control: bool,
+}
+
 /// A fast pass in the penalty area that the defending side may clear.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CrossContest {
@@ -373,6 +407,12 @@ pub trait PossessionModule: Send + Sync + 'static {
     fn loose_ball(&self, view: &MatchView<'_>) -> Option<LooseBall>;
     /// The opponents who may tackle carrier `c`, or `None` inside the control cooldown.
     fn tacklers(&self, view: &MatchView<'_>, c: usize) -> Option<u32>;
+    /// Defender `i`'s try to cut out the pass in flight as it passes him, or `None` when he
+    /// may not try on this tick.
+    fn pass_cut(&self, view: &MatchView<'_>, i: usize) -> Option<PassCut>;
+    /// Defender `i`'s chance to win the ball from carrier `c` as he takes him on, or `None`
+    /// when he does not meet him on this tick.
+    fn take_on(&self, view: &MatchView<'_>, c: usize, i: usize) -> Option<f64>;
 }
 
 /// What the goal-side cover found, for the debug trace.
@@ -408,10 +448,12 @@ pub enum TargetsTrace {
     },
 }
 
-/// Every player's target for this tick, in roster order.
+/// Every player's target for this tick, in roster order, and the job each target is for
+/// ([`crate::pace::Job`]), which sets its urgency grade.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Targets {
     pub targets: [DVec2; ROSTER],
+    pub jobs: [crate::pace::Job; ROSTER],
     pub trace: TargetsTrace,
 }
 
@@ -424,6 +466,10 @@ pub struct OptionDraft {
     /// The open team-mates in roster order and their pass scores.
     pub passes: [(usize, f64); MATES],
     pub pass_count: usize,
+    /// Each pass's share of its score that moves which pass is picked but not how the pass
+    /// option compares with the others (the team's patience): it is taken off the picked
+    /// pass's score after the pick.
+    pub pass_pick: [f64; MATES],
     /// The dribble and hold scores; `None` for a keeper. The dribble score is `None` when
     /// an opponent is close and the carrier does not try a take-on (the skill gate).
     pub dribble_hold: Option<(Option<f64>, f64)>,
@@ -431,6 +477,12 @@ pub struct OptionDraft {
     /// The carry cost subtracted from the best pass after the pick.
     pub carry: f64,
     pub nearest_opp_pos: DVec2,
+    /// The amplitude of each option's perceived-score draw (`decision.perceive`); 0 draws
+    /// nothing.
+    pub perceive: f64,
+    /// The spread of the shot's score over the carrier's misread of the keeper off his line
+    /// (`decision.keeper_read`); 0 draws nothing.
+    pub shot_read: f64,
 }
 
 /// The raw noise draws of one carrier's options, in the draft's order.
@@ -440,7 +492,13 @@ pub struct OptionDraws {
     pub passes: [f64; MATES],
     pub dribble_hold: (f64, f64),
     pub clear: f64,
+    /// The perceived-score draws ([`PERCEIVE_DRAWS`]).
+    pub perceive: [f64; PERCEIVE_DRAWS],
 }
+
+/// The perceived-score draws of one carrier, in order: the shot, every pass, the dribble,
+/// the hold, the clearance, and the shooter's read of the keeper.
+pub const PERCEIVE_DRAWS: usize = MATES + 5;
 
 /// The scored options and every pass candidate's score, in roster order.
 #[derive(Debug, Clone, Copy)]
@@ -523,7 +581,7 @@ pub trait DecisionModule: Send + Sync + 'static {
         choice: Choice,
     ) -> CarrierPlan;
     /// Carrier `c`'s pass to `j`, given the aim draw.
-    fn pass_kick(&self, view: &MatchView<'_>, c: usize, j: usize, aim: f64) -> Kick;
+    fn pass_kick(&self, view: &MatchView<'_>, c: usize, j: usize, aim: f64, weight: f64) -> Kick;
     /// Carrier `c`'s clearance, wide or not, given the aim draw.
     fn clear_kick(&self, view: &MatchView<'_>, c: usize, wide: bool, aim: f64) -> Kick;
     /// `true` when a shot at a goal `keeper` defends draws its side.
@@ -551,20 +609,29 @@ pub trait DecisionModule: Send + Sync + 'static {
     /// The chance that player `i`, on the side without the ball, lapses in this minute of
     /// play. The loop draws the `Lapse` key against it.
     fn lapse_chance(&self, view: &MatchView<'_>, i: usize) -> f64;
+    /// The tackle decision of `tackler`, in reach of `carrier`: the chances of the tackle it
+    /// makes (the foul chance may differ from `chances`, the fouls module's), or `None` when it
+    /// does not tackle. A declined tackle draws nothing; no tackle happens without this
+    /// decision.
+    fn tackle(
+        &self,
+        view: &MatchView<'_>,
+        tackler: usize,
+        carrier: usize,
+        chances: TackleChances,
+    ) -> Option<TackleChances>;
 }
 
-/// One check of the AI manager: the minute, the changes to queue in order, and the manager's
-/// memory after the check.
+/// One check of the AI manager: the changes to queue in order.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AiPlan {
-    pub minute: u32,
     pub changes: Vec<(Change, AiCode)>,
-    pub memory: AiState,
 }
 
 /// The AI manager's in-match checks. It draws nothing.
 pub trait ManagerModule: Send + Sync + 'static {
-    /// One check for `team`; `at_stoppage` marks the check an injury or a goal asks for.
+    /// One check for `team`; `at_stoppage` marks a check on the tick a stoppage that admits a
+    /// substitution opened, or one an injury, a goal or a sending-off asks for.
     fn check(&self, view: &MatchView<'_>, team: usize, at_stoppage: bool) -> AiPlan;
 }
 

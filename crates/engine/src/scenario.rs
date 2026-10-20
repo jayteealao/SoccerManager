@@ -2,8 +2,8 @@
 //! running velocity and foul cooldown), the ball, the
 //! carrier, the clock and its period, the score, the cards, energy, substitutions used, the
 //! managers, the change queue, the knockout switch, the outcomes of the next shoot-out kicks,
-//! the referee's and injury rolls' next draws, and the plugin hooks to where a test needs
-//! them.
+//! the referee's and injury rolls' next draws, the draws of the next restarts' waits, and the
+//! plugin hooks to where a test needs them.
 //! Only this crate's tests build it (the `scenario` feature), so a release build never
 //! contains it.
 
@@ -47,10 +47,19 @@ impl Scene {
         self
     }
 
-    /// Puts the ball at rest at `at`.
+    /// Puts the ball at rest at `at`. Every player's followed ball point is the ball, as
+    /// for a block that has settled around it.
     pub fn ball(mut self, at: DVec3) -> Self {
         self.sim.ball.pos = at;
         self.sim.ball.vel = DVec3::ZERO;
+        self.sim.slide_reset();
+        self
+    }
+
+    /// Every player's followed ball point at `at`, as for a block still settled around a
+    /// ball that was there: the far-player delay then follows the ball from it.
+    pub fn follow_from(mut self, at: DVec2) -> Self {
+        self.sim.slide_ball = [at; crate::modules::ROSTER];
         self
     }
 
@@ -67,7 +76,15 @@ impl Scene {
         self.sim.control_since = 0;
         if let Some(c) = c {
             self.sim.last_touch = Some(self.sim.players[c].team);
+            self.sim.possession_phase = Some(self.sim.players[c].team);
         }
+        self
+    }
+
+    /// The team in possession, kept through a loose ball and a pass in flight; `None`
+    /// before anyone controls the ball.
+    pub fn phase(mut self, team: Option<usize>) -> Self {
+        self.sim.possession_phase = team;
         self
     }
 
@@ -229,15 +246,9 @@ impl Scene {
             .carrier(None);
         let sim = &mut self.sim;
         sim.last_touch = Some(team);
-        sim.seat_phase(crate::rules::Phase::DeadBall(crate::rules::DeadBall {
-            kind,
-            team,
-            spot,
-            direct,
-            since: sim.tick,
-            ready_at: sim.tick,
-            taker,
-        }));
+        sim.seat_phase(crate::rules::Phase::DeadBall(
+            crate::rules::DeadBall::fixed(kind, team, spot, direct, sim.tick, 0, taker),
+        ));
         self
     }
 
@@ -524,11 +535,48 @@ impl Scene {
         self
     }
 
+    /// The next restarts take `quick` for the quick-restart draw and `wait_draw` (0 to 1) for
+    /// the drawn extra's uniform draw instead of their streams; `None` leaves that draw to its
+    /// stream.
+    pub fn pin_restart(mut self, quick: Option<bool>, wait_draw: Option<f64>) -> Self {
+        self.sim.pinned_restart = Some(crate::sim::PinnedRestart { quick, wait_draw });
+        self
+    }
+
     /// `team` has made `used` substitutions in `windows` windows.
     pub fn subs_used(mut self, team: usize, used: u8, windows: u8) -> Self {
         let ledger = &mut self.sim.ledgers[team];
         ledger.used = used;
         ledger.windows = windows;
+        self
+    }
+
+    /// Player `i` has taken a knock.
+    pub fn knock(mut self, i: usize) -> Self {
+        self.sim.players[i].knock = true;
+        self
+    }
+
+    /// Edits the match tally of player `i`.
+    pub fn player_tally(
+        mut self,
+        i: usize,
+        edit: impl FnOnce(&mut crate::sim::tally::PlayerTally),
+    ) -> Self {
+        let (team, squad) = (self.sim.players[i].team, self.sim.players[i].squad);
+        edit(&mut self.sim.tallies[team][squad]);
+        self
+    }
+
+    /// A stoppage of `kind` opens on the scene's current tick, as the step that stopped play
+    /// leaves it for the AI manager's check.
+    pub fn stoppage_opened(mut self, kind: StoppageKind) -> Self {
+        self.sim.stoppage = Some(crate::rules::Stoppage {
+            tick: self.sim.tick,
+            kind,
+            team: Some(0),
+            spot: DVec2::ZERO,
+        });
         self
     }
 

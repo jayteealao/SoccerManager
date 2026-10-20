@@ -342,7 +342,9 @@ fn an_anchor_from_an_earlier_spell_never_comes_back_without_a_draw() {
     let pair = pair(TraitKind::GetsForward);
     let i = index(0, pair.slot);
     let mut starts = 0;
-    for seed in 0..3 {
+    // Seeds 0 to 4: seed 4 is the lowest whose match brings an anchor into force once the
+    // player as a person joined the team shape (seeds 0 to 2 were enough before).
+    for seed in 0..5 {
         let config = pair_config(seed, 90, &pair, Some(TraitStrength::Strong), Some(1.0));
         let mut sim = Simulation::new(config).unwrap();
         let (mut was_live, mut read) = (false, 0);
@@ -393,7 +395,7 @@ fn first_touch_scene(mood: f64) -> Vec<EngineEvent> {
         .carrier(Some(me))
         .control_since(1_000)
         .with_trait(me, "releases_ball_early", Some(TraitStrength::Strong))
-        .instruction(0, TEMPO, "slower")
+        .instruction(0, TEMPO, "slow")
         .mood(me, mood)
         .build();
     for _ in 0..2 * engine::TICKS_PER_SECOND {

@@ -544,6 +544,16 @@ test('a replay file that cannot be read shows its refusal on the match view, fro
   assert.equal(session.view, 'match', 'the refusal panel lives on the match view, so the view opens');
 });
 
+test('a chosen file the browser cannot read is refused by name, not dropped', async () => {
+  const { session } = await started(RUNNING);
+  // A file moved or changed after it was chosen: the browser's read fails.
+  const gone = new Blob([new Uint8Array(4)]);
+  gone.arrayBuffer = () => Promise.reject(new Error('A requested file could not be found'));
+  await session.openReplay(gone, 'moved.smfx');
+  assert.equal(session.panel.kind, 'replay-refused');
+  assert.match(session.panel.title, /could not be found/);
+});
+
 test('a saved match of the previous release opens live, naming its engine, with no kick-off', async () => {
   const resumed = {
     ...RUNNING,
@@ -1277,4 +1287,43 @@ test('two quick squad view changes save one at a time, and the newer one is what
   assert.equal(session.viewsSaved, 'saved');
   assert.equal(session.squadViews.active, 'Newer');
   assert.equal(mostAtOnce, 1, 'one save at a time');
+});
+
+test('a walk-on plays before the first tick at the playback speed, and the clock waits', async () => {
+  const { session, socket } = await started(RUNNING);
+  socket.deliver(hello());
+  socket.deliver(
+    JSON.stringify({
+      type: 'walk-on',
+      period: 0,
+      first_tick: 1,
+      speed: 2,
+      ticks: 100,
+      paths: [{ player: 0, from: [-1, -34], to: [3, -34] }],
+    })
+  );
+  for (let t = 1; t <= 300; t += 1) {
+    socket.deliver(frameAt(t));
+  }
+  session.scheduler.setSpeed(1);
+  session.frame(0);
+  assert.equal(session.interlude?.message.first_tick, 1);
+  assert.equal(session.rendered[3], -100, 'the player starts at the tunnel');
+  assert.equal(session.rendered[4], -3400);
+  // One second of the two-second walk: halfway, and no tick has played.
+  for (let ts = 16; ts <= 1008; ts += 16) {
+    session.frame(ts);
+  }
+  assert.equal(session.renderedTick, 0, 'the walk-on is not match time');
+  assert.ok(Math.abs(session.rendered[3] - 100) <= 4, `${session.rendered[3]}`);
+  for (let ts = 1024; ts <= 2200; ts += 16) {
+    session.frame(ts);
+  }
+  assert.equal(session.interlude, null);
+  assert.ok(session.renderedTick >= 1 && session.renderedTick < 60, `${session.renderedTick}`);
+  // A rewind to before the first tick and a seek past it play no walk-on.
+  session.rewind(1);
+  session.rewind(250);
+  session.frame(2300);
+  assert.equal(session.interlude, null);
 });

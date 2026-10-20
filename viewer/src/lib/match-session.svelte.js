@@ -62,6 +62,7 @@ import { adapterFor, memoryAdapter, mergeRatings, readPart } from './views.js';
 import { TICKS_PER_MINUTE, totalMinutes } from './skip.js';
 import { MatchSocket, socketAddress } from './socket.js';
 import { Stoppages, stopsPlay } from './stoppages.js';
+import { drawWalkOn, walkOnDue, walkOnSeconds } from './walk-on.js';
 
 /// The screens the match screen can show.
 export const SCREENS = Object.freeze([
@@ -261,6 +262,9 @@ export class MatchSession {
     this.status = null;
     this.matchId = null;
     this.renderedTick = 0;
+    /// Each half's walk-on by the tick it ends on, and the walk-on being drawn, if any.
+    this.walkOns = new Map();
+    this.interlude = null;
     this.kickedOff = false;
     this.resuming = false;
     this.reconnectAttempt = 0;
@@ -606,6 +610,8 @@ export class MatchSession {
 
   begin(hello, { stored = false } = {}) {
     this.history = new History(hello.ticks_expected);
+    this.walkOns = new Map();
+    this.interlude = null;
     this.helloVersion = hello['protocol.version'] ?? null;
     this.reportClock.reset();
     this.report = null;
@@ -948,7 +954,7 @@ export class MatchSession {
       history.measurePage();
     }
     if (result.kind === 'restart') {
-      this.stoppages.add(this.incoming.tick);
+      this.stoppages.restart(this.incoming.tick);
     }
     // A match can run past the announced ticks; the timeline's end follows the newest tick.
     if (history.newestTick > history.ticksExpected) {
@@ -966,6 +972,10 @@ export class MatchSession {
   }
 
   onMessage(message) {
+    if (message.type === 'walk-on') {
+      this.walkOns.set(message.first_tick, message);
+      return;
+    }
     if (GROUND_MESSAGES.has(message.type)) {
       this.onGround(message);
       return;
@@ -1001,7 +1011,7 @@ export class MatchSession {
     }
     this.match.add(message);
     if (stopsPlay(message)) {
-      this.stoppages.add(message.tick);
+      this.stoppages.stop(message.tick);
     }
     // Full time marks the real end, so the timeline stops at the last tick that arrived.
     if (message.type === 'event' && message['event.type'] === KIND.fullTime && this.history) {
@@ -1112,7 +1122,19 @@ export class MatchSession {
     if (!history || history.count === 0) {
       return;
     }
+    if (this.interlude && this.playInterlude(timestamp)) {
+      return;
+    }
+    const before = this.renderedTick;
     const step = this.scheduler.advance(timestamp, history.newestTick, history.firstTick);
+    // Playback that runs into a half's first tick shows the walk-on to it first; a seek, a
+    // scrub or a skip passes it.
+    if (!this.scrubbing && this.skip?.state !== 'playing') {
+      const walkOn = walkOnDue(this.walkOns, before, step.from);
+      if (walkOn && this.startInterlude(walkOn, timestamp)) {
+        return;
+      }
+    }
     if (!history.tickAt(step.from, this.earlier)) {
       return;
     }
@@ -1136,6 +1158,50 @@ export class MatchSession {
     }
     this.pace();
     this.reportSeen(timestamp);
+  }
+
+  /// Starts the walk-on before its half's first tick: the cursor waits on that tick, and the
+  /// pitch shows the players walking from the tunnel. `false` when the tick is not stored.
+  startInterlude(message, timestamp) {
+    const base = new Int16Array(COMPONENT_COUNT);
+    if (!this.history.tickAt(message.first_tick, base)) {
+      return false;
+    }
+    this.scheduler.seek(message.first_tick);
+    this.interlude = { message, base, seconds: 0, last: timestamp };
+    this.pitch?.clearTrail();
+    this.drawInterlude();
+    signal('viewer.walk_on', {
+      period: message.period,
+      first_tick: message.first_tick,
+      seconds: walkOnSeconds(message),
+    });
+    return true;
+  }
+
+  /// One frame of the walk-on, at the playback speed; a pause holds it. `false` once it has
+  /// ended, so the frame plays the half's first tick.
+  playInterlude(timestamp) {
+    const it = this.interlude;
+    const elapsed = Math.min(250, Math.max(0, timestamp - it.last));
+    it.last = timestamp;
+    if (this.scheduler.playing) {
+      it.seconds += (elapsed / 1000) * this.scheduler.speed;
+    }
+    if (it.seconds >= walkOnSeconds(it.message)) {
+      this.interlude = null;
+      this.renderedTick = it.message.first_tick;
+      this.scheduler.rest();
+      return false;
+    }
+    this.drawInterlude();
+    return true;
+  }
+
+  drawInterlude() {
+    const it = this.interlude;
+    drawWalkOn(it.message, it.seconds, it.base, this.rendered);
+    this.pitch?.draw(this.rendered);
   }
 
   /// Brings every panel to `tick`. A seek never replays a goal moment: the banner belongs to
@@ -1360,6 +1426,7 @@ export class MatchSession {
       return;
     }
     const from = this.renderedTick;
+    this.interlude = null;
     // A rewind that jumps past a break opens no report behind it.
     if (tick > from) {
       this.reportClock.pass(this.match.events, tick);
@@ -1542,10 +1609,13 @@ export class MatchSession {
   /// Plays a replay file with no engine: every stored frame goes through the same path live
   /// frames take, so playback and rewind are the same code as a live match.
   /// With `leave`, the replay was opened from the start screen: closing it, or a file that
-  /// cannot be read, goes back there.
-  async openReplay(bytes, name = 'replay', { leave = false } = {}) {
+  /// cannot be read, goes back there. `input` is the file's bytes, or the chosen file itself:
+  /// a file the browser cannot read (moved or changed since it was chosen) is refused like a
+  /// file that is not a replay, with the browser's reason.
+  async openReplay(input, name = 'replay', { leave = false } = {}) {
     let read;
     try {
+      const bytes = input instanceof Blob ? new Uint8Array(await input.arrayBuffer()) : input;
       read = await readReplay(bytes);
     } catch (error) {
       const reason = error.reason ?? error.message;

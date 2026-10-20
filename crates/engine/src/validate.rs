@@ -1,14 +1,28 @@
-//! The tick-stream validator: pitch bounds, player separation, ball speed, formation anchor
-//! tolerance in open play, and the ball's place at a restart. The anchor rule flags a player
-//! that is far from the ball, far from its anchor, and closing on neither for the grace
-//! period (idle drift). A sent-off or injured player at its parking spot beside the pitch is
-//! exempt from every player rule. A substitute enters at the halfway line on the touchline,
-//! inside the pitch, on a restart tick; no rule limits a player's jump, so the entry breaks
-//! none. The anchors follow the team shapes in force at each tick: the teams change ends at
-//! half-time, a line closes up after a sending-off or an injury and reopens when a
-//! substitute replaces the injured player, and a tactics change moves every anchor. From the
+//! The tick-stream validator: pitch bounds, player separation, ball speed, player speed,
+//! formation anchor tolerance in open play, and the ball's place at a restart. The anchor rule
+//! judges a player by his job: it flags a player that is far from the ball, far from its
+//! anchor, far from every job target the records show (`job_distance`: an opponent he may
+//! track, mark or press, and for a back-line player the goal-side cover spot of a central
+//! opponent in his half), and closing on none of them for the grace period (idle drift); his
+//! own step toward where a job target stood counts as closing on it, not the target coming to
+//! him (`job_closing`); a player who moves toward where the ball was on the previous
+//! record is closing on it, however fast the ball runs away from him; a player on a run in
+//! behind is closing for as long as real runs last, and on his way back after it while he moves
+//! toward his anchor ([`RunSpell`]); while the ball waits
+//! where it left play before it appears at a restart spot, the spot stands for the ball. A
+//! sent-off or injured player at its parking spot beside the pitch is exempt from every player
+//! rule. The player-speed rule limits each
+//! player's move between two records to the top of the speed map for one tick plus one
+//! separation push; the first record of a half (the kick-off placed after the walk-on) and the
+//! slot a substitution names on its tick (the substitute enters at the halfway line on the
+//! touchline) are exempt. The anchors follow the team shapes in force at each tick: the teams
+//! change ends at half-time, a line closes up after a sending-off or an injury and reopens when
+//! a substitute replaces the injured player, and a tactics change moves every anchor. From the
 //! first kick of a penalty shoot-out on, the players wait in the centre circle and the anchor
-//! rule no longer applies.
+//! rule no longer applies. The ball-rest rule flags a ball in play that lies still for
+//! [`MAX_BALL_REST_S`] (a stall: nobody reaches it, and play never stops); a dead spell, from an
+//! event naming a restart spot until the ball first moves after it is placed, and a shoot-out
+//! are exempt.
 //!
 //! [`Validator::check_events`] judges a match's event stream on its own rules, whatever
 //! produced it: the full engine or the fast model, which has no ticks to check.
@@ -31,6 +45,203 @@ pub const MIN_SEPARATION: f64 = 0.1;
 pub const MAX_BALL_SPEED: f64 = 40.0;
 /// How far the ball may lie from the restart spot a restart event names.
 pub const RESTART_SPOT_TOLERANCE: f64 = 0.5;
+/// The tick of a match's first record. The opening kick-off is taken on the step that
+/// records it, before any record shows the ball at the spot, so the anchor rule reads that
+/// record as the kick-off's restart: the ball no longer waits at the centre spot.
+pub const OPENING_RECORD_TICK: u32 = 1;
+/// The longest a ball in play may lie still, in seconds: the median length of the 696 real
+/// dead spells of the IDSSE Bundesliga and 2. Bundesliga matches (`idsse_dead.csv`, the spells
+/// the restart waits are drawn from; shortest 1.64 s, longest 206.48 s). Half of all real
+/// stoppages are over sooner, so a ball that lies still this long while play has not stopped
+/// is a stall, not football.
+pub const MAX_BALL_REST_S: f64 = 19.92;
+/// A ball that moves less than this between two records is at rest, in metres.
+pub const BALL_REST_STEP: f64 = 0.001;
+
+/// The `ball_rest` rule's state, shared by the two checkers: a dead spell runs from an event
+/// that names a restart spot until the ball first moves on a record after the restart record
+/// that placed it; outside one, the records the ball lies still on are counted, and the rule
+/// fires once, on the record that reaches [`MAX_BALL_REST_S`].
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct BallRest {
+    dead: bool,
+    placed: bool,
+    still: u32,
+}
+
+impl BallRest {
+    /// The records of rest at which the rule fires, at the tuning's tick length.
+    pub(crate) fn limit_ticks(t: &Tuning) -> u32 {
+        (MAX_BALL_REST_S / t.dt).round() as u32
+    }
+
+    /// A spell that starts inside a stoppage: placed when its restart record came before the
+    /// first record.
+    pub(crate) fn dead(placed: bool) -> Self {
+        Self {
+            dead: true,
+            placed,
+            still: 0,
+        }
+    }
+
+    /// An event naming a restart spot: play has stopped.
+    pub(crate) fn stopped(&mut self) {
+        self.dead = true;
+        self.placed = false;
+    }
+
+    /// The next record's ball after `prev` (none on the first record); `true` when this record
+    /// reaches the limit. A shoot-out's records count no rest.
+    pub(crate) fn record(
+        &mut self,
+        prev: Option<DVec2>,
+        ball: DVec2,
+        restart: bool,
+        shootout: bool,
+        limit: u32,
+    ) -> bool {
+        let still = prev.is_some_and(|p| (ball - p).length() < BALL_REST_STEP);
+        if self.dead {
+            if restart {
+                self.placed = true;
+            } else if self.placed && !still && prev.is_some() {
+                self.dead = false;
+            }
+        }
+        if still && !self.dead && !shootout {
+            self.still += 1;
+        } else {
+            self.still = 0;
+        }
+        self.still == limit
+    }
+}
+
+/// The longest a run in behind counts as closing, in seconds: the 99th percentile of the
+/// durations of 5,850 tracked runs in behind (DFL Bundesliga, Metrica, PFF FIFA World Cup 2022
+/// and SkillCorner A-League tracking, by the shared run definitions of [`crate::run_kind`];
+/// median 3.08 s, longest 15.42 s).
+pub const MAX_RUN_S: f64 = 9.81;
+
+/// The anchor rule's run state of one player, shared by the two checkers. A run is a spell at
+/// [`crate::run_kind::RUN_SPEED`] or faster that gains depth toward the goal his side attacks.
+/// While it lasts, for at most [`MAX_RUN_S`], the player is closing: real runs in behind take
+/// forwards far from their place and from the ball. After a run he is on his way back until he
+/// is near his anchor or the ball again, and while he moves toward his anchor he is closing on
+/// it, however fast the anchor slides away. A player who stands still far from both is not.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct RunSpell {
+    ticks: u32,
+    returning: bool,
+}
+
+impl RunSpell {
+    /// The player's step from `was` (the previous record; none on the first) to `now`, on a
+    /// side that attacks `attack_x`; `far_from` is his nearer anchor while he is farther than the
+    /// rule's distances from both his anchor and the ball, and `None` otherwise. A step longer
+    /// than `max_step`, the most any player moves between two records, is a jump that the speed
+    /// rule reports, not a run. `true` when the step counts as closing.
+    pub(crate) fn closing(
+        &mut self,
+        was: Option<DVec2>,
+        now: DVec2,
+        attack_x: f64,
+        far_from: Option<DVec2>,
+        max_step: f64,
+        t: &Tuning,
+    ) -> bool {
+        let Some(was) = was else {
+            *self = Self::default();
+            return false;
+        };
+        let step = now - was;
+        let length = step.length();
+        let on_run = length >= crate::run_kind::RUN_SPEED * t.dt
+            && length <= max_step
+            && step.x * attack_x > 0.0;
+        if on_run {
+            self.ticks += 1;
+        } else {
+            self.returning |= self.ticks > 0;
+            self.ticks = 0;
+        }
+        if far_from.is_none() {
+            self.returning = false;
+        }
+        let live = on_run && f64::from(self.ticks) * t.dt <= MAX_RUN_S;
+        let back = self.returning
+            && far_from.is_some_and(|anchor| step.dot((anchor - now).normalize_or_zero()) > 1e-3);
+        live || back
+    }
+}
+
+/// How near, in metres, a player stands to a job's target when he is doing that job: the
+/// distance from which an opponent adds no pressure ([`crate::pressure::FAR_M`]), so a player
+/// that close to a man is on him.
+pub const JOB_NEAR_M: f64 = crate::pressure::FAR_M;
+
+/// The anchor rule's job targets, shared by the two checkers: the distance from player `i`
+/// (at `pos[i]`, his nearer anchor at `anchor`) to the nearest target
+/// of a job the records show he may be doing. Each opponent on the pitch is one (the runner he
+/// tracks, the man he marks or presses). For a back-line player, so is the cover spot of each
+/// opponent in his side's half inside the central channel (`cover_channel`): the point on the
+/// line from that opponent to his own goal's centre at the depth of his anchor, where the
+/// engine's goal-side cover places him. Parked players are no target. The ball, his other job
+/// target, the rule reads apart.
+pub(crate) fn job_distance(
+    pos: &[DVec2; PLAYER_COUNT],
+    parked: &[bool; PLAYER_COUNT],
+    i: usize,
+    teams: &[Team; 2],
+    anchor: DVec2,
+    t: &Tuning,
+) -> f64 {
+    let team = i / PLAYERS_PER_TEAM;
+    let side = &teams[team];
+    let half = side.pitch().half_length();
+    let depth = |at: DVec2| at.x * side.attack_x + half;
+    let covers = side.in_back_line(i % PLAYERS_PER_TEAM);
+    let goal = side.own_goal();
+    let hold = depth(anchor).max(0.5);
+    let me = pos[i];
+    let mut nearest = f64::INFINITY;
+    for (j, &at) in pos.iter().enumerate() {
+        if j / PLAYERS_PER_TEAM == team || parked[j] {
+            continue;
+        }
+        nearest = nearest.min((at - me).length());
+        let reach = depth(at);
+        if covers && at.y.abs() <= t.cover_channel && reach < half && reach > 1e-6 {
+            let share = (hold / reach).min(1.0);
+            let spot = DVec2::new(
+                goal.x + side.attack_x * hold,
+                goal.y + (at.y - goal.y) * share,
+            );
+            nearest = nearest.min((spot - me).length());
+        }
+    }
+    nearest
+}
+
+/// `true` when player `i`'s step to `now` closes on a job target where it stood on the record
+/// before (`before`, the previous positions, where he stood `was_m` from his nearest target):
+/// his own move counts, not a target coming to him.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn job_closing(
+    before: &[DVec2; PLAYER_COUNT],
+    now: DVec2,
+    was_m: f64,
+    parked: &[bool; PLAYER_COUNT],
+    i: usize,
+    teams: &[Team; 2],
+    anchor: DVec2,
+    t: &Tuning,
+) -> bool {
+    let mut moved = *before;
+    moved[i] = now;
+    job_distance(&moved, parked, i, teams, anchor, t) < was_m - 1e-3
+}
 
 /// One rule violation.
 #[derive(Debug, Clone, PartialEq)]
@@ -100,6 +311,13 @@ pub struct Validator {
     spots: Vec<(u32, DVec2)>,
     /// The tick of the first shoot-out kick, if the match went to a shoot-out.
     shootout_from: Option<u32>,
+    /// The ticks of half-time and each extra-time break: the next half's first record.
+    half_times: Vec<u32>,
+    /// The roster slot each substitution names, with its tick.
+    entries: Vec<(u32, usize)>,
+    /// The ball-rest state the first record starts in: a match resumed while play was
+    /// stopped starts inside that stoppage, whose event came before its records.
+    rest_at_start: BallRest,
 }
 
 impl Validator {
@@ -110,6 +328,9 @@ impl Validator {
             timeline: vec![(0, teams)],
             spots: Vec::new(),
             shootout_from: None,
+            half_times: Vec::new(),
+            entries: Vec::new(),
+            rest_at_start: BallRest::default(),
         }
     }
 
@@ -130,21 +351,53 @@ impl Validator {
             .filter(|e| e.shootout_round.is_some())
             .map(|e| e.tick)
             .min();
+        let half_times = events
+            .iter()
+            .filter(|e| e.kind == EngineEventKind::HalfTime)
+            .map(|e| e.tick)
+            .collect();
+        let entries = events
+            .iter()
+            .filter(|e| e.kind == EngineEventKind::Substitution)
+            .filter_map(|e| e.player.map(|p| (e.tick, p)))
+            .collect();
         Self {
             tuning,
             timeline: timeline.to_vec(),
             spots,
             shootout_from,
+            half_times,
+            entries,
+            rest_at_start: BallRest::default(),
         }
+    }
+
+    /// The validator of records that start while play is stopped, as a match resumed from a
+    /// snapshot taken at a stoppage does: the ball-rest rule counts no rest until the ball
+    /// first moves after its restart record. `placed` is `true` when that record came before
+    /// the first record.
+    pub fn starting_in_stoppage(mut self, placed: bool) -> Self {
+        self.rest_at_start = BallRest::dead(placed);
+        self
     }
 
     /// Returns every violation in `records`, in tick order.
     pub fn check(&self, records: &[TickRecord]) -> Vec<Violation> {
         let mut out = Vec::new();
         let mut far_ticks = [0u32; PLAYER_COUNT];
-        let mut prev_dist = [[f64::INFINITY; 2]; PLAYER_COUNT];
+        let mut runs = [RunSpell::default(); PLAYER_COUNT];
+        let mut prev_dist = [[f64::INFINITY; 3]; PLAYER_COUNT];
+        let mut prev_chase: Option<(DVec2, [DVec2; PLAYER_COUNT])> = None;
         let mut prev_ball: Option<DVec2> = None;
+        let mut prev_players: Option<([DVec2; PLAYER_COUNT], [bool; PLAYER_COUNT])> = None;
+        let max_step = running::max_step(&self.tuning);
+        // The restart spot whose ball has not yet appeared there, and the next spot to read.
+        let mut fetch_spot: Option<DVec2> = None;
+        let mut next_spot = 0;
         let mut shape = 0;
+        let mut rest = self.rest_at_start;
+        let rest_limit = BallRest::limit_ticks(&self.tuning);
+        let mut next_stop = 0;
         for r in records {
             while shape + 1 < self.timeline.len() && self.timeline[shape + 1].0 <= r.tick {
                 shape += 1;
@@ -152,6 +405,14 @@ impl Validator {
             let teams = &self.timeline[shape].1;
             let pitch = teams[0].pitch();
             let ball = DVec2::new(f64::from(r.ball[0]), f64::from(r.ball[1]));
+            while let Some(&(tick, _)) = self.spots.get(next_stop)
+                && tick <= r.tick
+            {
+                rest.stopped();
+                next_stop += 1;
+            }
+            let shootout = self.shootout_from.is_some_and(|from| r.tick >= from);
+            let rested = rest.record(prev_ball, ball, r.restart, shootout, rest_limit);
             // Fixed-size, so a whole match of records allocates nothing per tick.
             let pos: [DVec2; PLAYER_COUNT] = std::array::from_fn(|i| {
                 DVec2::new(f64::from(r.players[i][0]), f64::from(r.players[i][1]))
@@ -199,10 +460,29 @@ impl Validator {
                 }
             }
             prev_ball = Some(ball);
-            if r.restart
-                && let Ok(at) = self.spots.binary_search_by_key(&r.tick, |(tick, _)| *tick)
+            if let Some((prev, prev_parked)) = &prev_players
+                && !self.half_times.contains(&r.tick)
             {
-                let off = (ball - self.spots[at].1).length();
+                for i in 0..PLAYER_COUNT {
+                    if parked[i] || prev_parked[i] || self.entries.contains(&(r.tick, i)) {
+                        continue;
+                    }
+                    let step = (pos[i] - prev[i]).length();
+                    if step > max_step {
+                        out.push(Violation {
+                            tick: r.tick,
+                            rule: "player_speed",
+                            player: Some(i),
+                            value: step / self.tuning.dt,
+                        });
+                    }
+                }
+            }
+            prev_players = Some((pos, parked));
+            if r.restart
+                && let Some(spot) = running::latest_spot(&self.spots, r.tick)
+            {
+                let off = (ball - spot).length();
                 if off > RESTART_SPOT_TOLERANCE {
                     out.push(Violation {
                         tick: r.tick,
@@ -213,25 +493,74 @@ impl Validator {
                 }
             }
 
-            let shootout = self.shootout_from.is_some_and(|from| r.tick >= from);
+            while let Some(&(tick, spot)) = self.spots.get(next_spot)
+                && tick <= r.tick
+            {
+                fetch_spot = Some(spot);
+                next_spot += 1;
+            }
+            // While the ball waits where it left play, the spot stands for the ball.
+            let reference = fetch_spot.unwrap_or(ball);
+            if r.restart
+                || r.tick == OPENING_RECORD_TICK
+                || (ball - reference).length() <= RESTART_SPOT_TOLERANCE
+            {
+                fetch_spot = None;
+            }
+
             for (i, p) in pos.iter().enumerate() {
                 if parked[i] || shootout {
                     far_ticks[i] = 0;
+                    runs[i] = RunSpell::default();
                     continue;
                 }
                 let team = i / PLAYERS_PER_TEAM;
                 let slot = i % PLAYERS_PER_TEAM;
                 // The record does not say which team has the ball, so the nearer of the
                 // slot's two anchors counts.
-                let d_anchor = [true, false]
-                    .map(|has| (*p - teams[team].anchor(slot, ball, has, &self.tuning)).length());
-                let d_anchor = d_anchor[0].min(d_anchor[1]);
-                let d_ball = (*p - ball).length();
-                let closing = d_ball < prev_dist[i][0] - 1e-3 || d_anchor < prev_dist[i][1] - 1e-3;
-                prev_dist[i] = [d_ball, d_anchor];
-                let drifting = d_ball > self.tuning.anchor_ball_distance
+                let anchors =
+                    [true, false].map(|has| teams[team].anchor(slot, reference, has, &self.tuning));
+                let nearer = running::nearer_anchor(anchors, *p);
+                let d_anchor = (*p - nearer).length().min(running::kick_off_place_distance(
+                    &teams[team],
+                    slot,
+                    *p,
+                    reference,
+                ));
+                let d_ball = (*p - reference).length();
+                let d_job = job_distance(&pos, &parked, i, teams, nearer, &self.tuning);
+                let toward_ball = prev_chase
+                    .is_some_and(|(was, at)| (*p - was).length() < (at[i] - was).length() - 1e-3);
+                let far = d_ball > self.tuning.anchor_ball_distance
                     && d_anchor > self.tuning.anchor_tolerance
-                    && !closing;
+                    && d_job > JOB_NEAR_M;
+                let on_run = runs[i].closing(
+                    prev_chase.map(|(_, at)| at[i]),
+                    *p,
+                    teams[team].attack_x,
+                    far.then_some(nearer),
+                    max_step,
+                    &self.tuning,
+                );
+                let toward_job = prev_chase.is_some_and(|(_, at)| {
+                    job_closing(
+                        &at,
+                        *p,
+                        prev_dist[i][2],
+                        &parked,
+                        i,
+                        teams,
+                        nearer,
+                        &self.tuning,
+                    )
+                });
+                let closing = d_ball < prev_dist[i][0] - 1e-3
+                    || d_anchor < prev_dist[i][1] - 1e-3
+                    || toward_job
+                    || toward_ball
+                    || on_run;
+                prev_dist[i] = [d_ball, d_anchor, d_job];
+                let drifting = far && !closing;
                 far_ticks[i] = if drifting { far_ticks[i] + 1 } else { 0 };
                 if far_ticks[i] >= self.tuning.anchor_grace_ticks {
                     out.push(Violation {
@@ -241,6 +570,15 @@ impl Validator {
                         value: d_anchor,
                     });
                 }
+            }
+            prev_chase = Some((reference, pos));
+            if rested {
+                out.push(Violation {
+                    tick: r.tick,
+                    rule: "ball_rest",
+                    player: None,
+                    value: MAX_BALL_REST_S,
+                });
             }
         }
         for v in &out {
@@ -444,7 +782,9 @@ mod tests {
         let v = Validator::new(Tuning::default(), [bare(0), bare(1)]);
         let mut r = record(10);
         r.players[1] = r.players[0];
-        let out = v.check(&[record(9), r]);
+        // One record only: from a record before it, player 1's move onto player 0 would also
+        // break the player speed rule.
+        let out = v.check(&[r]);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].rule, "separation");
         assert_eq!(out[0].tick, 10);
@@ -500,5 +840,75 @@ mod tests {
         let out = v.check(&[record(1), restart]);
         assert_eq!(out.len(), 1, "{out:?}");
         assert_eq!(out[0].rule, "restart_spot");
+    }
+
+    /// A ball in play that lies still for the rest limit is one `ball_rest` violation, on the
+    /// record that reaches it. The same rest while play is stopped (from a stoppage until the
+    /// ball first moves after its restart record) is no violation; once that ball has moved,
+    /// a new rest counts from there.
+    #[test]
+    fn a_ball_still_in_play_for_the_rest_limit_is_one_violation_and_a_dead_ball_none() {
+        let t = Tuning::default();
+        let limit = BallRest::limit_ticks(&t);
+        assert_eq!(limit, 996, "19.92 s at 50 ticks a second");
+        let records: Vec<TickRecord> = (1..=limit + 200).map(record).collect();
+        let v = Validator::new(t.clone(), [bare(0), bare(1)]);
+        let out = v.check(&records);
+        assert_eq!(out.len(), 1, "{out:?}");
+        assert_eq!(out[0].rule, "ball_rest");
+        assert_eq!(out[0].tick, limit + 1, "the first record rests nothing");
+        assert_eq!(out[0].value, MAX_BALL_REST_S);
+
+        // A throw-in at tick 2: the ball is placed there and waits to the end.
+        let config = crate::data::test_support::shipped_config(1, 90).unwrap();
+        let sim = crate::sim::Simulation::new(config).unwrap();
+        let mut throw = sim.event(crate::sim::EngineEventKind::ThrowIn, Some(0));
+        throw.tick = 2;
+        throw.spot = Some(DVec2::ZERO);
+        let v = Validator::for_match(t.clone(), &[(0, [bare(0), bare(1)])], &[throw]);
+        let mut waiting = records.clone();
+        waiting[1].restart = true;
+        assert!(v.check(&waiting).is_empty(), "{:?}", v.check(&waiting));
+
+        // The throw is taken at tick 100 (the ball moves 0.5 m); from there it lies still again.
+        let mut taken = waiting;
+        for r in &mut taken[99..] {
+            r.ball = [0.5, 0.0, 0.0];
+        }
+        let out = v.check(&taken);
+        assert_eq!(out.len(), 1, "{out:?}");
+        assert_eq!(out[0].rule, "ball_rest");
+        assert_eq!(out[0].tick, 100 + limit);
+    }
+
+    /// Records that start inside a stoppage, as a match resumed from a snapshot taken while
+    /// play is stopped: the still ball rests nothing until it moves after its restart record,
+    /// whether that record comes in the records or came before them. The same records read as
+    /// a match in play break the rule.
+    #[test]
+    fn records_that_start_in_a_stoppage_rest_nothing_until_the_restart_is_taken() {
+        let t = Tuning::default();
+        let limit = BallRest::limit_ticks(&t);
+        let still: Vec<TickRecord> = (1..=limit + 200).map(record).collect();
+        let in_play = Validator::new(t.clone(), [bare(0), bare(1)]);
+        assert_eq!(in_play.check(&still).len(), 1);
+
+        // The restart record came before the first record.
+        let placed = Validator::new(t.clone(), [bare(0), bare(1)]).starting_in_stoppage(true);
+        assert!(placed.check(&still).is_empty());
+        // Taken at tick 100: a new rest counts from there.
+        let mut taken = still.clone();
+        for r in &mut taken[99..] {
+            r.ball = [0.5, 0.0, 0.0];
+        }
+        let out = placed.check(&taken);
+        assert_eq!(out.len(), 1, "{out:?}");
+        assert_eq!(out[0].tick, 100 + limit);
+
+        // The restart record is in the records, at tick 50.
+        let waiting = Validator::new(t.clone(), [bare(0), bare(1)]).starting_in_stoppage(false);
+        let mut appears = still;
+        appears[49].restart = true;
+        assert!(waiting.check(&appears).is_empty());
     }
 }

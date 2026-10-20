@@ -1,7 +1,8 @@
 // The attribute hover's copy: for each visible attribute, the actions it drives, as the main
 // attribute of a stage or as one of its shown supports (at most three per stage). A minor
 // weight acts in the engine but is never listed. An attribute that no stage names lists the
-// action of its own job as main. Pure: no DOM.
+// action of its own job as main, and so does one whose job is at a stage no table holds (pace),
+// first. Determination, which acts on an occasion, lists the press it widens. Pure: no DOM.
 //
 // The page has no content access while it runs, so this is a copy of `content/attributes.json`
 // made by that rule; `tests/attribute-actions.test.js` derives the same table from the file and
@@ -44,6 +45,8 @@ export const ACTION_WORDS = Object.freeze({
   corner: 'Corner delivery',
   free_kick: 'Free kick delivery',
   long_throw: 'Long throw',
+  cover: 'Covering and stepping with the line',
+  recovery_run: 'Recovery run',
 });
 
 /// Each visible attribute's actions as `[action, role]`, mains first, each part in catalogue
@@ -78,7 +81,14 @@ export const ATTRIBUTE_ACTIONS = Object.freeze({
   penalties: [['penalty', 'main']],
   long_throws: [['long_throw', 'main']],
   flair: [['pass', 'support'], ['dribble', 'support']],
-  positioning: [['block', 'main'], ['intercept', 'support'], ['shape', 'support'], ['mark', 'support']],
+  positioning: [
+    ['press', 'main'],
+    ['block', 'main'],
+    ['cover', 'main'],
+    ['intercept', 'support'],
+    ['shape', 'support'],
+    ['mark', 'support'],
+  ],
   vision: [
     ['pass', 'main'],
     ['chip', 'support'],
@@ -95,6 +105,7 @@ export const ATTRIBUTE_ACTIONS = Object.freeze({
     ['long_shot', 'main'],
     ['dribble', 'main'],
     ['tackle', 'support'],
+    ['press', 'support'],
     ['shape', 'support'],
     ['claim', 'support'],
     ['rush', 'support'],
@@ -115,12 +126,14 @@ export const ATTRIBUTE_ACTIONS = Object.freeze({
     ['pass', 'support'],
     ['shot', 'support'],
     ['tackle', 'support'],
+    ['press', 'support'],
     ['block', 'support'],
     ['rush', 'support'],
     ['off_ball_run', 'support'],
+    ['cover', 'support'],
   ],
-  work_rate: [['press', 'main'], ['shape', 'support']],
-  aggression: [['tackle', 'main'], ['press', 'support']],
+  work_rate: [['recovery_run', 'main']],
+  aggression: [['tackle', 'main']],
   concentration: [
     ['shape', 'main'],
     ['penalty', 'support'],
@@ -129,14 +142,15 @@ export const ATTRIBUTE_ACTIONS = Object.freeze({
     ['save', 'support'],
     ['organise', 'support'],
     ['mark', 'support'],
+    ['cover', 'support'],
   ],
   teamwork: [['shape', 'main'], ['pass', 'support'], ['cross', 'support']],
   determination: [['press', 'support']],
   bravery: [['header', 'support']],
   communication: [['organise', 'main'], ['claim', 'support']],
-  pace: [['sprint', 'main']],
-  acceleration: [['sprint', 'main']],
-  stamina: [['endure', 'main'], ['press', 'support'], ['recover', 'support']],
+  pace: [['sprint', 'main'], ['recovery_run', 'support']],
+  acceleration: [['sprint', 'main'], ['recovery_run', 'support']],
+  stamina: [['endure', 'main'], ['recover', 'support']],
   strength: [
     ['shield', 'main'],
     ['long_shot', 'support'],

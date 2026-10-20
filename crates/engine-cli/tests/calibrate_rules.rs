@@ -70,7 +70,11 @@ fn a_change_run_reports_one_row_per_sensitivity_rule_and_the_five_match_rule() {
             .map(|r| r["job"].as_str().unwrap().to_string())
             .collect()
     };
-    assert_eq!(jobs.len(), 61, "58 attribute jobs and 3 body jobs");
+    assert_eq!(
+        jobs.len(),
+        63,
+        "58 attribute jobs, 3 body jobs and the press and cover stages"
+    );
 
     let run = data.join("run");
     let out = change_run(&data, &content, &run);
@@ -80,21 +84,21 @@ fn a_change_run_reports_one_row_per_sensitivity_rule_and_the_five_match_rule() {
     RecordSchemas::load()
         .report(&report)
         .unwrap_or_else(|e| panic!("{e}\n{report}"));
-    assert_eq!(report["schema.version"], "7");
+    assert_eq!(report["schema.version"], "9");
 
     let stage = &report["calib.rules"];
     assert_eq!(stage["built"], true);
-    assert_eq!(stage["checked"], 62);
-    assert_eq!(stage["levels"], 124);
+    assert_eq!(stage["checked"], 64);
+    assert_eq!(stage["levels"], 128);
     let rows = stage["rows"].as_array().unwrap();
     let names: Vec<&str> = rows.iter().map(|r| r["job"].as_str().unwrap()).collect();
     assert_eq!(
-        names[..61],
+        names[..63],
         jobs.iter().map(String::as_str).collect::<Vec<_>>()[..]
     );
-    assert_eq!(names[61], "five-match");
+    assert_eq!(names[63], "five-match");
 
-    let five = &rows[61];
+    let five = &rows[63];
     assert_eq!(five["levels"], json!([10.0, 16.0]));
     assert!(five["roles"]["ST"].is_number(), "{five}");
     assert!(five["share"]["lo"].as_f64() <= five["share"]["hi"].as_f64());
@@ -106,14 +110,14 @@ fn a_change_run_reports_one_row_per_sensitivity_rule_and_the_five_match_rule() {
     let count = |w: &str| rows.iter().filter(|r| r["word"] == w).count();
     assert_eq!(
         count("pass") + count("fail") + count("not_sure"),
-        62,
+        64,
         "every row has a word"
     );
     assert_eq!(stage["failed"], count("fail"));
     assert_eq!(stage["not_sure"], count("not_sure"));
     assert!(
         text.contains(&format!(
-            "rules stage: 62 touched sensitivity rules checked at 124 levels, {} failed, {} not sure",
+            "rules stage: 64 touched sensitivity rules checked at 128 levels, {} failed, {} not sure",
             count("fail"),
             count("not_sure")
         )),
@@ -124,7 +128,10 @@ fn a_change_run_reports_one_row_per_sensitivity_rule_and_the_five_match_rule() {
         "the stage prints its table: {text}"
     );
     let flagged = rows.iter().filter(|r| r["report_only"] == true).count();
-    assert_eq!(flagged, 21, "the new jobs' rules are marked report-only");
+    assert_eq!(
+        flagged, 24,
+        "the new jobs' rules and the defensive jobs' rules are marked report-only"
+    );
     let _ = std::fs::remove_dir_all(&data);
 }
 

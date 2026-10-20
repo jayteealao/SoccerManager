@@ -182,6 +182,9 @@ pub fn run(content_dir: Option<&Path>, opts: &ResumeOpts) -> anyhow::Result<i32>
         None => None,
     };
     let resumed_at = sim.tick();
+    // A snapshot taken while play is stopped resumes inside that stoppage, whose event the
+    // resumed records do not hold; `true` when the ball already lay at its restart spot.
+    let stopped = sim.dead_ball().map(|dead| dead.appear_at <= resumed_at);
     let started = Instant::now();
     let mut sink = FanoutSink::new(file, snapshots);
     sim.run(&mut sink)?;
@@ -199,7 +202,11 @@ pub fn run(content_dir: Option<&Path>, opts: &ResumeOpts) -> anyhow::Result<i32>
         if opts.json {
             engine::record::write_jsonl(&path.with_extension("jsonl"), &records.records)?;
         }
-        let validator = Validator::for_match(sim.tuning().clone(), sim.team_timeline(), &events);
+        let mut validator =
+            Validator::for_match(sim.tuning().clone(), sim.team_timeline(), &events);
+        if let Some(placed) = stopped {
+            validator = validator.starting_in_stoppage(placed);
+        }
         violations = validator.check(&records.records).len();
     }
 

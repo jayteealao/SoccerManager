@@ -73,9 +73,51 @@ pub struct Played {
     pub arms: Option<(Vec<design::MatchRow>, Vec<design::MatchRow>)>,
 }
 
+/// The factors of a run of `file`'s rules whose jobs `only` names (every rule when `None`):
+/// one factor per distinct target, in rule order, so a stage rule rides its main
+/// attribute's factor; the factors the design varies (indices into the first list), in the
+/// order of the first selected rule that needs each; and, per selected rule, its index in
+/// the file and the place of its factor among the varied ones.
+pub fn factors(
+    content: &Content,
+    file: &SensitivityFile,
+    only: Option<&[&str]>,
+) -> (Vec<Factor>, Vec<usize>, Vec<(usize, usize)>) {
+    let mut all: Vec<Factor> = Vec::new();
+    let of_rule: Vec<usize> = file
+        .rules
+        .iter()
+        .map(|r| {
+            let f = Factor::of(r, content);
+            all.iter()
+                .position(|g| g.target == f.target)
+                .unwrap_or_else(|| {
+                    all.push(f);
+                    all.len() - 1
+                })
+        })
+        .collect();
+    let mut varied: Vec<usize> = Vec::new();
+    let mut asks = Vec::new();
+    for (i, r) in file.rules.iter().enumerate() {
+        if !only.is_none_or(|o| o.contains(&r.job.as_str())) {
+            continue;
+        }
+        let k = varied
+            .iter()
+            .position(|&f| f == of_rule[i])
+            .unwrap_or_else(|| {
+                varied.push(of_rule[i]);
+                varied.len() - 1
+            });
+        asks.push((i, k));
+    }
+    (all, varied, asks)
+}
+
 /// Plays the rules of `file` whose jobs `only` names (every rule when `None`): the balanced
-/// design over those jobs, every other job held at its middle level, and the two arms over
-/// every job. Returns the rows and the judged rules.
+/// design over those jobs' factors, every other factor held at its middle level, and the two
+/// arms over every factor. Returns the rows and the judged rules.
 pub fn run_rules(
     content: &Content,
     clubs: &Clubs,
@@ -83,14 +125,7 @@ pub fn run_rules(
     only: Option<&[&str]>,
     size: Size,
 ) -> (Played, Vec<RuleResult>) {
-    let all: Vec<Factor> = file.rules.iter().map(|r| Factor::of(r, content)).collect();
-    let varied: Vec<usize> = file
-        .rules
-        .iter()
-        .enumerate()
-        .filter(|(_, r)| only.is_none_or(|o| o.contains(&r.job.as_str())))
-        .map(|(i, _)| i)
-        .collect();
+    let (all, varied, selected) = factors(content, file, only);
     let rows = design::play_design(content, clubs, &all, &varied, size.matches, size.seed);
     let arms = size.arm_matches.map(|n| {
         (
@@ -99,10 +134,9 @@ pub fn run_rules(
         )
     });
     let body = &content.tuning.engine.contract.body;
-    let asks: Vec<Ask> = varied
+    let asks: Vec<Ask> = selected
         .iter()
-        .enumerate()
-        .map(|(k, &i)| {
+        .map(|&(i, k)| {
             let r = &file.rules[i];
             Ask {
                 job: r.job.clone(),
@@ -174,5 +208,52 @@ mod tests {
         ];
         let jobs: Vec<&str> = blocking(&results).iter().map(|r| r.job.as_str()).collect();
         assert_eq!(jobs, ["passing"]);
+    }
+
+    /// A stage rule rides its main attribute's factor: the shipped rules give one factor per
+    /// distinct target, every target once; the press and cover stage asks read positioning's
+    /// factor, alone or with positioning's own rule.
+    #[test]
+    fn a_stage_rule_shares_its_main_attributes_factor() {
+        let content = crate::data::test_support::shipped_content();
+        let dir = crate::data::test_support::shipped_dir();
+        let file = load_rules(&content, &dir).unwrap();
+        let (all, varied, asks) = factors(&content, &file, None);
+        assert_eq!(all.len(), file.rules.len() - 2);
+        for (a, f) in all.iter().enumerate() {
+            assert!(all[..a].iter().all(|g| g.target != f.target), "{}", f.job);
+        }
+        assert_eq!(varied.len(), all.len());
+        assert_eq!(asks.len(), file.rules.len());
+        let factor_of = |job: &str| {
+            let (i, k) = asks
+                .iter()
+                .copied()
+                .find(|&(i, _)| file.rules[i].job == job)
+                .unwrap();
+            assert_eq!(file.rules[i].job, job);
+            all[varied[k]].job.clone()
+        };
+        assert_eq!(factor_of("press.choose"), "positioning");
+        assert_eq!(factor_of("cover.execute"), "positioning");
+        let (all_only, varied, asks) = factors(&content, &file, Some(&["press.choose"]));
+        assert_eq!(all_only.len(), all.len());
+        assert_eq!(varied.len(), 1);
+        assert_eq!(all_only[varied[0]].job, "positioning");
+        assert_eq!(asks.len(), 1);
+        let (_, varied, asks) = factors(
+            &content,
+            &file,
+            Some(&["positioning", "press.choose", "teamwork"]),
+        );
+        assert_eq!(varied.len(), 2);
+        let k = |job: &str| {
+            asks.iter()
+                .find(|&&(i, _)| file.rules[i].job == job)
+                .unwrap()
+                .1
+        };
+        assert_eq!(k("positioning"), k("press.choose"));
+        assert_ne!(k("positioning"), k("teamwork"));
     }
 }

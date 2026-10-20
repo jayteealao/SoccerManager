@@ -57,7 +57,7 @@ fn report(out: &Output, run: &Path) -> Value {
     RecordSchemas::load()
         .report(&report)
         .unwrap_or_else(|e| panic!("{e}\n{report}"));
-    assert_eq!(report["schema.version"], "7");
+    assert_eq!(report["schema.version"], "9");
     report
 }
 
@@ -85,12 +85,13 @@ fn edit_band(content: &Path, name: &str, edit: impl FnOnce(&mut Value)) {
     std::fs::write(&path, serde_json::to_string_pretty(&doc).unwrap()).unwrap();
 }
 
-/// A band of the equal suite no match can sit inside: fouls per team between 0 and 0.1.
+/// A band of the equal suite no match can sit inside: passes per team between 0 and 0.1 (fouls per
+/// team until matches with no foul came in).
 fn impossible_band(gates: bool) -> Value {
     json!({
         "band": "probe_fail",
         "suites": ["equal"],
-        "measure": { "kind": "mean", "per": "team", "of": ["fouls.{side}"] },
+        "measure": { "kind": "mean", "per": "team", "of": ["passes.{side}"] },
         "design": { "lo": 0.0, "hi": 0.1, "smallest_shift": 0.05 },
         "real": {
             "source": { "none": "a test band with no real counterpart" },
@@ -365,5 +366,124 @@ fn a_base_without_measures_judges_a_measures_band_by_its_range() {
         .map(|o| o["engine"].as_str().unwrap())
         .collect();
     assert_eq!(engines, ["changed", "old"]);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+/// The shipped team-shape bands, the bands of the `shape_` groups: each name, and whether it
+/// reads the measures (every band but ball in play, a summary field).
+fn shape_bands() -> Vec<(String, bool)> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content/realism-bands.json");
+    let doc: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    doc["bands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|b| b["group"].as_str().is_some_and(|g| g.starts_with("shape_")))
+        .map(|b| {
+            let name = b["band"].as_str().unwrap().to_string();
+            (name, b["measure"].to_string().contains("shape."))
+        })
+        .collect()
+}
+
+/// The team-shape bands and the figures report and never judge: each shape band sits in
+/// `calib.reported` and never in the gating rows or `calib.bands`; in a measures build it has
+/// a word, and a planted real value gives its real column and gap; a build without the
+/// measures says so and judges none of them. The figures sit in `calib.figures`, each beside its
+/// earlier build's value with the change, and without a value in a build without the
+/// measures. Runs in both builds.
+#[test]
+fn the_shape_bands_and_figures_report_with_their_real_values_and_never_judge() {
+    let data = temp("engine-cli-reported", "shape");
+    let content = edited_content(&data, "tuning.json", |_| {});
+    // Two planted matches: centre-back depth in possession 10 and 12 metres, calm 0.8 and 0.9.
+    let real = data.join("real-data");
+    std::fs::create_dir_all(&real).unwrap();
+    let planted = json!({ "per_match": {
+        "a": { "cb": { "depth_in": 10.0 }, "team": { "calm": 0.8 } },
+        "b": { "cb": { "depth_in": 12.0 }, "team": { "calm": 0.9 } }
+    }});
+    std::fs::write(real.join("shape3_real.json"), planted.to_string()).unwrap();
+    let run = data.join("run");
+    let real_arg = real.display().to_string();
+    let out = calibrate(
+        &data,
+        &content,
+        &run,
+        &["--matches", "4", "--real-data", &real_arg],
+    );
+    let text = stderr(&out);
+    let r = report(&out, &run);
+    let measured = cfg!(feature = "measures");
+
+    let bands = shape_bands();
+    assert_eq!(bands.len(), 101);
+    let gating: Vec<&str> = rows(&r, "calib.bands")
+        .iter()
+        .map(|b| b["band"].as_str().unwrap())
+        .collect();
+    assert_eq!(bands.iter().filter(|(_, m)| !m).count(), 1);
+    for (band, needs_measures) in &bands {
+        assert!(row(&r, "calib.verdicts", band).is_none(), "{band} gates");
+        assert!(!gating.contains(&band.as_str()), "{band} in calib.bands");
+        let reported = row(&r, "calib.reported", band);
+        if measured || !needs_measures {
+            let reported = reported.unwrap_or_else(|| panic!("no {band}: {r}"));
+            assert!(reported["word"].is_string(), "{reported}");
+        } else {
+            // A build without the measures judges no measures band, as it says as it starts.
+            assert!(reported.is_none(), "{band} in a build without the measures");
+        }
+    }
+    assert_eq!(
+        text.contains("this build has no measures"),
+        !measured,
+        "{text}"
+    );
+    if measured {
+        for (band, real) in [("cb_depth_in", 11.0), ("dead_ball_calm_share", 0.85)] {
+            let reported = row(&r, "calib.reported", band).unwrap();
+            assert!(
+                (reported["real"].as_f64().unwrap() - real).abs() < 1e-9,
+                "{reported}"
+            );
+            let value = reported["value"]
+                .as_f64()
+                .unwrap_or_else(|| panic!("{reported}"));
+            let gap = reported["distance"].as_f64().unwrap();
+            assert!((gap - (value - real)).abs() < 1e-3, "{reported}");
+        }
+    }
+
+    let figures = rows(&r, "calib.figures");
+    let names: Vec<&str> = figures
+        .iter()
+        .map(|f| f["figure"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "top_two_receiver_share",
+            "back_line_link_share",
+            "engine_passes_per_team"
+        ]
+    );
+    for f in figures {
+        assert_eq!(f["suite"], "equal");
+        assert_eq!(f["build"], "6aa7e09");
+        let today = f["today"].as_f64().unwrap();
+        // The pass count is a summary field, so every build gives it.
+        if measured || f["figure"] == "engine_passes_per_team" {
+            let value = f["value"].as_f64().unwrap_or_else(|| panic!("{f}"));
+            let change = f["change"].as_f64().unwrap();
+            assert!((change - (value - today)).abs() < 1e-3, "{f}");
+        } else {
+            assert!(f.get("value").is_none() && f.get("change").is_none(), "{f}");
+        }
+    }
+    assert!(
+        text.contains("figures (beside an earlier build; never judged):"),
+        "{text}"
+    );
     let _ = std::fs::remove_dir_all(&data);
 }

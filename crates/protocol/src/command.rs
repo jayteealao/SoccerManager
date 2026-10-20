@@ -13,18 +13,35 @@ use serde::{Deserialize, Serialize};
 pub enum ChangeKind {
     Tactics,
     Substitution,
+    /// Primitives at new levels; applies on the next tick.
+    Instructions,
+    /// A side's rules and player instructions; applies on the next tick.
+    GameState,
 }
 
 impl ChangeKind {
     /// Every kind, in declaration order.
-    pub const ALL: [ChangeKind; 2] = [ChangeKind::Tactics, ChangeKind::Substitution];
+    pub const ALL: [ChangeKind; 4] = [
+        ChangeKind::Tactics,
+        ChangeKind::Substitution,
+        ChangeKind::Instructions,
+        ChangeKind::GameState,
+    ];
 
     /// The kind as a client writes it.
     pub fn code(&self) -> &'static str {
         match self {
             ChangeKind::Tactics => "tactics",
             ChangeKind::Substitution => "substitution",
+            ChangeKind::Instructions => "instructions",
+            ChangeKind::GameState => "game-state",
         }
+    }
+
+    /// `true` for a kind that applies on the next tick and waits for no stoppage, so every
+    /// rule pack admits it.
+    pub fn at_once(&self) -> bool {
+        matches!(self, ChangeKind::Instructions | ChangeKind::GameState)
     }
 
     /// The kind named by `code`, or `None`.
@@ -129,7 +146,7 @@ impl Queue {
                 reason: format!("unknown change type {kind}"),
             });
         };
-        if !self.admitted.contains(&kind) {
+        if !kind.at_once() && !self.admitted.contains(&kind) {
             return Verdict::Reject(Reject {
                 command: "queue-change".into(),
                 reason: format!("the rule pack admits no {} change", kind.code()),
@@ -190,6 +207,22 @@ mod tests {
             panic!("a forbidden kind must be refused");
         };
         assert_eq!(reject.reason, "the rule pack admits no substitution change");
+    }
+
+    #[test]
+    fn a_level_or_game_state_change_is_admitted_by_every_rule_pack() {
+        let mut q = Queue::new(Vec::new());
+        for kind in ["instructions", "game-state"] {
+            let Verdict::Ack(ack) = q.submit(kind, serde_json::Value::Null, 3) else {
+                panic!("{kind} waits for no stoppage, so it is always admitted");
+            };
+            assert_eq!(ack.state, Some(ChangeState::Queued));
+        }
+        assert_eq!(ChangeKind::parse("game-state"), Some(ChangeKind::GameState));
+        assert_eq!(
+            serde_json::to_string(&ChangeKind::GameState).unwrap(),
+            "\"game-state\""
+        );
     }
 
     #[test]

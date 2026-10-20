@@ -2,13 +2,17 @@
 //! acceptance criteria, never tuning values: the calibration harness reads them and nothing
 //! writes them.
 //!
-//! The file is a list of bands (version 4). Each band names its measure (a mean, a share,
+//! The file is a list of bands (version 5). Each band names its measure (a mean, a share,
 //! or a pooled ratio of per-match fields from a closed catalog, or one of three built-in
 //! measures), the suites that judge it, its design range and the smallest shift that
 //! matters, and its full record: where its real value is measured (a pointer into the
 //! real-data folder, or the reason it has no real counterpart), the sample size and date,
 //! its evidence label, its two confidence counts, its pitch condition, and whether it gates.
 //! The file holds no real value: the calibrate command reads it in place at each judgement.
+//!
+//! Version 5 adds an optional list of figures: a measure over the same catalog, with the
+//! value a named build gave, and no range. A figure is reported beside that value and never
+//! judged. A version 4 file (the same layout without figures) still loads as it is.
 //!
 //! A version 3 file (the range flat on the band, no record) still loads and migrates in
 //! memory: every band gates, its condition is dry, and it has no real record. A version 2
@@ -29,7 +33,9 @@ use super::{RED_CARD_FLOOR, RED_CARD_LIMIT, Suite};
 /// The file name inside the content folder.
 pub const BANDS_FILE: &str = "realism-bands.json";
 /// The layout version this build writes and reads.
-pub const REGISTRY_VERSION: u32 = 4;
+pub const REGISTRY_VERSION: u32 = 5;
+/// The layout before the figures list: the same bands, loaded as they are.
+pub const V4_VERSION: u32 = 4;
 /// The layout before the band record, migrated on load.
 pub const V3_VERSION: u32 = 3;
 /// The oldest layout this build migrates on load.
@@ -593,8 +599,57 @@ pub struct Registry {
     /// under this floor only reports.
     pub generalisation_floor: u32,
     pub bands: Vec<BandDef>,
-    /// The layout version the file was migrated from; `None` for a version 4 file.
+    /// The figures: measures reported beside an earlier build's value, never judged.
+    pub figures: Vec<FigureDef>,
+    /// The layout version the file was migrated from; `None` for a version 4 or 5 file.
     pub migrated_from: Option<u32>,
+}
+
+/// A figure: a measure reported beside the value an earlier build gave, with no range; it
+/// never changes a verdict.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FigureDef {
+    pub figure: String,
+    /// The suites that report it.
+    pub suites: Vec<String>,
+    pub measure: Measure,
+    /// The value an earlier build gave.
+    pub today: Today,
+}
+
+/// The value a figure had on an earlier build, and where it was measured.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Today {
+    pub value: f64,
+    /// The build, as a commit.
+    pub build: String,
+    /// How the value was measured, in words.
+    pub source: String,
+}
+
+impl FigureDef {
+    /// The figure as a band that only reports, so the band measures evaluate it: its range
+    /// is empty and it never gates.
+    pub fn as_band(&self) -> BandDef {
+        BandDef {
+            band: self.figure.clone(),
+            suites: self.suites.clone(),
+            measure: self.measure.clone(),
+            lo: self.today.value,
+            hi: self.today.value,
+            smallest_shift: 1.0,
+            group: None,
+            real: None,
+            evidence: None,
+            confidence: None,
+            condition: Condition::Dry,
+            max_from_dry: None,
+            gates: false,
+            report_only: Some("a figure: reported beside an earlier build's value".into()),
+        }
+    }
 }
 
 impl Registry {
@@ -628,12 +683,25 @@ impl Registry {
                 .value
                 .migrate()
         } else {
-            if let (Some(doc), Some(4)) = (&doc, version) {
+            if let (Some(doc), Some(4 | 5)) = (&doc, version) {
                 required(doc).map_err(refuse)?;
             }
-            load_json_bytes::<RegistryV4>(KIND, bytes, BANDS_FILE, REGISTRY_VERSION, &())?
-                .value
-                .into_registry()
+            // A version 4 file is a version 5 file without figures.
+            let expected = if version == Some(u64::from(V4_VERSION)) {
+                V4_VERSION
+            } else {
+                REGISTRY_VERSION
+            };
+            let file = load_json_bytes::<RegistryV4>(KIND, bytes, BANDS_FILE, expected, &())?.value;
+            if expected == V4_VERSION && !file.figures.is_empty() {
+                return Err(refuse((
+                    "figures".into(),
+                    format!(
+                        "a version {V4_VERSION} file has no figures; figures need version {REGISTRY_VERSION}"
+                    ),
+                )));
+            }
+            file.into_registry()
         };
         registry.check().map_err(refuse)?;
         let floor = u64::from(registry.generalisation_floor);
@@ -683,6 +751,43 @@ impl Registry {
                 }
             }
             super::measures::check(&b.measure).map_err(|why| (at("measure"), why))?;
+        }
+        for (i, f) in self.figures.iter().enumerate() {
+            let at = |field: &str| format!("figures[{i}] ({}).{field}", f.figure);
+            if f.figure.trim().is_empty() {
+                return Err((format!("figures[{i}].figure"), "is empty".into()));
+            }
+            if !seen.insert(f.figure.as_str()) {
+                return Err((
+                    at("figure"),
+                    "names a band or figure already in the file".into(),
+                ));
+            }
+            if f.suites.is_empty() {
+                return Err((at("suites"), "names no suite".into()));
+            }
+            if let Some(s) = f.suites.iter().find(|s| Suite::parse(s).is_none()) {
+                return Err((
+                    at("suites"),
+                    format!("{s} is not a suite (equal, strength, formations, red-card)"),
+                ));
+            }
+            if !f.today.value.is_finite() {
+                return Err((at("today.value"), "is not a number".into()));
+            }
+            if f.today.build.trim().is_empty() || f.today.source.trim().is_empty() {
+                return Err((at("today"), "needs the build and the source".into()));
+            }
+            if matches!(
+                f.measure,
+                Measure::Builtin { .. } | Measure::Distribution { .. } | Measure::Cells { .. }
+            ) {
+                return Err((
+                    at("measure"),
+                    "a figure is a mean, a share or a ratio over the catalog".into(),
+                ));
+            }
+            super::measures::check(&f.measure).map_err(|why| (at("measure"), why))?;
         }
         Ok(())
     }
@@ -912,6 +1017,10 @@ struct RegistryV4 {
     generalisation_floor: u32,
     #[garde(skip)]
     bands: Vec<BandV4>,
+    /// Version 5 only.
+    #[serde(default)]
+    #[garde(skip)]
+    figures: Vec<FigureDef>,
 }
 
 /// A band's design range in the version 4 file.
@@ -971,6 +1080,7 @@ impl RegistryV4 {
             stronger_team: self.stronger_team,
             generalisation_floor: self.generalisation_floor,
             bands,
+            figures: self.figures,
             migrated_from: None,
         }
     }
@@ -1017,6 +1127,7 @@ impl RegistryV3 {
             stronger_team: self.stronger_team,
             generalisation_floor: DEFAULT_GENERALISATION_FLOOR,
             bands: self.bands.into_iter().map(BandDef::migrated).collect(),
+            figures: Vec::new(),
             migrated_from: Some(self.schema_version),
         }
     }
@@ -1333,7 +1444,8 @@ mod tests {
         assert_eq!(r.schema_version, REGISTRY_VERSION);
         assert_eq!(r.migrated_from, None);
         assert_confirmed(&r);
-        assert_eq!(r.bands.len(), 18 + REPORTED.len());
+        assert_eq!(r.bands.len(), 18 + REPORTED.len() + SHAPE_BANDS);
+        assert_eq!(r.bands.iter().filter(|b| is_shape(b)).count(), SHAPE_BANDS);
         assert_eq!(r.bands.iter().filter(|b| b.gates).count(), 18);
         assert_eq!(
             r.band("possession_home_pct").unwrap().group.as_deref(),
@@ -1379,6 +1491,61 @@ mod tests {
         let mut g = r.clone();
         g.bands.retain(|b| b.gates);
         g
+    }
+
+    /// The team-shape bands: per position depth, width, pace and sprints, and per team the
+    /// slide, the far-player gain, dead-ball calm, stoppages and ball in play. All report.
+    const SHAPE_BANDS: usize = 101;
+
+    /// `true` for a team-shape band: its group names the shape.
+    fn is_shape(b: &BandDef) -> bool {
+        b.group.as_deref().is_some_and(|g| g.starts_with("shape_"))
+    }
+
+    /// The shipped file in version 4 form (no figures) loads with the same bands; a version 4
+    /// file with figures, and a figure the catalog cannot read, are refused by name.
+    #[test]
+    fn a_version_4_file_still_loads_and_figures_need_version_5() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content/realism-bands.json");
+        let text = std::fs::read_to_string(path).unwrap();
+        let mut doc: Value = serde_json::from_str(&text).unwrap();
+        let shipped = Registry::from_bytes(text.as_bytes()).unwrap();
+        assert_eq!(shipped.figures.len(), 3);
+        assert_eq!(
+            shipped
+                .figures
+                .iter()
+                .map(|f| f.figure.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "top_two_receiver_share",
+                "back_line_link_share",
+                "engine_passes_per_team"
+            ]
+        );
+        doc["schema_version"] = Value::from(4);
+        let err = refusal(&doc.to_string());
+        assert!(err.contains("figures need version 5"), "{err}");
+        let figures = doc.as_object_mut().unwrap().remove("figures").unwrap();
+        let v4 = Registry::from_bytes(doc.to_string().as_bytes()).unwrap();
+        assert_eq!(v4.schema_version, 4);
+        assert_eq!(v4.names(), shipped.names());
+        assert_eq!(v4.digest(), shipped.digest());
+        assert!(v4.figures.is_empty());
+        let mut bad = figures.clone();
+        bad[0]["measure"]["num"] = serde_json::json!(["shape.gk.depth_in_sum.home"]);
+        doc["schema_version"] = Value::from(5);
+        doc["figures"] = bad;
+        let err = refusal(&doc.to_string());
+        assert!(
+            err.contains("figures[0] (top_two_receiver_share).measure"),
+            "{err}"
+        );
+        let mut clash = figures;
+        clash[1]["figure"] = Value::from("goals_per_match");
+        doc["figures"] = clash;
+        let err = refusal(&doc.to_string());
+        assert!(err.contains("names a band or figure already"), "{err}");
     }
 
     /// The bands the shipped file adds with `gates: false`, in file order.
@@ -1594,7 +1761,7 @@ mod tests {
             assert!(b.evidence.is_some(), "{}", b.band);
             let c = b.confidence.unwrap_or_else(|| panic!("{}", b.band));
             assert_eq!(b.condition, Condition::Dry, "{}", b.band);
-            let reported = REPORTED.contains(&b.band.as_str());
+            let reported = REPORTED.contains(&b.band.as_str()) || is_shape(b);
             assert_eq!(b.gates, !reported, "{}", b.band);
             if reported {
                 assert_eq!(
@@ -1911,7 +2078,7 @@ mod tests {
         let err = refusal(&V2.replace("\"schema_version\": 2", "\"schema_version\": 1"));
         assert!(err.contains(BANDS_FILE), "{err}");
         assert!(err.contains("schema_version 1"), "{err}");
-        assert!(err.contains("reads 4"), "{err}");
+        assert!(err.contains("reads 5"), "{err}");
         let err = refusal("{\"schema_version\": 9}");
         assert!(err.contains(BANDS_FILE) && err.contains('9'), "{err}");
     }

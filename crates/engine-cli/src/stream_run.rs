@@ -19,7 +19,7 @@ use engine::{
 use protocol::{
     CardKind, ChangeKind, ChangeOutcome, ChangeState, ChangeStateNote, Condition, Confidence,
     EventType, HiddenWord, MatchEvent, RatingWire, Ratings, RosterEntry, ServerMessage, SlotRole,
-    SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup, TraitWire,
+    SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup, TraitWire, WalkOn, WalkPathWire,
 };
 use std::cell::RefCell;
 
@@ -147,6 +147,8 @@ pub fn drive<S: TickSink>(
     route: MessageRoute<'_>,
 ) -> Result<Driven, StreamError> {
     let mut ids = Ids::new(sim);
+    opts.state
+        .set_home_formation(sim.teams()[HOME].base.formation);
     if let Some(carried) = opts.page_changes {
         ids.page.extend(
             carried
@@ -200,6 +202,15 @@ pub fn drive<S: TickSink>(
             for admitted in held.drain() {
                 let id = sim.queue_change(HOME, admitted.change.clone());
                 ids.page.push((id, admitted.queue_id.clone()));
+                // A level or game-state change applied, or was refused, as it was queued:
+                // it is settled now and can no longer be withdrawn.
+                if admitted.change.at_once() {
+                    let applied = sim
+                        .applied_changes()
+                        .iter()
+                        .any(|a| a.team == HOME && a.id == id);
+                    held.settle(&admitted.queue_id, applied);
+                }
                 if let Some(carried) = opts.page_changes {
                     carried.borrow_mut().push(PageChange {
                         id: Some(id),
@@ -255,8 +266,17 @@ pub fn drive<S: TickSink>(
         {
             return gone(err, written);
         }
+        // A half's walk-on goes before its first tick, so a page draws it before the tick.
+        if let Some(walk_on) = sim.take_walk_on() {
+            route(ServerMessage::WalkOn(walk_on_message(&walk_on)))?;
+            if let Err(err) = sink.on_walk_on(&walk_on) {
+                return gone(err, written);
+            }
+        }
         let record = sim.record();
         opts.state.set_tick(record.tick);
+        opts.state
+            .set_home_formation(sim.teams()[HOME].base.formation);
         if let Err(err) = sink.on_tick(&record) {
             return gone(err, written);
         }
@@ -556,6 +576,7 @@ pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
                     duty: rd.duty,
                 })
                 .collect(),
+            levels: levels_of(&team.tactics, &config.tactics),
         });
         let entry = |squad: usize| RosterEntry {
             id: team.player_ids[squad].clone(),
@@ -625,6 +646,28 @@ fn hidden_word(
 
 /// Every player's match rating as the `ratings` message carries it, home first and in squad
 /// order.
+/// The walk-on as the page reads it: positions in metres to the centimetre, as the tick
+/// frames carry them.
+pub(crate) fn walk_on_message(walk_on: &engine::WalkOn) -> WalkOn {
+    let cm = |v: f64| (v * 100.0).round() / 100.0;
+    WalkOn {
+        period: walk_on.period,
+        first_tick: walk_on.first_tick,
+        speed: walk_on.speed,
+        ticks: walk_on.ticks,
+        paths: walk_on
+            .paths
+            .iter()
+            .map(|w| WalkPathWire {
+                // A roster index is below 22, so the cast fits.
+                player: w.player as u32,
+                from: [cm(w.from.x), cm(w.from.y)],
+                to: [cm(w.to.x), cm(w.to.y)],
+            })
+            .collect(),
+    }
+}
+
 pub(crate) fn ratings_message(sim: &Simulation) -> Ratings {
     let teams = sim.teams();
     Ratings {
@@ -643,6 +686,76 @@ pub(crate) fn ratings_message(sim: &Simulation) -> Ratings {
 /// A squad index as the wire writes it. A validated team file holds far fewer players.
 fn wire_index(squad: usize) -> u16 {
     u16::try_from(squad).unwrap_or(u16::MAX)
+}
+
+/// Each side's game-state rules and player instructions as the hello carries them; `None`
+/// when neither side has any.
+pub(crate) fn hello_game_state(sim: &Simulation) -> Option<[Option<serde_json::Value>; 2]> {
+    let teams = sim.teams();
+    engine::data::game_state::sides_value(
+        [&teams[0].game_state, &teams[1].game_state],
+        &sim.config().tactics,
+    )
+}
+
+/// The level, choice or state of every primitive of the tactics file in `tactics`, in the
+/// file's order; a primitive the tactics do not store reads as its default.
+pub(crate) fn levels_of(
+    tactics: &engine::Tactics,
+    schema: &engine::data::tactics::TacticsSchema,
+) -> Vec<u8> {
+    schema
+        .primitives
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            tactics.level(i, schema).unwrap_or_else(|| {
+                p.default_index(schema)
+                    .and_then(|d| u8::try_from(d).ok())
+                    .unwrap_or(0)
+            })
+        })
+        .collect()
+}
+
+/// The style presets the match loaded, as the hello carries them: each by name, with its
+/// primitives and their levels, its formations, its rules and its player instructions, all by
+/// name. `None` when the content has no styles.
+pub(crate) fn hello_styles(sim: &Simulation) -> Option<serde_json::Value> {
+    let config = sim.config();
+    let styles = config.styles.as_ref()?;
+    let schema = &config.tactics;
+    let presets: Vec<serde_json::Value> = styles
+        .styles
+        .iter()
+        .map(|style| {
+            let primitives: Vec<serde_json::Value> = style
+                .primitives
+                .iter()
+                .map(|&(p, l)| {
+                    let primitive = &schema.primitives[usize::from(p)];
+                    serde_json::json!({
+                        "primitive": primitive.name,
+                        "level": primitive.level_names(schema)[usize::from(l)],
+                    })
+                })
+                .collect();
+            let formations: Vec<&str> = style
+                .formations
+                .iter()
+                .map(|&f| schema.formations[usize::from(f)].name.as_str())
+                .collect();
+            let written = engine::data::game_state::written(&style.game_state, schema);
+            serde_json::json!({
+                "name": style.name,
+                "primitives": primitives,
+                "formations": formations,
+                "rules": written.rules,
+                "player_instructions": written.instructions,
+            })
+        })
+        .collect();
+    Some(serde_json::Value::Array(presets))
 }
 
 /// The loaded tactics file as the hello carries it, so the page renders its tactics panel
@@ -1189,7 +1302,7 @@ mod tests {
                 assert_eq!(word.word, None, "{entry:?}");
             }
         }
-        assert_eq!(protocol::PROTOCOL_VERSION, 7);
+        assert_eq!(protocol::PROTOCOL_VERSION, 9);
         let setup = teams[HOME]
             .setup
             .as_ref()
@@ -1677,7 +1790,7 @@ mod tests {
         assert!(
             advice
                 .iter()
-                .any(|a| a.picks.iter().any(|p| p.code == "sub-fatigue")),
+                .any(|a| a.picks.iter().any(|p| p.kind == "substitution")),
             "{advice:?}"
         );
         // Each message differs from the one before it.

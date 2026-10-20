@@ -91,7 +91,7 @@ test('the player as a person through one match and into the next', async ({ page
     await pastSplash(page);
     await page.locator('[data-choice="new"]').click();
     await setupToTactics(page);
-    await page.locator('select[data-instruction="tempo"]:visible').selectOption({ label: 'Faster' });
+    await page.locator('select[data-instruction="tempo"]:visible').selectOption({ label: 'Fast' });
 
     // 1. The panel from the Squad screen, every section.
     await openPanel(page, lomrick);

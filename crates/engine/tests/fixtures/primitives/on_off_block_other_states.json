@@ -1,0 +1,25 @@
+{
+  "refusal": "the states are the levels of instructions.time_wasting",
+  "primitive": {
+    "name": "planted",
+    "kind": "on_off",
+    "levels": "instructions.time_wasting",
+    "states": ["no", "yes"],
+    "default": "no",
+    "inputs": [
+      {
+        "input": "time_wasting",
+        "hook": "restart.time_wasting"
+      }
+    ],
+    "signature": [
+      {
+        "stat": "restart_wait_leading_late_s",
+        "direction": "up"
+      }
+    ],
+    "data": {
+      "none": "a planted entry"
+    }
+  }
+}

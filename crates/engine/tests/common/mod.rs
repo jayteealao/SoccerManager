@@ -19,6 +19,59 @@ pub fn content() -> Content {
     Content::load(&content_dir()).expect("the shipped content loads")
 }
 
+/// The shipped content with the `team_stands` flag on: the tactics file's stands apply.
+pub fn content_with_stands() -> Content {
+    let on = engine::FlagStates(
+        [(
+            engine::flags::TEAM_STANDS.to_string(),
+            engine::FlagState::On,
+        )]
+        .into(),
+    );
+    content().with_flags(&on).expect("the stands flag turns on")
+}
+
+/// The shipped content with the `ai_style_pick` flag off: an AI-managed side starts in the
+/// tactics file's default tactics, as before the style pick existed.
+pub fn content_without_style_pick() -> Content {
+    let off = engine::FlagStates(
+        [(
+            engine::flags::AI_STYLE_PICK.to_string(),
+            engine::FlagState::Off,
+        )]
+        .into(),
+    );
+    content()
+        .with_flags(&off)
+        .expect("the style pick flag turns off")
+}
+
+/// `config` with both sides in the AI's default tactics, each with the lineup and bench its
+/// pre-match module picks for them: the match the AI plays with the style pick off. For a
+/// scene or a batch whose premise is the default tactics, such as two squads that differ in
+/// one attribute only, which would otherwise each start in the style that fits it.
+pub fn default_tactics(config: MatchConfig) -> MatchConfig {
+    let defaults = engine::Tactics::defaults(&config.tactics);
+    config
+        .with_ai_tactics(0, defaults)
+        .with_ai_tactics(1, defaults)
+}
+
+/// The shipped content with the `ai_style_pick` flag on, its shipped state, stated for the
+/// tests of the pick: an AI-managed side starts in the named style the staff advice picks.
+pub fn content_with_style_pick() -> Content {
+    let on = engine::FlagStates(
+        [(
+            engine::flags::AI_STYLE_PICK.to_string(),
+            engine::FlagState::On,
+        )]
+        .into(),
+    );
+    content()
+        .with_flags(&on)
+        .expect("the style pick flag turns on")
+}
+
 pub fn default_teams(content: &Content) -> [TeamFile; 2] {
     let dir = content_dir();
     let a = content
@@ -44,13 +97,18 @@ pub fn full_match() -> MatchConfig {
     MatchConfig::new(SEED, 90, &content, [&a, &b]).unwrap()
 }
 
-/// The seed-6, 90-minute match on the shipped content and default teams: both sides score,
-/// and its AI managers change tactics in the second half. (Seed 40 stopped scoring when the
-/// converted team files took values from related attributes.)
+/// The seed-2, 90-minute match on the shipped content and default teams: it scores.
+/// (Seed 40 until the team stands went off or the converted team files took values from
+/// related attributes; seed 6 on those team files, where both sides scored; seed 1 until the
+/// defending stages read their attributes, when it stopped scoring; seed 3 until a player
+/// going for a loose ball stopped being pushed off it, when it stopped scoring; seed 1 until
+/// clearances, shots and misreads were scored by their cost, when it stopped scoring; seed 0
+/// until every option was charged its chance of losing the ball, when it stopped scoring.
+/// Seed 2 is the lowest that scores now.)
 pub fn scoring_match() -> MatchConfig {
     let content = content();
     let [a, b] = default_teams(&content);
-    MatchConfig::new(6, 90, &content, [&a, &b]).unwrap()
+    MatchConfig::new(2, 90, &content, [&a, &b]).unwrap()
 }
 
 /// A seed-42 match of `minutes` on the shipped content and default teams. Shorter than the

@@ -20,9 +20,10 @@ use super::{
     AiPlan, BallModule, CarrierPlan, ChangesModule, ClockModule, CommentaryHookModule, Contest,
     CrossContest, Crossing, DecisionHookModule, DecisionModule, Deflection, DisciplineModule,
     FatigueModule, FoulsModule, InjuriesModule, LooseBall, ManagerModule, MatchView, OffsideModule,
-    OptionDraft, OptionDraws, ParrySide, PeriodEnd, PossessionModule, PreMatchModule, Proposal,
-    ROSTER, RestartPass, RestartsModule, RuleHookModule, RulesModule, Scored, ShootoutLineup,
-    ShotDraws, ShotKind, ShotModule, SteeringModule, SubEntry, SubRequest, TackleChances, Targets,
+    OptionDraft, OptionDraws, ParrySide, PassCut, PeriodEnd, PossessionModule, PreMatchModule,
+    Proposal, ROSTER, RestartPass, RestartsModule, RuleHookModule, RulesModule, Scored,
+    ShootoutLineup, ShotDraws, ShotKind, ShotModule, SteeringModule, SubEntry, SubRequest,
+    TackleChances, Targets,
 };
 use crate::ai::Setup;
 use crate::ball::Ball;
@@ -210,6 +211,17 @@ impl PreMatchModule for StandIn<dyn PreMatchModule> {
     ) -> Setup {
         self.0.setup_for(team, start, tactics, attrs)
     }
+    fn advise(
+        &self,
+        team: &Team,
+        styles: &crate::data::styles::Styles,
+        tactics: &TacticsSchema,
+        attrs: &AttributeSchema,
+        seed: u64,
+        side: usize,
+    ) -> Option<(Tactics, crate::tactics::rules::GameState)> {
+        self.0.advise(team, styles, tactics, attrs, seed, side)
+    }
 }
 
 impl Modifier for StandIn<dyn Modifier> {
@@ -264,14 +276,23 @@ impl RestartsModule for StandIn<dyn RestartsModule> {
     fn delay_ticks(&self, view: &MatchView<'_>, kind: StoppageKind, team: usize) -> u32 {
         self.0.delay_ticks(view, kind, team)
     }
+    fn extra_ticks(&self, view: &MatchView<'_>, kind: StoppageKind, team: usize, u: f64) -> u32 {
+        self.0.extra_ticks(view, kind, team, u)
+    }
+    fn quick_chance(&self, view: &MatchView<'_>, dead: &DeadBall) -> f64 {
+        self.0.quick_chance(view, dead)
+    }
+    fn job(&self, view: &MatchView<'_>, dead: &DeadBall, i: usize) -> crate::pace::Job {
+        self.0.job(view, dead, i)
+    }
     fn shootout_delay_ticks(&self, view: &MatchView<'_>) -> u32 {
         self.0.shootout_delay_ticks(view)
     }
     fn target(&self, view: &MatchView<'_>, dead: &DeadBall, i: usize) -> DVec2 {
         self.0.target(view, dead, i)
     }
-    fn ready(&self, view: &MatchView<'_>, dead: &DeadBall, now: u32) -> bool {
-        self.0.ready(view, dead, now)
+    fn steps_done(&self, view: &MatchView<'_>, dead: &DeadBall, now: u32) -> bool {
+        self.0.steps_done(view, dead, now)
     }
     fn kick_off_position(
         &self,
@@ -354,6 +375,12 @@ impl PossessionModule for StandIn<dyn PossessionModule> {
     fn tacklers(&self, view: &MatchView<'_>, c: usize) -> Option<u32> {
         self.0.tacklers(view, c)
     }
+    fn pass_cut(&self, view: &MatchView<'_>, i: usize) -> Option<PassCut> {
+        self.0.pass_cut(view, i)
+    }
+    fn take_on(&self, view: &MatchView<'_>, c: usize, i: usize) -> Option<f64> {
+        self.0.take_on(view, c, i)
+    }
 }
 
 impl DecisionModule for StandIn<dyn DecisionModule> {
@@ -387,8 +414,8 @@ impl DecisionModule for StandIn<dyn DecisionModule> {
     ) -> CarrierPlan {
         self.0.plan(view, c, options, choice)
     }
-    fn pass_kick(&self, view: &MatchView<'_>, c: usize, j: usize, aim: f64) -> Kick {
-        self.0.pass_kick(view, c, j, aim)
+    fn pass_kick(&self, view: &MatchView<'_>, c: usize, j: usize, aim: f64, weight: f64) -> Kick {
+        self.0.pass_kick(view, c, j, aim, weight)
     }
     fn clear_kick(&self, view: &MatchView<'_>, c: usize, wide: bool, aim: f64) -> Kick {
         self.0.clear_kick(view, c, wide, aim)
@@ -416,6 +443,15 @@ impl DecisionModule for StandIn<dyn DecisionModule> {
         aim: f64,
     ) -> RestartPass {
         self.0.restart_pass(view, taker, kind, direct, aim)
+    }
+    fn tackle(
+        &self,
+        view: &MatchView<'_>,
+        tackler: usize,
+        carrier: usize,
+        chances: TackleChances,
+    ) -> Option<TackleChances> {
+        self.0.tackle(view, tackler, carrier, chances)
     }
 }
 

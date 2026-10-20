@@ -114,9 +114,14 @@ fn a_throw_in_a_corner_and_a_goal_kick_are_restart_kicks() {
     );
 }
 
+/// Seed 2, the lowest whose kick-off is followed by a second kick before the ball goes dead
+/// (seed 0 until every option was charged its chance of losing the ball; the shared seed 42
+/// until tempo became patience and the mentality an appetite for risk).
 #[test]
 fn the_kick_off_is_a_restart_kick_and_the_next_pass_is_a_pass() {
-    let mut sim = Simulation::new(short_match(5)).unwrap();
+    let content = content();
+    let [a, b] = default_teams(&content);
+    let mut sim = Simulation::new(MatchConfig::new(2, 5, &content, [&a, &b]).unwrap()).unwrap();
     let kicks = |s: &engine::sim::Summary| {
         (0..2)
             .map(|t| s.passes[t] + s.clearances[t] + s.restart_kicks[t] + s.shots[t])
@@ -224,9 +229,12 @@ fn an_opponent_inside_the_tackle_reach_can_win_the_ball() {
 
 /// The home carrier runs at `speed` metres per second with an away player 0.5 m from the
 /// ball. The tackle roll lies between the standing win chance and the running win chance.
+/// The pace selector is off: the scene judges the tackle on the speed it sets, which the
+/// selector would cut to his chosen pace in the same step.
 fn running(speed: f64) -> Simulation {
     let mut config = calm_match(90);
     config.tuning.tackle_dribble_win = 0.5;
+    config.tuning.pace = engine::tuning::PaceTuning::off();
     let sim = Simulation::new(config.clone()).unwrap();
     let (tackler, carrier) = (sim.skills(index(1, 5)), sim.skills(index(0, 5)));
     let base = engine::rules::fouls::win_chance(tackler, carrier, &config.tuning);
@@ -252,7 +260,9 @@ fn a_running_carrier_is_easier_to_tackle_than_a_standing_one() {
 }
 
 /// A calm match on `seed` with the cross clearance on, everyone spread away, the home
-/// striker on the ball at `from`. The home side attacks `x = 52.5` in the first half.
+/// striker on the ball at `from`. The home side attacks `x = 52.5` in the first half. A pass
+/// along the x axis starts wide of the post (`y = 4.5`), so it stays a pass: an open-play kick
+/// that would go in is a shot.
 fn pass_scene(seed: u64, from: DVec2) -> Scene {
     let mut config = calm_match(90);
     config.seed = seed;
@@ -270,8 +280,8 @@ const AWAY_KEEPER: usize = 11;
 
 #[test]
 fn a_defender_clears_a_fast_pass_in_his_area() {
-    let mut sim = pass_scene(42, DVec2::new(30.0, 0.0))
-        .place(DEFENDER, DVec2::new(40.0, 1.0))
+    let mut sim = pass_scene(42, DVec2::new(30.0, 4.5))
+        .place(DEFENDER, DVec2::new(40.0, 5.5))
         .rolls(&[0.0])
         .kick(DVec2::X, 20.0, 0.0)
         .build();
@@ -290,8 +300,8 @@ fn a_defender_clears_a_fast_pass_in_his_area() {
 
 #[test]
 fn a_failed_clearance_roll_lets_the_pass_go_on() {
-    let mut sim = pass_scene(42, DVec2::new(30.0, 0.0))
-        .place(DEFENDER, DVec2::new(40.0, 1.0))
+    let mut sim = pass_scene(42, DVec2::new(30.0, 4.5))
+        .place(DEFENDER, DVec2::new(40.0, 5.5))
         .rolls(&[0.99])
         .kick(DVec2::X, 20.0, 0.0)
         .build();

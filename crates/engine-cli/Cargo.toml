@@ -25,6 +25,11 @@ measures = ["engine/measures"]
 name = "calibrate_rules"
 required-features = ["sensitivity"]
 
+# The primitives harness plays matches with the measures on.
+[[test]]
+name = "primitives_harness"
+required-features = ["measures"]
+
 [dependencies]
 engine = { path = "../engine" }
 protocol = { path = "../protocol" }

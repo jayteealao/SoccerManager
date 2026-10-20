@@ -297,7 +297,8 @@ impl Season {
 
     /// The record in `data`. A missing file gives an empty record; a file that does not read,
     /// or is larger than [`MAX_FILE_BYTES`], gives an empty record and says so in a signal.
-    /// Never fails the launch.
+    /// A refused file is first moved aside (see [`set_aside`]), so the next save of the empty
+    /// record never overwrites the person's matches. Never fails the launch.
     pub fn load(data: &Path) -> Season {
         Season::load_within(data, MAX_FILE_BYTES)
     }
@@ -308,17 +309,27 @@ impl Season {
         if let Ok(meta) = std::fs::metadata(&path)
             && meta.len() > max_bytes
         {
-            tracing::warn!(
-                signal = "launch.season_refused",
-                reason = %format!("the season file is {} bytes; at most {max_bytes}", meta.len())
+            refuse(
+                &path,
+                &format!(
+                    "the season file is {} bytes; at most {max_bytes}",
+                    meta.len()
+                ),
             );
             return Season::default();
         }
-        let Ok(text) = std::fs::read_to_string(&path) else {
-            return Season::default();
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Season::default();
+            }
+            Err(error) => {
+                refuse(&path, &format!("the season file does not read: {error}"));
+                return Season::default();
+            }
         };
         Season::parse(&text).unwrap_or_else(|reason| {
-            tracing::warn!(signal = "launch.season_refused", reason = %reason);
+            refuse(&path, &reason);
             Season::default()
         })
     }
@@ -444,6 +455,44 @@ impl Season {
             .collect();
         serde_json::json!({ "matches": part.matches, "players": players })
     }
+}
+
+/// Says in a signal why the season file at `path` is refused, and moves it aside first, so
+/// the empty record that replaces it in this launch never overwrites it on the next save.
+fn refuse(path: &Path, reason: &str) {
+    match set_aside(path) {
+        Ok(kept) => tracing::warn!(
+            signal = "launch.season_refused",
+            reason = %reason,
+            kept = %kept.display()
+        ),
+        Err(error) => tracing::warn!(
+            signal = "launch.season_refused",
+            reason = %reason,
+            kept = %format!("not kept: {error}")
+        ),
+    }
+}
+
+/// Renames the file at `path` to the first free name of `<name>.refused`, `<name>.refused.1`,
+/// `<name>.refused.2` and so on, beside it, and returns the new path. An earlier refused copy
+/// is never replaced.
+fn set_aside(path: &Path) -> std::io::Result<PathBuf> {
+    let base = {
+        let mut name = path.as_os_str().to_os_string();
+        name.push(".refused");
+        PathBuf::from(name)
+    };
+    let mut kept = base.clone();
+    let mut n = 0u32;
+    while kept.exists() {
+        n += 1;
+        let mut name = base.as_os_str().to_os_string();
+        name.push(format!(".{n}"));
+        kept = PathBuf::from(name);
+    }
+    std::fs::rename(path, &kept)?;
+    Ok(kept)
 }
 
 /// Writes `text` at `path` through a temporary file beside it, creating the folder.
@@ -723,6 +772,13 @@ pub(crate) mod tests {
         assert_eq!(Season::load(data), season);
         std::fs::write(data.join(SEASON_FILE), "{ not json").unwrap();
         assert_eq!(Season::load(data), Season::default());
+        let refused_copy = data.join(format!("{SEASON_FILE}.refused"));
+        assert_eq!(
+            std::fs::read_to_string(&refused_copy).unwrap(),
+            "{ not json"
+        );
+        assert!(!data.join(SEASON_FILE).exists());
+        std::fs::remove_file(&refused_copy).unwrap();
 
         let good = serde_json::to_value(&season).unwrap();
         let refused = |edit: &dyn Fn(&mut serde_json::Value)| {
@@ -774,6 +830,54 @@ pub(crate) mod tests {
         let size = std::fs::metadata(data.join(SEASON_FILE)).unwrap().len();
         assert_eq!(Season::load_within(data, size), season);
         assert_eq!(Season::load_within(data, size - 1), Season::default());
+        // The over-size file is kept aside whole, not lost.
+        let kept = data.join(format!("{SEASON_FILE}.refused"));
+        assert_eq!(
+            Season::parse(&std::fs::read_to_string(kept).unwrap()).unwrap(),
+            season
+        );
+    }
+
+    /// A refused season file survives the next save: the launch keeps the empty record, the
+    /// first finished match saves it, and the person's own file is still on disk beside it,
+    /// under `.refused`, then `.refused.1` for a second refusal.
+    #[test]
+    fn a_refused_file_is_kept_aside_and_the_next_save_never_replaces_it() {
+        let folder = temp("refused");
+        let data = &folder.0;
+        let mut season = Season::default();
+        season
+            .clubs
+            .entry("club-a".into())
+            .or_default()
+            .matches
+            .push("m-0".into());
+        season.save(data).unwrap();
+        let mut doc: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(data.join(SEASON_FILE)).unwrap())
+                .unwrap();
+        doc["schema_version"] = 99.into();
+        let theirs = doc.to_string();
+        std::fs::write(data.join(SEASON_FILE), &theirs).unwrap();
+
+        let mut fresh = Season::load(data);
+        assert_eq!(fresh, Season::default());
+        fresh
+            .clubs
+            .entry("club-b".into())
+            .or_default()
+            .matches
+            .push("m-1".into());
+        fresh.save(data).unwrap();
+        let kept = data.join(format!("{SEASON_FILE}.refused"));
+        assert_eq!(std::fs::read_to_string(&kept).unwrap(), theirs);
+        assert_eq!(Season::load(data), fresh);
+
+        std::fs::write(data.join(SEASON_FILE), "{ not json").unwrap();
+        assert_eq!(Season::load(data), Season::default());
+        assert_eq!(std::fs::read_to_string(&kept).unwrap(), theirs);
+        let second = data.join(format!("{SEASON_FILE}.refused.1"));
+        assert_eq!(std::fs::read_to_string(&second).unwrap(), "{ not json");
     }
 
     /// The copy: none for a club with no match; a copy with no input set plays the same seed

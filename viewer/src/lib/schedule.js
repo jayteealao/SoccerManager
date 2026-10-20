@@ -53,6 +53,12 @@ export class Scheduler {
     this.playing = playing;
   }
 
+  /// Forgets the last frame's timestamp, so the next frame moves the cursor by nothing: the
+  /// frames between (a walk-on interlude) were not playback time.
+  rest() {
+    this.lastTimestamp = null;
+  }
+
   /// Puts the cursor on an exact tick, for a rewind. The fraction resets to zero, so the
   /// next frame drawn is the stored tick itself.
   seek(tick) {

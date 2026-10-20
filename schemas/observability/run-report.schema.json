@@ -24,8 +24,18 @@
       "const": "run-report"
     },
     "schema.version": {
-      "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows; 4 for a calibrate run that reports each band's real value (calib.real, calib.realism, and the real columns of each verdict); 5 for a calibrate run that reports the bands that only report apart (calib.reported), the developer's acceptances (calib.accepted), the match counts (calib.counts), and how each verdict row was judged; 6 for a calibrate run with the whole-distribution bands (upper and noise_floor on a verdict row); 7 for a calibrate run with the formation field rating (calib.nash). Every key of an older version stays.",
-      "enum": ["1", "2", "3", "4", "5", "6", "7"]
+      "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows; 4 for a calibrate run that reports each band's real value (calib.real, calib.realism, and the real columns of each verdict); 5 for a calibrate run that reports the bands that only report apart (calib.reported), the developer's acceptances (calib.accepted), the match counts (calib.counts), and how each verdict row was judged; 6 for a calibrate run with the whole-distribution bands (upper and noise_floor on a verdict row); 7 for a calibrate run with the formation field rating (calib.nash); 8 for a calibrate run with the registry's figures (calib.figures); 9 for a calibrate run whose change run reports a styles sample (calib.styles). Every key of an older version stays.",
+      "enum": ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
+    },
+    "calib.substitutions": {
+      "description": "The substitutions of the run's matches (per team a match, the share of team matches by count, the minute quartiles, the reasons, the out-of-position share) beside the real era of the rule pack's substitution limit from the signature table; report only.",
+      "type": "object",
+      "required": ["limit", "matches", "substitutions", "per_team", "count_shares", "minute_quartiles", "reasons"]
+    },
+    "calib.styles": {
+      "description": "A change run's sample of the styles suite: one match per ordered pairing of the named styles on the changed engine, report only. Its gate block (gate: pass, dominant, identity_flags, pairings_outside, violations, unplayed) judges the sample whole and reports only.",
+      "type": "object",
+      "required": ["matches_per_pairing", "matches", "played", "violations", "styles", "pairings", "dominant", "identity_flags", "wall_ms"]
     },
     "owner.id": {
       "type": "string",
@@ -815,6 +825,24 @@
             "type": "array",
             "items": { "$ref": "#/$defs/verdictRow" }
           },
+          "calib.figures": {
+            "description": "Since version 8: the band registry's figures, each the value the run gives beside the value an earlier build gave (today, of build), and the change between them. Never judged: no word and no range, never in the joint word or calib.pass. value and change are absent when the run cannot give the figure (a build without the measures).",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["figure", "suite", "se", "today", "build"],
+              "additionalProperties": false,
+              "properties": {
+                "figure": { "type": "string", "minLength": 1 },
+                "suite": { "type": "string", "minLength": 1 },
+                "value": { "type": "number" },
+                "se": { "type": "number", "minimum": 0 },
+                "today": { "type": "number" },
+                "build": { "type": "string", "minLength": 1 },
+                "change": { "type": "number" }
+              }
+            }
+          },
           "calib.accepted": {
             "description": "Since version 5: the run folder's accepted.json, the bands it accepts, and why it was ignored when it was (another run or identity, or a file that cannot be read).",
             "type": "object",
@@ -1052,7 +1080,7 @@
       "if": {
         "properties": {
           "operation": { "const": "calibrate" },
-          "schema.version": { "enum": ["2", "3", "4", "5", "6", "7"] },
+          "schema.version": { "not": { "const": "1" } },
           "outcome": { "not": { "const": "error" } }
         },
         "required": ["operation", "schema.version"]

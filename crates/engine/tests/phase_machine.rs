@@ -204,12 +204,14 @@ fn a_planted_undeclared_step_fails_the_validator() {
 
 /// Every write of the stored phase in the engine's source, as `path: line`, outside the
 /// files allowed to write it: the machine's one writer in the referee, the snapshot reader
-/// that restores it, the scene builder, and the scene builder's one seat in the referee
-/// (`seat_phase`, compiled only for test scenes).
+/// that restores it, the scene builder, the scene builder's one seat in the referee
+/// (`seat_phase`, compiled only for test scenes), and the referee's one update of the dead
+/// ball in force (`update_dead_ball`: the restart's own times, the named phase unchanged).
 fn phase_writes(files: &[(String, String)]) -> Vec<String> {
     let mut found = Vec::new();
     let mut in_machine = 0;
     let mut seats = 0;
+    let mut updates = 0;
     for (path, text) in files {
         for line in text.lines() {
             let code = line.trim_start();
@@ -220,12 +222,18 @@ fn phase_writes(files: &[(String, String)]) -> Vec<String> {
                 "snapshot.rs" | "scenario.rs" => {}
                 "rules/mod.rs" if code == "self.referee.phase = next;" => in_machine += 1,
                 "rules/mod.rs" if code == "self.referee.phase = phase;" => seats += 1,
+                "rules/mod.rs" if code == "self.referee.phase = Phase::DeadBall(dead);" => {
+                    updates += 1
+                }
                 _ => found.push(format!("{path}: {code}")),
             }
         }
     }
     if seats > 1 {
         found.push(format!("rules/mod.rs: {seats} scene seats, not 1"));
+    }
+    if updates > 1 {
+        found.push(format!("rules/mod.rs: {updates} dead-ball updates, not 1"));
     }
     if in_machine != 1 {
         found.push(format!(

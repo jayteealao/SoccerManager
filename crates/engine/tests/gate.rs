@@ -607,7 +607,9 @@ fn committed() -> GoldenFile {
 /// The recorded result changes: entry 2, whose reason names the maths change and the keyed
 /// split, entry 3, whose reason names the restart position check and the fixes it forced, and
 /// entry 4, whose reason names the ratings in tenths and the unchanged play, and entry 5,
-/// whose reason names the stage blend and the curve. Each candidate is a clean commit, and
+/// whose reason names the stage blend and the curve, and entry 9, whose reason names the team
+/// shape and the AI's style pick, and entry 10, whose reason names the tactical primitives,
+/// the style presets and the option values. Each candidate is a clean commit, and
 /// each band result holds a verdict for each band of `content/realism-bands.json`.
 #[test]
 fn each_result_change_is_one_regenerate_entry_with_its_band_result() {
@@ -621,10 +623,10 @@ fn each_result_change_is_one_regenerate_entry_with_its_band_result() {
         .collect();
     assert_eq!(
         regenerations,
-        [2, 3, 4, 5, 6, 7, 8],
-        "seven regenerate entries, entries 2 to 8"
+        [2, 3, 4, 5, 6, 7, 8, 9, 10],
+        "nine regenerate entries, entries 2 to 10"
     );
-    let named: [(usize, &[&str]); 7] = [
+    let named: [(usize, &[&str]); 9] = [
         (2, &["libm", "keyed"]),
         (3, &["restart position check", "Law 8", "goal line"]),
         (4, &["tenths", "version 2", "every tick of play unchanged"]),
@@ -639,6 +641,31 @@ fn each_result_change_is_one_regenerate_entry_with_its_band_result() {
                 "mood",
                 "traits of play",
                 "weaker foot",
+            ],
+        ),
+        (
+            9,
+            &[
+                "team shape",
+                "slides",
+                "pace",
+                "restart waits",
+                "walk-on",
+                "defensive jobs",
+                "named style",
+                "lineup and bench",
+            ],
+        ),
+        (
+            10,
+            &[
+                "tactical primitives",
+                "presets of primitives",
+                "situation-driven substitutions",
+                "real threat of a place",
+                "chance of losing the ball",
+                "value-added rating",
+                "knockout fixture",
             ],
         ),
     ];
@@ -728,22 +755,23 @@ fn band_result_holds_every_band(entry: &golden::LedgerEntry, index: usize) {
     }
 }
 
-/// The regeneration kept what the gate measures: gate schema 5 with state inventory 5, and
-/// the fixture list of the golden-file guard, by its digest at the guard's commit.
+/// The regeneration kept what the gate measures: gate schema 8 with state inventory 7, and
+/// the fixture list by its digest: the golden-file guard's list with the knockout fixture on
+/// seed 1.
 #[test]
 fn the_regeneration_kept_the_gate_schema_and_the_fixture_list() {
     use sha2::{Digest, Sha256};
     let file = committed();
-    assert_eq!(file.gate_schema, 5);
-    assert_eq!(file.inventory_version, 5);
+    assert_eq!(file.gate_schema, 8);
+    assert_eq!(file.inventory_version, 7);
     let list = serde_json::to_string(&file.fixtures).unwrap();
     let hex: String = Sha256::digest(list.as_bytes())
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect();
     assert_eq!(
-        hex, "7978db1fc301382124ca8dc6928956131411dbbf177b90f978481dc7cd1fd5fc",
-        "the fixture list differs from the golden-guard one"
+        hex, "ac68fdb109cbdbb4b52d47cc9251b5def51712f0adc2288daf33df0f41b18364",
+        "the fixture list differs from the schema 8 one"
     );
     // Control: one changed fixture moves the digest.
     let mut edited = file.fixtures.clone();

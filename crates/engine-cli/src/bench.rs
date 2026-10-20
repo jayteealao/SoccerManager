@@ -13,7 +13,9 @@ use stream::session::{MatchState, SessionConfig};
 use stream::{Client, CommandContext, Gate, Incoming, Server, Session};
 
 use crate::cli::BenchOpts;
-use crate::stream_run::{Drive, drive, hello_substitutions, hello_tactics, hello_teams};
+use crate::stream_run::{
+    Drive, drive, hello_game_state, hello_substitutions, hello_tactics, hello_teams,
+};
 
 /// Wall-time budget for one 90-minute match on one thread, in milliseconds (NFR-1).
 pub const BUDGET_MATCH_WALL_MS: u64 = 2000;
@@ -175,6 +177,8 @@ fn measure_stream(
         knockout: false,
         ground_length: config.pitch().length(),
         ground_width: config.pitch().width(),
+        game_state: hello_game_state(&sim),
+        styles: None,
     };
 
     let server = Server::bind(&data, &match_id)?;

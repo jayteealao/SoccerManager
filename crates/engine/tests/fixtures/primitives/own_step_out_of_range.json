@@ -1,0 +1,56 @@
+{
+  "refusal": "gives build_up 9, outside its range -2 to 2",
+  "primitive": {
+    "name": "planted",
+    "kind": "graded",
+    "levels": "own",
+    "steps": [
+      {
+        "name": "very_low",
+        "values": {
+          "build_up": 0.0
+        }
+      },
+      {
+        "name": "low",
+        "values": {
+          "build_up": 0.1
+        }
+      },
+      {
+        "name": "mid",
+        "values": {
+          "build_up": 0.2
+        }
+      },
+      {
+        "name": "high",
+        "values": {
+          "build_up": 0.30000000000000004
+        }
+      },
+      {
+        "name": "very_high",
+        "values": {
+          "build_up": 9.0
+        }
+      }
+    ],
+    "default": "mid",
+    "inputs": [
+      {
+        "input": "build_up",
+        "hook": "pass.build_up"
+      }
+    ],
+    "signature": [
+      {
+        "stat": "passes_per_possession",
+        "direction": "up"
+      }
+    ],
+    "data": {
+      "none": "a planted entry"
+    }
+  }
+}

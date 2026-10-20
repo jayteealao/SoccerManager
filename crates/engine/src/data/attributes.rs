@@ -11,7 +11,10 @@
 //! attributes, moves communication to the mental group, adds the personality group (hidden
 //! values whose jobs act on occasions in a match, or on nothing in a match), the small weights
 //! of a stage, and a consistency degree per action; a version 3 file converts
-//! ([`crate::data::convert::attributes_v3_to_v4`]).
+//! ([`crate::data::convert::attributes_v3_to_v4`]). Version 5 adds the cover and recovery-run
+//! stages, re-weights the press and shape stages, moves work rate's job to the recovery run
+//! and makes determination's an occasion; a version 4 file converts
+//! ([`crate::data::convert::attributes_v4_to_v5`]).
 
 use std::collections::BTreeMap;
 
@@ -21,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use crate::contract::{ActionKind, GateDefs, STAGES, StageKind, StageTable};
 
 /// Schema version this build reads.
-pub const ATTRIBUTES_VERSION: u32 = 4;
+pub const ATTRIBUTES_VERSION: u32 = 5;
 /// The slots of a player's rating array: `Attributes` on a player is a fixed array of this
 /// size, holding every visible, hidden, and personality value.
 pub const MAX_ATTRIBUTES: usize = 64;
@@ -302,8 +305,10 @@ fn check_names(attributes: &[AttributeDef], _ctx: &()) -> garde::Result {
 /// stage; every job acts where the tables show its attribute (main or shown support, never a
 /// small weight); only a hidden attribute has the spread for its job, and a hidden
 /// attribute's job is the spread or an execute stage. A personality value is hidden, has an
-/// occasion or inert job that names no action, and is in no table; no other attribute has an
-/// occasion or inert job; an inert job's statistic is "inert in a match".
+/// occasion or inert job that names no action, and is in no table; a visible performance
+/// attribute may have an occasion job that names no action, and then it may sit in tables or
+/// in none; no other attribute has an occasion or inert job; an inert job's statistic is
+/// "inert in a match".
 fn check_tables(
     attributes: &[AttributeDef],
 ) -> impl FnOnce(&ActionTables, &()) -> garde::Result + '_ {
@@ -416,9 +421,24 @@ fn check_tables(
                 }
                 continue;
             }
+            // A visible performance attribute may act on an occasion that no stage of its own
+            // reads (determination widens the press while his side trails); such a job names
+            // no action, and the attribute may sit in tables or in none. Only a personality
+            // value is inert in a match.
+            if job.stage == JobStage::Occasion && !def.hidden {
+                if job.action.is_some() {
+                    return Err(garde::Error::new(format!(
+                        "attribute {}: an occasion job names no action; remove its action \
+                         {action_name}",
+                        def.name
+                    )));
+                }
+                continue;
+            }
             if occasion {
                 return Err(garde::Error::new(format!(
-                    "attribute {}: only a personality value may have an {:?} job",
+                    "attribute {}: only a personality value or a visible attribute may have an \
+                     occasion job, and only a personality value an inert one, not {:?}",
                     def.name, job.stage
                 )));
             }
@@ -657,14 +677,35 @@ mod tests {
     }
 
     #[test]
-    fn an_occasion_job_outside_personality_is_refused() {
+    fn an_inert_job_outside_personality_is_refused() {
         let mut s = shipped();
         let i = s.index("vision").unwrap();
-        s.attributes[i].job.stage = JobStage::Occasion;
+        s.attributes[i].job.stage = JobStage::Inert;
         s.attributes[i].job.action = None;
         let text = refusal(&s);
         assert!(
-            text.contains("attribute vision: only a personality value may have an Occasion job"),
+            text.contains("attribute vision: only a personality value or a visible attribute"),
+            "{text}"
+        );
+        let mut s = shipped();
+        let i = s.index("consistency").unwrap();
+        s.attributes[i].job.stage = JobStage::Occasion;
+        let text = refusal(&s);
+        assert!(text.contains("attribute consistency: only"), "{text}");
+    }
+
+    #[test]
+    fn determination_acts_on_an_occasion_and_an_occasion_job_names_no_action() {
+        let s = shipped();
+        let job = &s.attributes[s.index("determination").unwrap()].job;
+        assert_eq!((job.stage, job.action), (JobStage::Occasion, None));
+        assert!(s.validate().is_ok());
+        let mut s = shipped();
+        let i = s.index("determination").unwrap();
+        s.attributes[i].job.action = Some(ActionKind::Press);
+        let text = refusal(&s);
+        assert!(
+            text.contains("attribute determination: an occasion job names no action"),
             "{text}"
         );
     }

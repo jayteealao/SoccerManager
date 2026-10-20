@@ -272,7 +272,12 @@ test('Save replay downloads the whole match, and the file plays every tick with 
     const own = Buffer.from(await hook(page, () => window.__touchline.lastSavedBytes()));
     expect(createHash('sha256').update(bytes).digest('hex')).toBe(createHash('sha256').update(own).digest('hex'));
 
-    await page.locator('input[type="file"]').first().setInputFiles(saved);
+    // The saved bytes, not the path: the download was written a moment ago, and Chromium can
+    // fail to read a chosen file that was still being written to disk (NotFoundError).
+    await page
+      .locator('input[type="file"]')
+      .first()
+      .setInputFiles({ name: path.basename(saved), mimeType: 'application/octet-stream', buffer: bytes });
     await until(page, () => window.__touchline.replay().stored, undefined, 30_000);
     const reopened = await hook(page, () => window.__touchline.replay());
     expect(reopened.ticks).toBe(replay.ticks);

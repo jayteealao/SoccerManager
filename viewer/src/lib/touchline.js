@@ -12,17 +12,21 @@ import { surname } from './prematch.js';
 import { wholeOf } from './scale.js';
 import { instructionNames, words } from './tactics-panel.js';
 
-/// The assistant's reason, in words, per `ai.decision` code.
+/// The assistant's reason, in words, per `ai.decision` code. The two mentality codes name the
+/// AI manager's old tactics changes; an older replay still carries them.
 export const PICK_REASONS = Object.freeze({
   'sub-injury': 'injured player',
   'sub-keeper': 'outfield player in goal',
   'sub-fatigue': 'tired player',
+  'sub-booked': 'booked player at risk',
+  'sub-form': 'player off his game',
+  'sub-knock': 'player carrying a knock',
   'mentality-up-trailing': 'trailing',
   'mentality-down-leading': 'leading',
 });
 
 /// The words shown when the assistant has no pick open.
-export const NO_PICK = 'No pick open. The assistant checks every 30 seconds of play.';
+export const NO_PICK = 'No pick open. The assistant checks at each stoppage that allows a substitution.';
 
 /// The minute a card event names, as the feed writes it: 44' or 45+2'.
 function minuteText(event) {

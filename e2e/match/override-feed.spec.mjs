@@ -5,7 +5,7 @@
 // strong trait of every outfield player (so whichever eleven start, one carries it), and whose
 // tuning makes that trait beat a faster tempo every time it is pressed, so the line shows within
 // a short run; the event, the feed row and the count are the engine's and the page's own. On
-// the Tactics screen the tempo is set to faster, the match kicks off with the whole match sent
+// the Tactics screen the tempo is set to fast, the match kicks off with the whole match sent
 // at once, and the feed is read at the first override: one row of the trait-override kind
 // naming the player, what he did, the instruction and the cause. Played to full time, the
 // panel of the first player to hold up the ball shows the count of his rows with one example. Screenshots are kept as evidence; the test removes the content copy
@@ -46,8 +46,8 @@ test('an override shows in the feed with the player, the trait, the instruction 
     await pastSplash(page);
     await page.locator('[data-choice="new"]').click();
     await setupToTactics(page);
-    // The instruction his trait goes against: a faster tempo.
-    await page.locator('select[data-instruction="tempo"]:visible').selectOption({ label: 'Faster' });
+    // The instruction his trait goes against: a tempo faster than the default.
+    await page.locator('select[data-instruction="tempo"]:visible').selectOption({ label: 'Fast' });
     await kickOffFromTactics(page);
 
     // The first hold-up override, then the feed at that tick.

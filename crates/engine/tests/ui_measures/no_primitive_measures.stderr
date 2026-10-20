@@ -1,0 +1,13 @@
+error[E0432]: unresolved import `engine::measures`
+ --> tests/ui_measures/no_primitive_measures.rs:3:13
+  |
+3 | use engine::measures::MatchMeasures;
+  |             ^^^^^^^^ could not find `measures` in `engine`
+  |
+note: found an item that was configured out
+ --> src/lib.rs
+  |
+  | #[cfg(feature = "measures")]
+  |       -------------------- the item is gated behind the `measures` feature
+  | pub mod measures;
+  |         ^^^^^^^^

@@ -19,10 +19,13 @@ use std::fs::File;
 use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
+use engine::data::game_state::{self, GameStateFile};
 use engine::data::hex12;
+use engine::data::tactics::TacticsSchema;
 use engine::{AppliedChange, Change, Manager, RoleDuty, Simulation, TacticsPatch};
 use protocol::{
-    Frame, PROTOCOL_V3, PROTOCOL_V4, PROTOCOL_V5, PROTOCOL_V6, PROTOCOL_VERSION, TickFrame,
+    Frame, PROTOCOL_V3, PROTOCOL_V4, PROTOCOL_V5, PROTOCOL_V6, PROTOCOL_V7, PROTOCOL_V8,
+    PROTOCOL_VERSION, TickFrame,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -50,17 +53,22 @@ pub const FORMAT_VERSION: u16 = 4;
 /// not yet known. Protocol 6 only added optional fields, so a file of protocol 5 frames still
 /// decodes; a reader shows the fields it lacks as unknown. Protocol 7 also only added optional
 /// fields (the player as a person), so a file of protocol 6 frames still decodes the same way.
-pub const READS_PROTOCOLS: [u16; 5] = [
+/// Protocol 8 only added the `walk-on` message, so a file of protocol 7 frames still decodes;
+/// it plays with no walk-on. Protocol 9 only added two change kinds and optional fields, so a
+/// file of protocol 8 frames still decodes.
+pub const READS_PROTOCOLS: [u16; 7] = [
     PROTOCOL_V3,
     PROTOCOL_V4,
     PROTOCOL_V5,
     PROTOCOL_V6,
+    PROTOCOL_V7,
+    PROTOCOL_V8,
     PROTOCOL_VERSION,
 ];
 /// Header offset of the frame count.
 const FRAMES_AT: u64 = 16;
 
-/// The protocols this build reads, as words: "3, 4, 5, 6 and 7".
+/// The protocols this build reads, as words: "3, 4, 5, 6, 7, 8 and 9".
 fn reads_words() -> String {
     let (last, rest) = READS_PROTOCOLS
         .split_last()
@@ -174,6 +182,11 @@ pub struct MatchSettings {
     pub knockout: bool,
     /// Home first.
     pub managers: [ManagerKind; 2],
+    /// Each side's game-state rules and player instructions as the hello carries them, home
+    /// first; re-simulation gives each side its own. Written only when a side has some; a
+    /// record without it, as from an earlier build, has none on either side.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub game_state: Option<[Option<serde_json::Value>; 2]>,
 }
 
 /// One input as the record lists it.
@@ -213,11 +226,48 @@ pub enum LoggedChange {
         instructions: [Option<u8>; 6],
         roles: Vec<LoggedRole>,
     },
+    /// A side's game-state rules moved: `active` is the set that holds, bit `k` for rule `k`.
+    Rule {
+        active: u8,
+    },
+    /// Primitives set to new levels, by the names of the tactics file.
+    Instructions {
+        levels: Vec<LoggedLevel>,
+    },
+    /// A side's rules and player instructions replaced whole, in their written form.
+    GameState {
+        game_state: GameStateFile,
+    },
 }
 
-impl From<&Change> for LoggedChange {
-    fn from(change: &Change) -> Self {
+/// One primitive and its level, choice or state, by name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LoggedLevel {
+    pub primitive: String,
+    pub level: String,
+}
+
+impl LoggedChange {
+    /// The log entry for `change`; a level or game-state change is written by the names of
+    /// `schema`, the tactics file the match played with.
+    pub fn of(change: &Change, schema: &TacticsSchema) -> Self {
         match change {
+            Change::Instructions(levels) => LoggedChange::Instructions {
+                levels: levels
+                    .iter()
+                    .map(|&(p, l)| {
+                        let primitive = &schema.primitives[usize::from(p)];
+                        LoggedLevel {
+                            primitive: primitive.name.clone(),
+                            level: primitive.level_names(schema)[usize::from(l)].to_string(),
+                        }
+                    })
+                    .collect(),
+            },
+            Change::GameState(state) => LoggedChange::GameState {
+                game_state: game_state::written(state, schema),
+            },
             Change::Substitution { off, on } => LoggedChange::Substitution { off: *off, on: *on },
             Change::Tactics(patch) => LoggedChange::Tactics {
                 formation: patch.formation,
@@ -233,14 +283,33 @@ impl From<&Change> for LoggedChange {
                     })
                     .collect(),
             },
+            Change::Rule { active } => LoggedChange::Rule { active: *active },
         }
     }
-}
 
-impl LoggedChange {
-    /// The engine change this entry names.
-    pub fn to_change(&self) -> Change {
-        match self {
+    /// The engine change this entry names; a level or game-state change is read by the names
+    /// of `schema`, and a name it does not hold is refused in words.
+    pub fn to_change(&self, schema: &TacticsSchema) -> Result<Change, String> {
+        Ok(match self {
+            LoggedChange::Instructions { levels } => Change::Instructions(
+                levels
+                    .iter()
+                    .enumerate()
+                    .map(|(k, l)| {
+                        game_state::level_of(
+                            schema,
+                            &l.primitive,
+                            &l.level,
+                            &format!("levels[{k}]"),
+                        )
+                        .map_err(|(at, reason)| format!("{at}: {reason}"))
+                    })
+                    .collect::<Result<_, _>>()?,
+            ),
+            LoggedChange::GameState { game_state: file } => Change::GameState(
+                game_state::resolve(file, schema, &[])
+                    .map_err(|(at, reason)| format!("{at}: {reason}"))?,
+            ),
             LoggedChange::Substitution { off, on } => Change::Substitution { off: *off, on: *on },
             LoggedChange::Tactics {
                 formation,
@@ -264,7 +333,8 @@ impl LoggedChange {
                     })
                     .collect(),
             }),
-        }
+            LoggedChange::Rule { active } => Change::Rule { active: *active },
+        })
     }
 }
 
@@ -276,6 +346,8 @@ pub enum ChangeSource {
     Manager,
     /// The computer manager; re-simulation lets the engine make it again.
     Ai,
+    /// The side's game-state rules; re-simulation lets the engine make it again.
+    Rule,
 }
 
 /// One entry of the applied-change log.
@@ -292,26 +364,29 @@ pub struct ChangeEntry {
     pub queue_number: u32,
     /// The tick it applied on.
     pub tick: u32,
-    /// The stoppage it applied at, by the rule pack's code.
+    /// The stoppage it applied at, by the rule pack's code; `none` for a rule change that
+    /// applied whole at once.
     pub stoppage: String,
     pub change: LoggedChange,
 }
 
 impl ChangeEntry {
-    /// The log entry for `applied`, made for a team whose manager is `manager`.
-    pub fn of(applied: &AppliedChange, manager: Manager) -> Self {
+    /// The log entry for `applied`, made for a team whose manager is `manager`, in a match
+    /// that played with the tactics file `schema`.
+    pub fn of(applied: &AppliedChange, manager: Manager, schema: &TacticsSchema) -> Self {
         Self {
             order: applied.order,
             team: applied.team,
-            source: match manager {
-                Manager::Human => ChangeSource::Manager,
-                Manager::Ai => ChangeSource::Ai,
+            source: match (&applied.change, manager) {
+                (Change::Rule { .. }, _) => ChangeSource::Rule,
+                (_, Manager::Human) => ChangeSource::Manager,
+                (_, Manager::Ai) => ChangeSource::Ai,
             },
             queued_tick: applied.id.tick,
             queue_number: applied.id.n,
             tick: applied.tick,
-            stoppage: applied.stoppage.code().to_string(),
-            change: LoggedChange::from(&applied.change),
+            stoppage: applied.stoppage.map_or("none", |s| s.code()).to_string(),
+            change: LoggedChange::of(&applied.change, schema),
         }
     }
 }
@@ -340,7 +415,7 @@ pub fn outcome_of(sim: &Simulation) -> Outcome {
         changes: sim
             .applied_changes()
             .iter()
-            .map(|a| ChangeEntry::of(a, managers[a.team]))
+            .map(|a| ChangeEntry::of(a, managers[a.team], &sim.config().tactics))
             .collect(),
         watchdog: Watchdog {
             slow_calls: sim.plugins().slow_calls(),
@@ -1088,17 +1163,102 @@ mod tests {
                 (7, RoleDuty { role: 2, duty: 0 }),
             ],
         });
+        let schema = shipped_tactics();
         for change in [sub, tactics] {
-            let logged = LoggedChange::from(&change);
+            let logged = LoggedChange::of(&change, &schema);
             let json = serde_json::to_string(&logged).unwrap();
             let back: LoggedChange = serde_json::from_str(&json).unwrap();
             assert_eq!(back, logged, "{json}");
-            assert_eq!(back.to_change(), change, "{json}");
+            assert_eq!(back.to_change(&schema), Ok(change), "{json}");
         }
-        let json =
-            serde_json::to_string(&LoggedChange::from(&Change::Substitution { off: 1, on: 2 }))
-                .unwrap();
+        let json = serde_json::to_string(&LoggedChange::of(
+            &Change::Substitution { off: 1, on: 2 },
+            &schema,
+        ))
+        .unwrap();
         assert_eq!(json, r#"{"substitution":{"off":1,"on":2}}"#);
+    }
+
+    #[test]
+    fn a_rule_change_is_logged_with_its_own_source_and_no_stoppage() {
+        let schema = shipped_tactics();
+        let change = Change::Rule { active: 5 };
+        let logged = LoggedChange::of(&change, &schema);
+        let json = serde_json::to_string(&logged).unwrap();
+        assert_eq!(json, r#"{"rule":{"active":5}}"#);
+        let back: LoggedChange = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.to_change(&schema), Ok(change.clone()));
+        let applied = engine::AppliedChange {
+            order: 0,
+            team: 1,
+            id: engine::ChangeId { tick: 99, n: 3 },
+            tick: 100,
+            stoppage: None,
+            change,
+        };
+        // A rule change keeps its source whoever manages the side.
+        for manager in [Manager::Human, Manager::Ai] {
+            let entry = ChangeEntry::of(&applied, manager, &schema);
+            assert_eq!(entry.source, ChangeSource::Rule);
+            assert_eq!(entry.stoppage, "none");
+        }
+        assert_eq!(
+            serde_json::to_string(&ChangeSource::Rule).unwrap(),
+            r#""rule""#
+        );
+    }
+
+    fn shipped_tactics() -> TacticsSchema {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content");
+        let dir = engine::ContentDir::resolve(Some(&dir)).unwrap();
+        engine::Content::load(&dir).unwrap().tactics
+    }
+
+    #[test]
+    fn a_level_and_a_game_state_change_are_logged_by_name_and_read_back() {
+        let schema = shipped_tactics();
+        let index = |name: &str| {
+            schema
+                .primitives
+                .iter()
+                .position(|p| p.name == name)
+                .unwrap() as u8
+        };
+        let levels = Change::Instructions(vec![(index("tempo"), 0), (index("crossing"), 4)]);
+        let logged = LoggedChange::of(&levels, &schema);
+        let json = serde_json::to_string(&logged).unwrap();
+        assert_eq!(
+            json,
+            r#"{"instructions":{"levels":[{"primitive":"tempo","level":"very_fast"},{"primitive":"crossing","level":"cross_often"}]}}"#
+        );
+        let back: LoggedChange = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.to_change(&schema), Ok(levels));
+        let file = engine::data::game_state::parse(
+            br#"{"rules":[{"when":[{"kind":"score","state":"trailing","by":1}],"set":[{"primitive":"mentality","level":"attacking"}]}],
+                "instructions":[{"slot":9,"primitive":"dribbling","level":"dribble_often"}]}"#,
+        )
+        .unwrap();
+        let state = game_state::resolve(&file, &schema, &[]).unwrap();
+        let change = Change::GameState(state);
+        let logged = LoggedChange::of(&change, &schema);
+        let json = serde_json::to_string(&logged).unwrap();
+        assert!(
+            json.starts_with(r#"{"game_state":{"game_state":{"rules":"#),
+            "{json}"
+        );
+        let back: LoggedChange = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.to_change(&schema), Ok(change));
+        let unknown = LoggedChange::Instructions {
+            levels: vec![LoggedLevel {
+                primitive: "tempo".into(),
+                level: "warp".into(),
+            }],
+        };
+        let refused = unknown.to_change(&schema).unwrap_err();
+        assert!(
+            refused.contains("warp is not a level of tempo"),
+            "{refused}"
+        );
     }
 
     #[test]

@@ -644,7 +644,17 @@ fn faulty_offside_fails_the_gate_at_a_named_window() {
 
     let content = common::content();
     let [a, b] = common::default_teams(&content);
-    let fixture = Fixture::seed(42);
+    // Seed 1: the lowest seed whose match brings an offside call the faulty module gets
+    // wrong (seed 0 until the computer manager grouped its substitutions and a player going for a
+    // loose ball stopped being pushed off it; seed 1
+    // until the AI sides started in the style their staff picks; seed 2 until the player as a person joined the team shape; seed 1 until the
+    // restart waits shortened the live time; seed 42 until the team
+    // stands went off, when its match stopped bringing one; seed 4 until defenders could cut
+    // out passes; seed 10 until a pressed carrier weighed his options by the pressure he feels; seed 14
+    // until a player stepped aside from a team-mate walking at him; seed 9 until an attacker
+    // read the offside line late; seed 5 until a pass from the own area looked past a screened
+    // team-mate; seed 14 until a passer read the press his receiver would meet).
+    let fixture = Fixture::seed(1);
     let clean = gate::play_fixture(
         &fixture,
         &Inputs {
@@ -804,15 +814,20 @@ fn faulty_clock_fails_the_gate_at_a_named_window() {
 }
 
 /// A changed possession module fails the gate: an outfield player who reaches a loose ball from 1 cm further fails
-/// the gate at the first loose ball that centimetre decides (on seed 2, in the second window,
-/// from tick 1,000 to tick 2,000), and the report names the window.
+/// the gate at the first loose ball that centimetre decides (on seed 0, by tick 2,000; seed 2
+/// until the player as a person joined the team shape, then seed 1 until defenders could cut
+/// out passes, then seed 2 until a presser was weighed by where he stands, then seed 1 until a
+/// player stepped aside from a team-mate walking at him, then seed 4 until shots and clearances
+/// were weighed by what they cost and remove, then seed 1 until every option was valued by the
+/// real threat of its place), and the report
+/// names the window.
 #[test]
 fn faulty_possession_fails_the_gate_at_a_named_window() {
     use engine::gate::{self, Fixture, Inputs, Verdict, compare, report_line};
 
     let content = common::content();
     let [a, b] = common::default_teams(&content);
-    let fixture = Fixture::seed(2);
+    let fixture = Fixture::seed(0);
     let play = |content: &engine::Content| {
         gate::play_fixture(
             &fixture,

@@ -4,9 +4,13 @@
 
 pub mod attributes;
 pub mod convert;
+pub mod game_state;
 pub mod generator;
 pub mod names;
+pub mod primitives;
+pub mod restart_waits;
 pub mod rules;
+pub mod styles;
 pub mod tactics;
 pub mod team;
 pub mod traits;
@@ -20,8 +24,9 @@ use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
 
 use crate::error::EngineError;
-use crate::flags::{ActiveFlags, FlagState, FlagStates};
+use crate::flags::{ActiveFlags, FlagState, FlagStates, TEAM_STANDS};
 use crate::modules::{Picked, REGISTRY, ResolvedModules, SLOTS_VERSION, SlotFile};
+use tactics::Stands;
 
 pub use attributes::{ATTRIBUTES_VERSION, AttributeSchema, Group, MAX_ATTRIBUTES};
 pub use generator::{generate_league, generate_league_in_tier};
@@ -40,6 +45,12 @@ pub const RULES_FILE: &str = "rules/default.json";
 pub const TACTICS_FILE: &str = "tactics.json";
 /// The trait catalogue: the traits of play a team file may give a player.
 pub const TRAITS_FILE: &str = "traits.json";
+/// The restart wait table: how long each kind of stoppage waits beyond its visible steps. It is
+/// optional; content without it plays the tuning file's fixed restart delays.
+pub const RESTART_WAITS_FILE: &str = "restart-waits.json";
+/// The named styles the AI manager picks from before a match. It is optional; content without
+/// it keeps the tactics file's default AI tactics.
+pub const STYLES_FILE: &str = "styles.json";
 pub const TEAM_A_FILE: &str = "teams/default-a.json";
 pub const TEAM_B_FILE: &str = "teams/default-b.json";
 /// The English commentary lines. The file stays out of `Content` and its digest: editing a
@@ -397,8 +408,9 @@ fn check_ratings(bytes: &[u8], shown: &str) -> Result<(), EngineError> {
 /// Loads an attribute file's bytes in any version this build reads; a version 1 file is
 /// converted with the frozen contract tables ([`convert::attributes_v1_to_v2`]), a version 2
 /// file takes the hidden values ([`convert::attributes_v2_to_v3`]), a version 3 file takes
-/// the version 4 additions ([`convert::attributes_v3_to_v4`]), and the result is checked once
-/// as a current file. The digest is that of the bytes read.
+/// the version 4 additions ([`convert::attributes_v3_to_v4`]), a version 4 file takes the
+/// version 5 changes ([`convert::attributes_v4_to_v5`]), and the result is checked once as a
+/// current file. The digest is that of the bytes read.
 pub fn load_attributes_bytes(
     bytes: &[u8],
     shown: &str,
@@ -409,20 +421,30 @@ pub fn load_attributes_bytes(
             let value = parse_checked::<AttributeSchema>(KIND, bytes, shown, &())?;
             Ok(loaded(KIND, bytes, shown, value, ATTRIBUTES_VERSION, None))
         }
-        found @ (convert::ATTRIBUTES_V1 | convert::ATTRIBUTES_V2 | convert::ATTRIBUTES_V3) => {
-            let v3 = match found {
+        found @ (convert::ATTRIBUTES_V1
+        | convert::ATTRIBUTES_V2
+        | convert::ATTRIBUTES_V3
+        | convert::ATTRIBUTES_V4) => {
+            let v4 = match found {
                 convert::ATTRIBUTES_V1 => {
                     let v1: convert::AttributeSchemaV1 = parse(KIND, bytes, shown)?;
                     let v2 = convert::attributes_v1_to_v2(v1)
                         .map_err(|reason| refused(KIND, shown, "attributes".into(), reason))?;
-                    convert::attributes_v2_to_v3(v2)
+                    convert::attributes_v3_to_v4(convert::attributes_v2_to_v3(v2))
                 }
                 convert::ATTRIBUTES_V2 => {
-                    convert::attributes_v2_to_v3(parse::<AttributeSchema>(KIND, bytes, shown)?)
+                    convert::attributes_v3_to_v4(convert::attributes_v2_to_v3(parse::<
+                        AttributeSchema,
+                    >(
+                        KIND, bytes, shown,
+                    )?))
+                }
+                convert::ATTRIBUTES_V3 => {
+                    convert::attributes_v3_to_v4(parse::<AttributeSchema>(KIND, bytes, shown)?)
                 }
                 _ => parse::<AttributeSchema>(KIND, bytes, shown)?,
             };
-            let value = checked(KIND, shown, convert::attributes_v3_to_v4(v3), &())?;
+            let value = checked(KIND, shown, convert::attributes_v4_to_v5(v4), &())?;
             Ok(loaded(KIND, bytes, shown, value, found, Some(found)))
         }
         found => Err(version_refused(KIND, shown, found, ATTRIBUTES_VERSION)),
@@ -432,7 +454,10 @@ pub fn load_attributes_bytes(
 /// Loads a tuning file's bytes in any version this build reads; a version 2 file is
 /// converted to version 3 ([`convert::tuning_v2_to_v3`]), a version 3 file to version 4
 /// ([`convert::tuning_v3_to_v4`]), a version 4 file to version 5
-/// ([`convert::tuning_v4_to_v5`]), and the result is checked as a current file.
+/// ([`convert::tuning_v4_to_v5`]), a version 5 file to version 6
+/// ([`convert::tuning_v5_to_v6`]), a version 6 file to version 7
+/// ([`convert::tuning_v6_to_v7`]), a version 7 file to version 8
+/// ([`convert::tuning_v7_to_v8`]), and the result is checked as a current file.
 pub fn load_tuning_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TuningFile>, EngineError> {
     const KIND: &str = "tuning";
     match peek_version(KIND, bytes, shown)? {
@@ -440,7 +465,12 @@ pub fn load_tuning_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TuningFile>
             let value = parse_checked::<TuningFile>(KIND, bytes, shown, &())?;
             Ok(loaded(KIND, bytes, shown, value, TUNING_VERSION, None))
         }
-        found @ (convert::TUNING_V2 | convert::TUNING_V3 | convert::TUNING_V4) => {
+        found @ (convert::TUNING_V2
+        | convert::TUNING_V3
+        | convert::TUNING_V4
+        | convert::TUNING_V5
+        | convert::TUNING_V6
+        | convert::TUNING_V7) => {
             let mut json: serde_json::Value = parse(KIND, bytes, shown)?;
             if found == convert::TUNING_V2 {
                 json = convert::tuning_v2_to_v3(json)
@@ -450,9 +480,21 @@ pub fn load_tuning_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TuningFile>
                 json = convert::tuning_v3_to_v4(json)
                     .map_err(|reason| refused(KIND, shown, "engine".into(), reason))?;
             }
-            let v5 = convert::tuning_v4_to_v5(json)
-                .map_err(|reason| refused(KIND, shown, "engine".into(), reason))?;
-            let value: TuningFile = serde_json::from_value(v5)
+            if found <= convert::TUNING_V4 {
+                json = convert::tuning_v4_to_v5(json)
+                    .map_err(|reason| refused(KIND, shown, "engine".into(), reason))?;
+            }
+            if found <= convert::TUNING_V5 {
+                json = convert::tuning_v5_to_v6(json)
+                    .map_err(|reason| refused(KIND, shown, "engine".into(), reason))?;
+            }
+            if found <= convert::TUNING_V6 {
+                json = convert::tuning_v6_to_v7(json)
+                    .map_err(|reason| refused(KIND, shown, "match_rating".into(), reason))?;
+            }
+            let v8 = convert::tuning_v7_to_v8(json)
+                .map_err(|reason| refused(KIND, shown, "match_rating".into(), reason))?;
+            let value: TuningFile = serde_json::from_value(v8)
                 .map_err(|e| refused(KIND, shown, "converted file".into(), e.to_string()))?;
             let value = checked(KIND, shown, value, &())?;
             Ok(loaded(KIND, bytes, shown, value, found, Some(found)))
@@ -461,8 +503,14 @@ pub fn load_tuning_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TuningFile>
     }
 }
 
-/// Loads a tactics file's bytes in either version this build reads; a version 1 file is
-/// converted ([`convert::tactics_v1_to_v2`]) and checked as a current file.
+/// Loads a tactics file's bytes in any version this build reads; a version 1 file is
+/// converted to version 2 ([`convert::tactics_v1_to_v2`]), a version 2 file to version 3
+/// ([`convert::tactics_v2_to_v3`]), a version 3 file to version 4
+/// ([`convert::tactics_v3_to_v4`]), a version 4 file to version 5
+/// ([`convert::tactics_v4_to_v5`]), a version 5 file to version 6
+/// ([`convert::tactics_v5_to_v6`]), a version 6 file to version 7
+/// ([`convert::tactics_v6_to_v7`]), a version 7 file to version 8 ([`convert::tactics_v7_to_v8`]),
+/// and the result is checked as a current file.
 pub fn load_tactics_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TacticsSchema>, EngineError> {
     const KIND: &str = "tactics";
     match peek_version(KIND, bytes, shown)? {
@@ -470,17 +518,57 @@ pub fn load_tactics_bytes(bytes: &[u8], shown: &str) -> Result<Loaded<TacticsSch
             let value = parse_checked::<TacticsSchema>(KIND, bytes, shown, &())?;
             Ok(loaded(KIND, bytes, shown, value, TACTICS_VERSION, None))
         }
-        convert::TACTICS_V1 => {
-            let v1: convert::TacticsV1 = parse(KIND, bytes, shown)?;
-            let value = checked(KIND, shown, convert::tactics_v1_to_v2(v1), &())?;
-            Ok(loaded(
-                KIND,
-                bytes,
-                shown,
-                value,
-                convert::TACTICS_V1,
-                Some(convert::TACTICS_V1),
-            ))
+        found @ (convert::TACTICS_V1
+        | convert::TACTICS_V2
+        | convert::TACTICS_V3
+        | convert::TACTICS_V4
+        | convert::TACTICS_V5
+        | convert::TACTICS_V6
+        | convert::TACTICS_V7) => {
+            let v7 = if found == convert::TACTICS_V7 {
+                parse(KIND, bytes, shown)?
+            } else {
+                let v6 = if found == convert::TACTICS_V6 {
+                    parse(KIND, bytes, shown)?
+                } else {
+                    let v5 = if found == convert::TACTICS_V5 {
+                        parse(KIND, bytes, shown)?
+                    } else {
+                        let v4 = if found == convert::TACTICS_V4 {
+                            parse(KIND, bytes, shown)?
+                        } else {
+                            let v3 = if found == convert::TACTICS_V3 {
+                                parse(KIND, bytes, shown)?
+                            } else {
+                                let v2 = if found == convert::TACTICS_V1 {
+                                    let v1: convert::TacticsV1 = parse(KIND, bytes, shown)?;
+                                    convert::tactics_v1_to_v2(v1)
+                                } else {
+                                    parse(KIND, bytes, shown)?
+                                };
+                                convert::tactics_v2_to_v3(v2).map_err(|reason| {
+                                    refused(KIND, shown, "tactics".into(), reason)
+                                })?
+                            };
+                            convert::tactics_v3_to_v4(v3)
+                                .map_err(|reason| refused(KIND, shown, "tactics".into(), reason))?
+                        };
+                        convert::tactics_v4_to_v5(v4)
+                            .map_err(|reason| refused(KIND, shown, "tactics".into(), reason))?
+                    };
+                    convert::tactics_v5_to_v6(v5)
+                        .map_err(|reason| refused(KIND, shown, "tactics".into(), reason))?
+                };
+                convert::tactics_v6_to_v7(v6)
+                    .map_err(|reason| refused(KIND, shown, "tactics".into(), reason))?
+            };
+            let v8 = convert::tactics_v7_to_v8(v7)
+                .map_err(|reason| refused(KIND, shown, "tactics".into(), reason))?;
+            let mut value: TacticsSchema = serde_json::from_value(v8)
+                .map_err(|e| refused(KIND, shown, "converted file".into(), e.to_string()))?;
+            primitives::drop_unmatched_fits(&mut value);
+            let value = checked(KIND, shown, value, &())?;
+            Ok(loaded(KIND, bytes, shown, value, found, Some(found)))
         }
         found => Err(version_refused(KIND, shown, found, TACTICS_VERSION)),
     }
@@ -515,7 +603,8 @@ pub fn hex12(digest: &[u8]) -> String {
     digest.iter().take(6).map(|b| format!("{b:02x}")).collect()
 }
 
-/// The bytes of the five content files, as read from a content folder or a replay file.
+/// The bytes of the five content files, and of the restart wait table when the content has
+/// one, as read from a content folder or a replay file.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ContentFiles {
     pub attributes: Vec<u8>,
@@ -523,18 +612,41 @@ pub struct ContentFiles {
     pub rules: Vec<u8>,
     pub tactics: Vec<u8>,
     pub traits: Vec<u8>,
+    /// The restart wait table, `None` when the content has none.
+    pub restart_waits: Option<Vec<u8>>,
+    /// The named styles, `None` when the content has none.
+    pub styles: Option<Vec<u8>>,
 }
 
 impl ContentFiles {
-    /// Reads the five files from `dir`, each once.
+    /// Reads the five files from `dir`, each once, and the restart wait table when the folder
+    /// holds one.
     pub fn read(dir: &ContentDir) -> Result<Self, EngineError> {
         let read = |rel: &str| read_bytes(&dir.path(rel), rel);
+        let waits = dir.path(RESTART_WAITS_FILE);
+        let styles = dir.path(STYLES_FILE);
         Ok(Self {
             attributes: read(ATTRIBUTES_FILE)?,
             tuning: read(TUNING_FILE)?,
             rules: read(RULES_FILE)?,
             tactics: read(TACTICS_FILE)?,
-            traits: read(TRAITS_FILE)?,
+            // A content folder made before the trait catalogue existed has no traits file: it
+            // reads the catalogue as it first shipped, as an older replay does.
+            traits: if dir.path(TRAITS_FILE).is_file() {
+                read(TRAITS_FILE)?
+            } else {
+                traits::FROZEN_TRAITS_V1.as_bytes().to_vec()
+            },
+            restart_waits: if waits.is_file() {
+                Some(read(RESTART_WAITS_FILE)?)
+            } else {
+                None
+            },
+            styles: if styles.is_file() {
+                Some(read(STYLES_FILE)?)
+            } else {
+                None
+            },
         })
     }
 }
@@ -548,7 +660,13 @@ pub struct Content {
     pub tactics: TacticsSchema,
     /// The trait catalogue: the traits of play a team file may give a player.
     pub traits: traits::TraitCatalogue,
-    /// SHA-256 over the five file digests in order: attributes, tuning, rules, tactics, traits.
+    /// The restart wait table, `None` when the content has none: the fixed delays play then.
+    pub restart_waits: Option<restart_waits::RestartWaits>,
+    /// The named styles, `None` when the content has none: the AI keeps its default tactics.
+    pub styles: Option<styles::Styles>,
+    /// SHA-256 over the five file digests in order: attributes, tuning, rules, tactics, traits,
+    /// then, when the content has a restart wait table, a tag and its digest, and the same for a
+    /// styles file.
     /// When a flag state differs from the file's, the list of flags that are on is hashed
     /// in as well.
     pub digest: [u8; 32],
@@ -562,6 +680,9 @@ pub struct Content {
     written_digest: [u8; 32],
     /// The rule file as written. The rules slot's module turns it into `rules`.
     written_rules: Vec<u8>,
+    /// The tactics file's stands as written. `tactics` holds them only while the
+    /// `team_stands` flag is on; off, every stand in `tactics` reads 0.
+    written_stands: Stands,
 }
 
 impl Content {
@@ -571,6 +692,15 @@ impl Content {
     /// names.
     pub fn load(dir: &ContentDir) -> Result<Self, EngineError> {
         let content = Self::from_files(&ContentFiles::read(dir)?)?;
+        content.with_slots(&read_bytes(&dir.path(SLOTS_FILE), SLOTS_FILE)?)
+    }
+
+    /// Loads the content of `dir` as [`Content::load`] does, with the rule file's bytes
+    /// `rules` in place of the folder's: the rule pack and the digest follow them.
+    pub fn load_with_rules(dir: &ContentDir, rules: Vec<u8>) -> Result<Self, EngineError> {
+        let mut files = ContentFiles::read(dir)?;
+        files.rules = rules;
+        let content = Self::from_files(&files)?;
         content.with_slots(&read_bytes(&dir.path(SLOTS_FILE), SLOTS_FILE)?)
     }
 
@@ -667,6 +797,18 @@ impl Content {
             });
         }
         let traits = traits::load_traits_bytes(&files.traits, TRAITS_FILE)?;
+        let waits = files
+            .restart_waits
+            .as_deref()
+            .map(|bytes| restart_waits::load_restart_waits_bytes(bytes, RESTART_WAITS_FILE))
+            .transpose()?;
+        let styles = files
+            .styles
+            .as_deref()
+            .map(|bytes| {
+                styles::load_styles_bytes(bytes, STYLES_FILE, &tactics.value, &attributes.value)
+            })
+            .transpose()?;
         // The generator gives a keeper only the keeper traits, so each must be a trait.
         if let Some(name) = tuning.value.generator.person.as_ref().and_then(|p| {
             p.traits
@@ -692,26 +834,41 @@ impl Content {
         hasher.update(rules.digest);
         hasher.update(tactics.digest);
         hasher.update(traits.digest);
+        // Content without a wait table keeps the digest it had before the table existed.
+        if let Some(waits) = &waits {
+            hasher.update(b"restart_waits:");
+            hasher.update(waits.digest);
+        }
+        // Content without a styles file keeps the digest it had before the file existed.
+        if let Some(styles) = &styles {
+            hasher.update(b"styles:");
+            hasher.update(styles.digest);
+        }
         let digest: [u8; 32] = hasher.finalize().into();
+        let written_stands = tactics.value.stands;
         let written = Self {
             attributes: attributes.value,
             tuning: tuning.value.clone(),
             rules: rules.value,
             tactics: tactics.value,
             traits: traits.value,
+            restart_waits: waits.map(|w| w.value),
+            styles: styles.map(|s| s.value),
             digest,
             flags: ActiveFlags::default(),
             modules,
             written_tuning: tuning.value,
             written_digest: digest,
             written_rules: files.rules.clone(),
+            written_stands,
         };
         written.with_flags(&FlagStates::default())
     }
 
     /// This content with the flag states in `states` applied over the file's own states.
     /// A flag that is on has its overrides written into `tuning`, and each one is logged as
-    /// `flag.active`. When a state differs from the file's, the list of flags that are on
+    /// `flag.active`. The tactics file's stands enter `tactics` only while the `team_stands`
+    /// flag is on; off, every stand reads 0. When a state differs from the file's, the list of flags that are on
     /// enters the digest, so a match played with it is never taken for one played without.
     pub fn with_flags(&self, states: &FlagStates) -> Result<Self, EngineError> {
         let file = &self.written_tuning;
@@ -739,8 +896,15 @@ impl Content {
         } else {
             self.written_digest
         };
+        let mut tactics = self.tactics.clone();
+        tactics.stands = if flags.is_on(TEAM_STANDS) {
+            self.written_stands
+        } else {
+            Stands::default()
+        };
         Ok(Self {
             tuning,
+            tactics,
             digest,
             flags,
             ..self.clone()
@@ -811,6 +975,24 @@ pub(crate) mod test_support {
 
     pub(crate) fn shipped_config(seed: u64, minutes: u32) -> Result<MatchConfig, EngineError> {
         let content = shipped_content();
+        let [a, b] = default_teams(&content);
+        MatchConfig::new(seed, minutes, &content, [&a, &b])
+    }
+
+    /// The shipped content with the `team_stands` flag on: the tactics file's stands apply.
+    pub(crate) fn shipped_content_with_stands() -> Content {
+        let on = FlagStates([(TEAM_STANDS.to_string(), FlagState::On)].into());
+        shipped_content()
+            .with_flags(&on)
+            .expect("the stands flag turns on")
+    }
+
+    /// [`shipped_config`] with the team stands on.
+    pub(crate) fn shipped_config_with_stands(
+        seed: u64,
+        minutes: u32,
+    ) -> Result<MatchConfig, EngineError> {
+        let content = shipped_content_with_stands();
         let [a, b] = default_teams(&content);
         MatchConfig::new(seed, minutes, &content, [&a, &b])
     }

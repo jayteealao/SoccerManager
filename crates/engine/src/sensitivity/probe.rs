@@ -110,6 +110,16 @@ pub struct SideCounts {
     /// Headers the side's outfield players contested with an opponent close, and those won.
     pub headers_traffic: f64,
     pub headers_traffic_won: f64,
+    /// Ticks a presser of the side ran at a carrier from beyond the engaging range, and those
+    /// on which he stood goal-side of the carrier.
+    pub press_ticks: f64,
+    pub press_goal_side: f64,
+    /// Samples of the side's back-line players out of possession, and the sum of their depth
+    /// gaps from their line's mean depth, in metres.
+    pub line_gap_n: f64,
+    pub line_gap_m: f64,
+    /// Recovery runs of the side that drew a sprint.
+    pub recovery_sprints: f64,
 }
 
 /// The distance in metres short of the second-last defender within which an onside attacker
@@ -386,6 +396,29 @@ impl JobProbe {
         self.pressing = bits;
     }
 
+    /// A presser of `team` ran at the carrier from beyond the engaging range; `goal_side` when
+    /// he stood between the carrier and his own goal.
+    pub(crate) fn press_sample(&mut self, team: usize, goal_side: bool) {
+        let s = &mut self.sides[team];
+        s.press_ticks += 1.0;
+        if goal_side {
+            s.press_goal_side += 1.0;
+        }
+    }
+
+    /// The depth gaps, in metres, of `team`'s back-line players from their line out of
+    /// possession.
+    pub(crate) fn line_sample(&mut self, team: usize, gaps: &[f64]) {
+        let s = &mut self.sides[team];
+        s.line_gap_n += gaps.len() as f64;
+        s.line_gap_m += gaps.iter().sum::<f64>();
+    }
+
+    /// A recovery run of `team` started and drew a sprint.
+    pub(crate) fn recovery_sprint(&mut self, team: usize) {
+        self.sides[team].recovery_sprints += 1.0;
+    }
+
     /// An outfield player of `team` contested a header with an opponent close; `won` when he
     /// won it.
     pub(crate) fn header_in_traffic(&mut self, team: usize, won: bool) {
@@ -589,14 +622,10 @@ impl JobProbe {
 }
 
 impl crate::sim::Simulation {
-    /// `true` when an active opponent of player `c` stands within the pressing distance.
+    /// `true` when player `c` is pressed ([`crate::pressure::pressed`]).
     fn probe_pressed(&self, c: usize) -> bool {
-        let me = &self.players[c];
-        self.players.iter().any(|p| {
-            p.team != me.team
-                && p.active()
-                && (p.pos - me.pos).length() < crate::contract::PRESSED_M
-        })
+        let p = &self.players[c];
+        crate::pressure::pressed(&self.players, p, self.teams[p.team].attack_x)
     }
 
     /// Count site: the carrier `c` decided `choice` with `plan`.
@@ -671,6 +700,25 @@ impl crate::sim::Simulation {
         }
     }
 
+    /// The depth gaps, in metres, of `team`'s active back-line players (the keeper aside) from
+    /// the mean depth of the line; none with fewer than two of them.
+    fn line_gaps(&self, team: usize) -> Vec<f64> {
+        let first = team * crate::team::PLAYERS_PER_TEAM;
+        let keeper = self.keeper(team);
+        let depths: Vec<f64> = self.teams[team]
+            .back_line()
+            .into_iter()
+            .map(|slot| first + slot)
+            .filter(|&i| i != keeper && self.players[i].active())
+            .map(|i| self.players[i].pos.x)
+            .collect();
+        if depths.len() < 2 {
+            return Vec::new();
+        }
+        let line = depths.iter().sum::<f64>() / depths.len() as f64;
+        depths.iter().map(|d| (d - line).abs()).collect()
+    }
+
     /// Count site: the decision pass set the targets and wrote `trace`.
     pub(crate) fn probe_targets(&mut self, trace: crate::modules::TargetsTrace) {
         use crate::modules::{CoverTrace, TargetsTrace};
@@ -700,10 +748,33 @@ impl crate::sim::Simulation {
                     }
                     _ => None,
                 };
+                // Each presser beyond the engaging range: goal-side when he stands nearer
+                // his own goal than the carrier along the line from the carrier to it.
+                let at = self.players[c].pos;
+                let to_goal = crate::math::toward(at, self.teams[def].own_goal());
+                let engage = self.config.tuning.press_engage;
+                let presses: Vec<bool> = pressers[..count]
+                    .iter()
+                    .filter(|&&(_, i)| {
+                        i != usize::MAX && (self.players[i].pos - at).length() >= engage
+                    })
+                    .map(|&(_, i)| (self.players[i].pos - at).dot(to_goal) > 0.0)
+                    .collect();
+                let gaps = if sample {
+                    self.line_gaps(def)
+                } else {
+                    Vec::new()
+                };
                 if let Some(p) = self.probe.as_deref_mut() {
                     p.pressers(def, bits, behind);
                     if let Some(d) = covered {
                         p.cover(def, d);
+                    }
+                    for goal_side in presses {
+                        p.press_sample(def, goal_side);
+                    }
+                    if !gaps.is_empty() {
+                        p.line_sample(def, &gaps);
                     }
                 }
             }
@@ -914,6 +985,23 @@ mod tests {
             (p.sides[1].presses_behind, p.sides[1].behind_ticks),
             (3.0, 2.0)
         );
+    }
+
+    #[test]
+    fn the_defensive_job_counters_count_for_their_side() {
+        let mut p = JobProbe::default();
+        p.press_sample(1, true);
+        p.press_sample(1, false);
+        p.press_sample(1, true);
+        p.line_sample(1, &[0.5, 1.5, 2.0]);
+        p.line_sample(1, &[1.0]);
+        p.recovery_sprint(1);
+        p.recovery_sprint(0);
+        let (a, b) = (p.sides[0], p.sides[1]);
+        assert_eq!((b.press_ticks, b.press_goal_side), (3.0, 2.0));
+        assert_eq!((b.line_gap_n, b.line_gap_m), (4.0, 5.0));
+        assert_eq!((a.recovery_sprints, b.recovery_sprints), (1.0, 1.0));
+        assert_eq!((a.press_ticks, a.line_gap_n), (0.0, 0.0));
     }
 
     #[test]

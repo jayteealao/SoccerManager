@@ -154,12 +154,13 @@
     {
       "job": "work_rate",
       "kind": "attribute",
-      "measure": "tackle_attempts",
-      "statistic": "tackle attempts per match",
+      "measure": "recovery_sprints",
+      "statistic": "sprinted recovery runs per match",
       "levels": [
         8.0,
         16.0
-      ]
+      ],
+      "report_only": true
     },
     {
       "job": "aggression",
@@ -641,6 +642,30 @@
         20.0,
         100.0
       ]
+    },
+    {
+      "job": "press.choose",
+      "kind": "stage",
+      "measure": "press_goal_side",
+      "statistic": "presses from the goal side of the carrier, share",
+      "direction": "up",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "cover.execute",
+      "kind": "stage",
+      "measure": "line_gap",
+      "statistic": "back-line depth gap from the line out of possession",
+      "direction": "down",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
     }
   ],
   "derived": [

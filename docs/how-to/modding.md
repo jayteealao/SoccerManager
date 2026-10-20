@@ -46,7 +46,7 @@ To judge the change against the engine before it, add `--base main` from your gi
 
 ## Add a realism band
 
-Every band is an entry of `bands` in `realism-bands.json`, so a new band needs no code. The file is at version 4: each band has its design range and its record. To check the substitutions of each team in the equal suite, add:
+Every band is an entry of `bands` in `realism-bands.json`, so a new band needs no code. The file is at version 5: each band has its design range and its record. To check the substitutions of each team in the equal suite, add:
 
 ```json
 {
@@ -189,6 +189,24 @@ To remove an attribute that the engine does not require, remove it from `attribu
 
 The schema holds 30 to 50 attributes. The engine requires 4 attributes by name, because play reads them directly: `pace`, `technique`, `agility`, and `consistency`. It refuses a schema without one of them. The sensitivity rules refuse a job that has no rule: add a rule for the new job to `sensitivity.json` before you run them.
 
+## Make or change a style preset
+
+A style in `styles.json` is a preset of tactical primitives. To change one, or to add one, work in your own content folder:
+
+1. Open `styles.json` and find the style, or copy one as a starting point and give it a new name.
+2. Edit its `primitives` list. Each entry is `{ "primitive": <name>, "level": <name> }`: a primitive of `tactics.json` and one of its levels, choices or states (`on` or `off`). Include one `mentality` entry. A primitive you leave out stays at its default. Set only what the style's football definition names; a preset that sets everything hides which settings make the style.
+3. Edit its `duties` (a duty hint by position), `formations` (one or more formations of `tactics.json`), `identity` (two or three statistics, each with the direction the style should move it) and `rules` (one to six game-state rules, in the form a person writes; see [the data-file reference](../reference/data-files.md#stylesjson)).
+4. Load the content to check the file. A primitive, level, formation, duty or rule condition the engine does not know, a primitive set twice, a preset without a mentality, and a preset with no rules or more than six are refused by name:
+
+   ```bash
+   engine-cli --content-dir my-content calibrate --suite styles --seed 9 --matches 1 --out runs/styles-check
+   ```
+
+5. Play the styles gate on your folder, as in [Run the styles gate](calibration.md#run-the-styles-gate), and read whether your style shows its identity and whether any style now dominates.
+
+No engine code names a style, so a new style needs no build. The computer manager picks among every style in the file by its staff advice; to keep a style out of its pick, remove it from the file.
+
+Every style in the file also shows in the style picker of the Tactics screen's Phases tab, in the file's order. Picking it sets each primitive to the style's level (and the default for one it leaves out) and replaces the game plans with its rules; the player's own instructions, the formation and the duties stay. The picker shows the style's name in words: a name the page has no words for reads as the name with its underscores as spaces, so give a new style a plain name such as `quick_wings`. A row whose level differs from the picked style shows a mark.
 ## Compare two models with a flag
 
 Use a feature flag to decide between the current model and a candidate on the realism bands.
@@ -230,8 +248,8 @@ error: content refused: tuning tuning.json: engine.keeper_catch_chance: greater 
 error: content refused: team teams/x.json: players: player p-club-00000001-00-04: attribute pace is 20.5; allowed 1.0 to 20.0
 error: content refused: team teams/x.json: players: player p-club-00000001-00-04: attribute pace is 12.34; not on a tenth
 error: content refused: team teams/x.json: players: player p-club-00000001-00-04: body field height is missing
-error: content refused: team teams/x.json: schema_version 3; this build reads 2
-error: content refused: rules rules/default.json: schema_version 7; this build reads 3
+error: content refused: team teams/x.json: schema_version 4; this build reads 3
+error: content refused: rules rules/default.json: schema_version 7; this build reads 4
 ```
 
 To correct the error:

@@ -153,6 +153,7 @@ impl Writer {
             self.u8(rd.role);
             self.u8(rd.duty);
         }
+        self.raw(&t.settings);
     }
 
     /// A player's state deltas, one byte per attribute group, and the effective values they
@@ -194,6 +195,103 @@ impl Writer {
         }
     }
 
+    /// A side's game state as the snapshot stores it: the base tactics, the rules in priority
+    /// order, the player instructions, the set of rules active, and the change being taken up
+    /// (each slot's prior tactics, the side's, each slot's tick, which slots have taken it,
+    /// and whether the side has switched). The plans follow from these and the tactics.
+    pub(crate) fn game_state(&mut self, path: &dyn Fn() -> String, team: &Team) {
+        use crate::tactics::rules::{Action, Condition, Score};
+        self.tactics(&team.base);
+        let state = &team.game_state;
+        // A side holds at most 8 rules, each of at most 6 conditions and a few actions, and
+        // at most one instruction per slot and primitive: all below 255.
+        self.u8(state.rules.len() as u8);
+        for (k, rule) in state.rules.iter().enumerate() {
+            self.u8(rule.when.len() as u8);
+            for c in &rule.when {
+                match *c {
+                    Condition::Score(score) => {
+                        self.u8(0);
+                        match score {
+                            Score::Leading(n) => {
+                                self.u8(0);
+                                self.u8(n);
+                            }
+                            Score::Level => {
+                                self.u8(1);
+                                self.u8(0);
+                            }
+                            Score::Trailing(n) => {
+                                self.u8(2);
+                                self.u8(n);
+                            }
+                        }
+                    }
+                    Condition::TimeLeft { minutes } => {
+                        self.u8(1);
+                        self.f64_at(|| format!("{}.rules[{k}].time_left", path()), minutes);
+                    }
+                    Condition::RedCardsOurs { at_least } => {
+                        self.u8(2);
+                        self.u8(at_least);
+                    }
+                    Condition::RedCardsTheirs { at_least } => {
+                        self.u8(3);
+                        self.u8(at_least);
+                    }
+                    Condition::RunOfPlay { above, value } => {
+                        self.u8(4);
+                        self.bool(above);
+                        self.f64_at(|| format!("{}.rules[{k}].run_of_play", path()), value);
+                    }
+                    Condition::TeamEnergy { below } => {
+                        self.u8(5);
+                        self.f64_at(|| format!("{}.rules[{k}].team_energy", path()), below);
+                    }
+                }
+            }
+            self.u8(rule.set.len() as u8);
+            for a in &rule.set {
+                match *a {
+                    Action::Level { primitive, level } => {
+                        self.u8(0);
+                        self.u8(primitive);
+                        self.u8(level);
+                    }
+                    Action::Formation(f) => {
+                        self.u8(1);
+                        self.u8(f);
+                        self.u8(0);
+                    }
+                }
+            }
+        }
+        self.u8(state.instructions.len() as u8);
+        for i in &state.instructions {
+            self.u8(i.slot);
+            self.u8(i.primitive);
+            self.u8(i.level);
+        }
+        self.u8(team.rules_active);
+        match team.take_up.as_deref() {
+            None => self.u8(0),
+            Some(take) => {
+                self.u8(1);
+                for t in &take.prior {
+                    self.tactics(t);
+                }
+                self.tactics(&take.prior_side);
+                for at in take.at {
+                    self.u32(at);
+                }
+                for taken in take.taken {
+                    self.bool(taken);
+                }
+                self.bool(take.switched);
+            }
+        }
+    }
+
     /// Every counter of the match summary, in declaration order.
     /// Every player's tally, by side and squad index: the counts, then the expected goals.
     pub(crate) fn tallies(&mut self, tallies: &[Vec<crate::sim::tally::PlayerTally>; 2]) {
@@ -223,6 +321,12 @@ impl Writer {
                 self.f64_at(|| format!("tallies[{team}][{s}].xg"), t.xg);
                 self.u32(t.assists);
                 self.u8(u8::from(t.started));
+                self.f64_at(|| format!("tallies[{team}][{s}].psxg_faced"), t.psxg_faced);
+                self.u32(t.shot_goals_conceded);
+                self.f64_at(
+                    || format!("tallies[{team}][{s}].value_added"),
+                    t.value_added,
+                );
             }
         }
     }
@@ -263,6 +367,7 @@ impl Writer {
         self.pair(s.passes_completed);
         self.pair(s.clearances);
         self.pair(s.restart_kicks);
+        self.pair(s.goals_no_shot);
         self.u32(s.live_ticks);
         self.pair(s.possession_ticks);
         self.pair(s.extra_added_s);

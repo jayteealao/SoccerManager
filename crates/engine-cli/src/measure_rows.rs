@@ -44,6 +44,95 @@ pub const PLAYER_SLOTS: usize = 16;
 /// high intensity 5.5 to 7, sprint 7 and over.
 pub const ZONES: [&str; 5] = ["walk", "jog", "run", "hi", "sprint"];
 pub const SIDES: [&str; 2] = ["home", "away"];
+/// The team-shape groups, by the position of a player's formation slot: centre-backs,
+/// full-backs, central midfielders (holding, central and attacking), wingers, strikers.
+pub const SHAPE_GROUPS: [&str; 5] = ["cb", "fb", "cm", "w", "st"];
+/// The team-shape sums kept per group, in order (the engine's `measures::shape`).
+pub const SHAPE_GROUP_FIELDS: [&str; 26] = [
+    "depth_in_sum",
+    "depth_in_n",
+    "depth_out_sum",
+    "depth_out_n",
+    "width_near_in_sum",
+    "width_near_in_n",
+    "width_near_out_sum",
+    "width_near_out_n",
+    "width_far_in_sum",
+    "width_far_in_n",
+    "width_far_out_sum",
+    "width_far_out_n",
+    "pace_stand",
+    "pace_walk",
+    "pace_jog",
+    "pace_run",
+    "pace_hs",
+    "pace_sprint",
+    "speed_near_sum",
+    "speed_near_n",
+    "speed_far_sum",
+    "speed_far_n",
+    "sprints_fwd",
+    "sprints_back",
+    "sprints_lat",
+    "live_ticks",
+];
+/// The team-shape sums kept per team, in order.
+pub const SHAPE_TEAM_FIELDS: [&str; 27] = [
+    "slide_x_in_sxy",
+    "slide_x_in_sxx",
+    "slide_x_out_sxy",
+    "slide_x_out_sxx",
+    "slide_y_in_sxy",
+    "slide_y_in_sxx",
+    "slide_y_out_sxy",
+    "slide_y_out_sxx",
+    "far_1s_30_45_pq",
+    "far_1s_30_45_qq",
+    "far_1s_gt45_pq",
+    "far_1s_gt45_qq",
+    "far_10s_30_45_pq",
+    "far_10s_30_45_qq",
+    "far_10s_gt45_pq",
+    "far_10s_gt45_qq",
+    "calm_ticks",
+    "dead_ticks",
+    "stops_throw_in",
+    "stops_free_kick",
+    "stops_goal_kick",
+    "stops_corner",
+    "stops_kick_off",
+    "stops_penalty",
+    "links_top2",
+    "links_back",
+    "links_total",
+];
+/// Team-shape sums per side: every group's, then the team's.
+pub const SHAPE_FIELDS: usize =
+    SHAPE_GROUPS.len() * SHAPE_GROUP_FIELDS.len() + SHAPE_TEAM_FIELDS.len();
+
+/// The name of team-shape sum `i` of a side: `<group>.<field>`, then the team fields.
+pub fn shape_name(i: usize) -> String {
+    let per = SHAPE_GROUP_FIELDS.len();
+    match SHAPE_GROUPS.get(i / per) {
+        Some(g) => format!("{g}.{}", SHAPE_GROUP_FIELDS[i % per]),
+        None => SHAPE_TEAM_FIELDS[i - SHAPE_GROUPS.len() * per].to_string(),
+    }
+}
+
+/// The place of the team-shape sum `name` (`<group>.<field>` or a team field).
+pub fn shape_place(name: &str) -> Option<usize> {
+    let per = SHAPE_GROUP_FIELDS.len();
+    match name.split_once('.') {
+        Some((g, f)) => {
+            let g = SHAPE_GROUPS.iter().position(|x| *x == g)?;
+            Some(g * per + SHAPE_GROUP_FIELDS.iter().position(|x| *x == f)?)
+        }
+        None => SHAPE_TEAM_FIELDS
+            .iter()
+            .position(|x| *x == name)
+            .map(|t| SHAPE_GROUPS.len() * per + t),
+    }
+}
 
 // The engine's measures and the rows agree on every size.
 #[cfg(feature = "measures")]
@@ -53,6 +142,7 @@ const _: () = assert!(
         && PHASES.len() == engine::measures::PHASE_COUNT
         && CHAIN_PASS_BINS == engine::measures::CHAIN_PASS_BINS
         && CHAIN_SECOND_BINS == engine::measures::CHAIN_SECOND_BINS
+        && SHAPE_FIELDS == engine::measures::shape::SHAPE_FIELDS
 );
 
 /// The realism measures of one match, as the rows keep them. Per-side arrays are home
@@ -131,7 +221,7 @@ pub struct PlayerRow {
 /// A match's realism measures and each player's running, as a measures build records them.
 /// A row holds one only when the match carries the measures, so a row of a build without the
 /// feature keeps none in memory.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MeasureBlock {
     /// The realism measures.
     pub measures: Measures,
@@ -139,4 +229,31 @@ pub struct MeasureBlock {
     pub physical: [[PlayerRow; PLAYER_SLOTS]; 2],
     /// Players of a side beyond [`PLAYER_SLOTS`], whose running no slot holds.
     pub physical_overflow: [u32; 2],
+    /// The team-shape sums, per side, in [`shape_name`] order.
+    pub shape: [[f64; SHAPE_FIELDS]; 2],
+}
+
+impl Default for MeasureBlock {
+    fn default() -> Self {
+        Self {
+            measures: Measures::default(),
+            physical: [[PlayerRow::default(); PLAYER_SLOTS]; 2],
+            physical_overflow: [0; 2],
+            shape: [[0.0; SHAPE_FIELDS]; 2],
+        }
+    }
+}
+
+#[cfg(all(test, feature = "measures"))]
+mod tests {
+    /// The rows name the team-shape sums as the engine keeps them.
+    #[test]
+    fn the_shape_names_are_the_engines() {
+        let engine = engine::measures::shape::field_names();
+        let rows: Vec<String> = (0..super::SHAPE_FIELDS).map(super::shape_name).collect();
+        assert_eq!(rows, engine);
+        for (i, name) in rows.iter().enumerate() {
+            assert_eq!(super::shape_place(name), Some(i), "{name}");
+        }
+    }
 }

@@ -46,7 +46,8 @@ use stream::{
 use crate::cli::ServeOpts;
 use crate::matchday::{self, Matchday, Round};
 use crate::stream_run::{
-    Drive, PageChange, carry_page_changes, drive, hello_substitutions, hello_tactics, hello_teams,
+    Drive, PageChange, carry_page_changes, drive, hello_game_state, hello_styles,
+    hello_substitutions, hello_tactics, hello_teams,
 };
 
 /// The team the page manages.
@@ -311,6 +312,7 @@ impl<'a> Serving<'a> {
                 .collect(),
             bench_size: usize::from(config.tactics.ai.bench_size),
             tactics: config.tactics.clone(),
+            formation: config.teams[HOME].tactics.formation,
         }));
         let state = Arc::new(MatchState::default());
         let mut gated = GatedSnapshots::new(
@@ -444,7 +446,7 @@ impl<'a> Serving<'a> {
                     events: Arc::clone(&events),
                     queue: Queue::new(admitted_kinds(&self.loaded.content.rules)),
                     pre_match: if self.sim.is_some() {
-                        Arc::new(PreMatch::none())
+                        Arc::new(PreMatch::reading(self.loaded.content.tactics.clone()))
                     } else {
                         Arc::clone(&self.pre_match)
                     },
@@ -772,6 +774,8 @@ fn hello_for(
         knockout: config.knockout,
         ground_length: config.pitch().length(),
         ground_width: config.pitch().width(),
+        game_state: hello_game_state(sim),
+        styles: hello_styles(sim),
     }
 }
 
@@ -779,12 +783,29 @@ fn hello_for(
 /// socket checked the lineup and the patch's indices before it stored them.
 pub(crate) fn with_page_setup(config: MatchConfig, setup: PageSetup) -> MatchConfig {
     let config = config.with_setup(HOME, setup.lineup, setup.bench);
-    match setup.patch {
+    let config = match setup.patch {
         Some(patch) => {
             let tactics =
                 patch.applied_to(config.teams[HOME].tactics, &setup.lineup, &config.tactics);
             config.with_tactics(HOME, tactics)
         }
+        None => config,
+    };
+    // The other primitives the page moved, then its rules and player instructions; with
+    // neither the match is the one the patch alone makes.
+    let config = if setup.levels.is_empty() {
+        config
+    } else {
+        let tactics = setup
+            .levels
+            .iter()
+            .fold(config.teams[HOME].tactics, |t, &(p, l)| {
+                t.with_level(usize::from(p), l, &config.tactics)
+            });
+        config.with_tactics(HOME, tactics)
+    };
+    match setup.game_state {
+        Some(state) => config.with_game_state(HOME, state),
         None => config,
     }
 }
@@ -817,8 +838,15 @@ mod skip_equality {
     use std::path::PathBuf;
 
     /// The knockout seed whose served match with the sample pack is level after extra time
-    /// and goes to a shoot-out. `scan_for_the_shootout_seed` finds it again.
-    const SHOOTOUT_SEED: u64 = 1;
+    /// and goes to a shoot-out. `scan_for_the_shootout_seed` finds it again (seed 0 until
+    /// tempo became patience and the mentality an appetite for risk; seed 3 until defenders met
+    /// a running carrier in a take-on; seed 0 until a passer read the press his receiver would
+    /// meet; seed 16 until the AI manager's substitutions followed the situation; seed 3 until
+    /// the computer manager grouped its substitutions and a player going for a loose ball stopped
+    /// being pushed off it; seed 0 until the styles became presets of primitives; seed 11 until
+    /// clearances, shots and misreads were scored by their cost; seed 5 until every option was
+    /// valued by the real threat of its place).
+    const SHOOTOUT_SEED: u64 = 4;
 
     /// The tick the knockout match marks a watchdog hit on, in every run.
     const WATCHDOG_AT: u32 = 60_000;

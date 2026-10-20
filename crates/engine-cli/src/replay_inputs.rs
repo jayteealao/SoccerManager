@@ -12,8 +12,8 @@ use std::path::Path;
 use anyhow::{Context, bail};
 use engine::data::traits::FROZEN_TRAITS_V1;
 use engine::data::{
-    ATTRIBUTES_FILE, COMMENTARY_FILE, ContentFiles, RULES_FILE, SLOTS_FILE, TACTICS_FILE,
-    TEAM_A_FILE, TEAM_B_FILE, TRAITS_FILE, TUNING_FILE,
+    ATTRIBUTES_FILE, COMMENTARY_FILE, ContentFiles, RESTART_WAITS_FILE, RULES_FILE, SLOTS_FILE,
+    STYLES_FILE, TACTICS_FILE, TEAM_A_FILE, TEAM_B_FILE, TRAITS_FILE, TUNING_FILE,
 };
 use engine::{Commentary, Content, MatchConfig, Simulation};
 use script::{Backstop, LoadedPack, Pack};
@@ -39,12 +39,21 @@ const SLOTS_ROLE: &str = "slots";
 /// ([`FROZEN_TRAITS_V1`]); its team files hold no traits.
 const TRAITS_ROLE: &str = "traits";
 
+/// The restart wait table's role. It follows the trait catalogue and is present only when the
+/// content has a wait table; a replay file without it plays the fixed restart delays, as
+/// every match did before the table existed.
+const RESTART_WAITS_ROLE: &str = "restart_waits";
+
+/// The named styles' role. It follows the restart wait table and is present only when the
+/// content has a styles file; a replay file without it plays the default AI tactics, as every
+/// match did before the styles existed.
+const STYLES_ROLE: &str = "styles";
+
 /// The script pack's roles. They come last and are present only when the match ran a pack.
 const PACK_ROLES: [&str; 2] = ["pack_manifest", "pack_script"];
 
-/// The input files of one match: the core roles, the slot file, the trait catalogue, and the
-/// pack files, in the
-/// order the replay file stores them.
+/// The input files of one match: the core roles, the slot file, the trait catalogue, the
+/// restart wait table, and the pack files, in the order the replay file stores them.
 pub struct InputFiles(pub Vec<InputFile>);
 
 impl InputFiles {
@@ -93,6 +102,12 @@ impl InputFiles {
             read_bytes(&dir.path(SLOTS_FILE), SLOTS_FILE)?,
         ));
         files.push(file(TRAITS_ROLE, TRAITS_FILE, content.traits));
+        if let Some(waits) = content.restart_waits {
+            files.push(file(RESTART_WAITS_ROLE, RESTART_WAITS_FILE, waits));
+        }
+        if let Some(styles) = content.styles {
+            files.push(file(STYLES_ROLE, STYLES_FILE, styles));
+        }
         if let Some(pack_dir) = script_pack {
             // The folder checks (the entry stays inside the folder) run on the disk layout.
             let pack = Pack::read(pack_dir).inspect_err(|err| {
@@ -119,28 +134,42 @@ impl InputFiles {
     pub fn from_record(fixture: &Fixture) -> anyhow::Result<Self> {
         let roles: Vec<&str> = fixture.inputs.iter().map(|f| f.role.as_str()).collect();
         // The trait catalogue is stored only after the slot file, which every replay that has
-        // the catalogue also has.
-        let accepted = [(false, false), (true, false), (true, true)]
-            .into_iter()
-            .any(|(slots, traits)| {
-                [false, true].into_iter().any(|pack| {
-                    let mut wanted = CORE_ROLES.to_vec();
-                    if slots {
-                        wanted.push(SLOTS_ROLE);
-                    }
-                    if traits {
-                        wanted.push(TRAITS_ROLE);
-                    }
-                    if pack {
-                        wanted.extend(PACK_ROLES);
-                    }
-                    roles == wanted
-                })
-            });
+        // the catalogue also has; the restart wait table and then the styles, each optional,
+        // only after the catalogue.
+        let accepted = [
+            (false, false, false, false),
+            (true, false, false, false),
+            (true, true, false, false),
+            (true, true, true, false),
+            (true, true, false, true),
+            (true, true, true, true),
+        ]
+        .into_iter()
+        .any(|(slots, traits, waits, styles)| {
+            [false, true].into_iter().any(|pack| {
+                let mut wanted = CORE_ROLES.to_vec();
+                if slots {
+                    wanted.push(SLOTS_ROLE);
+                }
+                if traits {
+                    wanted.push(TRAITS_ROLE);
+                }
+                if waits {
+                    wanted.push(RESTART_WAITS_ROLE);
+                }
+                if styles {
+                    wanted.push(STYLES_ROLE);
+                }
+                if pack {
+                    wanted.extend(PACK_ROLES);
+                }
+                roles == wanted
+            })
+        });
         if !accepted {
             bail!(
-                "the replay file's inputs are {} ; a match needs {}, then optionally {SLOTS_ROLE} \
-                 and {TRAITS_ROLE}, then optionally {}",
+                "the replay file's inputs are {} ; a match needs {}, then optionally {SLOTS_ROLE}, \
+                 {TRAITS_ROLE}, {RESTART_WAITS_ROLE} and {STYLES_ROLE}, then optionally {}",
                 roles.join(", "),
                 CORE_ROLES.join(", "),
                 PACK_ROLES.join(" and ")
@@ -188,6 +217,10 @@ pub fn build(
         traits: inputs
             .get(TRAITS_ROLE)
             .map_or_else(|| FROZEN_TRAITS_V1.as_bytes().to_vec(), |f| f.bytes.clone()),
+        // A file without the wait table plays the fixed restart delays.
+        restart_waits: inputs.get(RESTART_WAITS_ROLE).map(|f| f.bytes.clone()),
+        // A file without the styles plays the default AI tactics.
+        styles: inputs.get(STYLES_ROLE).map(|f| f.bytes.clone()),
     })?;
     // A file without the slot file plays with the built-in default selection.
     let content = match inputs.get(SLOTS_ROLE) {
@@ -235,6 +268,17 @@ pub fn build(
     for (team, kind) in settings.managers.iter().enumerate() {
         config = config.with_manager(team, kind.manager());
     }
+    for (team, value) in settings.game_state.iter().flatten().enumerate() {
+        let Some(value) = value else {
+            continue;
+        };
+        let formation = config.teams[team].tactics.formation;
+        let state = engine::data::game_state::from_value(value, &config.tactics, &[formation])
+            .map_err(|(field, reason)| {
+                anyhow::anyhow!("the recorded game state of team {team}: {field}: {reason}")
+            })?;
+        config = config.with_game_state(team, state);
+    }
     let keyframe_interval = content.tuning.stream.keyframe_interval;
     let sim = Simulation::start(
         config,
@@ -262,6 +306,7 @@ mod tests {
             minutes: 1,
             knockout: false,
             managers: [stream::ManagerKind::Ai, stream::ManagerKind::Ai],
+            game_state: None,
         }
     }
 
@@ -272,7 +317,7 @@ mod tests {
     fn a_replay_without_the_trait_catalogue_builds_with_the_frozen_copy() {
         let inputs = InputFiles::read(Some(&shipped()), None, None, None).unwrap();
         let roles: Vec<&str> = inputs.0.iter().map(|f| f.role.as_str()).collect();
-        assert_eq!(roles[7..], [SLOTS_ROLE, TRAITS_ROLE]);
+        assert_eq!(roles[7..9], [SLOTS_ROLE, TRAITS_ROLE]);
         let held = inputs.get(TRAITS_ROLE).unwrap();
         assert_eq!(held.name, TRAITS_FILE);
         assert_eq!(held.bytes, FROZEN_TRAITS_V1.as_bytes());
@@ -281,15 +326,128 @@ mod tests {
             inputs
                 .0
                 .iter()
-                .filter(|f| f.role != TRAITS_ROLE)
+                .filter(|f| {
+                    f.role != TRAITS_ROLE && f.role != RESTART_WAITS_ROLE && f.role != STYLES_ROLE
+                })
                 .cloned()
                 .collect(),
         );
-        let with = build(&inputs, &settings(), Backstop::Never, false).unwrap();
+        let without_waits = InputFiles(
+            inputs
+                .0
+                .iter()
+                .filter(|f| f.role != RESTART_WAITS_ROLE && f.role != STYLES_ROLE)
+                .cloned()
+                .collect(),
+        );
+        let with = build(&without_waits, &settings(), Backstop::Never, false).unwrap();
         let without = build(&older, &settings(), Backstop::Never, false).unwrap();
         assert_eq!(
             with.sim.config().content_hash,
             without.sim.config().content_hash
+        );
+    }
+
+    /// A recorded match stores the restart wait table after the trait catalogue and builds
+    /// with it; a replay written before the table existed lacks it, is accepted, and plays the
+    /// fixed delays, so it keeps the content hash it was recorded with.
+    #[test]
+    fn a_replay_stores_the_wait_table_and_one_without_it_plays_the_fixed_delays() {
+        let shipped = InputFiles::read(Some(&shipped()), None, None, None).unwrap();
+        let older = InputFiles(
+            shipped
+                .0
+                .iter()
+                .filter(|f| f.role != RESTART_WAITS_ROLE && f.role != STYLES_ROLE)
+                .cloned()
+                .collect(),
+        );
+        let mut inputs = InputFiles(older.0.clone());
+        inputs.0.push(InputFile {
+            role: RESTART_WAITS_ROLE.into(),
+            name: RESTART_WAITS_FILE.into(),
+            bytes: serde_json::to_vec(&engine::data::restart_waits::RestartWaits::defaults())
+                .unwrap(),
+        });
+        let roles: Vec<&str> = inputs.0.iter().map(|f| f.role.as_str()).collect();
+        assert_eq!(roles[7..], [SLOTS_ROLE, TRAITS_ROLE, RESTART_WAITS_ROLE]);
+        let with = build(&inputs, &settings(), Backstop::Never, false).unwrap();
+        assert!(with.sim.config().restart_waits.is_some());
+        let without = build(&older, &settings(), Backstop::Never, false).unwrap();
+        assert!(without.sim.config().restart_waits.is_none());
+        assert_ne!(
+            with.sim.config().content_hash,
+            without.sim.config().content_hash
+        );
+    }
+
+    /// A record's game state gives each side its rules and instructions: the home side here,
+    /// with the away side's `null` left alone, so the AI side keeps its style's rules and no
+    /// instruction; the hello form written back is the recorded form for the home side and the
+    /// style's rules for the away side, and two builds of the record play the same match, its
+    /// rules firing.
+    #[test]
+    fn a_recorded_game_state_gives_each_side_its_rules() {
+        let inputs = InputFiles::read(Some(&shipped()), None, None, None).unwrap();
+        let home = serde_json::json!({
+            "rules": [{
+                "when": [{ "kind": "time_left", "minutes": 1.0 }],
+                "set": [{ "primitive": "tempo", "level": "fast" }]
+            }],
+            "instructions": [{ "slot": 10, "primitive": "dribbling", "level": "dribble_more" }]
+        });
+        let recorded = MatchSettings {
+            managers: [stream::ManagerKind::Human, stream::ManagerKind::Ai],
+            game_state: Some([Some(home.clone()), None]),
+            ..settings()
+        };
+        let play = || {
+            let mut built = build(&inputs, &recorded, Backstop::Never, false).unwrap();
+            let teams = built.sim.teams();
+            assert_eq!(teams[0].game_state.rules.len(), 1);
+            assert_eq!(teams[0].game_state.instructions.len(), 1);
+            assert!(teams[1].game_state.instructions.is_empty());
+            let sent = crate::stream_run::hello_game_state(&built.sim).unwrap();
+            assert_eq!(sent[0], Some(home.clone()));
+            let away = sent[1].as_ref().expect("the AI side's style rules");
+            assert_eq!(away["rules"].as_array().map(Vec::len), Some(2));
+            assert!(away.get("instructions").is_none());
+            while !built.sim.is_over() {
+                built.sim.step();
+            }
+            (built.sim.summary(), built.sim.applied_changes().to_vec())
+        };
+        let (first, again) = (play(), play());
+        assert!(
+            first
+                .1
+                .iter()
+                .any(|c| matches!(c.change, engine::Change::Rule { .. })),
+            "the rule never fired"
+        );
+        assert_eq!(first, again);
+    }
+
+    /// A recorded game state the tactics file cannot resolve is refused by name.
+    #[test]
+    fn a_recorded_game_state_naming_an_unknown_primitive_is_refused() {
+        let inputs = InputFiles::read(Some(&shipped()), None, None, None).unwrap();
+        let recorded = MatchSettings {
+            game_state: Some([
+                None,
+                Some(serde_json::json!({
+                    "instructions": [{ "slot": 10, "primitive": "juggling", "level": "more" }]
+                })),
+            ]),
+            ..settings()
+        };
+        let Err(err) = build(&inputs, &recorded, Backstop::Never, false) else {
+            panic!("an unknown primitive builds");
+        };
+        let text = format!("{err:#}");
+        assert!(
+            text.contains("the recorded game state of team 1") && text.contains("juggling"),
+            "{text}"
         );
     }
 }

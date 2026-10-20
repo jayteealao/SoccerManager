@@ -21,7 +21,9 @@ use engine::observe::MatchStats;
 use super::bands::{BandDef, Builtin, Measure, Per, Source};
 use super::distribution::{Hist, Metric, bin_of};
 use super::{se_mean, se_ratio, se_share};
-use crate::measure_rows::{Measures, PASS_CELL_NAMES, PHASES, PLAYER_SLOTS, PlayerRow, ZONES};
+use crate::measure_rows::{
+    Measures, PASS_CELL_NAMES, PHASES, PLAYER_SLOTS, PlayerRow, SHAPE_FIELDS, ZONES, shape_place,
+};
 
 /// The per-team fields of the catalog. A band names one as `<field>.home`, `<field>.away`,
 /// or, in a per-team mean, `<field>.{side}`.
@@ -44,16 +46,19 @@ pub const SIDED: [&str; 16] = [
     "substitutions",
 ];
 
-/// The per-match fields of the catalog.
-pub const MATCH: [&str; 2] = ["injuries", "ball_in_play_s"];
+/// The per-match fields of the catalog: `ball_in_play_min` is `ball_in_play_s` in minutes.
+pub const MATCH: [&str; 3] = ["injuries", "ball_in_play_s", "ball_in_play_min"];
 
 /// The per-team fields a `measures` build adds, read from a match's extras. Five name a
 /// family: `pass_attempts.<cell>` and `pass_completed.<cell>` for each pass cell,
 /// `goals_phase.<phase>` for each goal phase, `third_ticks.<third>` for each third, and
 /// `zone_ticks.<zone>` for each speed zone. The running fields sum over the players of the
 /// side who played: `players_used`, `minutes_on`, `distance_m`, the sum of each player's
-/// peak speed `peak_mps`, and the ball-in-play ticks in each zone.
-pub const MEASURE_FIELDS: [&str; 13] = [
+/// peak speed `peak_mps`, and the ball-in-play ticks in each zone. A sixth family,
+/// `shape.<sum>`, names each team-shape sum ([`crate::measure_rows::shape_name`]), such as
+/// `shape.cb.depth_in_sum` or `shape.slide_x_in_sxy`, and `shape.<group>.live_min`, the
+/// group's ball-in-play player-minutes.
+pub const MEASURE_FIELDS: [&str; 14] = [
     "shot_distance_m",
     "pass_attempts",
     "pass_completed",
@@ -67,17 +72,19 @@ pub const MEASURE_FIELDS: [&str; 13] = [
     "distance_m",
     "peak_mps",
     "zone_ticks",
+    "shape",
 ];
 
 /// The thirds of the pitch, from a side's own goal line.
 pub const THIRDS: [&str; 3] = ["own", "middle", "final"];
 
 /// What a match's compact row holds beyond its band record: the realism measures, each
-/// player's running, and the two clubs as (league, club), home first.
+/// player's running, the team-shape sums, and the two clubs as (league, club), home first.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Extras {
     pub measures: Measures,
     pub physical: [[PlayerRow; PLAYER_SLOTS]; 2],
+    pub shape: [[f64; SHAPE_FIELDS]; 2],
     pub clubs: [(u32, u32); 2],
 }
 
@@ -95,6 +102,7 @@ fn measure_base(base: &str) -> bool {
         Some(("goals_phase", phase)) => member(&PHASES, phase).is_some(),
         Some(("third_ticks", third)) => member(&THIRDS, third).is_some(),
         Some(("zone_ticks", zone)) => member(&ZONES, zone).is_some(),
+        Some(("shape", sum)) => shape_sum(&[[0.0; SHAPE_FIELDS]; 2], sum, 0).is_some(),
         Some(_) => false,
         None => {
             MEASURE_FIELDS.contains(&base)
@@ -105,6 +113,7 @@ fn measure_base(base: &str) -> bool {
                         | "goals_phase"
                         | "third_ticks"
                         | "zone_ticks"
+                        | "shape"
                 )
         }
     }
@@ -161,6 +170,7 @@ fn extra(e: &Extras, base: &str, side: usize) -> Option<f64> {
             let z = member(&ZONES, zone)?;
             players().map(|p| f64::from(p.zone_ticks[z])).sum()
         }
+        Some(("shape", sum)) => shape_sum(&e.shape, sum, side)?,
         Some(_) => return None,
         None => match base {
             "shot_distance_m" => m.shot_distance_m[side],
@@ -178,6 +188,16 @@ fn extra(e: &Extras, base: &str, side: usize) -> Option<f64> {
             _ => return None,
         },
     })
+}
+
+/// The team-shape sum `sum` of `side`: a kept sum by its name, or `<group>.live_min`, the
+/// group's ball-in-play ticks in player-minutes.
+fn shape_sum(shape: &[[f64; SHAPE_FIELDS]; 2], sum: &str, side: usize) -> Option<f64> {
+    if let Some(group) = sum.strip_suffix(".live_min") {
+        let ticks = shape[side][shape_place(&format!("{group}.live_ticks"))?];
+        return Some(ticks / (f64::from(engine::TICKS_PER_SECOND) * 60.0));
+    }
+    Some(shape[side][shape_place(sum)?])
 }
 
 /// The value of the per-team field `name` for `side` (0 home, 1 away).
@@ -209,6 +229,7 @@ pub fn field(s: &MatchStats, name: &str, side: Option<usize>) -> Option<f64> {
     match name {
         "injuries" => return Some(f64::from(s.tactics.injury_count)),
         "ball_in_play_s" => return Some(f64::from(s.figures.ball_in_play_s)),
+        "ball_in_play_min" => return Some(f64::from(s.figures.ball_in_play_s) / 60.0),
         _ => {}
     }
     let (base, which) = name.rsplit_once('.')?;
@@ -1161,9 +1182,14 @@ mod tests {
             zone_ticks: [0, 0, 0, 0, 10],
             peak_mps: 9.0,
         };
+        let mut shape = [[0.0; SHAPE_FIELDS]; 2];
+        shape[0][shape_place("cb.depth_in_sum").unwrap()] = 120.0;
+        shape[0][shape_place("cb.depth_in_n").unwrap()] = 12.0;
+        shape[1][shape_place("stops_corner").unwrap()] = 3.0;
         Extras {
             measures: m,
             physical,
+            shape,
             clubs,
         }
     }
@@ -1198,6 +1224,15 @@ mod tests {
         assert_eq!(f("peak_mps.home"), Some(17.0));
         assert_eq!(f("zone_ticks.sprint.home"), Some(60.0));
         assert_eq!(f("players_used.away"), Some(0.0));
+        assert_eq!(f("shape.cb.depth_in_sum.home"), Some(120.0));
+        assert_eq!(f("shape.cb.depth_in_n.home"), Some(12.0));
+        assert_eq!(f("shape.stops_corner.away"), Some(3.0));
+        assert_eq!(f("shape.stops_corner.home"), Some(0.0));
+        assert!(is_measure_field("shape.st.sprints_fwd.{side}"));
+        assert!(!is_measure_field("shape.gk.depth_in_sum.home"));
+        assert!(!is_measure_field("shape.home"));
+        assert!(is_measure_field("shape.w.live_min.away"));
+        assert!(!is_measure_field("shape.slide.live_min.away"));
         // A catalog field still reads the band record.
         assert_eq!(f("goals.home"), Some(2.0));
         // Without extras, or with extras of a build without the measures: no value.

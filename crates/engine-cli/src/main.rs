@@ -21,11 +21,14 @@ mod replay;
 mod replay_inputs;
 mod report;
 mod resimulate;
+mod restart_waits;
 mod resume;
 mod season;
 mod serve;
+mod signatures;
 mod simulate;
 mod state_files;
+mod stats;
 mod stream_run;
 mod trace_file;
 mod web;
@@ -119,6 +122,10 @@ fn main() {
         cli::Command::Gate(opts) => gate::run(content_dir, &opts),
         cli::Command::Guard(opts) => guard::run(&opts),
         cli::Command::FastModel(opts) => fast_model::run(content_dir, &opts),
+        cli::Command::RestartWaits(opts) => restart_waits::run(content_dir, &opts),
+        cli::Command::Signatures(opts) => signatures::run(content_dir, &opts),
+        #[cfg(feature = "measures")]
+        cli::Command::Primitives(opts) => calibrate::primitives::run(content_dir, &opts),
         cli::Command::MatchdayTiming(opts) => matchday::timing::run(content_dir, &opts),
     };
     match result {

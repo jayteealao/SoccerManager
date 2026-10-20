@@ -268,6 +268,11 @@ pub struct TeamSetup {
     pub instructions: Vec<u8>,
     /// One role and duty per slot, in slot order.
     pub roles: Vec<SlotRole>,
+    /// The level, choice or state of every primitive of `tactics.primitives`, in that order:
+    /// each an index into the primitive's levels, choices or states. Written from protocol 9;
+    /// a setup without it, as from an earlier build, reads as empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub levels: Vec<u8>,
 }
 
 /// The substitution limits of the loaded rule pack.
@@ -358,6 +363,18 @@ pub struct Hello {
         skip_serializing_if = "is_default_ground_width"
     )]
     pub ground_width: f64,
+    /// Each side's game-state rules and player instructions, home first, in the form a
+    /// tactic writes them (`rules`, `instructions`; names, not indices), or `null` for a side
+    /// with neither. Written only when a side has some; a hello without it, as from an earlier
+    /// build, reads as no rules on either side.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub game_state: Option<[Option<serde_json::Value>; 2]>,
+    /// The style presets the engine loaded, as the styles file writes them, each with its
+    /// primitives by name, its rules and its player instructions: the presets the tactics
+    /// board offers. Written only when the engine loaded some; a hello without it, as from an
+    /// earlier build, offers none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub styles: Option<serde_json::Value>,
 }
 
 /// The length of a ground that a hello does not name, in metres.
@@ -467,7 +484,10 @@ pub struct ChangeStateNote {
 #[serde(deny_unknown_fields)]
 pub struct AdvicePick {
     /// The reason, as the `ai.decision` codes name it: `sub-injury`, `sub-keeper`,
-    /// `sub-fatigue`, `mentality-up-trailing` or `mentality-down-leading`.
+    /// `sub-fatigue`, `sub-booked`, `sub-form` or `sub-knock`. An earlier engine also sent
+    /// `mentality-up-trailing` or `mentality-down-leading` with a `tactics` pick, from when
+    /// the AI manager made tactics changes of its own; the assistant now offers substitutions
+    /// only, and the `tactics` kind stays readable.
     pub code: String,
     /// `substitution` or `tactics`, as `change.kind` names it.
     pub kind: String,
@@ -575,6 +595,37 @@ pub struct GroundProgress {
     pub reached: Vec<u32>,
 }
 
+/// The walk-on before one half: the players walk from the tunnel on the near touchline to the
+/// places of the half's first tick. It is sent before that tick's frame and is not match time:
+/// no tick plays it. A viewer draws it before the tick, or skips it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WalkOn {
+    /// The half it opens: 0 the first, 1 the second, 2 and 3 the extra-time halves.
+    pub period: u32,
+    /// The tick of the half's first frame, which the walk-on ends on.
+    pub first_tick: u32,
+    /// The walking speed, in metres per second.
+    pub speed: f64,
+    /// How long the walk-on lasts, in ticks of the match's tick length: the longest walk at
+    /// `speed`.
+    pub ticks: u32,
+    /// Every player on the pitch, in roster order.
+    pub paths: Vec<WalkPathWire>,
+}
+
+/// One player's walk, in metres on the tick frame's axes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WalkPathWire {
+    /// The player's slot in the tick frame, 0 to 21.
+    pub player: u32,
+    /// Where he comes out of the tunnel, `[x, y]`.
+    pub from: [f64; 2],
+    /// His place on the half's first tick, `[x, y]`.
+    pub to: [f64; 2],
+}
+
 /// Everything the server sends as a JSON text frame.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
@@ -592,6 +643,7 @@ pub enum ServerMessage {
     GroundEvent(GroundEvent),
     GroundProgress(GroundProgress),
     Ratings(Ratings),
+    WalkOn(WalkOn),
 }
 
 /// The playback speed a client asks for.
@@ -619,15 +671,19 @@ pub struct Jump {
     pub tick: u32,
 }
 
-/// A change a client queues for a later stoppage.
+/// A change a client queues. A tactics change and a substitution wait for a stoppage; a level
+/// change and a game-state change apply on the next tick.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QueueChange {
-    /// `tactics` or `substitution`. Any other value is refused by name.
+    /// `tactics`, `substitution`, `instructions` or `game-state`. Any other value is refused
+    /// by name.
     #[serde(rename = "change.kind")]
     pub kind: String,
-    /// `{ "patch": … }` for a tactics change, `{ "off": …, "on": … }` for a substitution.
-    /// [`QueueChange::detail_typed`] reads it.
+    /// `{ "patch": … }` for a tactics change, `{ "off": …, "on": … }` for a substitution,
+    /// `{ "levels": [{ "primitive": …, "level": … }] }` for a level change (names, not
+    /// indices), and `{ "game_state": { "rules": …, "instructions": … } }` for a game-state
+    /// change, in the form a tactic writes them. [`QueueChange::detail_typed`] reads it.
     #[serde(default)]
     pub detail: serde_json::Value,
 }
@@ -671,6 +727,26 @@ struct SwapDetail {
     on: u16,
 }
 
+/// One primitive at one level, choice or state, both by the names of the hello's `tactics`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LevelWire {
+    pub primitive: String,
+    pub level: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LevelsDetail {
+    levels: Vec<LevelWire>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GameStateDetail {
+    game_state: serde_json::Value,
+}
+
 /// A queued change's detail, read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChangeDetail {
@@ -680,6 +756,10 @@ pub enum ChangeDetail {
         off: u16,
         on: u16,
     },
+    /// Primitives at new levels, by name.
+    Levels(Vec<LevelWire>),
+    /// A side's rules and player instructions in their written form, whole.
+    GameState(serde_json::Value),
 }
 
 impl QueueChange {
@@ -695,6 +775,10 @@ impl QueueChange {
                     on: d.on,
                 }
             }),
+            "instructions" => serde_json::from_value::<LevelsDetail>(self.detail.clone())
+                .map(|d| ChangeDetail::Levels(d.levels)),
+            "game-state" => serde_json::from_value::<GameStateDetail>(self.detail.clone())
+                .map(|d| ChangeDetail::GameState(d.game_state)),
             _ => return None,
         };
         Some(read.map_err(|e| format!("cannot read the {} change: {e}", self.kind)))
@@ -712,6 +796,14 @@ pub struct SetLineup {
     /// kick-off.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub patch: Option<PatchWire>,
+    /// Pre-match levels of the other primitives, by name, applied after the patch. Written
+    /// only when the page moved some.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub levels: Vec<LevelWire>,
+    /// Pre-match rules and player instructions, in the form a tactic writes them, in place of
+    /// the side's own. Written only when the page set some.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub game_state: Option<serde_json::Value>,
 }
 
 /// Withdraws a queued change before a stoppage takes it.
@@ -841,6 +933,7 @@ mod tests {
                         mentality: 2,
                         instructions: vec![1, 1, 1, 1, 1, 0],
                         roles: vec![SlotRole { role: 0, duty: 1 }; 11],
+                        levels: Vec::new(),
                     }),
                     formation: "4-4-2".into(),
                 },
@@ -866,6 +959,8 @@ mod tests {
             knockout: true,
             ground_length: DEFAULT_GROUND_LENGTH,
             ground_width: DEFAULT_GROUND_WIDTH,
+            game_state: None,
+            styles: None,
         }
     }
 
@@ -909,6 +1004,71 @@ mod tests {
             queue_change("formation", serde_json::Value::Null).detail_typed(),
             None
         );
+
+        let levels = queue_change(
+            "instructions",
+            serde_json::json!({"levels": [{"primitive": "tempo", "level": "fast"}]}),
+        );
+        assert_eq!(
+            levels.detail_typed(),
+            Some(Ok(ChangeDetail::Levels(vec![LevelWire {
+                primitive: "tempo".into(),
+                level: "fast".into()
+            }])))
+        );
+        let state = serde_json::json!({"instructions": [{"slot": 9, "primitive": "dribbling", "level": "dribble_often"}]});
+        let game_state = queue_change("game-state", serde_json::json!({"game_state": state}));
+        assert_eq!(
+            game_state.detail_typed(),
+            Some(Ok(ChangeDetail::GameState(state)))
+        );
+        let Some(Err(fault)) = queue_change(
+            "instructions",
+            serde_json::json!({"levels": [{"primitive": "tempo", "step": 1}]}),
+        )
+        .detail_typed() else {
+            panic!("an unknown field is refused");
+        };
+        assert!(
+            fault.starts_with("cannot read the instructions change"),
+            "{fault}"
+        );
+    }
+
+    #[test]
+    fn the_board_fields_are_omitted_when_empty_and_read_back() {
+        let lineup = SetLineup {
+            lineup: (0..11).collect(),
+            bench: vec![11],
+            patch: None,
+            levels: Vec::new(),
+            game_state: None,
+        };
+        let plain = serde_json::to_string(&lineup).unwrap();
+        assert!(
+            !plain.contains("levels") && !plain.contains("game_state"),
+            "{plain}"
+        );
+        let full = SetLineup {
+            levels: vec![LevelWire {
+                primitive: "crossing".into(),
+                level: "cross_often".into(),
+            }],
+            game_state: Some(serde_json::json!({"rules": []})),
+            ..lineup
+        };
+        let back: SetLineup = serde_json::from_str(&serde_json::to_string(&full).unwrap()).unwrap();
+        assert_eq!(back, full);
+        let mut hello = hello();
+        let json = serde_json::to_string(&hello).unwrap();
+        assert!(
+            !json.contains("styles") && !json.contains("\"levels\""),
+            "{json}"
+        );
+        hello.styles = Some(serde_json::json!({"styles": []}));
+        hello.teams[0].setup.as_mut().unwrap().levels = vec![2, 0, 1];
+        let back: Hello = serde_json::from_str(&serde_json::to_string(&hello).unwrap()).unwrap();
+        assert_eq!(back, hello);
     }
 
     #[test]
@@ -953,6 +1113,8 @@ mod tests {
                 mentality: Some(3),
                 ..PatchWire::default()
             }),
+            game_state: None,
+            levels: Vec::new(),
         });
         let json = serde_json::to_string(&command).unwrap();
         assert!(json.starts_with("{\"type\":\"set-lineup\""), "{json}");
@@ -1049,6 +1211,8 @@ mod tests {
                 lineup: vec![0; 11],
                 bench: Vec::new(),
                 patch: None,
+                game_state: None,
+                levels: Vec::new(),
             }),
             ClientCommand::Seen(Seen { tick: 1_200 }),
             ClientCommand::CancelChange(CancelChange {
@@ -1370,6 +1534,30 @@ mod tests {
         assert!(err.to_string().contains("fast"), "{err}");
     }
 
+    #[test]
+    fn a_walk_on_reads_back_and_refuses_an_unknown_field() {
+        let walk = ServerMessage::WalkOn(WalkOn {
+            period: 1,
+            first_tick: 135_001,
+            speed: 2.0,
+            ticks: 900,
+            paths: vec![WalkPathWire {
+                player: 3,
+                from: [-1.0, -34.0],
+                to: [-20.5, 10.0],
+            }],
+        });
+        let json = serde_json::to_string(&walk).unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"walk-on","period":1,"first_tick":135001,"speed":2.0,"ticks":900,"paths":[{"player":3,"from":[-1.0,-34.0],"to":[-20.5,10.0]}]}"#
+        );
+        assert_eq!(serde_json::from_str::<ServerMessage>(&json).unwrap(), walk);
+        let late = json.replace(r#""ticks""#, r#""late":true,"ticks""#);
+        let err = serde_json::from_str::<ServerMessage>(&late).unwrap_err();
+        assert!(err.to_string().contains("late"), "{err}");
+    }
+
     fn advice() -> Advice {
         Advice {
             tick: 3_000,
@@ -1468,6 +1656,31 @@ mod tests {
             panic!("not a hello");
         };
         assert_eq!(*back, smaller);
+    }
+
+    #[test]
+    fn a_hello_carries_game_state_only_when_a_side_has_some() {
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(hello()))).unwrap();
+        assert!(!json.contains("game_state"), "{json}");
+        let mut ruled = hello();
+        let away = serde_json::json!({
+            "rules": [{
+                "when": [{ "kind": "score", "state": "leading", "by": 1 }],
+                "set": [{ "primitive": "mentality", "level": "cautious" }]
+            }],
+            "instructions": [{ "slot": 10, "primitive": "forward_runs", "level": "run_in_behind" }]
+        });
+        ruled.game_state = Some([None, Some(away.clone())]);
+        let json = serde_json::to_string(&ServerMessage::Hello(Box::new(ruled.clone()))).unwrap();
+        assert!(
+            json.ends_with(&format!(",\"game_state\":[null,{away}]}}")),
+            "{json}"
+        );
+        let ServerMessage::Hello(back) = serde_json::from_str::<ServerMessage>(&json).unwrap()
+        else {
+            panic!("not a hello");
+        };
+        assert_eq!(*back, ruled);
     }
 
     #[test]

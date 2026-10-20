@@ -181,3 +181,36 @@ fn a_change_queued_after_the_last_admitting_stoppage_expires_at_full_time() {
     );
     assert_eq!(stats.change_expired_at_full_time, 1);
 }
+
+/// A person's level change does not wait for a stoppage: queued in open play, it applies on
+/// the next tick with no stoppage named, while a tactics change queued with it still waits.
+#[test]
+fn a_level_change_applies_in_open_play_without_a_stoppage() {
+    let mut sim = rolling_scene();
+    let schema = sim.config().tactics.clone();
+    let tempo = schema
+        .primitives
+        .iter()
+        .position(|p| p.name == "tempo")
+        .unwrap();
+    let fastest = 0u8;
+    let before = sim.teams()[0].tactics;
+    assert_ne!(before.level(tempo, &schema), Some(fastest));
+    sim.queue_change(0, Change::Instructions(vec![(tempo as u8, fastest)]));
+    sim.step();
+    let events = sim.take_events();
+    assert!(events.iter().all(|e| e.spot.is_none()), "still open play");
+    let verdicts = verdicts(&events);
+    assert_eq!(verdicts.len(), 1, "{events:?}");
+    assert_eq!(verdicts[0].kind, EngineEventKind::ChangeApplied);
+    let applied = sim.applied_changes();
+    assert_eq!(applied.len(), 1);
+    assert_eq!(applied[0].stoppage, None);
+    assert_eq!(sim.teams()[0].tactics.level(tempo, &schema), Some(fastest));
+    assert_eq!(sim.teams()[0].tactics.mentality, before.mentality);
+    assert_eq!(
+        sim.pending_changes().len(),
+        1,
+        "the mentality change still waits"
+    );
+}

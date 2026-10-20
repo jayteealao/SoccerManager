@@ -3,9 +3,11 @@
 //! offside, fouls with advantage, cards, injuries, restarts, half-time, extra time and the
 //! penalty shoot-out of a knockout match, full time, and abandonment.
 //!
-//! Every time the ball goes dead, the referee places the ball at the restart spot, marks the
-//! tick as a restart, and announces the stoppage through the stoppage hook
-//! (`TickSink::on_stoppage`). The laws themselves are pure functions in the sub-modules.
+//! Every time the ball goes dead, the referee announces the stoppage through the stoppage hook
+//! (`TickSink::on_stoppage`). The ball waits where it left play for the restart's drawn extra
+//! (the unseen fetch), then appears at the restart spot, and that tick is marked as a restart;
+//! with no drawn extra (a quick restart, or content without a wait table) it appears there at
+//! once. The laws themselves are pure functions in the sub-modules.
 
 pub mod clock;
 pub mod discipline;
@@ -42,7 +44,8 @@ use serde_json::json;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Phase {
     Live,
-    /// The ball is dead and waits at the restart spot.
+    /// The ball is dead: it waits where it left play for the drawn extra, then at the
+    /// restart spot.
     DeadBall(DeadBall),
     FullTime,
 }
@@ -100,8 +103,9 @@ impl Shootout {
 /// The referee's state.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Referee {
-    /// The stored phase: the gate hashes it and the snapshot saves it. Only
-    /// `Simulation::enter_phase` writes it.
+    /// The stored phase: the gate hashes it and the snapshot saves it. `Simulation::enter_phase`
+    /// writes it, and `Simulation::update_dead_ball` writes the dead ball's `ready_at` once
+    /// its visible steps are done, which changes no phase name.
     pub phase: Phase,
     /// The phase's name in the phase machine: derived state that equals
     /// `phases::derive(phase, shootout)` at every tick boundary, so it is neither hashed nor
@@ -267,8 +271,20 @@ impl Simulation {
         self.referee.named = PhaseName::HalfTime;
     }
 
+    /// The one writer of the stored dead ball besides `enter_phase`: the same dead ball with
+    /// `ready_at` set once its visible steps are done. The named phase does not change.
+    pub(crate) fn update_dead_ball(&mut self, dead: DeadBall) {
+        debug_assert!(
+            matches!(self.referee.phase, Phase::DeadBall(d) if d.since == dead.since),
+            "only the dead ball in force is updated"
+        );
+        self.referee.phase = Phase::DeadBall(dead);
+    }
+
     /// Places every player for a kick-off by `team` at once, as at the start of a half, and
-    /// gives the centre-forward the ball.
+    /// gives the centre-forward the ball. The watcher sees the players walk on from the
+    /// tunnel to these places before the half's first tick: the placement marks a walk-on due
+    /// ([`Simulation::take_walk_on`]).
     pub(crate) fn place_kick_off(&mut self, team: usize) {
         #[cfg(feature = "measures")]
         if let Some(m) = self.measures.as_deref_mut() {
@@ -276,10 +292,15 @@ impl Simulation {
         }
         self.restart = true;
         self.last_kicker = None;
+        self.last_kick_dir = DVec2::ZERO;
         self.last_pass = None;
         self.pass_in_flight = None;
+        self.possession_phase = None;
+        self.clear_transitions();
         self.restart_taker = None;
         self.clearers_tried = 0;
+        self.cutters_tried = 0;
+        self.duelled = 0;
         self.end_shot();
         let restarts = self.config.modules.restarts;
         for i in 0..self.players.len() {
@@ -309,7 +330,11 @@ impl Simulation {
         self.ball = Ball::at(DVec2::ZERO);
         self.carrier = Some(kicker);
         self.control_since = self.tick;
+        // A kick-off opens a new spell on the ball; nobody's spell before it is judged.
+        self.value_from = Some((kicker, DVec2::ZERO));
         self.last_touch = Some(team);
+        self.possession_phase = Some(team);
+        self.slide_reset();
         self.end_acts_on_restart(team);
         self.restart_taker = Some(kicker);
         #[cfg(feature = "measures")]
@@ -317,17 +342,42 @@ impl Simulation {
             m.restart_taken(StoppageKind::KickOff, team, self.tick);
         }
         self.referee.offside = 0;
+        self.walk_on_due = true;
         self.enter_phase(Phase::Live, Cause::KickOffTaken);
     }
 
-    /// `team` scored. The event names the player who kicked the ball last; a player of the
-    /// other club makes it an own goal. The other team kicks off once everyone is back in
-    /// place.
+    /// `team` scored. A goal from a shot of the side in flight, or from its shot a block or a
+    /// parry turned in, is the shooter's; any other goal is a goal with no shot, and the event
+    /// names the player who kicked or turned the ball last: a player of the other club makes it
+    /// an own goal. The other team kicks off once everyone is back in place.
     pub(crate) fn goal(&mut self, team: usize) {
         self.summary.goals[team] += 1;
+        // The shooter of a turned shot of this side takes the goal.
+        if let Some((side, shooter)) = self.shot_deflected
+            && side == team
+        {
+            self.last_kicker = Some(shooter);
+        }
+        let from_shot = self.shot_in_flight == Some(team)
+            || self.shot_deflected.is_some_and(|(side, _)| side == team);
+        if from_shot {
+            self.tally_shot_goal_conceded(1 - team);
+        } else {
+            self.summary.goals_no_shot[team] += 1;
+        }
         #[cfg(feature = "measures")]
-        if let Some(m) = self.measures.as_deref_mut() {
-            m.goal(team, self.tick);
+        {
+            let shot = from_shot;
+            let by = match self.last_kicker {
+                Some(k) if self.players[k].team == team => 2,
+                Some(k) if k == self.keeper(1 - team) => 0,
+                Some(_) => 1,
+                None => 3,
+            };
+            if let Some(m) = self.measures.as_deref_mut() {
+                m.goal(team, self.tick);
+                m.probe.goal(team, shot, by);
+            }
         }
         // A shot that went in is no miss.
         self.shooter = None;
@@ -335,6 +385,9 @@ impl Simulation {
             && self.players[k].team == team
         {
             self.tally(k, crate::sim::tally::Count::Goal);
+            if from_shot {
+                self.value_goal(k, self.shot_xg);
+            }
             self.mood_event(k, crate::sim::mood::MoodEvent::Goal);
             if let Some((passer, receiver)) = self.last_pass
                 && receiver == k
@@ -450,6 +503,10 @@ impl Simulation {
         let offender = self.players[i];
         let fouled_team = self.players[c].team;
         self.summary.fouls[offender.team] += 1;
+        #[cfg(feature = "measures")]
+        if self.measures.is_some() {
+            self.measure_action(i);
+        }
         #[cfg(feature = "measures")]
         if let Some(m) = self.measures.as_deref_mut() {
             m.dead(self.tick);
@@ -734,6 +791,8 @@ impl Simulation {
             }
             Phase::FullTime => {}
         }
+        // An injury on the full-time tick (the fatigue pass runs after the clock) ends
+        // nothing: the match is already over, and `short_team` says so.
         if let Some(short) = self.short_team() {
             tracing::warn!(
                 signal = "rules.abandoned",
@@ -754,9 +813,10 @@ impl Simulation {
         }
     }
 
-    /// Stops play: shows held-back cards, places the ball at `spot`, marks the tick as a
-    /// restart, names the taker, and announces the stoppage. `cause` is what stopped play;
-    /// `kind` is the restart that follows.
+    /// Stops play: shows held-back cards, names the taker, draws the quick restart and the
+    /// drawn extra, and announces the stoppage. The ball waits where it left play for the
+    /// extra; with none it is placed at `spot` at once and the tick is marked as a restart.
+    /// `cause` is what stopped play; `kind` is the restart that follows.
     pub(crate) fn open_dead_ball(
         &mut self,
         kind: StoppageKind,
@@ -774,15 +834,20 @@ impl Simulation {
             return;
         }
         self.referee.offside = 0;
-        self.ball = Ball::at(spot);
+        let exit = self.ball.xy();
+        self.ball = Ball::at(exit);
         self.carrier = None;
         self.keeper_beaten = false;
-        self.restart = true;
         self.last_kicker = None;
+        self.last_kick_dir = DVec2::ZERO;
         self.last_pass = None;
         self.pass_in_flight = None;
+        self.possession_phase = None;
+        self.clear_transitions();
         self.restart_taker = None;
         self.clearers_tried = 0;
+        self.cutters_tried = 0;
+        self.duelled = 0;
         self.end_shot();
         let since = self.tick + 1;
         let restarts = self.config.modules.restarts;
@@ -809,19 +874,27 @@ impl Simulation {
                 }),
             );
         }
-        let ready_at = since + restarts.delay_ticks(&self.view(), kind, team);
-        self.enter_phase(
-            Phase::DeadBall(DeadBall {
-                kind,
-                team,
-                spot,
-                direct,
-                since,
-                ready_at,
-                taker,
-            }),
-            Cause::BallDead(cause),
-        );
+        let dead = self.dead_ball_wait(DeadBall {
+            kind,
+            team,
+            spot,
+            direct,
+            since,
+            ready_at: DeadBall::UNSET,
+            taker,
+            exit,
+            appear_at: since,
+            extra: 0,
+            quick: false,
+            hard_at: since,
+        });
+        if dead.appear_at == since {
+            self.ball = Ball::at(spot);
+            self.restart = true;
+        }
+        // The followed ball points reset to where the ball is.
+        self.slide_reset();
+        self.enter_phase(Phase::DeadBall(dead), Cause::BallDead(cause));
         self.referee.tally.add(cause);
         self.summary.stoppages += 1;
         let count = match kind {
@@ -847,18 +920,97 @@ impl Simulation {
         });
     }
 
-    /// One tick of a dead ball: every player steers to a restart target, and the taker
-    /// restarts play when ready, or at the hard limit whatever the players are doing.
+    /// The wait of `dead`, a restart that has just gone dead with nothing drawn yet. With a
+    /// wait table: the quick-restart draw (when the rule allows it), then the drawn extra
+    /// unless quick; the ball appears at the spot the extra after `since`, the restart is
+    /// taken the extra after its visible steps are done, and its visible steps may take the
+    /// kind's steps limit. Without one: the fixed delay, with the ball at the spot at once.
+    fn dead_ball_wait(&mut self, mut dead: DeadBall) -> DeadBall {
+        let restarts = self.config.modules.restarts;
+        let (kind, team, since) = (dead.kind, dead.team, dead.since);
+        let Some(limit_s) = self
+            .config
+            .restart_waits
+            .as_ref()
+            .map(|w| w.steps_limit_s(kind))
+        else {
+            let delay = restarts.delay_ticks(&self.view(), kind, team);
+            return DeadBall::fixed(kind, team, dead.spot, dead.direct, since, delay, dead.taker);
+        };
+        let taker = dead.taker;
+        let who = crate::streams::PlayerKey::of(&self.players[taker]);
+        #[cfg(feature = "scenario")]
+        let pinned = self.pinned_restart;
+        #[cfg(not(feature = "scenario"))]
+        let pinned: Option<crate::sim::PinnedRestart> = None;
+        let chance = restarts.quick_chance(&self.view(), &dead);
+        dead.quick = match pinned.and_then(|p| p.quick) {
+            Some(quick) => quick,
+            None => {
+                chance > 0.0
+                    && self
+                        .streams
+                        .chance(Key::player(Action::QuickRestart, who), chance)
+            }
+        };
+        if !dead.quick {
+            let u = match pinned.and_then(|p| p.wait_draw) {
+                Some(u) => u,
+                None => self.streams.draw(Key::player(Action::RestartWait, who)),
+            };
+            dead.extra = restarts.extra_ticks(&self.view(), kind, team, u);
+        }
+        #[cfg(feature = "measures")]
+        if restart::leads_late(&self.view(), team) {
+            let wait_s = f64::from(dead.extra) * self.config.tuning.dt;
+            if let Some(m) = self.measures.as_deref_mut() {
+                m.late_lead_restart(team, wait_s);
+            }
+        }
+        // The limit is 10 to 300 s, so the cast fits.
+        let limit = (limit_s / self.config.tuning.dt).round() as u32;
+        dead.appear_at = since + dead.extra;
+        dead.hard_at = since + dead.extra + limit;
+        dead
+    }
+
+    /// One tick of a dead ball: every player steers to a restart target with his job, the
+    /// ball appears at the spot when its drawn extra has passed, and the taker restarts play
+    /// the drawn extra after the visible steps are done, or at the hard limit whatever the
+    /// players are doing.
     pub(crate) fn dead_ball_tick(&mut self, dead: &DeadBall, t: &Tuning) {
         let restarts = self.config.modules.restarts;
+        let tick = self.tick;
+        // Jobs set the pace only where the pace runs at a dead ball (with a wait table, not
+        // at a shoot-out kick); elsewhere the pace stays off, as before.
+        let paced = self.config.restart_waits.is_some() && self.referee.shootout.is_none();
         for i in 0..self.players.len() {
             if self.players[i].active() {
                 self.players[i].target = restarts.target(&self.view(), dead, i);
+                if !paced {
+                    continue;
+                }
+                let job = restarts.job(&self.view(), dead, i);
+                let p = &mut self.players[i];
+                if p.pace.job != job {
+                    p.pace.job = job;
+                    p.pace.since = tick;
+                }
             }
         }
         let now = self.tick + 1;
+        if now == dead.appear_at && dead.appear_at != dead.since {
+            self.ball = Ball::at(dead.spot);
+            self.restart = true;
+        }
+        let steps = restarts.steps_done(&self.view(), dead, now);
+        let mut dead = *dead;
+        if dead.ready_at == DeadBall::UNSET && steps {
+            dead.ready_at = now + dead.extra;
+            self.update_dead_ball(dead);
+        }
         let forced = now >= dead.hard_limit();
-        let ready = restarts.ready(&self.view(), dead, now);
+        let ready = steps && now >= dead.ready_at;
         if !forced && !ready {
             return;
         }
@@ -870,10 +1022,12 @@ impl Simulation {
                 kind = dead.kind.code(),
                 team.id = %self.teams[dead.team].club_id,
                 waited_ticks = now - dead.since,
+                extra_ticks = dead.extra,
+                steps_done = steps,
                 taker_distance_m = (taker_distance_m * 100.0).round() / 100.0
             );
         }
-        self.take_restart(dead, t);
+        self.take_restart(&dead, t);
     }
 
     /// The taker restarts play. A throw-in, a corner, a goal kick, a free kick, and a penalty
@@ -890,7 +1044,10 @@ impl Simulation {
         self.enter_phase(Phase::Live, Cause::RestartTaken);
         self.carrier = Some(dead.taker);
         self.control_since = self.tick;
+        let at = self.ball.xy();
+        self.value_gain(dead.taker, at);
         self.last_touch = Some(dead.team);
+        self.possession_phase = Some(dead.team);
         self.end_acts_on_restart(dead.team);
         self.restart_taker = Some(dead.taker);
         #[cfg(feature = "measures")]
@@ -908,9 +1065,26 @@ impl Simulation {
                 Some((self.restart_pass(dead.taker, dead.kind, false), false))
             }
             StoppageKind::GoalKick => {
-                let kick = self
-                    .decide_carrier(dead.taker)
-                    .unwrap_or_else(|| self.restart_pass(dead.taker, dead.kind, false));
+                let decided = self.decide_carrier(dead.taker);
+                // The goal kick's length: the planned pass, or a clearance's distance; the
+                // restart pass measures its own.
+                #[cfg(feature = "measures")]
+                if let Some(kick) = decided {
+                    let length = match kick {
+                        crate::decision::Kick::Clear { .. } => {
+                            Some(crate::decision::CLEARANCE_DISTANCE)
+                        }
+                        _ => self
+                            .measures
+                            .as_deref()
+                            .and_then(|m| m.planned_length(dead.taker)),
+                    };
+                    if let (Some(m), Some(length)) = (self.measures.as_deref_mut(), length) {
+                        m.goal_kick(dead.team, length);
+                    }
+                }
+                let kick =
+                    decided.unwrap_or_else(|| self.restart_pass(dead.taker, dead.kind, false));
                 Some((kick, false))
             }
             StoppageKind::FreeKick if !dead.direct => {
@@ -1206,10 +1380,15 @@ impl Simulation {
         self.keeper_beaten = false;
         self.restart = true;
         self.last_kicker = None;
+        self.last_kick_dir = DVec2::ZERO;
         self.last_pass = None;
         self.pass_in_flight = None;
+        self.possession_phase = None;
+        self.clear_transitions();
         self.restart_taker = None;
         self.clearers_tried = 0;
+        self.cutters_tried = 0;
+        self.duelled = 0;
         self.end_shot();
         let since = self.tick + 1;
         let delay = self
@@ -1218,15 +1397,15 @@ impl Simulation {
             .restarts
             .shootout_delay_ticks(&self.view());
         self.enter_phase(
-            Phase::DeadBall(DeadBall {
-                kind: StoppageKind::Penalty,
+            Phase::DeadBall(DeadBall::fixed(
+                StoppageKind::Penalty,
                 team,
                 spot,
-                direct: true,
+                true,
                 since,
-                ready_at: since + delay,
-                taker: kicker,
-            }),
+                delay,
+                kicker,
+            )),
             cause,
         );
         self.summary.stoppages += 1;
@@ -1295,6 +1474,7 @@ impl Simulation {
         self.keeper_beaten = false;
         self.last_touch = Some(dead.team);
         self.last_kicker = Some(dead.taker);
+        self.last_kick_dir = self.ball.vel.truncate();
         self.control_since = self.tick;
     }
 
@@ -1531,15 +1711,7 @@ mod tests {
         sim.players[keeper].pos =
             DVec2::new(attack_x * (sim.config.pitch().half_length() - 0.3), 0.0);
         sim.ball = Ball::at(spot);
-        let dead = DeadBall {
-            kind: StoppageKind::Penalty,
-            team,
-            spot,
-            direct: true,
-            since: sim.tick,
-            ready_at: sim.tick,
-            taker,
-        };
+        let dead = DeadBall::fixed(StoppageKind::Penalty, team, spot, true, sim.tick, 0, taker);
         sim.enter_phase(
             Phase::DeadBall(dead),
             Cause::BallDead(StoppageKind::Penalty),

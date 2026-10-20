@@ -4,6 +4,7 @@
 //! emits one [`TickRecord`] per tick to a [`TickSink`], and reproduces a match byte for byte
 //! for the same seed, the same build, and the same machine.
 
+pub mod advice;
 pub mod ai;
 pub mod ball;
 mod canon;
@@ -22,18 +23,22 @@ pub mod math;
 pub mod measures;
 pub mod modules;
 pub mod observe;
+pub mod pace;
 pub mod pitch;
 pub mod player;
 pub mod plugin;
 pub mod possession;
+pub mod pressure;
 pub mod rating;
 pub mod record;
 pub mod rng;
 pub mod rules;
+pub mod run_kind;
 #[cfg(feature = "scenario")]
 pub mod scenario;
 #[cfg(feature = "sensitivity")]
 pub mod sensitivity;
+pub mod shape;
 pub mod shot;
 pub mod sim;
 pub mod snapshot;
@@ -45,6 +50,7 @@ pub mod trace;
 pub mod traits;
 pub mod tuning;
 pub mod validate;
+pub mod walk_on;
 
 pub use ai::{AiCode, Manager};
 pub use commentary::{Commentary, Commentator};
@@ -70,6 +76,7 @@ pub use tactics::change::{
 pub use tactics::{RoleDuty, Tactics, TacticsPatch};
 pub use tuning::Tuning;
 pub use validate::{RunningCheck, StreamRules, Validator, Violation};
+pub use walk_on::{WalkOn, WalkPath};
 
 /// Ticks per simulated second.
 pub const TICKS_PER_SECOND: u32 = 50;

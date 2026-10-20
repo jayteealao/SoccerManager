@@ -16,6 +16,7 @@ use crate::error::EngineError;
 use crate::math::DVec2;
 use crate::pitch::Pitch;
 use crate::player::{Attributes, Derived, Player, Status};
+use crate::tactics::rules::GameState;
 use crate::tactics::{RoleDuty, Tactics, TeamPlan};
 use crate::tuning::Tuning;
 
@@ -41,6 +42,9 @@ pub const FORMATION_442: [(f64, f64); PLAYERS_PER_TEAM] = [
 /// Metres beyond the deepest outfield slot within which a slot still belongs to the back line:
 /// a back three or five with its centre-back a little deeper is one line.
 const BACK_LINE_BAND: f64 = 4.0;
+
+/// Metres off the centre line within which a slot is central: it plays on neither side.
+pub const CENTRAL_M: f64 = 0.5;
 
 /// The lowest and highest of `ys`.
 fn span(ys: impl Iterator<Item = f64>) -> (f64, f64) {
@@ -128,8 +132,23 @@ pub struct Team {
     pub lineup: [usize; PLAYERS_PER_TEAM],
     /// Squad indices of the substitutes still available, in the order they were named.
     pub bench: Vec<usize>,
+    /// The tactics in force: the base tactics with the active rules applied.
     pub tactics: Tactics,
+    /// The plan the side reads as a whole: the plan of the tactics in force, or, while a rule
+    /// change is being taken up, the plan before it until half the side has taken it up.
     pub plan: TeamPlan,
+    /// The base tactics: what the manager set. With no rule active they are the tactics in
+    /// force.
+    pub base: Tactics,
+    /// The side's game-state rules and player instructions.
+    pub game_state: GameState,
+    /// The rules that hold: bit `k` for rule `k`.
+    pub rules_active: u8,
+    /// Per slot, the slot's own plan when a player instruction names it: the side's plan with
+    /// the instruction's inputs set. `None` reads the side's plan.
+    pub own: [Option<Box<TeamPlan>>; PLAYERS_PER_TEAM],
+    /// A rule change the players are still taking up.
+    pub take_up: Option<Box<TakeUp>>,
     /// `false` for a slot whose player left play (sent off, or injured and not replaced).
     pub active: [bool; PLAYERS_PER_TEAM],
     /// The ground of the match: the home team's. The formation, drawn for 105 by 68, scales
@@ -162,8 +181,20 @@ impl Team {
                 mentality: 0,
                 instructions: [0; 6],
                 roles: [RoleDuty::default(); PLAYERS_PER_TEAM],
+                settings: [0; crate::data::primitives::SETTINGS_MAX],
             },
             plan: TeamPlan::neutral(&t),
+            base: Tactics {
+                formation: 0,
+                mentality: 0,
+                instructions: [0; 6],
+                roles: [RoleDuty::default(); PLAYERS_PER_TEAM],
+                settings: [0; crate::data::primitives::SETTINGS_MAX],
+            },
+            game_state: GameState::default(),
+            rules_active: 0,
+            own: std::array::from_fn(|_| None),
+            take_up: None,
             active: [true; PLAYERS_PER_TEAM],
             pitch: Pitch::DEFAULT,
         };
@@ -310,18 +341,51 @@ impl Team {
             facing: DVec2::new(self.attack_x, 0.0),
             status: Status::OnPitch,
             yellow: 0,
+            knock: false,
             foul_ready: 0,
             lapse_until: 0,
+            pace: crate::pace::Pace::OFF,
         }
     }
 
     /// Puts `tactics` in force: the formation's slots from the tactics file with every line
     /// closed up around the slots out of play, and the plan play reads.
+    ///
+    /// Every player takes the tactics up at once: a change still being taken up ends. With no
+    /// rule active the tactics are the base tactics too.
     pub fn set_tactics(&mut self, tactics: Tactics, schema: &TacticsSchema, t: &Tuning) {
         self.tactics = tactics;
+        if self.rules_active == 0 {
+            self.base = tactics;
+        }
         self.base_formation = schema.slots(usize::from(tactics.formation));
         self.plan = TeamPlan::from(&tactics, schema, t);
+        self.own = own_plans(&self.plan, &self.game_state, schema, t);
+        self.take_up = None;
         self.relayout();
+    }
+
+    /// Gives the side its rules and player instructions, with no rule active; the tactics in
+    /// force become the base tactics again.
+    pub fn set_game_state(&mut self, state: GameState, schema: &TacticsSchema, t: &Tuning) {
+        self.game_state = state;
+        self.rules_active = 0;
+        let base = self.base;
+        self.set_tactics(base, schema, t);
+    }
+
+    /// The plan the player in `slot` reads: his own plan when a player instruction names his
+    /// slot, the side's otherwise; while a rule change is being taken up, a player who has not
+    /// taken it up yet reads the plan before it.
+    #[inline]
+    pub fn plan_for(&self, slot: usize) -> &TeamPlan {
+        if let Some(t) = &self.take_up {
+            if !t.taken[slot] {
+                return &t.prior_plans[slot];
+            }
+            return self.own[slot].as_deref().unwrap_or(&t.next);
+        }
+        self.own[slot].as_deref().unwrap_or(&self.plan)
     }
 
     /// The formation's slots, with each line closed up around every slot out of the outfield
@@ -410,6 +474,14 @@ impl Team {
             .collect()
     }
 
+    /// `true` when `slot` is in the back line ([`Team::back_line`]).
+    pub fn in_back_line(&self, slot: usize) -> bool {
+        let deepest = (1..PLAYERS_PER_TEAM)
+            .map(|s| self.base_formation[s].0)
+            .fold(f64::INFINITY, f64::min);
+        slot != 0 && self.base_formation[slot].0 <= deepest + BACK_LINE_BAND
+    }
+
     /// The team's lone forward: the single active slot, other than the one keeping goal, in
     /// the front line of the formation as the tactics file gives it. The front line is the
     /// outfield slots less than `BACK_LINE_BAND` metres behind the most advanced one. `None`
@@ -481,14 +553,27 @@ impl Team {
 
     /// A slot position in pitch coordinates with the ball at the centre. The formation is
     /// drawn for 105 by 68 and scales to the ground: along the touchline by its length over
-    /// 105, across by its width over 68.
+    /// 105, across by its width over 68. It is drawn for a team attacking positive `x`; a team
+    /// attacking the other way mirrors both the length and the width, so a left-back stands
+    /// on his own team's left at either end.
     pub fn slot_base(&self, slot: usize) -> DVec2 {
         let (fx, fy) = self.formation[slot];
         let (sx, sy) = self.pitch.scale();
         DVec2::new(
             (fx * sx - self.pitch.half_length()) * self.attack_x,
-            fy * sy,
+            fy * sy * self.attack_x,
         )
+    }
+
+    /// The side of the centre line slot `slot` plays on, in the team's own frame: -1 or +1,
+    /// and 0 for a central slot (less than half a metre off the centre line).
+    pub fn slot_side(&self, slot: usize) -> f64 {
+        let fy = self.formation[slot].1;
+        if fy.abs() < CENTRAL_M {
+            0.0
+        } else {
+            fy.signum()
+        }
     }
 
     /// Removes `slot` from the formation, as when its player leaves play: every line is laid
@@ -510,9 +595,14 @@ impl Team {
         self.attack_x = -self.attack_x;
     }
 
-    /// The formation anchor for `slot` given the ball position: the slot moved up by the
-    /// plan's block depth, the slot's duty, and the role's offset for the phase (the team has
-    /// the ball when `in_possession`), widened by the plan, plus the ball shift.
+    /// The formation anchor for `slot` given the ball position: the slot moved up out of
+    /// possession by the plan's block depth (the back line) or its engagement depth (the
+    /// players in front of it), the slot's duty, and its stand for the phase (the team has the
+    /// ball when `in_possession`), widened by the plan, mirrored for the team's attack
+    /// direction as [`Team::slot_base`] is, plus the ball shift. A central slot takes no
+    /// sideways stand. In play the shift reads each outfield player's followed ball point
+    /// ([`follow`]), so a far player's anchor slides late; the validator, the restarts and
+    /// the keeper pass the ball itself.
     pub fn anchor(&self, slot: usize, ball: DVec2, in_possession: bool, t: &Tuning) -> DVec2 {
         if slot == self.keeper_slot() {
             // The keeper stands on the line from the goal centre toward the ball.
@@ -523,22 +613,244 @@ impl Team {
         }
         let (fx, fy) = self.formation[slot];
         let (sx, sy) = self.pitch.scale();
-        let plan = &self.plan.slots[slot];
+        // The player's own plan: a player instruction may set his width, and a rule change
+        // reaches his place once he has taken it up.
+        let plan = self.plan_for(slot);
+        let slot_plan = &plan.slots[slot];
         let offset = if in_possession {
-            plan.in_possession
+            slot_plan.in_possession
         } else {
-            plan.out_of_possession
+            slot_plan.out_of_possession
         };
         // The role's offset comes after the existing sums, so an offset of 0 keeps every
         // anchor's bits.
-        let depth = (fx + self.plan.block_depth + plan.depth + offset.x) * sx;
-        let side = if fy < 0.0 { -1.0 } else { 1.0 };
+        // Out of possession the line height moves the back line and the line of engagement
+        // the players in front of it.
+        let block = if in_possession {
+            0.0
+        } else if self.in_back_line(slot) {
+            plan.block_depth
+        } else {
+            plan.engage_depth_m
+        };
+        let depth = (fx + block + slot_plan.depth + offset.x) * sx;
+        let side = self.slot_side(slot);
+        // Width spreads the side with the ball; defensive width spreads it without the ball.
+        let width = if in_possession {
+            plan.width
+        } else {
+            plan.defensive_width
+        };
         let base = DVec2::new(
             (depth - self.pitch.half_length()) * self.attack_x,
-            (fy * self.plan.width + side * offset.y) * sy,
+            (fy * width + side * offset.y) * sy * self.attack_x,
         );
         let shift = DVec2::new(ball.x * t.compactness_x, ball.y * t.compactness_y);
         self.pitch.clamp(base + shift, 0.5)
+    }
+}
+
+/// A rule change the side is taking up: each player reads what he read before it until his
+/// tick comes, and the side as a whole switches once half of it has taken the change up.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TakeUp {
+    /// Per slot, the tactics the player read before the change (a change that comes while
+    /// another is being taken up leaves each player on what he read).
+    pub prior: [Tactics; PLAYERS_PER_TEAM],
+    /// The tactics the side read as a whole before the change.
+    pub prior_side: Tactics,
+    /// Per slot, the plan of `prior` with the slot's instructions applied; and the side's
+    /// plan of `prior_side`.
+    pub prior_plans: Box<[TeamPlan; PLAYERS_PER_TEAM]>,
+    pub prior_side_plan: TeamPlan,
+    /// The side's plan of the tactics in force after the change.
+    pub next: TeamPlan,
+    /// Per slot, the tick the player takes the change up on.
+    pub at: [u32; PLAYERS_PER_TEAM],
+    /// Per slot, `true` once the player has taken the change up.
+    pub taken: [bool; PLAYERS_PER_TEAM],
+    /// `true` once half the side has taken the change up and the side reads it as a whole.
+    pub switched: bool,
+}
+
+impl Team {
+    /// The plan the player in `slot` reads under `tactics`: their plan with the slot's
+    /// instructions applied.
+    fn slot_plan(
+        &self,
+        tactics: &Tactics,
+        slot: usize,
+        schema: &TacticsSchema,
+        t: &Tuning,
+    ) -> TeamPlan {
+        let side = TeamPlan::from(tactics, schema, t);
+        own_plans(&side, &self.game_state, schema, t)[slot]
+            .as_deref()
+            .copied()
+            .unwrap_or(side)
+    }
+
+    /// Puts `tactics` in force at once for a rule change on tick `now`, with the same
+    /// formation and roles: each player takes it up on his tick of `at`, reading until then
+    /// what he read before; the side as a whole reads it once half the side has.
+    pub(crate) fn begin_take_up(
+        &mut self,
+        tactics: Tactics,
+        at: [u32; PLAYERS_PER_TEAM],
+        now: u32,
+        schema: &TacticsSchema,
+        t: &Tuning,
+    ) {
+        let (prior, prior_side) = match &self.take_up {
+            Some(old) => (
+                std::array::from_fn(|s| {
+                    if old.taken[s] {
+                        self.tactics
+                    } else {
+                        old.prior[s]
+                    }
+                }),
+                if old.switched {
+                    self.tactics
+                } else {
+                    old.prior_side
+                },
+            ),
+            None => ([self.tactics; PLAYERS_PER_TEAM], self.tactics),
+        };
+        self.tactics = tactics;
+        let next = TeamPlan::from(&tactics, schema, t);
+        self.own = own_plans(&next, &self.game_state, schema, t);
+        self.restore_take_up(
+            prior,
+            prior_side,
+            next,
+            at,
+            [false; PLAYERS_PER_TEAM],
+            false,
+            schema,
+            t,
+        );
+        self.advance_take_up(now);
+    }
+
+    /// Sets the take-up state from its parts, the plans worked out from the tactics: the
+    /// snapshot reader's way back to a change being taken up.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn restore_take_up(
+        &mut self,
+        prior: [Tactics; PLAYERS_PER_TEAM],
+        prior_side: Tactics,
+        next: TeamPlan,
+        at: [u32; PLAYERS_PER_TEAM],
+        taken: [bool; PLAYERS_PER_TEAM],
+        switched: bool,
+        schema: &TacticsSchema,
+        t: &Tuning,
+    ) {
+        let prior_plans = Box::new(std::array::from_fn(|s| {
+            self.slot_plan(&prior[s], s, schema, t)
+        }));
+        let prior_side_plan = TeamPlan::from(&prior_side, schema, t);
+        self.plan = if switched { next } else { prior_side_plan };
+        self.take_up = Some(Box::new(TakeUp {
+            prior,
+            prior_side,
+            prior_plans,
+            prior_side_plan,
+            next,
+            at,
+            taken,
+            switched,
+        }));
+    }
+
+    /// Moves the change being taken up on to tick `now`: each player whose tick has come takes
+    /// it up (a slot out of play counts as taken); the side reads it as a whole once half of it
+    /// has; once all have, the change is in force for everyone.
+    pub(crate) fn advance_take_up(&mut self, now: u32) {
+        let Some(take) = self.take_up.as_deref_mut() else {
+            return;
+        };
+        for s in 0..PLAYERS_PER_TEAM {
+            if !take.taken[s] && (take.at[s] <= now || !self.active[s]) {
+                take.taken[s] = true;
+            }
+        }
+        let on = (0..PLAYERS_PER_TEAM).filter(|&s| self.active[s]).count();
+        let taken = (0..PLAYERS_PER_TEAM)
+            .filter(|&s| self.active[s] && take.taken[s])
+            .count();
+        if !take.switched && 2 * taken >= on {
+            take.switched = true;
+            self.plan = take.next;
+        }
+        if take.taken.iter().all(|&t| t) {
+            self.plan = take.next;
+            self.take_up = None;
+        }
+    }
+
+    /// The player now in `slot` has taken the change being taken up: a substitute comes on
+    /// with it.
+    pub(crate) fn take_up_now(&mut self, slot: usize) {
+        if let Some(take) = self.take_up.as_deref_mut() {
+            take.taken[slot] = true;
+        }
+    }
+
+    /// The players of the side who have taken the change being taken up, and the players on
+    /// the pitch; `None` when no change is being taken up.
+    pub fn take_up_share(&self) -> Option<(usize, usize)> {
+        let take = self.take_up.as_deref()?;
+        let on = (0..PLAYERS_PER_TEAM).filter(|&s| self.active[s]).count();
+        let taken = (0..PLAYERS_PER_TEAM)
+            .filter(|&s| self.active[s] && take.taken[s])
+            .count();
+        Some((taken, on))
+    }
+}
+
+/// Each slot's own plan under side plan `plan`: `None` for a slot no instruction names, and
+/// the side's plan with each of the slot's instructions applied
+/// ([`TeamPlan::with_override`]) otherwise.
+pub fn own_plans(
+    plan: &TeamPlan,
+    state: &GameState,
+    schema: &TacticsSchema,
+    t: &Tuning,
+) -> [Option<Box<TeamPlan>>; PLAYERS_PER_TEAM] {
+    std::array::from_fn(|slot| {
+        if !state.instructs(slot) {
+            return None;
+        }
+        let block = schema.game_state.as_ref()?;
+        let mut own = *plan;
+        for ins in state.instructions_for(slot) {
+            let primitive = usize::from(ins.primitive);
+            let Some(entry) = schema
+                .primitives
+                .get(primitive)
+                .and_then(|p| block.override_of(&p.name))
+            else {
+                continue;
+            };
+            own = own.with_override(primitive, &entry.inputs, usize::from(ins.level), schema, t);
+        }
+        Some(Box::new(own))
+    })
+}
+
+/// One tick of a player's followed ball point: `seen` eases toward `ball` with a time
+/// constant of `k` seconds per metre of the player's `distance` from the ball, so a player
+/// near the ball follows it at once and a far one late. When the time constant is no longer
+/// than the step `dt` (always when `k` is 0) the point is the ball.
+pub fn follow(seen: DVec2, ball: DVec2, distance: f64, k: f64, dt: f64) -> DVec2 {
+    let tau = k * distance;
+    if tau <= dt {
+        ball
+    } else {
+        seen + (ball - seen) * (dt / tau)
     }
 }
 
@@ -785,5 +1097,111 @@ mod tests {
         let away = bare(1);
         assert_eq!(home.slot_base(0).x, -away.slot_base(0).x);
         assert!(home.slot_base(9).x > 0.0 && away.slot_base(9).x < 0.0);
+        // The whole place mirrors through the centre spot, length and width.
+        for slot in 0..PLAYERS_PER_TEAM {
+            assert_eq!(home.slot_base(slot), -away.slot_base(slot), "slot {slot}");
+        }
+    }
+
+    /// `true` when a pitch point stands on the left of a team attacking `attack_x`: the left
+    /// of a team attacking positive `x` is negative `y`, as the formation is drawn.
+    fn on_left(at: DVec2, attack_x: f64) -> bool {
+        at.y * attack_x < 0.0
+    }
+
+    #[test]
+    fn a_left_back_stands_on_his_own_left_for_both_teams_in_both_halves() {
+        let content = shipped_content();
+        let schema = &content.tactics;
+        let t = &content.tuning.engine;
+        for index in 0..2 {
+            let mut team = bare(index);
+            team.set_tactics(Tactics::defaults(schema), schema, t);
+            // Slot 1 is the 4-4-2's left-back, slot 4 its right-back.
+            assert_eq!(team.plan.slots[1].position, Some(Position::LB));
+            for half in 0..2 {
+                if half == 1 {
+                    team.switch_ends();
+                }
+                let ax = team.attack_x;
+                assert!(on_left(team.slot_base(1), ax), "team {index} half {half}");
+                assert!(!on_left(team.slot_base(4), ax), "team {index} half {half}");
+                for ball in [
+                    DVec2::ZERO,
+                    DVec2::new(30.0, 20.0),
+                    DVec2::new(-30.0, -20.0),
+                ] {
+                    for phase in [true, false] {
+                        let lb = team.anchor(1, ball, phase, t);
+                        let rb = team.anchor(4, ball, phase, t);
+                        assert!(
+                            (lb.y - rb.y) * ax < 0.0,
+                            "team {index} half {half} ball {ball} in possession {phase}: \
+                             left-back {lb} right-back {rb}"
+                        );
+                    }
+                }
+                // The keeper stands on the line from his goal toward the ball, either way.
+                let keeper = team.anchor(0, DVec2::ZERO, false, t);
+                assert_eq!(keeper.y, 0.0);
+                assert!(keeper.x * ax < 0.0);
+            }
+        }
+    }
+
+    #[test]
+    fn a_central_slot_takes_no_sideways_stand() {
+        let content = crate::data::test_support::shipped_content_with_stands();
+        let schema = &content.tactics;
+        let t = &content.tuning.engine;
+        let mut team = bare(0);
+        let mut tactics = Tactics::defaults(schema);
+        tactics.set_formation(schema.formation_index("4-3-3").unwrap() as u8, schema);
+        team.set_tactics(tactics, schema, t);
+        // Slot 6 is the 4-3-3's defensive midfielder on the centre line; his position's
+        // stand has a sideways part, which a central slot does not take.
+        assert_eq!(team.slot_side(6), 0.0);
+        assert!(team.plan.slots[6].in_possession.y != 0.0);
+        assert_eq!(team.anchor(6, DVec2::ZERO, true, t).y, 0.0);
+    }
+
+    const DT: f64 = 0.02;
+
+    #[test]
+    fn with_no_delay_the_followed_point_is_the_ball_bit_for_bit() {
+        let ball = DVec2::new(12.345_678, -7.654_321);
+        for seen in [DVec2::ZERO, DVec2::new(-40.0, 30.0)] {
+            for d in [0.0, 5.0, 60.0] {
+                assert_eq!(follow(seen, ball, d, 0.0, DT), ball);
+            }
+        }
+    }
+
+    #[test]
+    fn a_farther_player_follows_the_ball_later() {
+        let (seen, ball) = (DVec2::ZERO, DVec2::new(10.0, 20.0));
+        let near = follow(seen, ball, 10.0, 0.04, DT);
+        let far = follow(seen, ball, 40.0, 0.04, DT);
+        assert!((far - ball).length() > (near - ball).length());
+        // Within half a metre of a step's worth of delay the point is the ball.
+        assert_eq!(follow(seen, ball, 0.4, 0.04, DT), ball);
+    }
+
+    #[test]
+    fn the_followed_point_lies_between_where_it_was_and_the_ball_and_arrives() {
+        let ball = DVec2::new(-25.0, 18.0);
+        let mut seen = DVec2::new(30.0, -20.0);
+        for _ in 0..2_000 {
+            let next = follow(seen, ball, 45.0, 0.04, DT);
+            let gap = ball - seen;
+            if gap.length() > 1e-6 {
+                // On the segment from `seen` to `ball`.
+                let along = (next - seen).dot(gap) / gap.length_squared();
+                assert!((0.0..=1.0).contains(&along), "{along}");
+                assert!(((next - seen) - gap * along).length() < 1e-9);
+            }
+            seen = next;
+        }
+        assert!((seen - ball).length() < 1e-6, "{seen}");
     }
 }

@@ -1,0 +1,22 @@
+{
+  "refusal": "name a data source, or the reason no real data fits",
+  "primitive": {
+    "name": "planted",
+    "kind": "graded",
+    "levels": "instructions.tempo",
+    "default": "normal",
+    "inputs": [
+      {
+        "input": "patience",
+        "hook": "pass.recycle"
+      }
+    ],
+    "signature": [
+      {
+        "stat": "passes_per_possession",
+        "direction": "up"
+      }
+    ],
+    "data": {}
+  }
+}

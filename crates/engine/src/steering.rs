@@ -4,6 +4,7 @@
 
 use crate::math::{DVec2, clamp_len, sq_skip_limit, toward};
 use crate::modules::{MatchView, ModuleCard, ROSTER, SteeringModule};
+use crate::pace::Job;
 use crate::pitch::Pitch;
 use crate::player::Player;
 use crate::tuning::Tuning;
@@ -30,10 +31,23 @@ pub fn seek(pos: DVec2, target: DVec2, max_speed: f64) -> DVec2 {
     toward(pos, target) * max_speed
 }
 
-/// Push away from every other player closer than the separation radius. A pair whose squared
-/// distance is at or above `sq_skip_limit` of the radius is outside it and skips the square
-/// root; every other pair runs the square-root form unchanged.
+/// `true` for a player who goes for a loose ball or chases it. The separation push never holds
+/// him off it: two opposing chasers pushed apart on one target can each stand just outside the
+/// reach of a ball that lies between them, and then nobody ever plays it. He still pushes the
+/// others, and the overlap pass still keeps him the minimum distance from them.
+#[inline(always)]
+fn claims_ball(p: &Player) -> bool {
+    matches!(p.pace.job, Job::LooseBall | Job::Chase)
+}
+
+/// Push away from every other player closer than the separation radius; none on a player who
+/// goes for a loose ball ([`claims_ball`]). A pair whose squared distance is at or above
+/// `sq_skip_limit` of the radius is outside it and skips the square root; every other pair
+/// runs the square-root form unchanged.
 pub fn separation(players: &[Player], i: usize, t: &Tuning) -> DVec2 {
+    if claims_ball(&players[i]) {
+        return DVec2::ZERO;
+    }
     let me = players[i].pos;
     let mut push = DVec2::ZERO;
     let skip = sq_skip_limit(t.separation_radius);
@@ -103,11 +117,33 @@ fn separations(players: &[Player], t: &Tuning) -> [DVec2; ROSTER] {
         }
     }
     for (k, p) in push.iter_mut().enumerate().take(n) {
-        if on[k] {
+        if on[k] && claims_ball(&players[k]) {
+            *p = DVec2::ZERO;
+        } else if on[k] {
             *p *= t.separation_strength;
         }
     }
     push
+}
+
+/// The step aside of a player going `way` while the separation push `push` holds him back: the
+/// part of the push straight against his way, turned to his right. Separation alone pushes
+/// only along the line between two players, so two players walking at each other on one line
+/// (along a touchline, where both are clamped to the same line) would stop face to face for
+/// good; each stepping to his own right, they pass. Nothing when the push does not hold him
+/// back or he has nowhere to go.
+#[inline(always)]
+fn sidestep(way: DVec2, push: DVec2) -> DVec2 {
+    let speed = way.length();
+    if speed < 1e-9 {
+        return DVec2::ZERO;
+    }
+    let dir = way / speed;
+    let against = -push.dot(dir);
+    if against <= 0.0 {
+        return DVec2::ZERO;
+    }
+    DVec2::new(dir.y, -dir.x) * against
 }
 
 /// The velocity of player `i` after one tick of steering toward its target.
@@ -116,14 +152,17 @@ pub fn next_velocity(players: &[Player], i: usize, t: &Tuning) -> DVec2 {
 }
 
 /// The velocity of `p` after one tick of arriving at its target plus the separation push
-/// `push`, within its acceleration and speed.
+/// `push`, within its acceleration and the speed of its chosen pace: the pace selector's speed,
+/// never above his top speed. With the selector off the chosen speed is unlimited, so he
+/// arrives at his top speed as before the selector.
 #[inline(always)]
 fn steer(p: &Player, push: DVec2, t: &Tuning) -> DVec2 {
-    let max_speed = p.max_speed();
+    let max_speed = p.pace.speed.min(p.max_speed());
     let max_accel = p.max_accel();
     let max_decel = p.max_decel();
     // Arriving brakes over the distance his braking needs.
-    let desired = arrive(p.pos, p.target, max_speed, max_decel, t.arrive_radius) + push;
+    let way = arrive(p.pos, p.target, max_speed, max_decel, t.arrive_radius);
+    let desired = way + push + sidestep(way, push);
     let raw = desired - p.vel;
     // A change against his run is braking, which his agility sets; any other change is
     // acceleration. With both equal this is the one clamp it always was.
@@ -216,8 +255,8 @@ impl SteeringModule for SteeringV1 {
 }
 
 pub const STEERING_V1_CARD: ModuleCard = ModuleCard {
-    purpose: "Steers each player toward its target: arrive with braking, plus separation from close players, within its speed, acceleration and braking.",
-    inputs: "Every player's position, velocity, target, activity, and effective pace, acceleration, turning and braking (agility), and the engine tuning.",
+    purpose: "Steers each player toward its target: arrive with braking, plus separation from close players (none on a player going for a loose ball), within its speed, acceleration and braking.",
+    inputs: "Every player's position, velocity, target, activity, job, and effective pace, acceleration, turning and braking (agility), and the speed of his chosen pace level, and the engine tuning.",
     outputs: "The next velocity of one player, and every player's position once players closer than the minimum distance are pushed apart.",
     tuning: &[
         "arrive_radius",
@@ -364,6 +403,90 @@ mod tests {
             high < low,
             "agility 18 stops in {high:.3} m, agility 5 in {low:.3} m"
         );
+    }
+
+    /// Two players walking at each other along the touchline, each to a place beyond the
+    /// other, step aside and pass: both reach their places. Without the step aside the
+    /// separation push holds them face to face on the line (the stall a substitute walking on
+    /// at halfway met a team-mate walking the other way during a dead ball).
+    #[test]
+    fn two_players_walking_at_each_other_on_the_touchline_pass() {
+        let t = Tuning::default();
+        let line = -Pitch::DEFAULT.half_width() + 0.5;
+        let mut a = player(0, DVec2::new(1.3, line), DVec2::new(18.9, line));
+        let mut b = player(1, DVec2::new(2.5, line), DVec2::new(0.9, line));
+        for p in [&mut a, &mut b] {
+            p.pace.speed = 2.0;
+        }
+        let mut players = vec![a, b];
+        let mut scratch = Vec::new();
+        for _ in 0..1_500 {
+            step_all(&mut players, &mut scratch, &t, &Pitch::DEFAULT);
+            resolve_overlaps(&mut players, &t, &Pitch::DEFAULT);
+        }
+        for p in &players {
+            assert!(
+                (p.pos - p.target).length() < 1.0,
+                "player {} stopped at {:?}, his place {:?}",
+                p.id,
+                p.pos,
+                p.target
+            );
+        }
+        // The step aside is to his right and only against a push that holds him back.
+        let way = DVec2::new(2.0, 0.0);
+        assert_eq!(sidestep(way, DVec2::new(-0.5, 0.0)), DVec2::new(0.0, -0.5));
+        assert_eq!(sidestep(way, DVec2::new(0.5, 0.3)), DVec2::ZERO);
+        assert_eq!(sidestep(DVec2::ZERO, DVec2::new(-0.5, 0.0)), DVec2::ZERO);
+    }
+
+    /// Two opposing players going for one loose ball, each standing (his chosen pace a stand
+    /// within a metre of his target) on either side of the point they both aim at. With the
+    /// separation push on them they settle about 1.49 m apart, where the push equals the pull of
+    /// a stand, and each can stay just outside the reach of a ball beside that point (the stall
+    /// of seed 23: the ball on the touchline, nobody playing it to full time). Going for the
+    /// ball, neither is held off it: they close to the overlap minimum on the point. Two players
+    /// with any other job keep the push.
+    #[test]
+    fn players_going_for_a_loose_ball_are_not_held_off_it_by_the_push() {
+        let t = Tuning::default();
+        let target = DVec2::new(-35.1, -33.7);
+        let side = |job: Job| {
+            let mut players = vec![
+                player(0, target + DVec2::new(-0.744, 0.0), target),
+                player(1, target + DVec2::new(0.744, 0.0), target),
+            ];
+            for p in &mut players {
+                p.pace.job = job;
+                p.pace.speed = 0.2;
+            }
+            players[1].team = 1;
+            let mut scratch = Vec::new();
+            for _ in 0..2_500 {
+                step_all(&mut players, &mut scratch, &t, &Pitch::DEFAULT);
+                resolve_overlaps(&mut players, &t, &Pitch::DEFAULT);
+            }
+            (players[0].pos - players[1].pos).length()
+        };
+        for job in [Job::LooseBall, Job::Chase] {
+            let apart = side(job);
+            assert!(
+                apart < t.min_player_distance + 0.05,
+                "{job:?}: {apart:.3} m apart"
+            );
+        }
+        let held = side(Job::Wait);
+        assert!(held > 1.4, "a waiting pair stays {held:.3} m apart");
+        // The push itself: none on a player going for the ball, the usual one on the other.
+        let mut pair = vec![
+            player(0, DVec2::ZERO, DVec2::ZERO),
+            player(1, DVec2::new(1.0, 0.0), DVec2::new(1.0, 0.0)),
+        ];
+        pair[0].pace.job = Job::LooseBall;
+        assert_eq!(separation(&pair, 0, &t), DVec2::ZERO);
+        assert!(separation(&pair, 1, &t).x > 0.0);
+        assert_eq!(separations(&pair, &t)[0], DVec2::ZERO);
+        assert_eq!(separations(&pair, &t)[1], separation(&pair, 1, &t));
     }
 
     #[test]

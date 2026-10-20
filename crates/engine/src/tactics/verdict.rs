@@ -92,7 +92,8 @@ impl ChangesModule for ChangesV1 {
                 return Err(RejectReason::NotOnPitch { squad: *squad });
             }
         }
-        Ok(patch.applied_to(side.tactics, &side.lineup, schema))
+        // A manager's change patches the base tactics; the side's active rules apply over it.
+        Ok(patch.applied_to(side.base, &side.lineup, schema))
     }
 }
 

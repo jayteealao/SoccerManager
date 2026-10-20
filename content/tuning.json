@@ -1,5 +1,5 @@
 {
-  "schema_version": 5,
+  "schema_version": 8,
   "engine": {
     "dt": 0.02,
     "decision_interval_ticks": 1,
@@ -30,6 +30,7 @@
     "aim_noise": 0.06,
     "compactness_x": 0.3,
     "compactness_y": 0.3,
+    "far_delay_s_per_m": 0.01,
     "cover_distance": 3.0,
     "cover_channel": 12.0,
     "back_line_gap": 12.0,
@@ -72,7 +73,14 @@
       "shot_distance": 1.0,
       "dribble_base": -0.4,
       "dribble_space": 0.55,
-      "pressure": -0.8,
+      "shot_under_pressure": -0.8,
+      "takeon_under_pressure": -0.8,
+      "pass_under_pressure": 48.0,
+      "touch_under_pressure": 0.88,
+      "pressure_choice": 9.0,
+      "pass_weight_under_pressure": 1.0,
+      "pass_cut": 0.6,
+      "take_on_contest": 2.5,
       "first_touch": 0.6,
       "clear": -1.0,
       "clear_pressure": 1.2,
@@ -85,14 +93,31 @@
       "lone_dribble": -0.5,
       "carry_s": 0.0,
       "carry_cost": 0.0,
-      "teamwork_bonus": 0.1
+      "teamwork_bonus": 0.1,
+      "attack_danger": 1.963,
+      "clear_loss": 0.686,
+      "shot_loss": 0.724,
+      "perceive": 0.1,
+      "clear_worth": 2.0,
+      "shot_skill": 0.37,
+      "keeper_read": 0.4,
+      "threat": {
+        "intercept": -3.161,
+        "distance_coef": -0.04525,
+        "angle_coef": 2.633,
+        "angle2_coef": -0.787,
+        "unit": 0.0159,
+        "weight": 0.5
+      }
     },
     "injury_per_tackle": 0.004,
     "injury_per_minute": 0.0002,
+    "knock_ratio": 3.0,
     "xg": {
       "intercept": -4.191,
       "distance_coef": -0.0441,
-      "angle_coef": 6.3836
+      "angle_coef": 6.3836,
+      "keeper_coef": 0.139
     },
     "shots": {
       "loft_max": 7.0,
@@ -101,7 +126,8 @@
       "quality": {
         "intercept": -1.0,
         "distance_coef": -0.1,
-        "angle_coef": 1.0
+        "angle_coef": 1.0,
+        "keeper_coef": 0.139
       },
       "save_hold": 0.333,
       "parry_speed": 0.8,
@@ -263,6 +289,14 @@
         "long_throw": {
           "k": 0.054,
           "spread": 0.5
+        },
+        "cover": {
+          "k": 0.054,
+          "spread": 0.4
+        },
+        "recovery_run": {
+          "k": 0.054,
+          "spread": 0.2
         }
       },
       "speed": {
@@ -392,7 +426,8 @@
         "restart_noise": 0.06,
         "organise_back_line": 0.5,
         "anchor_space_m": 2.0,
-        "rash_chase": 0.3
+        "rash_chase": 0.3,
+        "press_goal_side_m": 2.0
       },
       "person": {
         "mood": {
@@ -515,6 +550,26 @@
         "ambition_weight": 0.6,
         "cap": 40.0
       }
+    },
+    "pace": {
+      "enabled": true,
+      "limits_ms": [0.2, 2.0, 4.0, 5.5, 7.0],
+      "stand_m": 1.0,
+      "return_far_m": 5.0,
+      "run_from_m": 0.0,
+      "calm_ball_m": 30.0,
+      "sprint_mid": 0.5,
+      "sprint_slope": 1.0,
+      "tired_from": 0.5,
+      "step_down_at": 0.25,
+      "skip_at": {
+        "carry": 0.1,
+        "timed_run": 0.1,
+        "press": 0.2,
+        "loose_ball": 0.35,
+        "recovery": 0.35
+      },
+      "late_minutes": 15
     }
   },
   "generator": {
@@ -1032,20 +1087,11 @@
     }
   },
   "match_rating": {
-    "base": 6.0,
+    "base": 6.66,
     "min": 1.0,
     "max": 10.0,
-    "goal": 1.0,
-    "shot_on_target": 0.15,
-    "shot_off_target": -0.05,
-    "xg": 0.5,
-    "pass_completed": 0.02,
-    "pass_failed": -0.04,
-    "tackle_won": 0.1,
-    "interception": 0.1,
-    "block": 0.15,
-    "clearance": 0.05,
-    "save": 0.3,
+    "value_added": 5.1,
+    "goals_prevented": 1.0,
     "foul": -0.05,
     "yellow": -0.5,
     "red": -1.5,
@@ -1068,5 +1114,18 @@
       "RB"
     ]
   },
-  "flags": {}
+  "flags": {
+    "ai_style_pick": {
+      "owner": "team-shape owner (the person)",
+      "hypothesis": "an AI-managed side that starts in the named style the staff advice rates best for its squad plays recognisably different matches; with the shipped styles some pairings play far outside the realism bands (40 equal matches: shots per team 24.5 and 23.8 against 11.2 and 15.1, goals per match 4.0 and 3.8), recorded as band misses for the tuning work; it ships on so the AI picks a style",
+      "removal_condition": "removed, with the pick kept on, once a paired run of 40 equal matches on seeds 9 and 42 keeps every core band with the flag on",
+      "state": "on"
+    },
+    "team_stands": {
+      "owner": "team-shape owner (the person)",
+      "hypothesis": "the per-position stands of tactics.json move the back line toward the real phase shapes without raising shots per team above the real band of 8 to 16; with the table seeded as if the ball sat on the halfway line it lifts the back line 6 to 11 m out of possession and shots per team rise to about 90, so it ships off",
+      "removal_condition": "removed, with the table kept or dropped, once the stands are seeded again from the engine's own measured positions with a block depth that reads the ball, and a paired run of 40 equal matches on seeds 9 and 42 keeps every core band with the flag on",
+      "state": "off"
+    }
+  }
 }

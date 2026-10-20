@@ -1919,7 +1919,11 @@ A,0,0
             ("n/a", "n/a")
         );
         assert_eq!(strong.report_only, None);
-        assert_eq!((info.missing, info.no_counterpart), (15 + 35, 3));
+        assert_eq!(
+            (info.missing, info.no_counterpart),
+            // The 101 team-shape bands read a file this folder lacks.
+            (15 + 35 + 101, 3)
+        );
 
         let mut joint = Joint {
             word: Word::Fail,

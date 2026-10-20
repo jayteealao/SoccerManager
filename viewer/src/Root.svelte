@@ -56,9 +56,8 @@
     if (!file) {
       return;
     }
-    const bytes = new Uint8Array(await file.arrayBuffer());
     fileInput.value = '';
-    await door.openReplay(bytes, file.name);
+    await door.openReplay(file, file.name);
   }
 
   function keydown(event) {

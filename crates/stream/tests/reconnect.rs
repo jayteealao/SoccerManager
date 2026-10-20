@@ -52,6 +52,8 @@ fn serve(
                     knockout: false,
                     ground_length: protocol::DEFAULT_GROUND_LENGTH,
                     ground_width: protocol::DEFAULT_GROUND_WIDTH,
+                    game_state: None,
+                    styles: None,
                 },
                 commands: CommandContext {
                     owner_id: "0".repeat(32),

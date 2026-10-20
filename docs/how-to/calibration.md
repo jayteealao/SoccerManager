@@ -153,6 +153,34 @@ Each row has a word by the same rules as a gating band. A change run judges a re
 
 The reported bands never move the joint word, its threshold, `calib.pass` or the exit code. Read a `fail` there as a gap between the engine and real football to look into, not as a broken change.
 
+## Read the team-shape bands and the figures
+
+A build with the measures also reports how the teams move. These bands only report and never block a change:
+
+- Shape, per position group (`cb`, `fb`, `cm`, `w`, `st`): how far behind the ball each group stands with and without the ball (`cb_depth_in`, `cb_depth_out`), and how wide it stands with the ball on its own side and on the other (`cb_width_near_in`, `cb_width_far_out`).
+- Pace, per group: the share of open play spent standing, walking, jogging, running, at high speed and sprinting (`cb_pace_walk_share`), and the mean speed with the ball on the player's side and on the other (`cb_speed_near`).
+- Sprints, per group: runs over 7 m/s for at least 1 s, forward, back and lateral, per minute of ball in play (`st_sprints_fwd_per_min`).
+- The team: how its block slides with the ball up the pitch and across it, with and without the ball (`slide_up_in`, `slide_across_out`); how far a player 30 to 45 m, or more than 45 m, from the ball follows it over 1 s and 10 s (`far_gain_1s_30_45`); and the share of dead-ball time players spend under 2 m/s (`dead_ball_calm_share`).
+- Stoppages per match by kind (`stoppages_throw_in_per_match`) and the minutes of ball in play (`ball_in_play_minutes`).
+
+The reported table groups them by `group` (`shape_cb`, `shape_slide`, `shape_stoppages`, and so on). Each real value comes from `shape3_real.json` in the real-data folder: one value per real match from 7 tracked Bundesliga and 2. Bundesliga matches. With 7 matches the real sample is under the bands' floor of 30, so the bands would only report even with `gates: true`. A checkout without that file reads `no real data here` for them.
+
+The slide up the pitch reads low while the off-ball stands are off, because players then hold their formation places. To see the band with them on, pair the run with the stands flag:
+
+```bash
+target/release/engine-cli calibrate --suite equal --seed 42 --matches 200 --pair team_stands
+```
+
+The figures follow the reported table:
+
+```text
+figures (beside an earlier build; never judged):
+figure                       suite           value        se      today     change  build
+top_two_receiver_share       equal          0.4711   0.01795      0.414     0.0571  6aa7e09
+```
+
+A figure is a number with no real range to judge it by: the share of completed links between each side's two most-linked players, the share with a full-back or centre-back in them, and the engine's passes per team. `today` is the value an earlier build gave, and `change` is this run's value minus it. A figure has no word and never moves a verdict; `calib.figures` in `report.json` holds the same rows. A build without the measures shows the two link figures with no value.
+
 ## Read a distribution band
 
 Six reported bands judge a whole distribution: goals per match, the scoreline table, passes per team, and in a measures build shot distance and possession chains in passes and in seconds. Their rows read differently:
@@ -187,6 +215,86 @@ field rating: 0 of 10 formations flagged (field rating above win rate by more th
 - `flagged` marks a formation whose field rating exceeds its win rate by more than 0.10: it loses mostly to formations the field does not play, and its win rate undersells it.
 
 The rating never changes a band, the verdict, `calib.pass` or the exit code. Read a flag as a question about the formations, not as a failure. With few matches per pairing each share is 0, 0.5 or 1, and the equilibrium can jump from run to run: read a flag only from a run with many matches per pairing. A run that played only some pairings (`--pairing`), or in which a pairing finished no match, prints `formation field rating: needs every pairing (<k> of <n> played)` instead and writes no `calib.nash`.
+
+## Read the substitutions against the real eras
+
+Each run reports the AI managers' substitutions in `calib.substitutions` of `report.json`, against the real era of the rule pack's limit from the `substitutions` rows of `signatures.json`: the Wyscout leagues of 2017/18 for a limit of 3, and Euro 2020, the 2022 World Cup and Euro 2024 for a limit of 5. To read the three-substitution era, play under its pack:
+
+```text
+target/release/engine-cli calibrate --suite equal --seed 9 --matches 200 --rules crates/engine-cli/tests/fixtures/rules/three-substitutions.json --out runs/subs-three-9
+```
+
+- `per_team` is the substitutions a team makes in a match, and `per_team_inside` whether it lies inside the real competitions' range.
+- `minute_quartiles` are the quartiles of the substitution minutes, and `quartiles_inside` whether each lies inside the real range of that quartile.
+- `reasons` splits the substitutions by `ai-decision` code; `injury_knock_share` is the share made for an injury or a knock, beside the real share forced by an injury.
+- `count_shares` gives the share of teams making 0, 1, 2 and more substitutions.
+
+The report never changes a band, the verdict, `calib.pass` or the exit code.
+
+## Run the styles suite
+
+The styles suite plays the eight named styles of `content/styles.json` against each other: every ordered pairing of two different styles, with the same squad on both sides and a formation drawn from each style's list. It judges no band; it tells you whether a style dominates and whether each style shows its identity. Run it on demand, for example before a release or after a change to how instructions play:
+
+```bash
+target/release/engine-cli calibrate --suite styles --seed 42 --matches 50 --out runs/styles-42
+```
+
+`--matches` is per ordered pairing, so 50 plays 2,800 matches (56 pairings). It runs alone: it refuses `--base`, `--pair`, `--baseline`, `--band` and `--pairing`. The report goes to `runs/styles-42/report.json` under `calib.styles`, and standard error ends with the table:
+
+```text
+styles suite: 2800 of 2800 matches played, 50 per ordered pairing, 73 rule violations
+style            pts/match     se   share  clear losses
+possession           2.706  0.030   0.239  none  DOMINANT
+low_block            0.923  0.049   0.082  possession, high_press, gegenpress
+...
+dominant: possession
+identity flags: possession: possession_pct; possession: passes; ...
+```
+
+Read it this way:
+
+- `pts/match` is the style's points per match (3 for a win, 1 for a draw), with its standard error; `share` is its share of all the points of the suite. With eight styles an even share is 0.125.
+- `clear losses` names the styles it loses to clearly: over their matches in both home orders, the 95 percent interval of its points less the other's lies wholly below 0.
+- `DOMINANT` marks a style with no clear loss, or with more than 20 percent of all the points. Every style should have at least one clear weakness; a dominant style is a style the AI and the player could always pick.
+- `identity flags` lists each statistic a style names in `styles.json` that its sides do not move in its direction by more than 1.96 standard errors from the mean over every side, for example a possession style that does not have more of the ball. In `calib.styles.styles[].identity`, each row gives `style_mean`, `all_mean` and `se`, so you can see which way the statistic moved.
+- `calib.styles.pairings` gives each ordered pairing's points, goals and shots per match: look there for a pairing that plays far from a real match.
+- The rule violations count every rule the running checker found broken over the suite. A match the equal suite never plays, such as two pressing styles against each other, can show a fault there.
+
+A flag on a small run can be noise: read the flags from a run with at least 50 matches per ordered pairing, where every pair of styles has played 100 matches with each side at home 50 times.
+
+To look into one pairing, play only it with `--style-pairing`, the home style first; a style may meet itself. Build with the `measures` feature to get each side's probe:
+
+```bash
+cargo build --release --locked -p engine-cli --features measures
+target/release/engine-cli calibrate --suite styles --style-pairing "counter_attack v gegenpress" --style-pairing "high_press v high_press" --seed 9 --matches 100 --out runs/pairings-9
+```
+
+Each pairing then prints its shots and goals a match, and a `home:` and an `away:` line: per side, its shots, goals, xG per shot and shot distance, its possessions and turnovers, where it loses the ball (its own, the middle or the final third), its fast breaks and the time from a regain to a shot, its pressures and what it does in the 5 to 10 seconds after a loss, its offsides, and where the ball spends its time. The same figures are in `calib.styles.pairings[].probe`. To find what drives a pairing, change one setting of one style in a copy of the content folder (`--content-dir`) and play the pairing again: the other figures stay on the same matches.
+
+### Run the styles gate
+
+The gate judges the whole table at once. Run it at 200 matches per ordered pairing, the size at which every pair of styles has played 400 matches and a clear loss can show (11,200 matches):
+
+```bash
+target/release/engine-cli calibrate --suite styles --seed 9 --matches 200 --out runs/styles-gate-9
+```
+
+The table on standard error ends with one line:
+
+```text
+styles gate: pass
+```
+
+or, when an item fails, `styles gate: fail: ` and each failing item. Read each item this way:
+
+- a dominant style: it loses clearly to no style, or takes more than 20 percent of the points;
+- an identity flag (`style: stat`): the style's sides do not move that statistic in its direction;
+- a pairing outside the range (`home v away` and its shots a match): both sides together average under 4 or over 40 shots a match;
+- violations: the running checker found a rule broken in one of the suite's matches;
+- unplayed: a planned match did not play.
+
+The same items are in `calib.styles.gate` of `report.json`, with `pass`. The gate never changes the exit code. To find the cause of a failing item, play the pairings it names with `--style-pairing` in a `measures` build, as above, and change one setting at a time in a copy of the content folder. A change to a preset that only makes the gate pass is not a fix: look for the mechanism that makes the pairing play unlike a real match.
+Every change run (`--base` or `--base-binary`) also plays a small sample: one match per ordered pairing, 56 matches, on the changed engine only, after its verdict. The same table prints on standard error, the report holds it under `calib.styles`, and `calib.stages.styles` gives its time. With one match per ordered pairing, a style shows a clear loss only when it loses both matches against another, so the sample flags styles as dominant by chance: read it for the pairings' goals and shots and the rule violations, not for the flags. The sample never changes the verdict.
 
 ## Accept a not-sure band
 
@@ -354,9 +462,78 @@ Each match's row then holds, per side:
 - the goals by phase: open play, or the corner, free kick, penalty, throw-in, kick-off or goal kick that began the scoring side's possession;
 - the open-play ticks with the ball in each third, counted from the side's own goal line;
 - the possession chains, by length in passes and in 2-second bins of time;
-- each player's ticks on the pitch, metres covered, ball-in-play time in each speed zone (walk under 2 m/s, jog 2 to 4, run 4 to 5.5, high intensity 5.5 to 7, sprint 7 and over) and peak speed.
+- each player's ticks on the pitch, metres covered, ball-in-play time in each speed zone (walk under 2 m/s, jog 2 to 4, run 4 to 5.5, high intensity 5.5 to 7, sprint 7 and over) and peak speed;
+- the team-shape sums behind "Read the team-shape bands and the figures": depth, width, pace and sprints per position group, the slide, the far players' response, dead-ball calm, the stoppages by kind and the completed links (`docs/reference/data-files.md` lists them).
 
 The measures read the match and change nothing: a seed plays the same match with or without them, and `calib.results_digest` is the same. A build without the feature prints that it has no measures as the run starts, writes zeros in the measure columns, and judges the bands of the band file only. `calib.rows.measures` in `report.json` says which build ran.
+
+### Write the decision probe
+
+A measures build also keeps a decision probe of each match: kicks by kind and third, the clearances the other side gained next, goals with and without a shot behind them, the carrier's option scores in the final third he attacks with the terms of his best pass, every open-play shot with its expected goals, the keeper's distance off his line and the shooter's execution share, and the balls into the box: each pass and restart kick by kind (an open-play lofted pass, a lofted restart kick, a kick along the ground) and those the next player to gain the ball gains inside the penalty area the kicker's side attacks, as a StatsBomb pass ends there. Set `SM_PROBE_OUT` to a file path and a calibration run appends one JSON line per match to it, with each keeper's rating, post-shot expected goals faced, goals from shots conceded, saves, completed passes and clearances:
+
+```bash
+SM_PROBE_OUT=runs/probe.jsonl target/release/engine-cli calibrate --suite equal --matches 200
+```
+
+The probe reads the match and changes nothing, like the other measures.
+
+## Check and fit a tactical primitive
+
+A tactical primitive is a setting of the tactics board, such as tempo or mentality, declared in the `primitives` block of `content/tactics.json`. Each one names the statistic it should move. To check that every level step moves it, build with the `measures` feature and run the harness:
+
+```bash
+cargo build --release -p engine-cli --features measures
+target/release/engine-cli --content-dir content primitives check --primitive tempo --pairs 200 --out runs/tempo-check.json
+```
+
+Each step plays 200 pairs of matches, the tested side one level apart on the same seed. Standard error lists any failed step with its numbers, and the run exits with 2. A step is judged on its primary statistic, the first in its `signature` list; a secondary statistic that does not move beyond the noise prints as a `secondary miss` and does not fail the step. The noise of 40 pairs often covers a real step, so use 200 pairs before you trust a failure.
+
+To fit one level to real teams, read the real-team table and search the level's value:
+
+```bash
+target/release/engine-cli --content-dir content signatures
+target/release/engine-cli --content-dir content primitives fit --primitive tempo --level slow --matches 200 --out runs/tempo-slow.json
+```
+
+The fit aims at a ratio, not at the real value itself: the ratio of the level's quintile median to the middle median in `signatures.json`, against the ratio of the engine's level to its default level. The engine plays more passes than real teams, so the absolute values differ; the result names both, and the gap belongs to the tuning of pass volume. Copy the fitted `search.value` into the level in `tactics.json` and the record into the primitive's `fits`; the load refuses a fit record whose values differ from the level's.
+
+The fit searches the level's first input in its `inputs` list and keeps the others at their content values. For width, that is the wide-target weight; the shape scale keeps its content value.
+
+### Check a choice
+
+A choice primitive, such as the attacking channel, has no steps. `check` plays each choice against the default choice and judges the choice's own statistic, which must rise beyond the noise:
+
+```bash
+target/release/engine-cli --content-dir content primitives check --primitive attacking_channel --pairs 200 --out runs/channel-check.json
+```
+
+The result holds each choice's means and paired differences for every statistic. To check that the channels mirror, compare the rise of `entries_left_share` under `left` with the rise of `entries_right_share` under `right` in that file: they should differ by no more than their combined noise. A primitive whose `data` names a `deferred` part prints its numbers for that part too, but they judge nothing until the deferral ends.
+
+### Check a player instruction
+
+A player instruction sets one primitive for one player (see the game-state section of the tactics file in `docs/reference/data-files.md`). `--player <slot>` checks it the same way, for the player in that slot of the tested side's 4-4-2: one level up from the default against no instruction, or each choice against none. The player's own statistic must rise beyond the noise, and the same statistic pooled over his ten team-mates must stay inside it:
+
+```bash
+target/release/engine-cli --content-dir content primitives check --primitive dribbling --player 5 --pairs 1000 --out runs/dribbling-player.json
+```
+
+Check each primitive on a slot its hook reaches: a striker (slot 9 or 10) for forward runs and the final third, a winger (slot 5 or 8) for dribbling, crossing, cross type and width, and a central midfielder (slot 6 or 7) for pressing, tackling and the two transition primitives. A single player's counts are small, so use 1,000 pairs. Forward runs are refused for a slot off the attack line.
+
+### Fit a thin-sample primitive
+
+Full-back run frequency fits to the off-ball runs of 13 SkillCorner teams, and forward runs to the runs of the 32 teams of the 2022 World Cup's tracking data: too few, or national teams rather than clubs, for quintiles. Their rows in `signatures.json` carry `thin_sample: true` and five targets spread evenly from the lowest to the highest team; the World Cup rows also carry `national_teams: true`. Run `fit` as for any level; it aims at the ratio of the level's target to the middle target. Full-back runs are rare in the engine, so fit their frequency with `--matches 1000`.
+
+A primitive may judge its lower and upper levels on different statistics: a signature entry with `"steps": "below_default"` or `"above_default"` judges only the steps on that side of the default. Forward runs judge their upper levels on the share of runs in behind and their lower levels on the share of runs coming short. The fit searches each level on its own side of the default, and a statistic that falls as the level rises takes its targets from the other end of the real spread: the lowest level aims at the highest team.
+
+### Make the forwards' run rows
+
+The run rows come from tracking data, not from a provider's run events. `scripts/tracking-runs.py` finds each forward's runs in the frames of the PFF World Cup 2022, SkillCorner, IDSSE and Metrica matches by the engine's own definition (4 m/s or faster for 1 s or more, his side with the ball, not the carrier):
+
+```bash
+python scripts/tracking-runs.py <tracking data folder> <real data folder>/tracking_runs.csv.gz
+```
+
+`engine-cli signatures` then classifies each run as the engine does, makes the rows from the World Cup teams and writes the club sources as checks. The Alfheim matches are not read: they track one team only, with no ball and no opponents, so they have no defensive line and no possession.
 
 ## Build a faster calibrate binary
 

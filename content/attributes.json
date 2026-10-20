@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "attributes": [
     {
       "name": "passing",
@@ -215,9 +215,9 @@
       "name": "work_rate",
       "group": "mental",
       "job": {
-        "action": "press",
-        "stage": "choose",
-        "statistic": "tackle attempts per match",
+        "action": "recovery_run",
+        "stage": "execute",
+        "statistic": "sprinted recovery runs per match",
         "direction": "up"
       }
     },
@@ -255,8 +255,7 @@
       "name": "determination",
       "group": "mental",
       "job": {
-        "action": "press",
-        "stage": "choose",
+        "stage": "occasion",
         "statistic": "presses per match when behind",
         "direction": "up"
       }
@@ -1095,20 +1094,22 @@
     "press": {
       "choose": {
         "main": {
-          "attribute": "work_rate",
+          "attribute": "positioning",
           "weight": 1.0
         },
         "supports": [
           {
-            "attribute": "aggression",
+            "attribute": "anticipation",
+            "weight": 0.3
+          },
+          {
+            "attribute": "decisions",
             "weight": 0.2
-          },
+          }
+        ],
+        "minor": [
           {
-            "attribute": "stamina",
-            "weight": 0.15
-          },
-          {
-            "attribute": "determination",
+            "attribute": "vision",
             "weight": 0.1
           }
         ],
@@ -1140,12 +1141,12 @@
         },
         "supports": [
           {
-            "attribute": "positioning",
-            "weight": 0.4
+            "attribute": "concentration",
+            "weight": 0.3
           },
           {
-            "attribute": "work_rate",
-            "weight": 0.2
+            "attribute": "consistency",
+            "weight": 0.15
           }
         ],
         "source": "design"
@@ -1562,6 +1563,44 @@
         ],
         "source": "design"
       }
+    },
+    "cover": {
+      "execute": {
+        "main": {
+          "attribute": "positioning",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "anticipation",
+            "weight": 0.3
+          },
+          {
+            "attribute": "concentration",
+            "weight": 0.2
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "recovery_run": {
+      "execute": {
+        "main": {
+          "attribute": "work_rate",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "pace",
+            "weight": 0.25
+          },
+          {
+            "attribute": "acceleration",
+            "weight": 0.2
+          }
+        ],
+        "source": "design"
+      }
     }
   },
   "consistency_degrees": {
@@ -1599,7 +1638,9 @@
     "off_ball_run": 1.0,
     "corner": 1.1,
     "free_kick": 1.2,
-    "long_throw": 0.7
+    "long_throw": 0.7,
+    "cover": 0.8,
+    "recovery_run": 0.6
   },
   "gates": {
     "chip": {

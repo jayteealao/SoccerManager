@@ -44,7 +44,6 @@ pub enum Measure {
     XgPerShot,
     PressedCompletion,
     LooseBallShare,
-    TackleAttempts,
     Fouls,
     Lapses,
     AnchorDistance,
@@ -78,11 +77,18 @@ pub enum Measure {
     RashChases,
     PressesBehind,
     HeadersInTraffic,
+    /// The share of presser ticks, beyond the engaging range, on which the presser stood
+    /// goal-side of the carrier.
+    PressGoalSide,
+    /// The mean depth gap of the back-line players from their line out of possession, metres.
+    LineGap,
+    /// Recovery runs that drew a sprint, per match.
+    RecoverySprints,
 }
 
 impl Measure {
     /// Every measure, in declaration order.
-    pub const ALL: [Measure; 48] = [
+    pub const ALL: [Measure; 50] = [
         Measure::PassCompletion,
         Measure::TakeOnCompletion,
         Measure::ReceiptLoss,
@@ -97,7 +103,6 @@ impl Measure {
         Measure::XgPerShot,
         Measure::PressedCompletion,
         Measure::LooseBallShare,
-        Measure::TackleAttempts,
         Measure::Fouls,
         Measure::Lapses,
         Measure::AnchorDistance,
@@ -131,6 +136,9 @@ impl Measure {
         Measure::RashChases,
         Measure::PressesBehind,
         Measure::HeadersInTraffic,
+        Measure::PressGoalSide,
+        Measure::LineGap,
+        Measure::RecoverySprints,
     ];
 
     /// The measure's index in [`Measure::ALL`].
@@ -139,12 +147,35 @@ impl Measure {
     }
 }
 
-/// Whether a rule's job belongs to an attribute or to a body field.
+/// Whether a rule's job belongs to an attribute, to a body field, or to a stage play reads.
+/// A stage rule names the stage (`press.choose`) and measures its own statistic; its
+/// factor is the stage's main attribute, shared with that attribute's own rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum JobKind {
     Attribute,
     Body,
+    Stage,
+}
+
+/// The stage a stage rule's job names, `action.stage`, when play reads it.
+pub fn stage_of(job: &str) -> Option<crate::contract::Stage> {
+    let (action, stage) = job.split_once('.')?;
+    let action = crate::contract::ActionKind::from_name(action)?;
+    let stage = crate::contract::StageKind::ALL
+        .into_iter()
+        .find(|s| s.name() == stage)?;
+    crate::contract::Stage::find(action, stage)
+}
+
+/// The main attribute of the stage a stage rule's job names, under `schema`.
+pub fn stage_main<'a>(job: &str, schema: &'a AttributeSchema) -> Option<&'a str> {
+    let (action, stage) = stage_of(job)?.kind();
+    schema
+        .actions
+        .get(&action)
+        .and_then(|t| t.get(&stage))
+        .map(|t| t.main.attribute.as_str())
 }
 
 /// The size of a sensitivity run.
@@ -197,9 +228,14 @@ pub struct RuleDef {
     pub kind: JobKind,
     #[garde(skip)]
     pub measure: Measure,
-    /// The job's statistic as its job table words it.
+    /// The job's statistic as its job table words it; a stage rule's own.
     #[garde(length(min = 3, max = 120))]
     pub statistic: String,
+    /// Which way a stage rule's statistic moves as the main attribute rises. Only a stage
+    /// rule has it: every other rule takes its job's direction.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(skip)]
+    pub direction: Option<Direction>,
     /// The low and the high level: ratings for an attribute; centimetres, years or percent of
     /// adaptation for a body job.
     #[garde(skip)]
@@ -224,6 +260,10 @@ pub struct RuleDef {
 fn is_false(b: &bool) -> bool {
     !*b
 }
+
+/// The rules the defensive jobs added or moved, each report-only: work rate's job rule (now
+/// the recovery run), and the press and cover stage rules.
+pub const DEFENSIVE_JOBS: [&str; 3] = ["work_rate", "press.choose", "cover.execute"];
 
 /// What a rule expects of its statistic: a move in its job's direction, or no move at all
 /// for a value that is inert in a match.
@@ -362,6 +402,23 @@ impl SensitivityFile {
         let all = jobs(schema, body);
         for (i, rule) in self.rules.iter().enumerate() {
             let field = |f: &str| format!("rules[{i}].{f}");
+            if self.rules[..i].iter().any(|r| r.job == rule.job) {
+                return Err((field("job"), format!("{} has a second rule", rule.job)));
+            }
+            if rule.kind == JobKind::Stage {
+                self.check_stage(rule, schema)
+                    .map_err(|(f, why)| (field(f), why))?;
+                continue;
+            }
+            if rule.direction.is_some() {
+                return Err((
+                    field("direction"),
+                    format!(
+                        "{}: only a stage rule states a direction; this one takes its job's",
+                        rule.job
+                    ),
+                ));
+            }
             let Some(job) = all.iter().find(|j| j.name == rule.job) else {
                 return Err((
                     field("job"),
@@ -371,9 +428,6 @@ impl SensitivityFile {
                     ),
                 ));
             };
-            if self.rules[..i].iter().any(|r| r.job == rule.job) {
-                return Err((field("job"), format!("{} has a second rule", rule.job)));
-            }
             if rule.kind != job.kind {
                 return Err((
                     field("kind"),
@@ -399,7 +453,8 @@ impl SensitivityFile {
             }
             let [lo, hi] = rule.levels;
             let range = match job.kind {
-                JobKind::Attribute => 1.0..=20.0,
+                // A stage rule is checked apart and never reaches here.
+                JobKind::Attribute | JobKind::Stage => 1.0..=20.0,
                 JobKind::Body => BODY_JOBS
                     .iter()
                     .find(|(n, _)| *n == rule.job)
@@ -463,13 +518,75 @@ impl SensitivityFile {
         Ok(())
     }
 
-    /// The direction of `rule`'s statistic as its job states it.
+    /// The checks of a stage rule, as `(field, reason)`: it names a stage play reads, states
+    /// its direction, and its levels are those of its main attribute's own rule, whose factor
+    /// it shares.
+    fn check_stage(
+        &self,
+        rule: &RuleDef,
+        schema: &AttributeSchema,
+    ) -> Result<(), (&'static str, String)> {
+        let Some(main) = stage_main(&rule.job, schema) else {
+            return Err((
+                "job",
+                format!(
+                    "{} is not a stage play reads; name it action.stage",
+                    rule.job
+                ),
+            ));
+        };
+        if rule.direction.is_none() {
+            return Err((
+                "direction",
+                format!(
+                    "{}: a stage rule states its direction, up or down",
+                    rule.job
+                ),
+            ));
+        }
+        if (rule.min_move.is_some() || rule.ceiling.is_some())
+            && rule.reason.as_deref().is_none_or(|r| r.trim().is_empty())
+        {
+            return Err((
+                "reason",
+                format!("{}: an override needs a reason", rule.job),
+            ));
+        }
+        let Some(own) = self
+            .rules
+            .iter()
+            .find(|r| r.kind == JobKind::Attribute && r.job == main)
+        else {
+            return Err((
+                "job",
+                format!(
+                    "{}: its main attribute {main} has no rule to share",
+                    rule.job
+                ),
+            ));
+        };
+        if own.levels != rule.levels {
+            return Err((
+                "levels",
+                format!(
+                    "{}: {:?} differ from the levels {:?} of {main}, whose factor it shares",
+                    rule.job, rule.levels, own.levels
+                ),
+            ));
+        }
+        Ok(())
+    }
+
+    /// The direction of `rule`'s statistic as its job states it; a stage rule's own.
     pub fn direction(
         &self,
         rule: &RuleDef,
         schema: &AttributeSchema,
         body: &BodyJobs,
     ) -> Direction {
+        if let Some(d) = rule.direction {
+            return d;
+        }
         jobs(schema, body)
             .into_iter()
             .find(|j| j.name == rule.job)
@@ -537,7 +654,7 @@ mod tests {
             &content.tuning.engine.contract.body,
         )
         .unwrap();
-        assert_eq!(file.rules.len(), content.attributes.len() + 3);
+        assert_eq!(file.rules.len(), content.attributes.len() + 3 + 2);
         assert_eq!(file.derived, vec!["build".to_string()]);
         let flagged: Vec<&str> = file
             .rules
@@ -545,10 +662,20 @@ mod tests {
             .filter(|r| r.report_only)
             .map(|r| r.job.as_str())
             .collect();
-        assert_eq!(flagged.len(), 21);
+        assert_eq!(flagged.len(), 24);
         for job in flagged {
-            assert!(crate::data::convert::V4_ADDED.contains(&job), "{job}");
+            assert!(
+                crate::data::convert::V4_ADDED.contains(&job) || DEFENSIVE_JOBS.contains(&job),
+                "{job}"
+            );
         }
+        let stages: Vec<&str> = file
+            .rules
+            .iter()
+            .filter(|r| r.kind == JobKind::Stage)
+            .map(|r| r.job.as_str())
+            .collect();
+        assert_eq!(stages, ["press.choose", "cover.execute"]);
         let inert: Vec<&str> = file
             .rules
             .iter()
@@ -650,7 +777,67 @@ mod tests {
 
     #[test]
     fn an_unknown_field_is_refused() {
-        refusal(edited(|v| rule_of(v, "passing")["direction"] = "up".into()));
+        refusal(edited(|v| rule_of(v, "passing")["colour"] = "red".into()));
+    }
+
+    #[test]
+    fn a_direction_outside_a_stage_rule_is_refused() {
+        let (field, reason) = refusal(edited(|v| rule_of(v, "passing")["direction"] = "up".into()));
+        assert!(field.ends_with(".direction"), "{field}");
+        assert!(reason.contains("only a stage rule"), "{reason}");
+    }
+
+    #[test]
+    fn a_stage_rule_names_a_stage_states_its_direction_and_shares_its_main_levels() {
+        let (field, reason) = refusal(edited(|v| {
+            rule_of(v, "press.choose")["job"] = "press.execute".into()
+        }));
+        assert!(field.ends_with(".job"), "{field}");
+        assert!(reason.contains("not a stage play reads"), "{reason}");
+        let (field, _) = refusal(edited(|v| {
+            rule_of(v, "cover.execute")
+                .as_object_mut()
+                .unwrap()
+                .remove("direction");
+        }));
+        assert!(field.ends_with(".direction"), "{field}");
+        let (field, reason) = refusal(edited(|v| {
+            rule_of(v, "press.choose")["levels"] = serde_json::json!([6.0, 16.0])
+        }));
+        assert!(field.ends_with(".levels"), "{field}");
+        assert!(reason.contains("positioning"), "{reason}");
+        let (field, _) = refusal(edited(|v| {
+            let rules = v["rules"].as_array_mut().unwrap();
+            let copy = rules
+                .iter()
+                .find(|r| r["job"] == "press.choose")
+                .unwrap()
+                .clone();
+            rules.push(copy);
+        }));
+        assert!(field.ends_with(".job"), "{field}");
+        let (bytes, content) = shipped();
+        let file = SensitivityFile::load(
+            &bytes,
+            SENSITIVITY_FILE,
+            &content.attributes,
+            &content.tuning.engine.contract.body,
+        )
+        .unwrap();
+        let body = &content.tuning.engine.contract.body;
+        let cover = file
+            .rules
+            .iter()
+            .find(|r| r.job == "cover.execute")
+            .unwrap();
+        assert_eq!(
+            file.direction(cover, &content.attributes, body),
+            Direction::Down
+        );
+        assert_eq!(
+            stage_main("cover.execute", &content.attributes),
+            Some("positioning")
+        );
     }
 
     #[test]

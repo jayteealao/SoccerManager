@@ -23,14 +23,16 @@
 import { liftHello } from './scale.js';
 
 /// The protocol version of the frames this page receives and writes.
-export const PROTOCOL_VERSION = 7;
+export const PROTOCOL_VERSION = 9;
 /// The frame protocols this page reads from a file. Protocol 4 changed only the scale of the
-/// hello's ratings, protocol 5 only the hello's squad entries and one added message, and
-/// protocols 6 and 7 only optional fields, so a protocol 3, 4, 5 or 6 file still plays; its
-/// hello is lifted when read (`liftHello`).
-export const READS_PROTOCOLS = Object.freeze([3, 4, 5, 6, 7]);
+/// hello's ratings, protocol 5 only the hello's squad entries and one added message,
+/// protocols 6 and 7 only optional fields, protocol 8 only the added `walk-on` message, and
+/// protocol 9 only optional fields (the hello's styles, each side's levels), so a protocol 3,
+/// 4, 5, 6, 7 or 8 file still plays; its hello is lifted when read (`liftHello`), and a file
+/// before protocol 8 has no walk-on.
+export const READS_PROTOCOLS = Object.freeze([3, 4, 5, 6, 7, 8, 9]);
 
-/// The protocols this page reads, as words: "3, 4, 5, 6 and 7".
+/// The protocols this page reads, as words: "3, 4, 5, 6, 7, 8 and 9".
 function readsWords() {
   return `${READS_PROTOCOLS.slice(0, -1).join(', ')} and ${READS_PROTOCOLS.at(-1)}`;
 }
@@ -568,10 +570,14 @@ export async function readReplay(input, { chain = productionChain } = {}) {
 // Every field of the version-4 record, as the engine's record types name them (`ReplayRecord`
 // in `crates/stream/src/record.rs`, which refuses unknown fields). A leaf is a type name:
 // `str`, `bool`, `u8`, `u32`, `u64` (a whole number, no sign), or `seed` (a decimal string of
-// a 64-bit number). `opt(t)` may also be null (an `Option` in the engine), `one(...)` is one
-// of the listed strings, `list(shape, length?)` is a list, and an object is a record whose
-// keys are exactly the listed ones. `variants` is an object with exactly one of the keys.
+// a 64-bit number), or `object` (any JSON object, which the engine reads as it reads a team
+// file's). `opt(t)` may also be null (an `Option` in the engine), `absent(t)` may also be
+// missing or null (an `Option` the engine writes only when it holds something), `one(...)` is
+// one of the listed strings, `list(shape, length?)` is a list, and an object is a record whose
+// keys are exactly the listed ones, less any `absent` key. `variants` is an object with
+// exactly one of the keys.
 const opt = (of) => ({ opt: of });
+const absent = (of) => ({ absent: of });
 const one = (...values) => ({ one: values });
 const list = (of, length = null) => ({ list: of, length });
 const variants = (of) => ({ variants: of });
@@ -583,6 +589,12 @@ const CHANGE_SHAPE = variants({
     instructions: list(opt('u8'), 6),
     roles: list({ squad: 'u64', role: 'u8', duty: 'u8' }),
   },
+  rule: { active: 'u8' },
+  // Primitives set to new levels from the tactics board, by the tactics file's names.
+  instructions: { levels: list({ primitive: 'str', level: 'str' }) },
+  // A side's rules and player instructions replaced whole; the engine nests the written
+  // file under its own `game_state` key.
+  game_state: { game_state: 'object' },
 });
 const RECORD_SHAPE = {
   engine: {
@@ -599,13 +611,14 @@ const RECORD_SHAPE = {
     minutes: 'u32',
     knockout: 'bool',
     managers: list(one('ai', 'human'), 2),
+    game_state: absent(list(opt('object'), 2)),
   },
   inputs: list({ role: 'str', name: 'str', bytes: 'u64', sha256: 'str' }),
   inputs_bytes: 'u64',
   changes: list({
     order: 'u32',
     team: 'u64',
-    source: one('manager', 'ai'),
+    source: one('manager', 'ai', 'rule'),
     queued_tick: 'u32',
     queue_number: 'u32',
     tick: 'u32',
@@ -625,6 +638,8 @@ function requireLeaf(value, type, path) {
     if (typeof value !== 'string') throw bad('a string');
   } else if (type === 'bool') {
     if (typeof value !== 'boolean') throw bad('true or false');
+  } else if (type === 'object') {
+    if (!isObject(value)) throw bad('an object');
   } else if (type === 'seed') {
     if (typeof value !== 'string' || !/^\d+$/.test(value) || BigInt(value) >= 1n << 64n) {
       throw bad('a decimal string of a 64-bit number');
@@ -637,8 +652,8 @@ function requireLeaf(value, type, path) {
 function requireShape(value, shape, path) {
   if (typeof shape === 'string') {
     requireLeaf(value, shape, path);
-  } else if (shape.opt) {
-    if (value !== null) requireShape(value, shape.opt, path);
+  } else if (shape.opt || shape.absent) {
+    if (value !== null) requireShape(value, shape.opt ?? shape.absent, path);
   } else if (shape.one) {
     if (!shape.one.includes(value)) {
       throw new ReplayRefused(`the record field ${path} is not one of ${shape.one.join(', ')}`);
@@ -681,9 +696,10 @@ function requireObject(value, shape, path) {
   for (const [key, inner] of Object.entries(shape)) {
     const at = path ? `${path}.${key}` : key;
     if (!Object.hasOwn(value, key)) {
+      if (inner.absent) continue;
       throw new ReplayRefused(`the record has no field ${at}`);
     }
-    if (value[key] === null && !inner.opt) {
+    if (value[key] === null && !inner.opt && !inner.absent) {
       throw new ReplayRefused(`the record field ${at} is null`);
     }
     requireShape(value[key], inner, at);

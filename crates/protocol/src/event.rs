@@ -256,7 +256,7 @@ pub struct MatchEvent {
     pub trait_cause: Option<String>,
     /// Additive extra, on a `trait-override` event: the instruction it went against, as
     /// `<instruction>:<level>`, `duty:<duty>` or `mentality:<mentality>`, such as
-    /// `tempo:faster`.
+    /// `tempo:fast`.
     #[serde(
         rename = "trait.instruction",
         skip_serializing_if = "Option::is_none",
@@ -492,7 +492,7 @@ mod tests {
         )
         .at_minute(61, None)
         .player(Some("p-club-a-08".into()))
-        .trait_override("holds_up_ball", "pressure", "tempo:faster");
+        .trait_override("holds_up_ball", "pressure", "tempo:fast");
         let json = serde_json::to_string(&e).unwrap();
         for key in [
             "\"event.type\":\"trait-override\"",
@@ -500,7 +500,7 @@ mod tests {
             "\"team.id\":\"club-a\"",
             "\"trait.name\":\"holds_up_ball\"",
             "\"trait.cause\":\"pressure\"",
-            "\"trait.instruction\":\"tempo:faster\"",
+            "\"trait.instruction\":\"tempo:fast\"",
         ] {
             assert!(json.contains(key), "missing {key} in {json}");
         }

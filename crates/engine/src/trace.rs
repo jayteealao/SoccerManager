@@ -178,9 +178,9 @@ impl Trace {
     }
 }
 
-/// `true` for the 21 actions whose draw is tested against a probability. The other 20 are
-/// value draws: score noise, aims, angles, lofts, the keeper's dive, and added time. The
-/// list is outside the stream table, so the scheme digest does not change.
+/// `true` for the 26 actions whose draw is tested against a probability. The other 22 are
+/// value draws: score noise, aims, angles, lofts, the keeper's dive, form, added time, the
+/// restart wait and the pass weight. The list is outside the stream table, so the scheme digest does not change.
 pub fn is_chance(action: Action) -> bool {
     match action {
         Action::ClearWide
@@ -203,13 +203,19 @@ pub fn is_chance(action: Action) -> bool {
         | Action::InjuryTackle
         | Action::Lapse
         | Action::Header
-        | Action::TraitOverride => true,
+        | Action::PaceSprint
+        | Action::QuickRestart
+        | Action::TraitOverride
+        | Action::PassCut
+        | Action::TakeOn
+        | Action::KnockTackle => true,
         Action::FormMatch | Action::FormPeriod => false,
         Action::ShotScore
         | Action::PassScore
         | Action::DribbleScore
         | Action::HoldScore
         | Action::ClearScore
+        | Action::PerceiveScore
         | Action::PassAim
         | Action::ClearAim
         | Action::ShotAim
@@ -222,7 +228,9 @@ pub fn is_chance(action: Action) -> bool {
         | Action::CrossLoft
         | Action::ExtraTimeAdded
         | Action::AddedTime
-        | Action::KeeperDive => false,
+        | Action::KeeperDive
+        | Action::RestartWait
+        | Action::PassWeight => false,
     }
 }
 
@@ -277,11 +285,15 @@ pub enum Point {
     /// A strong trait of play met a moment that may override an instruction, and its draw
     /// decided whether it did.
     TraitOverride,
+    /// A defender tried to cut out or block the pass in flight as it passed him.
+    PassCut,
+    /// A defender met a running carrier in a take-on.
+    TakeOn,
 }
 
 impl Point {
-    /// Every point: 10 decision points, then 29 rule outcomes.
-    pub const ALL: [Point; 39] = [
+    /// Every point: 10 decision points, then 31 rule outcomes.
+    pub const ALL: [Point; 41] = [
         Point::Carrier,
         Point::RestartPass,
         Point::Press,
@@ -321,6 +333,8 @@ impl Point {
         Point::Abandoned,
         Point::Form,
         Point::TraitOverride,
+        Point::PassCut,
+        Point::TakeOn,
     ];
 
     /// The point's name in the trace file.
@@ -365,6 +379,8 @@ impl Point {
             Point::Abandoned => "abandoned",
             Point::Form => "form",
             Point::TraitOverride => "trait_override",
+            Point::PassCut => "pass_cut",
+            Point::TakeOn => "take_on",
         }
     }
 
@@ -395,6 +411,7 @@ pub fn points_of(action: Action) -> &'static [Point] {
         | Action::DribbleScore
         | Action::HoldScore
         | Action::ClearScore
+        | Action::PerceiveScore
         | Action::ClearWide
         | Action::ClearAim => &[Point::Carrier],
         // Open-play passes, and corner and free-kick deliveries (`restart_pass`).
@@ -403,7 +420,9 @@ pub fn points_of(action: Action) -> &'static [Point] {
         Action::ShotSide | Action::ShotAim | Action::ShotSpread | Action::ShotLoft => {
             &[Point::Carrier, Point::RestartTaken]
         }
-        Action::Block | Action::BlockDeflect => &[Point::ShotBlock],
+        Action::Block => &[Point::ShotBlock],
+        // A blocked shot, or a pass a defender blocked as it passed him.
+        Action::BlockDeflect => &[Point::ShotBlock, Point::PassCut],
         Action::Save | Action::SaveHold => &[Point::ShotSave],
         Action::ParrySide | Action::ParryAngle | Action::ParryLoft => {
             &[Point::ShotSave, Point::ShootoutSave]
@@ -420,12 +439,22 @@ pub fn points_of(action: Action) -> &'static [Point] {
         Action::ShootoutFirstTeam | Action::ShootoutEnd => &[Point::ShootoutStart],
         Action::KeeperDive => &[Point::RestartTaken],
         Action::ShootoutSave | Action::ShootoutSaveHold => &[Point::ShootoutSave],
-        Action::InjuryMinute | Action::InjuryTackle => &[Point::Injury],
+        // A knock is drawn right after the tackle's injury roll, which traces the injury point.
+        Action::InjuryMinute | Action::InjuryTackle | Action::KnockTackle => &[Point::Injury],
         // A lapse is a defender losing his place in the shape.
         Action::Lapse => &[Point::Cover],
         Action::Header => &[Point::LooseBall],
         Action::FormMatch | Action::FormPeriod => &[Point::Form],
+        // An urgent job starts on a live tick, whose decision pass traces the press and
+        // cover, or the chase of a loose ball.
+        Action::PaceSprint => &[Point::Press, Point::Chase],
+        // Both are drawn as the ball goes dead.
+        Action::RestartWait | Action::QuickRestart => &[Point::DeadBall],
         Action::TraitOverride => &[Point::TraitOverride],
+        Action::PassCut => &[Point::PassCut],
+        Action::TakeOn => &[Point::TakeOn],
+        // Drawn with the pass's aim.
+        Action::PassWeight => &[Point::Carrier],
     }
 }
 
@@ -669,9 +698,17 @@ pub fn note_points(seen: &mut std::collections::BTreeSet<Point>, records: &[Trac
 /// The points the 22 gate matches never reach. Each has a scene test in
 /// `crates/engine/tests/trace.rs` that forces it and checks its record. The shipped teams
 /// carry no traits, so no gate match meets an override's moment. Since the player as a
-/// person changed play, the gate matches reach an offside.
+/// person changed play, the gate matches reach an offside. Since the AI sides start in the
+/// style their staff picks, no gate match has a change the rule pack refuses. Since the
+/// value-added rating changed the AI's substitutions, no gate match has a sending-off.
 #[cfg(feature = "scenario")]
-pub const SCENE_ONLY: &[Point] = &[Point::CrossClear, Point::Abandoned, Point::TraitOverride];
+pub const SCENE_ONLY: &[Point] = &[
+    Point::CrossClear,
+    Point::Abandoned,
+    Point::TraitOverride,
+    Point::ChangeRejected,
+    Point::SendOff,
+];
 
 /// Checks the partition: the points the gate matches reached plus [`SCENE_ONLY`] are
 /// exactly [`Point::ALL`]. Returns the missing points by name, or the scene-only points the

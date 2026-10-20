@@ -234,7 +234,8 @@ fn a_flag_the_file_turns_on_applies_at_load_and_the_command_line_turns_it_off() 
 #[test]
 fn the_shipped_content_with_no_states_is_unchanged() {
     let content = common::content();
-    assert!(content.flags.is_empty());
+    // The style pick is the one flag the shipped file turns on.
+    assert_eq!(content.flags.names(), [engine::flags::AI_STYLE_PICK]);
     let again = content.with_flags(&FlagStates::default()).unwrap();
     assert_eq!(again.digest, content.digest);
     assert_eq!(again.tuning, content.tuning);

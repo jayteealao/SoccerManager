@@ -386,7 +386,7 @@ fn a_missing_content_file_names_its_path() {
 
 /// Every flag engine code reads is declared in the shipped tuning file, and the shipped file
 /// declares no flag of its own: a candidate model lands with its flag, and the flag leaves
-/// with the losing model.
+/// with the losing model. The shipped file turns every flag off.
 #[test]
 fn the_shipped_flags_block_matches_the_code_flags() {
     let content = common::content();
@@ -394,11 +394,66 @@ fn the_shipped_flags_block_matches_the_code_flags() {
     for name in engine::CODE_FLAGS {
         assert!(declared.contains_key(*name), "{name} is not declared");
     }
-    assert!(
-        declared.is_empty(),
-        "the shipped file declares {declared:?}"
+    let own: Vec<_> = declared
+        .keys()
+        .filter(|n| !engine::CODE_FLAGS.contains(&n.as_str()))
+        .collect();
+    assert!(own.is_empty(), "the shipped file declares {own:?}");
+    // The style pick ships on; the stands ship off.
+    assert_eq!(content.flags.names(), [engine::flags::AI_STYLE_PICK]);
+}
+
+/// The team stands ship off: every stand of the loaded tactics reads 0 although the file
+/// holds the table, and turning the flag on brings the file's table back and marks the
+/// digest.
+#[test]
+fn the_team_stands_read_zero_until_their_flag_is_on() {
+    use engine::data::Position;
+    let content = common::content();
+    let positions = [
+        Position::GK,
+        Position::CB,
+        Position::LB,
+        Position::RB,
+        Position::DM,
+        Position::CM,
+        Position::AM,
+        Position::LW,
+        Position::RW,
+        Position::ST,
+    ];
+    let zero = engine::data::tactics::PhaseStand::default();
+    for position in positions {
+        assert_eq!(content.tactics.stands.of(position), zero, "{position:?}");
+    }
+    let file: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(common::content_dir().path(engine::data::TACTICS_FILE)).unwrap(),
+    )
+    .unwrap();
+    let cb_out = file["stands"]["cb"]["out_of_possession"]["x"]
+        .as_f64()
+        .unwrap();
+    assert!(cb_out != 0.0, "the shipped table holds the stands");
+    let on = content
+        .with_flags(&engine::FlagStates(
+            [(
+                engine::flags::TEAM_STANDS.to_string(),
+                engine::FlagState::On,
+            )]
+            .into(),
+        ))
+        .unwrap();
+    assert_eq!(
+        on.flags.names(),
+        [engine::flags::AI_STYLE_PICK, engine::flags::TEAM_STANDS]
     );
-    assert!(content.flags.is_empty());
+    assert_eq!(
+        on.tactics.stands.of(Position::CB).out_of_possession.x,
+        cb_out
+    );
+    assert_ne!(on.digest, content.digest);
+    let off = on.with_flags(&engine::FlagStates::default()).unwrap();
+    assert_eq!(off.tactics, content.tactics);
 }
 
 /// The shipped tuning file as JSON.
@@ -424,12 +479,135 @@ fn shipped_tuning_json() -> serde_json::Value {
     serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
 }
 
+/// Puts the shipped choice-model block back in its version 5 form: one pressure weight in
+/// place of the shot's and the take-on's own weights.
+fn with_one_pressure_weight(v: &mut serde_json::Value) {
+    let decision = v["engine"]["decision"].as_object_mut().unwrap();
+    let shot = decision.remove("shot_under_pressure").unwrap();
+    decision.remove("takeon_under_pressure").unwrap();
+    decision.insert("pressure".into(), shot);
+}
+
+/// The shipped file holds the shot's and the take-on's pressure weights at the old single
+/// value, and no single pressure weight; a current file that still names it is refused.
+#[test]
+fn the_pressure_weight_is_split_into_the_shot_and_the_take_on_weights() {
+    let t = common::content().tuning.engine.decision;
+    assert_eq!(t.shot_under_pressure, -0.8);
+    assert_eq!(t.takeon_under_pressure, -0.8);
+    let shipped = shipped_tuning_json();
+    assert!(shipped["engine"]["decision"].get("pressure").is_none());
+    let mut old_key = shipped.clone();
+    old_key["engine"]["decision"]["pressure"] = (-0.8).into();
+    let err = engine::data::load_tuning_bytes(&serde_json::to_vec(&old_key).unwrap(), "t.json")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("pressure"), "{err}");
+}
+
+/// A version 5 tuning file (one pressure weight) converts to version 6 with both new weights
+/// at its old value.
+#[test]
+fn a_version_5_tuning_file_converts_with_both_pressure_weights_at_its_value() {
+    let mut v5 = shipped_tuning_json();
+    v5["schema_version"] = 5.into();
+    with_one_pressure_weight(&mut v5);
+    let bytes = serde_json::to_vec(&v5).unwrap();
+    let loaded = engine::data::load_tuning_bytes(&bytes, "tuning-v5.json").unwrap();
+    assert_eq!(loaded.converted_from, Some(5));
+    let shipped = engine::data::load_tuning_bytes(
+        &serde_json::to_vec(&shipped_tuning_json()).unwrap(),
+        "tuning.json",
+    )
+    .unwrap();
+    assert_eq!(loaded.value, shipped.value);
+
+    v5["engine"]["decision"]["pressure"] = (-1.25).into();
+    let loaded =
+        engine::data::load_tuning_bytes(&serde_json::to_vec(&v5).unwrap(), "t.json").unwrap();
+    assert_eq!(loaded.value.engine.decision.shot_under_pressure, -1.25);
+    assert_eq!(loaded.value.engine.decision.takeon_under_pressure, -1.25);
+}
+
+/// A version 6 tuning file (a match-rating weight per save) converts to version 7 with the
+/// weight per save gone and a keeper rated by the goals he prevented, at the shipped weight;
+/// a current file that still names the weight per save is refused.
+#[test]
+fn a_version_6_tuning_file_converts_to_the_goals_prevented_keeper_rating() {
+    let mut v6 = shipped_tuning_json();
+    v6["schema_version"] = 6.into();
+    let rating = v6["match_rating"].as_object_mut().unwrap();
+    rating.remove("goals_prevented").unwrap();
+    rating.insert("save".into(), 0.3.into());
+    let bytes = serde_json::to_vec(&v6).unwrap();
+    let loaded = engine::data::load_tuning_bytes(&bytes, "tuning-v6.json").unwrap();
+    assert_eq!(loaded.converted_from, Some(6));
+    let shipped = engine::data::load_tuning_bytes(
+        &serde_json::to_vec(&shipped_tuning_json()).unwrap(),
+        "tuning.json",
+    )
+    .unwrap();
+    assert_eq!(loaded.value, shipped.value);
+    assert_eq!(loaded.value.match_rating.goals_prevented, 1.0);
+
+    let mut current = shipped_tuning_json();
+    current["match_rating"]["save"] = 0.3.into();
+    let err = engine::data::load_tuning_bytes(&serde_json::to_vec(&current).unwrap(), "t.json")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("save"), "{err}");
+}
+
+/// A version 7 tuning file (match-rating weights per goal, shot, pass, tackle, interception,
+/// block and clearance) converts to version 8 with those weights gone and an outfield player
+/// rated by the threat his actions added, at the shipped weight and base; a current file that
+/// still names a volume weight is refused.
+#[test]
+fn a_version_7_tuning_file_converts_to_the_value_added_rating() {
+    let mut v7 = shipped_tuning_json();
+    v7["schema_version"] = 7.into();
+    let rating = v7["match_rating"].as_object_mut().unwrap();
+    rating.remove("value_added").unwrap();
+    rating.insert("base".into(), 6.0.into());
+    for (key, weight) in [
+        ("goal", 1.0),
+        ("shot_on_target", 0.15),
+        ("shot_off_target", -0.05),
+        ("xg", 0.5),
+        ("pass_completed", 0.02),
+        ("pass_failed", -0.04),
+        ("tackle_won", 0.1),
+        ("interception", 0.1),
+        ("block", 0.15),
+        ("clearance", 0.05),
+    ] {
+        rating.insert(key.into(), weight.into());
+    }
+    let bytes = serde_json::to_vec(&v7).unwrap();
+    let loaded = engine::data::load_tuning_bytes(&bytes, "tuning-v7.json").unwrap();
+    assert_eq!(loaded.converted_from, Some(7));
+    let shipped = engine::data::load_tuning_bytes(
+        &serde_json::to_vec(&shipped_tuning_json()).unwrap(),
+        "tuning.json",
+    )
+    .unwrap();
+    assert_eq!(loaded.value, shipped.value);
+
+    let mut current = shipped_tuning_json();
+    current["match_rating"]["pass_completed"] = 0.02.into();
+    let err = engine::data::load_tuning_bytes(&serde_json::to_vec(&current).unwrap(), "t.json")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("pass_completed"), "{err}");
+}
+
 /// A version 3 tuning file (no state caps, body jobs, fatigue group weights or sprint cap)
 /// converts to version 4 with the values of the frozen copy, which are the shipped ones.
 #[test]
 fn a_version_3_tuning_file_converts_to_the_shipped_version_4() {
     let mut v3 = shipped_tuning_json();
     v3["schema_version"] = 3.into();
+    with_one_pressure_weight(&mut v3);
     let contract = v3["engine"]["contract"].as_object_mut().unwrap();
     contract.remove("states").unwrap();
     contract.remove("body").unwrap();
@@ -570,7 +748,7 @@ fn the_shipped_catalogue_holds_forty_five_visible_two_hidden_and_eleven_personal
     let content = common::content();
     let s = &content.attributes;
     assert_eq!(s.schema_version, ATTRIBUTES_VERSION);
-    assert_eq!(ATTRIBUTES_VERSION, 4);
+    assert_eq!(ATTRIBUTES_VERSION, 5);
     let visible = s.attributes.iter().filter(|d| !d.hidden).count();
     let hidden = s
         .attributes
@@ -664,6 +842,11 @@ fn every_new_attribute_names_a_stage_job_and_every_personality_value_an_occasion
                 JobStage::Inert => assert_eq!(def.job.statistic, "inert in a match", "{name}"),
                 other => panic!("{name}: {other:?}"),
             }
+        } else if def.job.stage == JobStage::Occasion {
+            // Determination widens the press while his side trails, an occasion no stage of
+            // its own reads (version 5).
+            assert_eq!(name, "determination");
+            assert!(def.job.action.is_none(), "{name}");
         } else {
             let stage = def
                 .job
@@ -724,13 +907,14 @@ fn a_personality_value_outside_its_rules_is_refused_by_name() {
     );
 }
 
-/// The version 3 file the build shipped before converts to version 4 with the same names,
-/// groups, jobs and gates as the shipped file; only the order of the attributes differs, as
-/// the new ones are appended. Its tables are the shipped ones but for the two small weights of
-/// bravery the shipped file tunes, and it keeps the uniform consistency degree 1.0, which is how
-/// a version 3 catalogue played.
+/// The version 3 file the build shipped before converts through version 4 to version 5 with
+/// the same names, groups, jobs and gates as the shipped file; only the order of the
+/// attributes differs, as the new ones are appended. Its tables are the shipped ones but for
+/// the two small weights of bravery the shipped file tunes, and it keeps the uniform
+/// consistency degree 1.0, which is how a version 3 catalogue played, but for the two degrees
+/// version 5 adds with its new stages.
 #[test]
-fn the_version_3_catalogue_converts_to_the_shipped_version_4() {
+fn the_version_3_catalogue_converts_to_the_shipped_catalogue() {
     let bytes = std::fs::read(common::fixture_path("attributes-v3.json")).unwrap();
     let v3: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(v3["schema_version"], 3);
@@ -762,8 +946,32 @@ fn the_version_3_catalogue_converts_to_the_shipped_version_4() {
         converted.consistency_degrees.len(),
         shipped.consistency_degrees.len()
     );
-    assert!(converted.consistency_degrees.values().all(|&d| d == 1.0));
+    for (action, &d) in &converted.consistency_degrees {
+        let added = matches!(action, ActionKind::Cover | ActionKind::RecoveryRun);
+        let want = if added {
+            shipped.consistency_degrees[action]
+        } else {
+            1.0
+        };
+        assert_eq!(d, want, "{action}");
+    }
     assert_eq!(converted.gates, shipped.gates);
+}
+
+/// The version 4 file the build shipped before (`attributes-v4.json`) converts to the shipped
+/// version 5 exactly: the re-weighted press and shape stages, the cover and recovery-run
+/// stages, the jobs of work rate and determination and the two new degrees come from the fifth
+/// frozen copy; nothing else changes.
+#[test]
+fn the_version_4_catalogue_converts_to_the_shipped_version_5() {
+    let bytes = std::fs::read(common::fixture_path("attributes-v4.json")).unwrap();
+    let v4: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(v4["schema_version"], 4);
+    let loaded = engine::data::load_attributes_bytes(&bytes, "attributes-v4.json").unwrap();
+    assert_eq!(loaded.converted_from, Some(4));
+    let content = common::content();
+    assert_eq!(&loaded.value, &content.attributes);
+    assert_eq!(ATTRIBUTES_VERSION, 5);
 }
 
 /// Every action with a table has its own consistency degree: finishing and saving swing most,
@@ -806,12 +1014,42 @@ fn the_trait_catalogue_loads_with_thirty_one_traits() {
     assert!(err.contains("trait kicks_long"), "{err}");
 }
 
+/// A content folder made before the trait catalogue existed (no `traits.json`) is not
+/// refused: it reads the catalogue as it first shipped, the one an older replay reads.
+#[test]
+fn a_content_folder_without_a_trait_file_reads_the_first_catalogue() {
+    use engine::data::traits::FROZEN_TRAITS_V1;
+    use engine::data::{ContentFiles, TRAITS_FILE};
+    let shipped = common::content_dir();
+    let root = std::env::temp_dir().join(format!("engine-no-traits-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    copy_dir(shipped.root(), &root);
+    std::fs::remove_file(root.join(TRAITS_FILE)).unwrap();
+    let files = ContentFiles::read(&ContentDir::at(root.clone()));
+    let _ = std::fs::remove_dir_all(&root);
+    assert_eq!(files.unwrap().traits, FROZEN_TRAITS_V1.as_bytes());
+}
+
+fn copy_dir(from: &std::path::Path, to: &std::path::Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_dir(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
 /// A version 4 tuning file (no consistency, hidden-value or match-rating block) converts to
 /// version 5 with the values of the frozen copy, which are the shipped ones.
 #[test]
 fn a_version_4_tuning_file_converts_to_the_shipped_version_5() {
     let mut v4 = shipped_tuning_json();
     v4["schema_version"] = 4.into();
+    with_one_pressure_weight(&mut v4);
     v4["engine"]["contract"]
         .as_object_mut()
         .unwrap()
@@ -859,6 +1097,134 @@ fn word_bands_out_of_order_or_short_of_one_are_refused_by_name() {
         .unwrap_err()
         .to_string();
     assert!(err.contains("injury_proneness"), "{err}");
+}
+
+/// The shipped tactics file as JSON.
+fn shipped_tactics_json() -> serde_json::Value {
+    let path = common::content_dir().path(engine::data::TACTICS_FILE);
+    serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+}
+
+/// The names that would set a gap between lines or a share of the slide.
+const PLANTED: [&str; 3] = ["line_gap", "target_gap", "slide_share"];
+
+/// No content field sets a target gap between the lines or a share of the slide: the line
+/// gaps and the block's length come from where each role stands and the slide. A tactics
+/// file with such a field at the top level, in a mentality, a role, a formation or the stand
+/// table, and a tuning file with one in its engine block, are each refused by name.
+#[test]
+fn a_content_file_that_sets_a_line_gap_or_a_slide_share_is_refused() {
+    type Place = fn(&mut serde_json::Value) -> &mut serde_json::Value;
+    let places: [(&str, Place); 5] = [
+        ("top level", |v| v),
+        ("a mentality", |v| &mut v["mentalities"][0]),
+        ("a role", |v| &mut v["roles"][0]),
+        ("a formation", |v| &mut v["formations"][0]),
+        ("the stand table", |v| &mut v["stands"]),
+    ];
+    for name in PLANTED {
+        for (place, at) in places {
+            let mut v = shipped_tactics_json();
+            at(&mut v)
+                .as_object_mut()
+                .unwrap()
+                .insert(name.into(), 12.into());
+            let err = engine::data::load_tactics_bytes(&serde_json::to_vec(&v).unwrap(), "t.json")
+                .err()
+                .unwrap_or_else(|| panic!("{name} in {place} loaded"))
+                .to_string();
+            assert!(err.contains(name), "{name} in {place}: {err}");
+        }
+    }
+    for name in ["slide_share", "line_gap_m"] {
+        let mut v = shipped_tuning_json();
+        v["engine"]
+            .as_object_mut()
+            .unwrap()
+            .insert(name.into(), 0.5.into());
+        let err = engine::data::load_tuning_bytes(&serde_json::to_vec(&v).unwrap(), "t.json")
+            .err()
+            .unwrap_or_else(|| panic!("{name} in the engine block loaded"))
+            .to_string();
+        assert!(err.contains(name), "{name}: {err}");
+    }
+    // The shipped files load.
+    let shipped = serde_json::to_vec(&shipped_tactics_json()).unwrap();
+    assert!(engine::data::load_tactics_bytes(&shipped, "tactics.json").is_ok());
+}
+
+/// The keys allowed to name a gap or a share, each with why it sets no gap between lines
+/// and no share of the slide.
+const ALLOWED: [(&str, &str); 6] = [
+    (
+        "back_line_gap",
+        "the widest gap between neighbours inside the deepest line, a ceiling for the respread when a player leaves",
+    ),
+    (
+        "drop_gap_m",
+        "how far the carrier must be behind a player before he drops, a trigger distance",
+    ),
+    (
+        "foreign_share",
+        "the share of foreign players the club generator draws, not a match value",
+    ),
+    (
+        "left_share",
+        "the share of left-footed players the person generator draws, not a match value",
+    ),
+    (
+        "strong_share",
+        "the share of drawn traits the person generator makes strong, not a match value",
+    ),
+    (
+        "moderate_share",
+        "the share of a trait's weight a moderate trait of play plays at, a player's choice weight",
+    ),
+];
+
+/// Every key of `v`, at any depth, whose name holds `gap`, `share` or `slide` and is not
+/// allowed, with its path.
+fn gap_or_share_keys(v: &serde_json::Value, path: &str, out: &mut Vec<String>) {
+    match v {
+        serde_json::Value::Object(map) => {
+            for (key, value) in map {
+                let here = format!("{path}.{key}");
+                let named = ["gap", "share", "slide"].iter().any(|w| key.contains(w));
+                if named && !ALLOWED.iter().any(|(allowed, _)| allowed == key) {
+                    out.push(here.clone());
+                }
+                gap_or_share_keys(value, &here, out);
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for (i, item) in items.iter().enumerate() {
+                gap_or_share_keys(item, &format!("{path}[{i}]"), out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The shipped tactics and tuning files hold no key that names a gap or a share beyond the
+/// allowed ones; the scan reports a planted `midfield_gap`, so it is proven able to fail.
+#[test]
+fn no_shipped_key_names_a_line_gap_or_a_slide_share() {
+    for (file, v) in [
+        ("tactics.json", shipped_tactics_json()),
+        ("tuning.json", shipped_tuning_json()),
+    ] {
+        let mut found = Vec::new();
+        gap_or_share_keys(&v, file, &mut found);
+        assert!(found.is_empty(), "{found:?}");
+    }
+    let mut planted = shipped_tactics_json();
+    planted["roles"][2]
+        .as_object_mut()
+        .unwrap()
+        .insert("midfield_gap".into(), 12.into());
+    let mut found = Vec::new();
+    gap_or_share_keys(&planted, "tactics.json", &mut found);
+    assert_eq!(found, ["tactics.json.roles[2].midfield_gap"]);
 }
 
 /// The trait catalogue is part of the content: the content holds its 31 traits, an edit to the

@@ -66,11 +66,12 @@ fn the_build_says_whether_it_records_the_measures() {
         .report(&report)
         .unwrap_or_else(|e| panic!("{e}\n{report}"));
     assert_eq!(report["calib.rows"]["measures"], measured);
-    assert_eq!(report["calib.rows"]["format"], 2);
+    assert_eq!(report["calib.rows"]["format"], 3);
 
     // The bands judged are those of the band file: the 18 that gate, no other, beside the
-    // run's own time budget; the 35 that only report are reported apart.
-    assert_eq!(shipped_bands(false).len(), 18 + 35);
+    // run's own time budget; the 35 that only report and the 101 team-shape bands, which only
+    // report too, are reported apart.
+    assert_eq!(shipped_bands(false).len(), 18 + 35 + 101);
     let shipped = shipped_bands(true);
     assert_eq!(shipped.len(), 18);
     let judged: BTreeSet<String> = report["calib.bands"]

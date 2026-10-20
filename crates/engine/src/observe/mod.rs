@@ -239,6 +239,10 @@ pub struct MatchFigures {
     pub clearances: [u32; 2],
     #[serde(rename = "stats.restart_kicks")]
     pub restart_kicks: [u32; 2],
+    /// Goals with no shot of the scoring side behind them: own goals and balls nobody kicked
+    /// in.
+    #[serde(rename = "stats.goals_no_shot")]
+    pub goals_no_shot: [u32; 2],
     /// Whole seconds with the ball in play over the whole match, the shoot-out excluded.
     #[serde(rename = "stats.ball_in_play_s")]
     pub ball_in_play_s: u32,
@@ -269,6 +273,7 @@ impl MatchFigures {
             pass_accuracy_pct: [0, 1].map(|t| share_pct(s.passes_completed[t], s.passes[t])),
             clearances: s.clearances,
             restart_kicks: s.restart_kicks,
+            goals_no_shot: s.goals_no_shot,
             ball_in_play_s: ball_in_play_s(s.live_ticks),
             possession_pct: [0, 1].map(|t| share_pct(s.possession_ticks[t], possession)),
             manager_kind: managers.map(|m| {
@@ -806,6 +811,7 @@ mod tests {
             "\"stats.pass_accuracy_pct\"",
             "\"stats.clearances\"",
             "\"stats.restart_kicks\"",
+            "\"stats.goals_no_shot\"",
             "\"stats.ball_in_play_s\"",
             "\"stats.possession_pct\":[54.2,45.8]",
             "\"manager.kind\":[\"ai\",\"ai\"]",

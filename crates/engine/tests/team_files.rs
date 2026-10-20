@@ -533,12 +533,391 @@ fn a_team_file_of_another_version_is_refused_naming_both() {
     );
 }
 
+/// A version 2 tactics file (three tempo levels, a block depth and flat offsets per
+/// mentality, no primitives) converts to the shipped version 3 file: tempo takes the five
+/// patience levels, each mentality drops its block depth and offsets and takes its loss weight
+/// by its place, and the file the primitive entries with their fits.
 #[test]
-fn a_version_1_tactics_file_converts_to_the_shipped_version_2_file() {
+fn a_version_2_tactics_file_converts_to_the_shipped_version_3_file() {
+    let path = common::content_dir().path(engine::data::TACTICS_FILE);
+    let mut v2: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    v2["schema_version"] = 2.into();
+    v2.as_object_mut().unwrap().remove("primitives").unwrap();
+    v2["instructions"]["tempo"] = serde_json::json!({
+        "default": "normal",
+        "levels": [
+            { "name": "slower", "value": -0.15 },
+            { "name": "normal", "value": 0.0 },
+            { "name": "faster", "value": 0.15 }
+        ]
+    });
+    for (i, m) in v2["mentalities"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .enumerate()
+    {
+        let m = m.as_object_mut().unwrap();
+        m.remove("loss_weight").unwrap();
+        let offset = 0.15 * (i as f64 - 2.0);
+        m.insert("block_depth".into(), (offset * 4.0 / 0.15).into());
+        m.insert("shoot".into(), offset.into());
+        m.insert("progress".into(), offset.into());
+        m.insert("hold".into(), (-offset * 2.0 / 3.0).into());
+    }
+    let converted =
+        engine::data::load_tactics_bytes(&serde_json::to_vec(&v2).unwrap(), "tactics-v2.json")
+            .unwrap();
+    assert_eq!(converted.converted_from, Some(2));
+    let shipped = common::content().tactics;
+    assert_eq!(converted.value.instructions, shipped.instructions);
+    assert_eq!(converted.value.mentalities, shipped.mentalities);
+    assert_eq!(converted.value.primitives, shipped.primitives);
+}
+
+/// A version 3 tactics file (three width and three directness levels, only the tempo and
+/// mentality primitives) converts to the shipped version 4 file: width and passing directness
+/// take their five levels, and the file takes every primitive entry version 4 adds, after its
+/// own.
+#[test]
+fn a_version_3_tactics_file_converts_to_the_shipped_version_4_file() {
+    let path = common::content_dir().path(engine::data::TACTICS_FILE);
+    let mut v3: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    v3["schema_version"] = 3.into();
+    v3["primitives"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|p| p["name"] == "tempo" || p["name"] == "mentality");
+    v3["instructions"]["width"] = serde_json::json!({
+        "default": "normal",
+        "levels": [
+            { "name": "narrow", "value": 0.85 },
+            { "name": "normal", "value": 1.0 },
+            { "name": "wide", "value": 1.15 }
+        ]
+    });
+    v3["instructions"]["passing_directness"] = serde_json::json!({
+        "default": "mixed",
+        "levels": [
+            { "name": "short", "value": -0.2 },
+            { "name": "mixed", "value": 0.0 },
+            { "name": "direct", "value": 0.2 }
+        ]
+    });
+    let converted =
+        engine::data::load_tactics_bytes(&serde_json::to_vec(&v3).unwrap(), "tactics-v3.json")
+            .unwrap();
+    assert_eq!(converted.converted_from, Some(3));
+    let shipped = common::content().tactics;
+    assert_eq!(converted.value.instructions, shipped.instructions);
+    assert_eq!(converted.value.mentalities, shipped.mentalities);
+    assert_eq!(converted.value.primitives, shipped.primitives);
+    assert_eq!(converted.value.roles, shipped.roles);
+}
+
+/// A version 4 tactics file (tempo levels named very direct to very patient) converts to the
+/// shipped version 5 file: the tempo levels, the default and the tempo primitive's default and
+/// fit records take the names very fast to very slow, with the same values and order; passing
+/// directness keeps its names.
+#[test]
+fn a_version_4_tactics_file_converts_to_the_shipped_version_5_file() {
+    let path = common::content_dir().path(engine::data::TACTICS_FILE);
+    let mut v4: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    v4["schema_version"] = 4.into();
+    let old = [
+        "very_direct",
+        "direct",
+        "balanced",
+        "patient",
+        "very_patient",
+    ];
+    v4["instructions"]["tempo"]["default"] = "balanced".into();
+    for (level, name) in v4["instructions"]["tempo"]["levels"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .zip(old)
+    {
+        level["name"] = name.into();
+    }
+    let tempo = v4["primitives"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|p| p["name"] == "tempo")
+        .unwrap();
+    tempo["default"] = "balanced".into();
+    for fit in tempo["fits"].as_array_mut().unwrap() {
+        let renamed = match fit["level"].as_str().unwrap() {
+            "very_fast" => "very_direct",
+            "fast" => "direct",
+            "slow" => "patient",
+            "very_slow" => "very_patient",
+            other => panic!("unexpected tempo fit level {other}"),
+        };
+        fit["level"] = renamed.into();
+    }
+    let converted =
+        engine::data::load_tactics_bytes(&serde_json::to_vec(&v4).unwrap(), "tactics-v4.json")
+            .unwrap();
+    assert_eq!(converted.converted_from, Some(4));
+    let shipped = common::content().tactics;
+    assert_eq!(converted.value.instructions, shipped.instructions);
+    assert_eq!(converted.value.mentalities, shipped.mentalities);
+    assert_eq!(converted.value.primitives, shipped.primitives);
+    assert_eq!(converted.value.roles, shipped.roles);
+    let names: Vec<&str> = shipped
+        .instructions
+        .tempo
+        .levels
+        .iter()
+        .map(|l| l.name.as_str())
+        .collect();
+    assert_eq!(names, ["very_fast", "fast", "normal", "slow", "very_slow"]);
+}
+
+/// A version 5 tactics file (three pressing and three line-height levels, none of the
+/// out-of-possession primitives) converts to the shipped version 6 file: pressing and line
+/// height take their outer levels around the three they had, with the same names, values and
+/// defaults, and the file takes every primitive entry version 6 adds, after its own.
+#[test]
+fn a_version_5_tactics_file_converts_to_the_shipped_version_6_file() {
+    let path = common::content_dir().path(engine::data::TACTICS_FILE);
+    let mut v5: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    v5["schema_version"] = 5.into();
+    let added = [
+        "pressing",
+        "line_height",
+        "line_of_engagement",
+        "defensive_width",
+        "force_the_opponent",
+        "tackling",
+        "offside_trap",
+        "stop_short_goal_kicks",
+        "press_on_back_pass",
+        "press_on_poor_touch",
+        "press_on_facing_back",
+        "press_on_wide",
+    ];
+    v5["primitives"]
+        .as_array_mut()
+        .unwrap()
+        // Time wasting became a primitive in version 8, after the version 6 entries.
+        .retain(|p| !added.contains(&p["name"].as_str().unwrap()) && p["name"] != "time_wasting");
+    for block in ["pressing", "line_height"] {
+        let levels = v5["instructions"][block]["levels"].as_array_mut().unwrap();
+        levels.remove(4);
+        levels.remove(0);
+    }
+    let converted =
+        engine::data::load_tactics_bytes(&serde_json::to_vec(&v5).unwrap(), "tactics-v5.json")
+            .unwrap();
+    assert_eq!(converted.converted_from, Some(5));
+    let shipped = common::content().tactics;
+    assert_eq!(converted.value.instructions, shipped.instructions);
+    assert_eq!(converted.value.primitives, shipped.primitives);
+    assert_eq!(converted.value.roles, shipped.roles);
+    assert_eq!(
+        shipped.instructions.level_names(0),
+        ["very_low", "low", "mid", "high", "very_high"]
+    );
+    assert_eq!(
+        shipped.instructions.level_names(3),
+        ["very_deep", "deep", "normal", "high", "very_high"]
+    );
+    assert_eq!(shipped.instructions.defaults()[0], 2);
+    assert_eq!(shipped.instructions.defaults()[3], 2);
+
+    // A version 5 file whose own pressing and line-height levels hold other values (an older
+    // replay's content) keeps them and loads; the fits of those levels, made at the shipped
+    // values, are dropped, and the other fits stay.
+    v5["instructions"]["pressing"]["levels"][0]["press_distance_scale"] = 0.8.into();
+    v5["instructions"]["line_height"]["levels"][2]["value"] = 5.0.into();
+    let converted =
+        engine::data::load_tactics_bytes(&serde_json::to_vec(&v5).unwrap(), "tactics-v5.json")
+            .unwrap();
+    let fits = |name: &str| -> Vec<String> {
+        converted
+            .value
+            .primitives
+            .iter()
+            .find(|p| p.name == name)
+            .unwrap()
+            .fits
+            .iter()
+            .map(|f| f.level.clone())
+            .collect()
+    };
+    assert_eq!(fits("pressing"), ["very_low", "high", "very_high"]);
+    assert_eq!(fits("line_height"), ["very_high"]);
+    assert_eq!(
+        converted.value.instructions.pressing.levels[1].press_distance_scale,
+        0.8
+    );
+}
+
+/// A version 6 tactics file (no game-state block) converts to the shipped version 7 file: it
+/// takes the frozen block, and nothing else changes. The shipped override list is exactly the
+/// confirmed ten primitives, and forward runs reach only the attack line.
+#[test]
+fn a_version_6_tactics_file_converts_to_the_shipped_version_7_file() {
+    let path = common::content_dir().path(engine::data::TACTICS_FILE);
+    let mut v6: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    v6["schema_version"] = 6.into();
+    v6.as_object_mut().unwrap().remove("game_state");
+    let converted =
+        engine::data::load_tactics_bytes(&serde_json::to_vec(&v6).unwrap(), "tactics-v6.json")
+            .unwrap();
+    assert_eq!(converted.converted_from, Some(6));
+    let shipped = common::content().tactics;
+    assert_eq!(converted.value.game_state, shipped.game_state);
+    assert_eq!(converted.value.primitives, shipped.primitives);
+    assert_eq!(converted.value.instructions, shipped.instructions);
+    assert_eq!(converted.value.roles, shipped.roles);
+    let block = shipped.game_state.as_ref().unwrap();
+    assert_eq!(block.max_rules, 6);
+    assert_eq!(block.run_of_play_window_min, 15);
+    let list: Vec<&str> = block
+        .player_overrides
+        .iter()
+        .map(|o| o.primitive.as_str())
+        .collect();
+    assert_eq!(
+        list,
+        [
+            "dribbling",
+            "crossing",
+            "cross_type",
+            "final_third",
+            "forward_runs",
+            "width",
+            "pressing",
+            "tackling",
+            "on_winning_the_ball",
+            "on_losing_the_ball",
+        ]
+    );
+    let runs = block.override_of("forward_runs").unwrap();
+    assert_eq!(runs.positions, [Position::LW, Position::RW, Position::ST]);
+    let press = block.override_of("pressing").unwrap();
+    assert!(
+        !press.inputs.iter().any(|i| i == "press_count"),
+        "the press count stays the side's"
+    );
+    let kinds: Vec<&str> = block.conditions.iter().map(|c| c.kind.as_str()).collect();
+    assert_eq!(kinds, engine::tactics::rules::CONDITION_KINDS);
+}
+
+/// A version 7 tactics file (the AI manager's fixed-minute fields, no substitution block)
+/// converts to the shipped version 8 file: the AI block loses the six fields and takes the
+/// frozen substitution block, and nothing else changes.
+#[test]
+fn a_version_7_tactics_file_converts_to_the_shipped_version_8_file() {
+    let path = common::content_dir().path(engine::data::TACTICS_FILE);
+    let mut v7: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    v7["schema_version"] = 7.into();
+    let ai = v7["ai"].as_object_mut().unwrap();
+    ai.remove("substitutions").unwrap();
+    for (field, value) in [
+        ("trailing_minute", serde_json::json!(70)),
+        ("leading_minute", serde_json::json!(80)),
+        ("check_interval_s", serde_json::json!(30)),
+        ("fatigue_energy", serde_json::json!(0.55)),
+        ("fatigue_from_minute", serde_json::json!(55)),
+        ("keep_for_injury_until_minute", serde_json::json!(80)),
+    ] {
+        ai.insert(field.into(), value);
+    }
+    let converted =
+        engine::data::load_tactics_bytes(&serde_json::to_vec(&v7).unwrap(), "tactics-v7.json")
+            .unwrap();
+    assert_eq!(converted.converted_from, Some(7));
+    let shipped = common::content().tactics;
+    assert_eq!(converted.value.ai, shipped.ai);
+    assert_eq!(converted.value.game_state, shipped.game_state);
+    assert_eq!(converted.value.primitives, shipped.primitives);
+    assert_eq!(converted.value.instructions, shipped.instructions);
+    assert_eq!(converted.value.roles, shipped.roles);
+}
+
+/// A version 8 tactics file that still names a field version 8 dropped is refused, naming it.
+#[test]
+fn a_version_8_tactics_file_naming_a_dropped_ai_field_is_refused_by_name() {
+    let path = common::content_dir().path(engine::data::TACTICS_FILE);
+    let shipped: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    assert_eq!(shipped["schema_version"], 8);
+    for field in engine::data::convert::TACTICS_V8_DROPPED_AI {
+        let mut v8 = shipped.clone();
+        v8["ai"][field] = 70.into();
+        let err =
+            engine::data::load_tactics_bytes(&serde_json::to_vec(&v8).unwrap(), "tactics.json")
+                .unwrap_err()
+                .to_string();
+        assert!(err.contains(field), "{field}: {err}");
+    }
+}
+
+/// A game-state block whose override names an input its primitive does not set, or one read
+/// for the side as a whole, or an unknown condition kind, is refused by name.
+#[test]
+fn a_bad_game_state_block_is_refused_by_name() {
+    let path = common::content_dir().path(engine::data::TACTICS_FILE);
+    let shipped: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    let attributes = common::content().attributes;
+    let refused = |edit: &dyn Fn(&mut serde_json::Value)| {
+        let mut v = shipped.clone();
+        edit(&mut v);
+        match engine::data::load_tactics_bytes(&serde_json::to_vec(&v).unwrap(), "tactics.json") {
+            Err(e) => e.to_string(),
+            Ok(loaded) => {
+                let (field, reason) = loaded.value.check(&attributes).unwrap_err();
+                format!("{field}: {reason}")
+            }
+        }
+    };
+    let err = refused(&|v| v["game_state"]["player_overrides"][0]["inputs"][0] = "crossing".into());
+    assert!(err.contains("dribbling does not set crossing"), "{err}");
+    let err = refused(&|v| {
+        v["game_state"]["player_overrides"][6]["inputs"][0] = "press_count".into();
+    });
+    assert!(
+        err.contains("press_count is read for the side as a whole"),
+        "{err}"
+    );
+    let err = refused(&|v| v["game_state"]["conditions"][0]["kind"] = "weather".into());
+    assert!(err.contains("weather is not a condition kind"), "{err}");
+    let err = refused(&|v| v["game_state"]["player_overrides"][0]["primitive"] = "marking".into());
+    assert!(err.contains("marking is not a primitive"), "{err}");
+    let err = refused(&|v| v["game_state"]["max_rules"] = 9.into());
+    assert!(err.contains("max_rules"), "{err}");
+}
+
+#[test]
+fn a_version_1_tactics_file_converts_to_the_shipped_version_3_file() {
     let v1 = fixture_bytes("tactics-v1.json");
     let converted = engine::data::load_tactics_bytes(&v1, "tactics-v1.json").unwrap();
     assert_eq!(converted.converted_from, Some(1));
-    assert_eq!(converted.value, common::content().tactics);
+    // The stand table, the stand options and their sizes, each role's menu and the
+    // rest-defence guard are optional parts of version 2 that a version 1 file has none of:
+    // it converts with them neutral, so it plays as it did.
+    let mut shipped = common::content().tactics;
+    shipped.stands = Default::default();
+    shipped.stand_options = None;
+    shipped.rest_defence = None;
+    for role in &mut shipped.roles {
+        role.options = Default::default();
+    }
+    for mentality in &mut shipped.mentalities {
+        mentality.rest_defence = 0;
+    }
+    // The out-of-position margin of the AI lineup is optional too: 0 when absent.
+    shipped.ai.out_of_position_margin = 0.0;
+    // So is a pressing level's presser willingness: the three levels the file holds take 0,
+    // and the two outer levels version 6 adds take theirs.
+    for level in &mut shipped.instructions.pressing.levels[1..4] {
+        level.press_willingness = 0.0;
+    }
+    assert_eq!(converted.value, shipped);
 }
 
 /// A team file with `ground` set in its club, as bytes.

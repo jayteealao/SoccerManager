@@ -93,4 +93,31 @@ impl Modifiers {
         }
         states::capped(families, &view.tuning().contract.states)
     }
+
+    /// The sum of `family`'s deltas on `group` for player `i`, within the family's cap, in
+    /// rating points. A reader for one family alone: play that weighs one state (the
+    /// rest-defence cover reads familiarity) reads it here, before the families combine.
+    pub fn family_delta(
+        &self,
+        view: &MatchView<'_>,
+        i: usize,
+        family: Family,
+        group: crate::data::attributes::Group,
+    ) -> f64 {
+        let sum: f64 = self
+            .0
+            .iter()
+            .filter(|m| m.family() == family)
+            .map(|m| m.effect(view, i).groups[group as usize])
+            .sum();
+        let [lo, hi] = view.tuning().contract.states.caps.of(family);
+        sum.clamp(lo, hi)
+    }
+
+    /// Test seam: modifier slot `slot` replaced by `m`.
+    #[cfg(test)]
+    pub(crate) fn with(mut self, slot: usize, m: &'static dyn Modifier) -> Self {
+        self.0[slot] = m;
+        self
+    }
 }

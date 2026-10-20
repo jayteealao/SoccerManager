@@ -32,17 +32,19 @@ export function riskWord(proneness) {
 /// Where each slot of a formation stands at kick-off, in percent of a pitch drawn with the
 /// home side attacking to the right: `left` along the length, `top` across. The engine's rule
 /// (`kick_off_position`): a slot whose depth from the halfway line is more than −1 m stands
-/// 1 m inside its own half. The away side attacks to the left, so its length is mirrored; the
-/// engine keeps the across value for both sides.
+/// 1 m inside its own half. The away side attacks to the left, so the engine mirrors both its
+/// length and its width: its left-back stands on its own left, the other side of the drawing
+/// from the home left-back.
 export function kickOffDots(slots, side) {
   const half = LENGTH / 2;
   return slots.map((slot) => {
     const depth = slot.x - half;
     const own = depth > -1 ? half - 1 : slot.x;
     const x = side === 0 ? own : LENGTH - own;
+    const y = side === 0 ? slot.y : -slot.y;
     return {
       left: (x / LENGTH) * 100,
-      top: ((slot.y + WIDTH / 2) / WIDTH) * 100,
+      top: ((y + WIDTH / 2) / WIDTH) * 100,
       position: slot.position,
     };
   });

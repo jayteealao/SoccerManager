@@ -21,16 +21,18 @@ import { VIEWER, contentWithSkin, fastForward, startEngine } from '../support/en
 import { everyMessage, injectingRelay, managerCommand, recordClientMessages } from '../support/messages.mjs';
 import { chooseIndex, clickClear, playUntil, snap } from '../support/page.mjs';
 import { expectRiskWords } from '../support/ratings.mjs';
+import { PICK_REASONS } from '../../viewer/src/lib/touchline.js';
 
 const SKINS = ['broadcast-blue', 'interim-light'];
 /// Minute 60 at 50 ticks a second: the Touchline fixture.
 const MINUTE_60 = 180_000;
 /// Minute 3: far enough into play for a change to wait for a stoppage.
 const MINUTE_3 = 9_000;
-/// The seed whose home team gets a tired-player pick after minute 55 (the engine's advice
-/// test finds it: minute 58, tick 178500).
-const ADVICE_SEED = 1;
-const ADVICE_TICK = 178_500;
+/// The advice drive: the first seed whose home team gets a substitution pick, the tick of that
+/// advice and the pick's code, as the engine's advice scan writes them and its test checks them.
+const ADVICE = JSON.parse(fs.readFileSync(new URL('./advice-drive.json', import.meta.url), 'utf8'));
+const ADVICE_SEED = ADVICE.seed;
+const ADVICE_TICK = ADVICE.tick;
 
 const evidence = (info, name) => {
   const out = process.env.MATCH_EVIDENCE_DIR
@@ -280,7 +282,7 @@ test('the Touchline queue: a substitution with a new shape, a cancel and an edit
   }
 });
 
-test("the assistant's tired-player pick shows at its tick, and Accept queues it", async ({ page }, info) => {
+test("the assistant's substitution pick shows at its tick, and Accept queues it", async ({ page }, info) => {
   test.setTimeout(8 * 60_000);
   // A relay records the page's messages: Playwright's socket route would pass every server
   // message of the fast-forward burst through the test runner, and 170,000 ticks end it.
@@ -295,10 +297,10 @@ test("the assistant's tired-player pick shows at its tick, and Accept queues it"
     await rewindTo(page, ADVICE_TICK + 50);
     const shown = await hook(page, () => window.__touchline.advice());
     await tab(page, 'Touchline').click();
-    const pick = shown.picks.find((p) => p.code === 'sub-fatigue');
+    const pick = shown.picks.find((p) => p.code === ADVICE.code);
     expect(pick, JSON.stringify(shown)).toBeTruthy();
-    expect(early.picks.some((p) => p.code === 'sub-fatigue' && early.tick === shown.tick)).toBe(false);
-    await expect(page.getByText(/tired player/).first()).toBeVisible();
+    expect(early.picks.some((p) => p.code === ADVICE.code && early.tick === shown.tick)).toBe(false);
+    await expect(page.getByText(PICK_REASONS[ADVICE.code]).first()).toBeVisible();
 
     const before = await hook(page, () => window.__touchline.pending().length);
     await page.getByRole('button', { name: `Accept: ${pick.text}` }).click();

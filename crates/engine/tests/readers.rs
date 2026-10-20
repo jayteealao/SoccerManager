@@ -221,10 +221,17 @@ fn long_throws(v: f64) -> f64 {
 }
 
 /// The home midfielder carries at (0, 0), rated `v` in flair, with a team-mate 30 m ahead
-/// and one behind him: his draft scores.
+/// and one behind him: his draft scores. Every mentality's loss weight is 0, so the scene reads
+/// flair alone and not the team's appetite for risk.
 fn flair_draft(v: f64) -> engine::modules::OptionDraft {
     let carrier = index(0, 6);
-    let sim = far()
+    let mut config = calm_match(90);
+    for m in &mut config.tactics.mentalities {
+        m.loss_weight = 0.0;
+    }
+    let tactics = engine::Tactics::defaults(&config.tactics);
+    let config = config.with_tactics(0, tactics);
+    let sim = spread(Scene::new(config), -45.0, 45.0)
         .place(carrier, DVec2::ZERO)
         .place(index(0, 9), DVec2::new(30.0, 5.0))
         .place(index(0, 4), DVec2::new(-8.0, 10.0))
@@ -800,7 +807,7 @@ fn every_new_attribute_moves_its_hook() {
 }
 
 /// Determination acts while his side trails: his reach moves more behind than level, where
-/// only his small support of the press stage acts.
+/// nothing of his determination acts (his job is an occasion, in no stage of the press).
 #[test]
 fn determination_widens_the_press_only_while_behind() {
     let behind = relative(press_reach(5.0, [1, 0]), press_reach(18.0, [1, 0]), Dir::Up);
@@ -1191,10 +1198,20 @@ fn dwells_on_ball(s: Option<TraitStrength>) -> f64 {
 /// The home side has the ball with player 4 at `ball`; home midfielder 6 carries `name`: his
 /// target.
 fn off_ball_target(name: &str, s: Option<TraitStrength>, ball: DVec2) -> DVec2 {
+    off_ball_target_from(name, s, ball, |scene| scene)
+}
+
+/// [`off_ball_target`] with `place` applied to the scene first.
+fn off_ball_target_from(
+    name: &str,
+    s: Option<TraitStrength>,
+    ball: DVec2,
+    place: impl FnOnce(Scene) -> Scene,
+) -> DVec2 {
     let carrier = index(0, 4);
     let me = index(0, 6);
     let sim = traited(
-        far()
+        place(far())
             .place(carrier, ball)
             .ball(DVec3::new(ball.x, ball.y, 0.0))
             .carrier(Some(carrier))
@@ -1216,9 +1233,13 @@ fn stays_back(s: Option<TraitStrength>) -> f64 {
     off_ball_target("stays_back", s, DVec2::new(-20.0, 0.0)).x + 52.5
 }
 
-/// With the ball in the final third: his target's distance from his own goal line.
+/// With the ball in the final third: his target's distance from his own goal line. He stands
+/// at (5, -5), within `anchor_ball_distance` of the ball, so he is in play and is not sent
+/// back to his place.
 fn arrives_late_in_box(s: Option<TraitStrength>) -> f64 {
-    off_ball_target("arrives_late_in_box", s, DVec2::new(25.0, 10.0)).x + 52.5
+    let ball = DVec2::new(25.0, 10.0);
+    let at = |scene: Scene| scene.place(index(0, 6), DVec2::new(5.0, -5.0));
+    off_ball_target_from("arrives_late_in_box", s, ball, at).x + 52.5
 }
 
 fn moves_into_channels(s: Option<TraitStrength>) -> f64 {

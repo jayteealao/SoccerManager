@@ -54,6 +54,8 @@ impl Simulation {
             }
             if blocked {
                 self.tally(i, Count::Block);
+                let at = self.ball.xy();
+                self.value_won(i, at);
                 let angle = self.streams.draw(Key::player(Action::BlockDeflect, p));
                 self.ball.vel =
                     self.config
@@ -201,18 +203,134 @@ impl Simulation {
                 self.deflected_by(i);
                 self.pass_in_flight = None;
                 self.clearers_tried = 0;
+                self.cutters_tried = 0;
+                self.duelled = 0;
                 self.keeper_beaten = false;
                 self.summary.clearances[cross.team] += 1;
                 self.tally(i, Count::Clearance);
+                let at = self.ball.xy();
+                self.value_won(i, at);
                 return true;
             }
         }
         false
     }
 
-    /// Player `i` deflected the shot in flight: his side touched the ball last and the shot
-    /// is over.
-    fn deflected_by(&mut self, i: usize) {
+    /// While a pass is in flight, each defender the possession module names rolls once per
+    /// flight, as the ball passes him, to cut it out: a ball he can control he takes (an
+    /// interception); a faster one he blocks back the way it came, with his side as the last
+    /// touch, and the pass is not completed. Returns `true` when a defender won the ball or
+    /// blocked it.
+    fn try_cut_pass(&mut self, t: &Tuning) -> bool {
+        let Some(passing) = self.pass_in_flight else {
+            return false;
+        };
+        let possession = self.config.modules.possession;
+        for i in 0..self.players.len() {
+            if self.players[i].team == passing {
+                continue;
+            }
+            let Some(cut) = possession.pass_cut(&self.view(), i) else {
+                continue;
+            };
+            let p = crate::streams::PlayerKey::of(&self.players[i]);
+            self.cutters_tried |= 1u32 << i;
+            let won = self
+                .streams
+                .tested(Key::player(Action::PassCut, p), &[cut.chance])
+                < cut.chance;
+            if self.trace_on() {
+                self.trace_point(
+                    Point::PassCut,
+                    json!({"defender": i, "chance": cut.chance, "control": cut.control, "won": won}),
+                );
+            }
+            if !won {
+                continue;
+            }
+            if cut.control {
+                self.gain(i, t);
+            } else {
+                self.tally(i, Count::Block);
+                let at = self.ball.xy();
+                self.value_won(i, at);
+                #[cfg(feature = "measures")]
+                if self.measures.is_some() {
+                    self.measure_action(i);
+                }
+                let angle = self.streams.draw(Key::player(Action::BlockDeflect, p));
+                self.ball.vel =
+                    self.config
+                        .modules
+                        .ball
+                        .deflect(&self.view(), Deflection::Block, angle, 0.0);
+                self.deflected_by(i);
+                self.pass_in_flight = None;
+                self.cutters_tried = 0;
+                self.duelled = 0;
+                self.keeper_beaten = false;
+            }
+            return true;
+        }
+        false
+    }
+
+    /// Each defender the possession module names meets running carrier `c` in a take-on: one
+    /// draw per meeting, and a defender who wins takes the ball (a tackle won). A defender
+    /// who has left the pressed distance of the carrier may meet him again. Returns `true`
+    /// when a defender won the ball.
+    fn try_take_on(&mut self, c: usize, t: &Tuning) -> bool {
+        let possession = self.config.modules.possession;
+        let reach = t.tackle_reach * crate::possession::TAKE_ON_STRETCH;
+        for i in 0..self.players.len() {
+            if self.duelled & (1u32 << i) != 0
+                && (self.players[i].pos - self.players[c].pos).length() >= reach
+            {
+                self.duelled &= !(1u32 << i);
+            }
+            let Some(chance) = possession.take_on(&self.view(), c, i) else {
+                continue;
+            };
+            self.duelled |= 1u32 << i;
+            let p = crate::streams::PlayerKey::of(&self.players[i]);
+            let won = self
+                .streams
+                .tested(Key::player(Action::TakeOn, p), &[chance])
+                < chance;
+            #[cfg(feature = "measures")]
+            {
+                self.measure_tackle(i, c);
+                let (team, squad) = (self.players[c].team, self.players[c].squad);
+                if let Some(m) = self.measures.as_deref_mut() {
+                    m.run_tackle(team, squad, won);
+                }
+            }
+            #[cfg(feature = "sensitivity")]
+            if self.probe.is_some() {
+                self.probe_tackle(i, c, if won { Tackle::Win } else { Tackle::Miss });
+            }
+            if self.trace_on() {
+                self.trace_point(
+                    Point::TakeOn,
+                    json!({"defender": i, "carrier": c, "chance": chance, "won": won}),
+                );
+            }
+            if won {
+                self.tally(i, Count::TackleWon);
+                let at = self.ball.xy();
+                self.value_won(i, at);
+                self.mood_event(i, crate::sim::mood::MoodEvent::DuelWon);
+                self.mood_event(c, crate::sim::mood::MoodEvent::DuelLost);
+                self.gain(i, t);
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Player `i` deflected the ball: his side touched the ball last and the shot in flight is
+    /// over; a shot he turned stays its shooter's while the turned ball is in flight.
+    pub(crate) fn deflected_by(&mut self, i: usize) {
         if self.ball.vel.z > 0.0 && self.ball.pos.z <= 0.0 {
             self.ball.pos.z = 0.001;
         }
@@ -223,7 +341,18 @@ impl Simulation {
         }
         self.last_touch = Some(team);
         self.last_kicker = Some(i);
+        self.last_kick_dir = self.ball.vel.truncate();
+        let turned = self
+            .shot_in_flight
+            .zip(self.shooter)
+            .or(self.shot_deflected);
+        let xg = self.shot_xg;
         self.end_shot();
+        self.shot_deflected = turned;
+        // A turned shot keeps its expected goals for the value of its goal.
+        if turned.is_some() {
+            self.shot_xg = xg;
+        }
     }
 
     /// Player `i` lost a header and the ball glanced off him. On a pass in flight the passer
@@ -298,6 +427,12 @@ impl Simulation {
                 if self.try_clear_cross() {
                     return;
                 }
+                if self.try_cut_pass(t) {
+                    return;
+                }
+                self.mark_heavy(t);
+                #[cfg(feature = "measures")]
+                self.measure_reception(t);
                 let Some(loose) = possession.loose_ball(&self.view()) else {
                     return;
                 };
@@ -373,6 +508,9 @@ impl Simulation {
                 }
             }
             Some(c) => {
+                if self.try_take_on(c, t) {
+                    return;
+                }
                 let Some(mut mask) = possession.tacklers(&self.view(), c) else {
                     return;
                 };
@@ -382,11 +520,35 @@ impl Simulation {
                     let p = crate::streams::PlayerKey::of(&self.players[i]);
                     let fouls = self.config.modules.fouls;
                     let chances = fouls.tackle_chances(&self.view(), i, c);
+                    // The tackle decision: a defender who declines draws nothing.
+                    let decision = self.config.modules.decision;
+                    let Some(chances) = decision.tackle(&self.view(), i, c, chances) else {
+                        continue;
+                    };
+                    #[cfg(feature = "measures")]
+                    {
+                        self.measure_tackle(i, c);
+                        if let Some(m) = self.measures.as_deref_mut() {
+                            m.tackle_decided(i);
+                        }
+                    }
                     let (p_win, p_foul) = (chances.p_win, chances.p_foul);
                     let draw = self
                         .streams
                         .tested(Key::player(Action::Tackle, p), &[p_win, p_win + p_foul]);
                     let outcome = fouls.tackle_outcome(&chances, draw);
+                    #[cfg(feature = "measures")]
+                    {
+                        let carrier = &self.players[c];
+                        if carrier.vel.length() > crate::rules::fouls::RUNNING_SPEED {
+                            let lost =
+                                matches!(outcome, Tackle::Win | Tackle::Foul { ball_lost: true });
+                            let (team, squad) = (carrier.team, carrier.squad);
+                            if let Some(m) = self.measures.as_deref_mut() {
+                                m.run_tackle(team, squad, lost);
+                            }
+                        }
+                    }
                     #[cfg(feature = "sensitivity")]
                     if self.probe.is_some() {
                         self.probe_tackle(i, c, outcome);
@@ -412,6 +574,8 @@ impl Simulation {
                     match outcome {
                         Tackle::Win => {
                             self.tally(i, Count::TackleWon);
+                            let at = self.ball.xy();
+                            self.value_won(i, at);
                             self.mood_event(i, crate::sim::mood::MoodEvent::DuelWon);
                             self.mood_event(c, crate::sim::mood::MoodEvent::DuelLost);
                             self.gain(i, t);
@@ -446,14 +610,32 @@ impl Simulation {
         self.keeper_beaten = false;
         let team = self.players[i].team;
         #[cfg(feature = "measures")]
+        let (keeper, fast) = (
+            i == self.keeper(team),
+            self.ball.vel.truncate().length() > _t.pass_arrival_speed,
+        );
+        #[cfg(feature = "measures")]
+        let in_box = {
+            let (ball, pitch) = (self.ball.xy(), self.config.pitch());
+            let attack = [self.teams[0].attack_x, self.teams[1].attack_x];
+            move |side: usize| pitch.in_penalty_area(ball, attack[side])
+        };
+        #[cfg(feature = "measures")]
         if let Some(m) = self.measures.as_deref_mut() {
+            m.probe.box_reached(in_box);
             if self.pass_in_flight == Some(team) {
+                if self.last_kicker == Some(i) {
+                    m.self_regained(team, keeper, fast);
+                }
                 m.completed(team);
             }
             m.touched(team, self.tick);
             m.gained(team, self.tick);
         }
         let changed = self.last_touch != Some(team);
+        if self.pass_in_flight == Some(team) && self.possession_phase == Some(team) {
+            self.receive_triggers(i, team);
+        }
         #[cfg(feature = "sensitivity")]
         if self.probe.is_some() {
             let (at, tick) = (self.players[i].pos, self.tick);
@@ -461,6 +643,8 @@ impl Simulation {
                 p.gained(team, at, tick);
             }
         }
+        let at = self.ball.xy();
+        self.value_gain(i, at);
         match self.pass_in_flight.take() {
             Some(passing) if passing == team => {
                 self.summary.passes_completed[team] += 1;
@@ -471,6 +655,11 @@ impl Simulation {
             }
             Some(_) => {
                 self.tally(i, Count::Interception);
+                self.value_won(i, at);
+                #[cfg(feature = "measures")]
+                if self.measures.is_some() {
+                    self.measure_action(i);
+                }
                 if let Some(k) = self.last_kicker {
                     self.mood_event(k, crate::sim::mood::MoodEvent::Error);
                 }
@@ -482,6 +671,8 @@ impl Simulation {
             self.last_pass = None;
         }
         self.clearers_tried = 0;
+        self.cutters_tried = 0;
+        self.duelled = 0;
         if self.restart_taker != Some(i) {
             self.restart_taker = None;
         }
@@ -490,6 +681,13 @@ impl Simulation {
             self.summary.possession_changes += 1;
         }
         self.last_touch = Some(team);
+        // A gain from the other side in open play opens the transition windows: the regain
+        // window of the side that won the ball and the counter-press window of the side that
+        // lost it.
+        if self.possession_phase == Some(1 - team) {
+            self.windows.won(team, self.tick);
+        }
+        self.possession_phase = Some(team);
         self.carrier = Some(i);
         self.control_since = self.tick;
         self.script_cache = None;
@@ -498,6 +696,137 @@ impl Simulation {
         self.end_acts_on_gain(i);
         if changed {
             self.gain_override(team);
+        }
+    }
+}
+
+impl Simulation {
+    /// Press trigger `kind` of the side with the ball fires for pressing side `def`: its
+    /// window opens now.
+    pub(crate) fn fire_trigger(&mut self, def: usize, kind: usize) {
+        self.windows.fire_trigger(def, kind, self.tick);
+        #[cfg(feature = "measures")]
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.trigger(def, kind, self.tick);
+        }
+    }
+
+    /// While a pass of the side in possession is in flight, each team-mate of the passer (not
+    /// the passer) who has the ball within his reach while it is too fast for him to control
+    /// joins the heavy mask: if he gains it later, his touch was a poor one.
+    fn mark_heavy(&mut self, t: &Tuning) {
+        let Some(team) = self.pass_in_flight else {
+            return;
+        };
+        let speed = self.ball.speed();
+        let xy = self.ball.xy();
+        let z = self.ball.pos.z;
+        for (i, p) in self.players.iter().enumerate() {
+            if p.team != team || !p.active() || Some(i) == self.last_kicker || z > p.derived.reach_m
+            {
+                continue;
+            }
+            let k = &p.derived.knobs;
+            if speed > t.control_speed * k.receive
+                && (p.pos - xy).length() < t.reach_radius * k.intercept
+            {
+                self.heavy_mask |= 1u32 << i;
+            }
+        }
+    }
+
+    /// Player `i` of `team` gained his side's pass in open play: the press triggers it fires
+    /// for the other side. A gain after the ball came too fast to control is a poor touch; a
+    /// receiver facing his own goal faces back; a full-back or a receiver in a wide channel is
+    /// a ball wide.
+    fn receive_triggers(&mut self, i: usize, team: usize) {
+        use crate::decision::{TRIGGER_FACING_BACK, TRIGGER_POOR_TOUCH, TRIGGER_WIDE};
+        let def = 1 - team;
+        if self.heavy_mask & (1u32 << i) != 0 {
+            self.fire_trigger(def, TRIGGER_POOR_TOUCH);
+        }
+        let p = &self.players[i];
+        let attack_x = self.teams[team].attack_x;
+        if p.facing.x * attack_x < -crate::decision::FACING_BACK_COS {
+            self.fire_trigger(def, TRIGGER_FACING_BACK);
+        }
+        let p = &self.players[i];
+        let fullback = matches!(
+            self.teams[team].plan.slots[p.slot].position,
+            Some(crate::data::team::Position::LB | crate::data::team::Position::RB)
+        );
+        if fullback || crate::decision::channel(p.pos.y, attack_x) != 1 {
+            self.fire_trigger(def, TRIGGER_WIDE);
+        }
+        self.heavy_mask = 0;
+    }
+
+    /// Where player `i`'s defensive action lies: his side, the ball's share of the pitch
+    /// length and its metres from his own goal line, and whether his slot is a centre-back or a
+    /// full-back.
+    #[cfg(feature = "measures")]
+    fn action_place(&self, i: usize) -> (usize, (f64, f64), bool) {
+        use crate::data::team::Position;
+        let p = &self.players[i];
+        let team = p.team;
+        let pitch = self.config.pitch();
+        let m = self.ball.xy().x * self.teams[team].attack_x + pitch.half_length();
+        let m = m.clamp(0.0, pitch.length());
+        let defender = matches!(
+            self.teams[team].plan.slots[p.slot].position,
+            Some(Position::CB | Position::LB | Position::RB)
+        );
+        (team, (m / pitch.length(), m), defender)
+    }
+
+    /// Count site: while a pass of the side in possession is in flight, the first team-mate of
+    /// the passer (not the passer) who has the ball within his full reach, at a height and a
+    /// speed he can control, receives it, under pressure or free.
+    #[cfg(feature = "measures")]
+    fn measure_reception(&mut self, t: &Tuning) {
+        let Some(team) = self.pass_in_flight else {
+            return;
+        };
+        let speed = self.ball.speed();
+        let xy = self.ball.xy();
+        let z = self.ball.pos.z;
+        let keeper = self.keeper(team);
+        let last = self.last_kicker;
+        let Some(i) = self.players.iter().enumerate().position(|(i, p)| {
+            let k = &p.derived.knobs;
+            p.team == team
+                && p.active()
+                && i != keeper
+                && Some(i) != last
+                && z <= p.derived.reach_m
+                && speed <= t.control_speed * k.receive
+                && (p.pos - xy).length() < t.reach_radius * k.intercept
+        }) else {
+            return;
+        };
+        let pressed = crate::decision::pressed(&self.view(), i);
+        let band = crate::pressure::band(crate::decision::nearest_opponent_m(&self.view(), i));
+        let squad = self.players[i].squad;
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.received(team, pressed, band, squad);
+        }
+    }
+
+    /// Count site: defender `i` tackled carrier `c`.
+    #[cfg(feature = "measures")]
+    pub(crate) fn measure_tackle(&mut self, i: usize, c: usize) {
+        let (def, share, defender) = self.action_place(i);
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.tackle(def, i, c, share, defender);
+        }
+    }
+
+    /// Count site: player `i` intercepted a pass or fouled the carrier.
+    #[cfg(feature = "measures")]
+    pub(crate) fn measure_action(&mut self, i: usize) {
+        let (def, share, defender) = self.action_place(i);
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.defensive_action(def, share, defender);
         }
     }
 }

@@ -1,6 +1,7 @@
 // The attribute hover's copy against the attribute catalogue: the page's table equals the one
 // derived from `content/attributes.json` by the hover rule (main and shown supports, mains
-// first, catalogue action order; the job's action for an attribute no stage names); every
+// first, catalogue action order; the job's action for an attribute no stage names, first for
+// a job at a stage no table holds, and the moved action for a visible occasion); every
 // visible attribute drives at least one action; every action has words; no minor weight is
 // listed unless the same attribute is main or a shown support of that action.
 
@@ -29,11 +30,31 @@ function derive(name) {
       support.push([action, 'support']);
     }
   }
-  if (main.length === 0 && support.length === 0) {
-    main.push([CATALOGUE.attributes.find((a) => a.name === name).job.action, 'main']);
+  const job = CATALOGUE.attributes.find((a) => a.name === name).job;
+  if (job.stage === 'occasion') {
+    // A visible attribute that acts on an occasion has no action in its job; it lists the
+    // action its occasion moves.
+    support.push(OCCASIONS[name]);
+  } else if (!(job.stage in CATALOGUE.actions[job.action])) {
+    // A job at a stage no table holds (pace's top speed) lists its action first, as main.
+    main.unshift([job.action, 'main']);
+  } else if (main.length === 0 && support.length === 0) {
+    main.push([job.action, 'main']);
   }
   return [...main, ...support];
 }
+
+/// The action each visible occasion attribute moves: determination widens the press while
+/// his side trails.
+const OCCASIONS = { determination: ['press', 'support'] };
+
+test('every visible occasion attribute names the action it moves', () => {
+  const occasions = VISIBLE.filter((a) => a.job.stage === 'occasion').map((a) => a.name);
+  assert.deepEqual(occasions, Object.keys(OCCASIONS));
+  for (const [action] of Object.values(OCCASIONS)) {
+    assert.ok(action in CATALOGUE.actions, action);
+  }
+});
 
 test('the hover copy equals the derivation from the attribute catalogue', () => {
   assert.deepEqual(Object.keys(ATTRIBUTE_ACTIONS), VISIBLE.map((a) => a.name));
@@ -76,7 +97,13 @@ test('crossing lists the cross as main and its two set-piece deliveries as suppo
     { action: 'corner', words: 'Corner delivery', role: 'support' },
     { action: 'free_kick', words: 'Free kick delivery', role: 'support' },
   ]);
-  // Pace is in no stage table: it lists the action of its job.
-  assert.deepEqual(actionsOf('pace'), [{ action: 'sprint', words: 'Sprint', role: 'main' }]);
+  // Pace's job is at a stage no table holds: it lists the action of its job first, then the
+  // recovery run it supports.
+  assert.deepEqual(actionsOf('pace'), [
+    { action: 'sprint', words: 'Sprint', role: 'main' },
+    { action: 'recovery_run', words: 'Recovery run', role: 'support' },
+  ]);
+  // Determination acts on an occasion: it lists the press it widens while his side trails.
+  assert.deepEqual(actionsOf('determination'), [{ action: 'press', words: 'Pressing', role: 'support' }]);
   assert.deepEqual(actionsOf('no_such_attribute'), []);
 });

@@ -1,0 +1,11 @@
+{
+  "rules": [
+    { "when": [{ "kind": "score", "state": "leading" }], "set": [{ "primitive": "mentality", "level": "cautious" }] },
+    { "when": [{ "kind": "score", "state": "trailing" }], "set": [{ "primitive": "mentality", "level": "positive" }] },
+    { "when": [{ "kind": "time_left", "minutes": 10 }], "set": [{ "primitive": "tempo", "level": "fast" }] },
+    { "when": [{ "kind": "red_cards_ours" }], "set": [{ "primitive": "pressing", "level": "low" }] },
+    { "when": [{ "kind": "red_cards_theirs" }], "set": [{ "primitive": "pressing", "level": "high" }] },
+    { "when": [{ "kind": "run_of_play", "above": 0.5 }], "set": [{ "primitive": "width", "level": "wide" }] },
+    { "when": [{ "kind": "team_energy", "below": 0.5 }], "set": [{ "primitive": "line_height", "level": "deep" }] }
+  ]
+}

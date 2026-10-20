@@ -41,9 +41,19 @@ fn a_corrupted_stream_reports_the_overlap() {
     let events = sim.take_events();
     let validator = Validator::for_match(config.tuning.clone(), sim.team_timeline(), &events);
     let violations = validator.check(&sink.records);
-    assert_eq!(violations.len(), 1, "{violations:?}");
-    assert_eq!(violations[0].rule, "separation");
-    assert_eq!(violations[0].tick, sink.records[10].tick);
+    // Player 1 jumps onto player 0 and back: one overlap, and a jump on each of the two steps
+    // that the player speed rule judges.
+    let rules: Vec<(&str, u32)> = violations.iter().map(|v| (v.rule, v.tick)).collect();
+    let tick = sink.records[10].tick;
+    assert_eq!(
+        rules,
+        [
+            ("separation", tick),
+            ("player_speed", tick),
+            ("player_speed", tick + 1)
+        ],
+        "{violations:?}"
+    );
 }
 
 /// The full engine's event stream of a seeded match, with the rules it is judged by.
@@ -55,16 +65,48 @@ fn engine_events(config: engine::MatchConfig) -> (Vec<engine::EngineEvent>, Stre
 }
 
 /// The event-stream rules hold for the full engine before they judge anything else: seeds 1
-/// to 5 over 90 minutes; seeds 9, 11, 21 and 28, which bring injuries; a 10-minute match,
-/// which adds no time; a knockout match (seed 1) played through extra time and a shoot-out,
-/// with a substitution the rule pack refuses; and seeds 16 and 11 between two generated
-/// top-flight clubs (league seed 1), which bring a second yellow and a straight red.
+/// to 5 over 90 minutes, which bring injuries; seeds 9, 11, 15, 21 and 28, which bring more
+/// injuries, and seed 67, which brought a straight red until
+/// the computer manager grouped its substitutions and a player going for a loose ball stopped being pushed off it, when seed 3 brought one instead (seed 67 the lowest since a pressed carrier weighed
+/// his options by the pressure he feels; seed 65 since defenders could cut out passes; seed 15 from the in-possession settings until then; before them seeds 1 to 5 and 9 to
+/// 28 brought it); since the styles became presets of primitives, seed 15 brings the straight
+/// red and seed 4 the refused substitution (since clearances, shots and misreads were scored by
+/// their cost, seed 38 in place of seed 4 brings the refused substitution, seed 35 in place of
+/// seed 5 a second yellow and the generated seed 15 the straight red); a 10-minute match, which adds no time; a
+/// knockout match (seed 19, the lowest whose shoot-out scores since clearances, shots and misreads were scored by their cost;
+/// seed 11 from the styles becoming presets of primitives until then; seed 14 before, the lowest whose shoot-out scored and that brought the
+/// refused substitution, which no other stream brought since a kick stayed on its way from its kicker
+/// along the line he sent it; seed 120 until the computer manager grouped its
+/// substitutions when its windows ran short; seed 8 until the styles carried rules for a side chasing or
+/// holding a score; seed 79 until the AI manager's substitutions followed the situation
+/// rather than the clock; seed 45 before; seed 4 until a passer read the press his receiver would meet; seed 1 until a pressed carrier
+/// weighed his options by the pressure he feels; seed 4 until a defender's read of
+/// a take-on counted; seed 9 until defenders could cut out passes; seed 1 until the running pace
+/// lifted on a counter rather than with the press, seed 4 until opponents walked round the
+/// restart spot, seed 2 until tempo became patience and the mentality an appetite for risk)
+/// played through extra time and a
+/// shoot-out; and seed 39 between two generated top-flight clubs (league seed 1), the lowest
+/// that brings a second yellow since every option was valued by the real threat of its place
+/// (seed 172 from every option being charged its chance of losing the ball until then; seed 15
+/// before, which brought the straight red too; seed 2 until the styles became
+/// presets of primitives), and seed 13 between the same clubs, the lowest that brings a
+/// straight red now (seed 17 until every option was valued by the real threat of its place), and the knockout seed 14, the lowest that brings a refused change since a
+/// shooter read the keeper's place with his attributes (the knockout match brought it until
+/// then)
+/// (by the other streams until a kick stayed on its way from its kicker; seed 1 until opponents walked round the restart spot; seed 4, which brought both, until
+/// tempo became patience and the mentality an appetite for risk). Until the AI
+/// sides started in the style their staff picks the knockout match was seed 1 and the
+/// generated seeds were 16 and 9. Until the player as a person joined the team shape the
+/// knockout match was seed 8 and the generated seeds were 7 and 1, and seeds 1 to 5 brought the refused substitution (seed 7 until the
+/// restart waits shortened the live time, when its match stopped bringing a second yellow;
+/// seed 6 until the defending stages read their attributes, when its match stopped bringing
+/// one and seed 7 brought one again).
 #[test]
 fn the_full_engines_event_streams_keep_the_event_rules() {
     use engine::EngineEventKind::{Card, ChangeRejected, HalfTime, Injury, Substitution};
     let content = common::content();
     let [a, b] = common::default_teams(&content);
-    let seeds = [1, 2, 3, 4, 5, 9, 11, 21, 28];
+    let seeds = [1, 2, 3, 9, 11, 15, 21, 28, 35, 38, 67];
     let mut streams: Vec<(String, (Vec<engine::EngineEvent>, StreamRules))> =
         common::run_many(0..=seeds.len() as u64 - 1, |i| {
             let seed = seeds[i as usize];
@@ -73,7 +115,7 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
         });
     let short = engine::MatchConfig::new(1, 10, &content, [&a, &b]).unwrap();
     streams.push(("10 minutes seed 1".into(), engine_events(short)));
-    let knockout = engine::MatchConfig::new(1, 90, &content, [&a, &b])
+    let knockout = engine::MatchConfig::new(19, 90, &content, [&a, &b])
         .unwrap()
         .with_knockout();
     let (events, rules) = engine_events(knockout);
@@ -81,13 +123,16 @@ fn the_full_engines_event_streams_keep_the_event_rules() {
         events.iter().any(|e| e.shootout_scored == Some(true)),
         "the knockout match reached a shoot-out with a scored kick"
     );
-    streams.push(("knockout seed 1".into(), (events, rules)));
+    streams.push(("knockout seed 19".into(), (events, rules)));
+    let refused = engine::MatchConfig::new(14, 90, &content, [&a, &b])
+        .unwrap()
+        .with_knockout();
+    streams.push(("knockout seed 14".into(), engine_events(refused)));
     let league = engine::data::generate_league(1, 2, &content);
-    for seed in [16, 11] {
-        let generated =
-            engine::MatchConfig::new(seed, 90, &content, [&league[0], &league[1]]).unwrap();
-        streams.push((format!("generated seed {seed}"), engine_events(generated)));
-    }
+    let generated = engine::MatchConfig::new(39, 90, &content, [&league[0], &league[1]]).unwrap();
+    streams.push(("generated seed 39".into(), engine_events(generated)));
+    let red = engine::MatchConfig::new(13, 90, &content, [&league[0], &league[1]]).unwrap();
+    streams.push(("generated seed 13".into(), engine_events(red)));
     let all: Vec<&engine::EngineEvent> = streams.iter().flat_map(|(_, (e, _))| e).collect();
     let has = |f: &dyn Fn(&engine::EngineEvent) -> bool| all.iter().any(|e| f(e));
     assert!(has(&|e| e.kind == Injury), "an injury is judged");

@@ -2,42 +2,40 @@
 
 use serde_json::json;
 
-use crate::TICKS_PER_SECOND;
 use crate::ai::AiCode;
 use crate::sim::{EngineEventKind, EventDetail, Simulation};
 use crate::tactics::change::Change;
 use crate::trace::Point;
 
 impl Simulation {
-    /// Runs the AI manager for every AI-managed team whose check is due on this tick.
+    /// Runs the AI manager for every AI-managed team whose check is due on this tick: on the
+    /// tick a stoppage that admits a substitution opens, and after an injury, a goal or a
+    /// sending-off. No check runs on a timer.
     pub(crate) fn ai_tick(&mut self) {
-        let now = self.tick + 1;
-        let interval = self.config.tactics.ai.check_interval_s * TICKS_PER_SECOND;
+        let admitted = self.view().substitutions_admitted();
         for team in 0..2 {
             if self.managers[team] != crate::ai::Manager::Ai {
                 self.ai[team].due = false;
                 continue;
             }
-            if self.ai[team].due || now.is_multiple_of(interval) {
-                let at_stoppage = self.ai[team].due;
+            if self.ai[team].due || admitted {
                 self.ai[team].due = false;
-                self.ai_check(team, at_stoppage);
+                self.ai_check(team, true);
             }
         }
     }
 
     /// One check of the AI manager for `team`: the manager module decides, then each change
-    /// it proposes is queued and announced in order. `at_stoppage` is `true` for the check an
-    /// injury or a goal asks for on its own stoppage.
+    /// it proposes is queued and announced in order.
     fn ai_check(&mut self, team: usize, at_stoppage: bool) {
         let plan = self
             .config
             .modules
             .manager
             .check(&self.view(), team, at_stoppage);
-        self.ai[team] = plan.memory;
+        let minute = self.referee.clock.minute(self.tick + 1).0;
         for (change, code) in plan.changes {
-            self.ai_queue(team, change, code, plan.minute);
+            self.ai_queue(team, change, code, minute);
         }
     }
 

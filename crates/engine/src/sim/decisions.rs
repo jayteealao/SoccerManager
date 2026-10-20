@@ -1,4 +1,5 @@
-//! The decision pass of the central loop: every player's target and the carrier's kick. The
+//! The decision pass of the central loop: every player's target, the job it is for, and the
+//! carrier's kick. The
 //! decision module decides; this pass draws every noise and aim value on the module's keys,
 //! in the order the decision maker always drew them, and writes the targets.
 
@@ -19,8 +20,19 @@ impl Simulation {
     pub(crate) fn decide(&mut self) -> Option<Kick> {
         let decision = self.config.modules.decision;
         let targets = decision.targets(&self.view());
-        for (p, &target) in self.players.iter_mut().zip(targets.targets.iter()) {
+        let tick = self.tick;
+        for ((p, &target), &job) in self
+            .players
+            .iter_mut()
+            .zip(targets.targets.iter())
+            .zip(targets.jobs.iter())
+        {
             p.target = target;
+            // A new job starts its own pace: the pace pass draws a new sprint for it.
+            if p.pace.job != job {
+                p.pace.job = job;
+                p.pace.since = tick;
+            }
         }
         #[cfg(feature = "sensitivity")]
         if self.probe.is_some() {
@@ -69,6 +81,13 @@ impl Simulation {
                     self.trace_point(Point::Cover, detail);
                 }
                 let c = self.carrier?;
+                if self.teams[def].plan.offside_trap {
+                    self.arm_trap(def, c);
+                }
+                #[cfg(feature = "measures")]
+                if self.measures.is_some() {
+                    self.measure_pressure(def, c);
+                }
                 self.decide_carrier(c)
             }
             TargetsTrace::Loose {
@@ -125,6 +144,29 @@ impl Simulation {
             draws.dribble_hold = (dribble, hold);
         }
         draws.clear = self.streams.draw(Key::player(Action::ClearScore, carrier));
+        // The perceived-score draws, from their own stream, only while the read strays.
+        if draft.perceive > 0.0 {
+            let key = Key::player(Action::PerceiveScore, carrier);
+            if draft.shot.is_some() {
+                draws.perceive[0] = self.streams.draw(key);
+            }
+            for k in 0..draft.pass_count {
+                draws.perceive[1 + k] = self.streams.draw(key);
+            }
+            if let Some((dribble, _)) = draft.dribble_hold {
+                if dribble.is_some() {
+                    draws.perceive[crate::modules::MATES + 1] = self.streams.draw(key);
+                }
+                draws.perceive[crate::modules::MATES + 2] = self.streams.draw(key);
+            }
+            draws.perceive[crate::modules::MATES + 3] = self.streams.draw(key);
+        }
+        // The shooter's read of the keeper off his line, on the same stream, only while it
+        // strays.
+        if draft.shot_read > 0.0 {
+            let key = Key::player(Action::PerceiveScore, carrier);
+            draws.perceive[crate::modules::MATES + 4] = self.streams.draw(key);
+        }
         let scored = decision.scored(&draft, &draws);
         if let Some(trace) = self.streams.trace_mut() {
             for &(j, score) in &scored.candidates[..scored.count] {
@@ -162,6 +204,10 @@ impl Simulation {
         // The carrier's moment: a strong trait may override his choice, and an override in
         // force keeps its action.
         let (o, choice) = self.carrier_override(c, &scored, o, choice);
+        #[cfg(feature = "measures")]
+        if self.measures.is_some() {
+            self.measure_choice(c, &o, choice, offsets);
+        }
         let carrier = crate::streams::PlayerKey::of(&self.players[c]);
         let plan = decision.plan(&self.view(), c, &o, choice);
         #[cfg(feature = "sensitivity")]
@@ -175,16 +221,24 @@ impl Simulation {
             let team = self.players[c].team;
             let (from, to) = (self.players[c].pos, self.players[j].pos);
             let d = (to - from).length();
-            let kind = crate::decision::PassKind::of(
-                from,
-                to,
-                d,
-                self.teams[team].attack_x,
-                c == self.keeper(team),
-                self.config.pitch(),
-            );
+            let gain = (to.x - from.x) * self.teams[team].attack_x;
+            let attack_x = self.teams[team].attack_x;
+            let keeper = c == self.keeper(team);
+            let pitch = self.config.pitch();
+            let kind = crate::decision::PassKind::of(from, to, d, attack_x, keeper, pitch);
+            let length = pitch.length();
+            let facts = crate::measures::PassFacts {
+                length_m: d,
+                start_third: crate::measures::third_of(from.x, attack_x, length),
+                target_third: crate::measures::third_of(to.x, attack_x, length),
+                channel: crate::decision::channel(to.y, attack_x),
+                cross: kind == crate::decision::PassKind::Cross,
+                origin_m: pitch.half_length() - from.x * attack_x,
+                keeper,
+            };
             if let Some(m) = self.measures.as_deref_mut() {
-                m.planned_pass(c, crate::measures::pass_cell(kind, d));
+                m.planned_pass(c, crate::measures::pass_cell(kind, d), gain);
+                m.pass_facts(c, facts);
             }
         }
         match plan {
@@ -193,7 +247,8 @@ impl Simulation {
             }
             CarrierPlan::Pass { j } => {
                 let aim = self.streams.draw(Key::player(Action::PassAim, carrier));
-                Some(decision.pass_kick(&self.view(), c, j, aim))
+                let weight = self.streams.draw(Key::player(Action::PassWeight, carrier));
+                Some(decision.pass_kick(&self.view(), c, j, aim, weight))
             }
             CarrierPlan::Clear { wide_chance } => {
                 let wide = wide_chance.is_some_and(|p| {
@@ -213,6 +268,186 @@ impl Simulation {
 }
 
 impl Simulation {
+    /// The offside trap of side `def` (hook `line.offside_trap`): an opposing carrier `c`
+    /// facing forward with no player of `def` within the pressed distance starts one, once in
+    /// his spell on the ball, so the line steps up as he looks to play forward and not before.
+    pub(crate) fn arm_trap(&mut self, def: usize, c: usize) {
+        if self.windows.trap_since(def, self.control_since) {
+            return;
+        }
+        let carrier = &self.players[c];
+        let attack_x = self.teams[carrier.team].attack_x;
+        if carrier.facing.x * attack_x <= crate::decision::FACING_BACK_COS {
+            return;
+        }
+        if crate::pressure::pressed(&self.players, carrier, attack_x) {
+            return;
+        }
+        self.windows.start_trap(def, self.tick);
+        #[cfg(feature = "measures")]
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.trap(def);
+        }
+    }
+
+    /// Count site: the players of side `def` whose own pressure on carrier `c` passes the
+    /// pressure model's threshold press him ([`crate::pressure::presses`],
+    /// [`crate::measures::MatchMeasures::pressure`]).
+    #[cfg(feature = "measures")]
+    fn measure_pressure(&mut self, def: usize, c: usize) {
+        let carrier = &self.players[c];
+        let attack_x = self.teams[carrier.team].attack_x;
+        let near = self
+            .players
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| p.team == def && crate::pressure::presses(carrier, p, attack_x))
+            .fold(0u32, |bits, (i, _)| bits | (1 << i));
+        let tick = self.tick;
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.pressure(def, c, near, tick);
+        }
+    }
+
+    /// Count site: carrier `c` chose `choice` (his options `o`, after any override). The
+    /// choice is off the plan when it is not the top-scored option before the noise, the
+    /// draft scored again with every noise draw at its middle: another kind of option, or a
+    /// pass to another team-mate. The opponents within the pressed distance of a dribbler,
+    /// goal-side of him or not, count his take-ons ([`crate::measures::MatchMeasures::carrying`]).
+    #[cfg(feature = "measures")]
+    fn measure_choice(
+        &mut self,
+        c: usize,
+        o: &crate::decision::Options,
+        choice: crate::decision::Choice,
+        offsets: Option<crate::plugin::OptionOffsets>,
+    ) {
+        use crate::decision::Choice;
+        let decision = self.config.modules.decision;
+        let (team, at) = (self.players[c].team, self.players[c].pos);
+        let attack_x = self.teams[team].attack_x;
+        let (mut ahead, mut beside) = (0u32, 0u32);
+        for (j, p) in self.players.iter().enumerate() {
+            if p.team != team && p.active() && (p.pos - at).length() < crate::contract::PRESSED_M {
+                if (p.pos.x - at.x) * attack_x > 0.0 {
+                    ahead |= 1 << j;
+                } else {
+                    beside |= 1 << j;
+                }
+            }
+        }
+        let mut final_third = None;
+        let mut box_pass = None;
+        let off_plan = {
+            let view = self.view();
+            let draft = decision.options(&view, c);
+            let middle = OptionDraws {
+                shot: 0.5,
+                passes: [0.5; crate::modules::MATES],
+                dribble_hold: (0.5, 0.5),
+                clear: 0.5,
+                perceive: [0.5; crate::modules::PERCEIVE_DRAWS],
+            };
+            let plain = decision.scored(&draft, &middle).options;
+            let (top, top_choice) = decision.choose(&view, c, &plain, offsets);
+            // The decision probe: the carrier's plain options in the final third he attacks.
+            let pitch = view.pitch();
+            if c != view.keeper(team)
+                && crate::measures::third_of(at.x, attack_x, pitch.length()) == 2
+            {
+                let notes = crate::measures::probe::notes();
+                let terms = plain.pass.and_then(|(_, j)| {
+                    draft.passes[..draft.pass_count]
+                        .iter()
+                        .position(|&(m, _)| m == j)
+                        .map(|k| notes.terms[k])
+                });
+                let kind = |ch: Choice| match ch {
+                    Choice::Pass => 0,
+                    Choice::Shot => 1,
+                    Choice::Dribble => 2,
+                    Choice::Hold => 3,
+                    Choice::Clear => 4,
+                };
+                let scores = [
+                    plain.pass.map(|p| p.0),
+                    plain.shot,
+                    plain.dribble,
+                    plain.hold,
+                    Some(plain.clear),
+                ];
+                // The box passes: a team-mate in the box he attacks (2) or arriving in it (1),
+                // each drafted pass's plain value, and the best pass's draft index.
+                let mate = view
+                    .players()
+                    .iter()
+                    .enumerate()
+                    .filter(|&(j, p)| {
+                        p.team == team && j != c && j != view.keeper(team) && p.active()
+                    })
+                    .map(|(_, p)| {
+                        if pitch.in_penalty_area(p.pos, attack_x) {
+                            2u8
+                        } else if pitch.in_penalty_area(p.pos + p.vel, attack_x) {
+                            1
+                        } else {
+                            0
+                        }
+                    })
+                    .max()
+                    .unwrap_or(0);
+                let values: Vec<f64> = draft.passes[..draft.pass_count]
+                    .iter()
+                    .zip(&draft.pass_pick)
+                    .map(|(&(_, s), &pick)| s - pick - draft.carry)
+                    .collect();
+                let best = plain.pass.and_then(|(_, j)| {
+                    draft.passes[..draft.pass_count]
+                        .iter()
+                        .position(|&(m, _)| m == j)
+                });
+                let top_score = scores
+                    .iter()
+                    .flatten()
+                    .fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+                box_pass = Some((
+                    mate,
+                    notes,
+                    values,
+                    best,
+                    top_score,
+                    top_choice == Choice::Pass,
+                ));
+                final_third = Some((
+                    scores,
+                    kind(top_choice),
+                    terms,
+                    (notes.in_range, notes.lane_open),
+                ));
+            }
+            top_choice != choice
+                || (choice == Choice::Pass && top.pass.map(|p| p.1) != o.pass.map(|p| p.1))
+        };
+        let k = match choice {
+            Choice::Pass => 0,
+            Choice::Shot => 1,
+            Choice::Dribble => 2,
+            Choice::Hold => 3,
+            Choice::Clear => 4,
+        };
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.chose(team, c, k, off_plan);
+            m.carrying(team, c, choice == Choice::Dribble, ahead, beside);
+            if let Some((scores, top, terms, candidates)) = final_third {
+                m.probe.final_third(team, scores, top, terms, candidates);
+            }
+            if let Some((mate, notes, values, best, top, is_pass)) = box_pass {
+                m.probe
+                    .box_options(team, mate, &notes, &values, best, (top, is_pass));
+            }
+        }
+    }
+
     /// Player `c` shoots a shot of `kind` at the goal centred on `goal`, which `keeper`
     /// defends. An open-play shot, a penalty, a direct free kick and a shoot-out kick all come
     /// from here, and the draws are taken in the same order every time: the side (only with
@@ -260,6 +495,14 @@ impl Simulation {
                 .modules
                 .decision
                 .restart_pass(&self.view(), taker, kind, direct, aim);
+        #[cfg(feature = "measures")]
+        if kind == StoppageKind::GoalKick {
+            let team = self.players[taker].team;
+            let length = (pass.target - self.players[taker].pos).length();
+            if let Some(m) = self.measures.as_deref_mut() {
+                m.goal_kick(team, length);
+            }
+        }
         #[cfg(feature = "sensitivity")]
         if kind == StoppageKind::ThrowIn {
             let team = self.players[taker].team;

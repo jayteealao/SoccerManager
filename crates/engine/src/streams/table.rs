@@ -19,7 +19,7 @@ pub const SQUAD_MAX: usize = crate::data::team::MAX_SQUAD;
 /// Player slots per action in the dense key index: two squads, then the match key.
 pub(crate) const SLOTS_PER_ACTION: usize = 2 * SQUAD_MAX + 1;
 
-/// Every possible key: 41 actions times 81 player slots.
+/// Every possible key: 49 actions times 81 player slots.
 pub const KEY_COUNT: usize = Action::ALL.len() * SLOTS_PER_ACTION;
 
 /// The part of the engine a draw belongs to; the number is its stream-id code.
@@ -112,14 +112,38 @@ pub enum Action {
     FormMatch,
     /// The period part of a player's form offset, drawn again every period of the match.
     FormPeriod,
+    /// Whether an URGENT job gets a sprint: one draw when the job starts, against a chance
+    /// that rises with the player's work rate.
+    PaceSprint,
+    /// The drawn extra of a restart beyond its visible steps: one draw when the ball goes
+    /// dead, read through the restart wait table's quantiles.
+    RestartWait,
+    /// Whether the taker restarts quickly, with no drawn extra: one draw when the ball goes
+    /// dead and the rule allows it.
+    QuickRestart,
     /// Whether a strong trait of play overrides an instruction at a moment that meets the
     /// override's conditions.
     TraitOverride,
+    /// Whether a defender cuts out (or blocks) the pass in flight as it passes him: one draw
+    /// per defender per flight.
+    PassCut,
+    /// The weight error of a pass: one draw with each pass's aim; a pressed passer's pass runs
+    /// too hard or too soft by it.
+    PassWeight,
+    /// Whether a defender who meets a running carrier in a take-on wins the ball: one draw per
+    /// meeting.
+    TakeOn,
+    /// Whether a tackled player who was not injured takes a knock: one draw after each tackle
+    /// injury roll that did not injure, against a multiple of that roll's chance.
+    KnockTackle,
+    /// The carrier's read of one option's score: one draw per option he reads, while the
+    /// read strays (`decision.perceive`).
+    PerceiveScore,
 }
 
 impl Action {
     /// Every action in table order.
-    pub const ALL: [Action; 41] = [
+    pub const ALL: [Action; 49] = [
         Action::ShotScore,
         Action::PassScore,
         Action::DribbleScore,
@@ -160,7 +184,15 @@ impl Action {
         Action::Header,
         Action::FormMatch,
         Action::FormPeriod,
+        Action::PaceSprint,
+        Action::RestartWait,
+        Action::QuickRestart,
         Action::TraitOverride,
+        Action::PassCut,
+        Action::PassWeight,
+        Action::TakeOn,
+        Action::KnockTackle,
+        Action::PerceiveScore,
     ];
 
     /// The action's table row.
@@ -204,7 +236,7 @@ use PlayerKind::{Actor, Match};
 use Subsystem::{Ball, Decision, Fatigue, Kick, Laws, Shootout};
 
 /// The stream-id table, one row per draw call in match play, in [`Action`] order.
-pub const TABLE: [Row; 41] = [
+pub const TABLE: [Row; 49] = [
     row(
         Action::ShotScore,
         Decision,
@@ -379,10 +411,60 @@ pub const TABLE: [Row; 41] = [
         Unscripted,
     ),
     row(
-        Action::TraitOverride,
+        Action::PaceSprint,
         Decision,
         7,
+        "pace_sprint",
+        Actor,
+        Unscripted,
+    ),
+    row(
+        Action::RestartWait,
+        Laws,
+        6,
+        "restart_wait",
+        Actor,
+        Unscripted,
+    ),
+    row(
+        Action::QuickRestart,
+        Laws,
+        7,
+        "quick_restart",
+        Actor,
+        Unscripted,
+    ),
+    row(
+        Action::TraitOverride,
+        Decision,
+        8,
         "trait_override",
+        Actor,
+        Unscripted,
+    ),
+    row(Action::PassCut, Ball, 14, "pass_cut", Actor, Unscripted),
+    row(
+        Action::PassWeight,
+        Kick,
+        8,
+        "pass_weight",
+        Actor,
+        Unscripted,
+    ),
+    row(Action::TakeOn, Ball, 15, "take_on", Actor, Unscripted),
+    row(
+        Action::KnockTackle,
+        Fatigue,
+        5,
+        "knock_tackle",
+        Actor,
+        Unscripted,
+    ),
+    row(
+        Action::PerceiveScore,
+        Decision,
+        9,
+        "perceive_score",
         Actor,
         Unscripted,
     ),
@@ -533,7 +615,7 @@ const ACTION_SHIFT: u32 = 32;
 /// keeps the scheme id and updates its digest.
 pub const SCHEME_DIGESTS: [(u8, &str); 1] = [(
     1,
-    "b5a3ec9ef41d0ed6087ed021989d710ce4aa1bea55e851158c3dd8120b1acc84",
+    "94f00d0fc0864441bfa7f144444b5d51079d61144df0851f5bf76167b60be9cb",
 )];
 
 /// The SHA-256, as lowercase hex, of what fixes `scheme`: the scheme id, every row (the
@@ -628,7 +710,10 @@ mod tests {
         let count = |c: Class| TABLE.iter().filter(|r| r.class == c).count();
         assert_eq!(count(Class::Referee), 15);
         assert_eq!(count(Class::Injury), 2);
-        assert_eq!(count(Class::Unscripted), 24);
+        // The restart wait and the quick restart are unscripted draws (25 before them, with the
+        // pace sprint and the trait override), as are the pass cut, the pass weight and the
+        // take-on, the knock, and the carrier's read of his options.
+        assert_eq!(count(Class::Unscripted), 32);
         let mut codes: Vec<(u8, u8)> = TABLE.iter().map(|r| (r.subsystem as u8, r.code)).collect();
         codes.sort_unstable();
         codes.dedup();

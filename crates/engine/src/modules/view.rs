@@ -1,6 +1,5 @@
 //! The read-only view a module reads the match through.
 
-use crate::ai::AiState;
 use crate::ball::Ball;
 use crate::data::attributes::AttributeSchema;
 use crate::data::rules::RulePack;
@@ -144,6 +143,12 @@ impl<'a> MatchView<'a> {
         self.sim.config.pitch()
     }
 
+    /// The restart wait table of the match, `None` when the content has none.
+    #[inline]
+    pub fn restart_waits(&self) -> Option<&'a crate::data::restart_waits::RestartWaits> {
+        self.sim.config.restart_waits.as_ref()
+    }
+
     /// The fatigue tuning of the match.
     #[inline]
     pub fn fatigue(&self) -> &'a FatigueTuning {
@@ -210,6 +215,13 @@ impl<'a> MatchView<'a> {
         self.sim.last_kicker
     }
 
+    /// The ground velocity the last kicker gave the ball (his kick, or his deflection), read
+    /// for its direction only; zero while nobody has kicked in this spell of play.
+    #[inline]
+    pub(crate) fn last_kick_dir(&self) -> crate::math::DVec2 {
+        self.sim.last_kick_dir
+    }
+
     /// The attribute schema of the match.
     #[inline]
     pub fn attributes(&self) -> &'a AttributeSchema {
@@ -246,6 +258,61 @@ impl<'a> MatchView<'a> {
         self.sim.pass_in_flight
     }
 
+    /// The team in possession: the team of the last player who gained control of the ball,
+    /// kept through a loose ball and a pass in flight. `None` while the ball is dead.
+    #[inline]
+    pub fn possession_phase(&self) -> Option<usize> {
+        self.sim.possession_phase
+    }
+
+    /// Seconds since `team` won the ball from the other side in open play, while it keeps
+    /// the ball; `None` otherwise.
+    #[inline]
+    pub fn since_regain_s(&self, team: usize) -> Option<f64> {
+        self.sim.since_regain_s(team)
+    }
+
+    /// Seconds since `team` lost the ball to the other side in open play, while the other
+    /// side has it; `None` otherwise.
+    #[inline]
+    pub fn since_loss_s(&self, team: usize) -> Option<f64> {
+        self.sim.since_loss_s(team)
+    }
+
+    /// Seconds since press trigger `kind` of the side with the ball fired, for pressing side
+    /// `team`, while the other side keeps the ball; `None` otherwise.
+    #[inline]
+    pub fn since_trigger_s(&self, team: usize, kind: usize) -> Option<f64> {
+        self.sim.since_trigger_s(team, kind)
+    }
+
+    /// Seconds since side `team`'s offside trap started, while the other side has the ball;
+    /// `None` otherwise.
+    #[inline]
+    pub fn since_trap_s(&self, team: usize) -> Option<f64> {
+        self.sim.since_trap_s(team)
+    }
+
+    /// Player `i`'s followed ball point: the point his anchor's ball shift reads, which
+    /// follows the ball later the farther he is from it. The ball itself at a dead ball.
+    #[inline]
+    pub fn slide_ball(&self, i: usize) -> crate::math::DVec2 {
+        self.sim.slide_ball[i]
+    }
+
+    /// Player `i`'s familiarity with his place and the team's tactic, in rating points: the
+    /// familiarity family's delta on the mental group, within the family's cap. 0 while no
+    /// modifier feeds the family.
+    pub fn familiarity(&self, i: usize) -> f64 {
+        use crate::data::attributes::Group;
+        use crate::modules::modifier::Family;
+        self.sim
+            .config
+            .modules
+            .modifiers
+            .family_delta(self, i, Family::Familiarity, Group::Mental)
+    }
+
     /// The team whose shot is in flight and not yet resolved.
     #[inline]
     pub fn shot_in_flight(&self) -> Option<usize> {
@@ -276,6 +343,20 @@ impl<'a> MatchView<'a> {
         self.sim.clearers_tried
     }
 
+    /// The defenders (one bit per roster index) who already tried to cut out the pass in
+    /// flight.
+    #[inline]
+    pub fn cutters_tried(&self) -> u32 {
+        self.sim.cutters_tried
+    }
+
+    /// The defenders (one bit per roster index) who already met the carrier in a take-on and
+    /// have not left the pressed distance of him since.
+    #[inline]
+    pub fn duelled(&self) -> u32 {
+        self.sim.duelled
+    }
+
     /// The restart taker until his first kick.
     #[inline]
     pub fn restart_taker(&self) -> Option<usize> {
@@ -294,12 +375,6 @@ impl<'a> MatchView<'a> {
         self.sim.ledgers
     }
 
-    /// The AI manager's memory for `team`.
-    #[inline]
-    pub fn ai_memory(&self, team: usize) -> AiState {
-        self.sim.ai[team]
-    }
-
     /// The substitution limit and window count in force.
     #[inline]
     pub fn substitution_limits(&self) -> (u8, u8) {
@@ -316,6 +391,31 @@ impl<'a> MatchView<'a> {
     #[inline]
     pub fn summary(&self) -> &'a Summary {
         &self.sim.summary
+    }
+
+    /// Every player's tally so far, by side and squad index.
+    #[inline]
+    pub fn tallies(&self) -> &'a [Vec<crate::sim::tally::PlayerTally>; 2] {
+        &self.sim.tallies
+    }
+
+    /// The weights of the match rating.
+    #[inline]
+    pub fn match_rating(&self) -> &'a crate::match_rating::MatchRatingTuning {
+        &self.sim.config.match_rating
+    }
+
+    /// The stoppage the current tick opened, if any.
+    #[inline]
+    pub fn stoppage(&self) -> Option<crate::rules::Stoppage> {
+        self.sim.stoppage
+    }
+
+    /// `true` when the stoppage the current tick opened admits a substitution.
+    pub fn substitutions_admitted(&self) -> bool {
+        self.sim
+            .stoppage
+            .is_some_and(|s| self.sim.config.modules.changes.admits(self, s.kind).1)
     }
 }
 

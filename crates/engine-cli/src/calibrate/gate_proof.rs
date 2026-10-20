@@ -212,9 +212,42 @@ impl Child<'_> {
     }
 }
 
+/// Refuses a proof content folder `to` that is the content folder `from`, holds it or sits
+/// inside it: the proof deletes `to` before it copies, so either would delete the content the
+/// person is editing or copy the folder into itself.
+fn refuse_overlap(from: &Path, to: &Path) -> anyhow::Result<()> {
+    let from = std::fs::canonicalize(from)
+        .with_context(|| format!("cannot read the content folder {}", from.display()))?;
+    // `to` may not exist yet: resolve its nearest existing parent and add the rest.
+    let mut existing = to.to_path_buf();
+    let mut rest = Vec::new();
+    while !existing.exists() {
+        match (existing.parent(), existing.file_name()) {
+            (Some(parent), Some(name)) => {
+                rest.push(name.to_os_string());
+                existing = parent.to_path_buf();
+            }
+            _ => break,
+        }
+    }
+    let mut to_abs = std::fs::canonicalize(&existing).unwrap_or(existing);
+    for name in rest.into_iter().rev() {
+        to_abs.push(name);
+    }
+    if to_abs.starts_with(&from) || from.starts_with(&to_abs) {
+        anyhow::bail!(
+            "the proof's content folder {} overlaps the content folder {}; choose another --out",
+            to_abs.display(),
+            from.display()
+        );
+    }
+    Ok(())
+}
+
 /// Writes the proof's content folder: the content of `from` without its proof file, with
 /// each broken copy declared in `tuning.json` as a flag, state off.
 fn write_content(from: &Path, to: &Path, copies: &[BrokenCopy]) -> anyhow::Result<()> {
+    refuse_overlap(from, to)?;
     let _ = std::fs::remove_dir_all(to);
     copy_tree(from, to)?;
     let tuning = to.join(engine::data::TUNING_FILE);
@@ -264,4 +297,27 @@ fn copy_tree(from: &Path, to: &Path) -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The proof's content folder may sit beside the content folder, never be it, hold it or
+    /// sit inside it; nothing is deleted when it is refused.
+    #[test]
+    fn a_proof_folder_that_overlaps_the_content_is_refused() {
+        let root = std::env::temp_dir().join(format!("gate_proof_overlap_{}", std::process::id()));
+        let content = root.join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("tuning.json"), "{}").unwrap();
+        let refused = |to: &Path| refuse_overlap(&content, to).is_err();
+        assert!(refused(&content));
+        assert!(refused(&root));
+        assert!(refused(&content.join("proof").join("content")));
+        assert!(!refused(&root.join("proof").join("content")));
+        assert!(write_content(&content, &root, &[]).is_err());
+        assert!(content.join("tuning.json").exists());
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

@@ -218,6 +218,43 @@ fn the_module_reference_names_every_slot() {
     );
 }
 
+/// The action-key column of the slot table lists the keys of each slot's default module, as
+/// its card declares them, so the ownership the reference shows is the program's.
+#[test]
+fn the_module_reference_gives_each_default_modules_keys() {
+    let doc = read("docs/reference/engine-modules.md");
+    let table = section(&doc, "Slots").expect("a Slots section");
+    let documented: Vec<(String, String)> = table
+        .lines()
+        .filter(|line| line.starts_with("| `"))
+        .map(|line| {
+            let cells: Vec<&str> = line.trim_matches('|').split('|').collect();
+            (
+                cells[0].trim().trim_matches('`').to_owned(),
+                cells[5].trim().to_owned(),
+            )
+        })
+        .collect();
+    for decl in engine::modules::REGISTRY {
+        let keys: Vec<String> = decl.registrations[0]
+            .card
+            .keys
+            .iter()
+            .map(|k| format!("{k:?}"))
+            .collect();
+        let expected = if keys.is_empty() {
+            "none".to_owned()
+        } else {
+            keys.join(", ")
+        };
+        let row = documented
+            .iter()
+            .find(|(slot, _)| slot == decl.slot.id)
+            .unwrap_or_else(|| panic!("no row for {}", decl.slot.id));
+        assert_eq!(row.1, expected, "the keys of {}", decl.slot.id);
+    }
+}
+
 #[test]
 fn the_module_how_to_runs_real_commands() {
     let doc = read("docs/how-to/engine-modules.md");
@@ -261,4 +298,39 @@ fn the_module_how_to_runs_real_commands() {
         weather.registrations[0].module,
         engine::modules::ModuleRef::Modifier(_)
     ));
+}
+
+/// Each row of the data files reference's file table gives the `schema_version` the shipped
+/// file carries, so a modder who copies the documented number is not refused.
+#[test]
+fn the_file_table_gives_each_shipped_files_version() {
+    let doc = read("docs/reference/data-files.md");
+    let table = section(&doc, "Files").expect("a Files section");
+    let mut checked = 0;
+    for line in table.lines() {
+        let cells: Vec<&str> = line.split('|').map(str::trim).collect();
+        // `| `name` | version | holds |`: one file per row; a row naming two files is skipped.
+        let (Some(name), Some(version)) = (cells.get(1), cells.get(2)) else {
+            continue;
+        };
+        let Some(name) = name.strip_prefix('`').and_then(|n| n.strip_suffix('`')) else {
+            continue;
+        };
+        if name.contains('`') {
+            continue;
+        }
+        let Ok(version) = version.parse::<u64>() else {
+            continue;
+        };
+        let text = read(&format!("content/{name}"));
+        let value: serde_json::Value =
+            serde_json::from_str(&text).unwrap_or_else(|e| panic!("content/{name}: {e}"));
+        assert_eq!(
+            value["schema_version"].as_u64(),
+            Some(version),
+            "data-files.md gives {name} version {version}"
+        );
+        checked += 1;
+    }
+    assert!(checked >= 10, "only {checked} rows checked");
 }

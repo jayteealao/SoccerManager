@@ -1,0 +1,14 @@
+{
+  "rules": [
+    {
+      "when": [
+        { "kind": "score", "state": "leading", "by": 1 },
+        { "kind": "time_left", "minutes": 15 }
+      ],
+      "set": [
+        { "primitive": "mentality", "level": "defensive" },
+        { "primitive": "line_of_engagement", "level": "low" }
+      ]
+    }
+  ]
+}
