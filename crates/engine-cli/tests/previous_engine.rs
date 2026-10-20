@@ -44,6 +44,12 @@ fn previous() -> (PathBuf, PathBuf) {
     (program, content)
 }
 
+/// The previous release this program ships beside itself: its tag, commit, version, the match
+/// stream protocol it speaks and the snapshot format it saves.
+fn pin() -> serde_json::Value {
+    serde_json::from_str(include_str!("../../../packaging/previous-engine.json")).unwrap()
+}
+
 fn temp(name: &str) -> PathBuf {
     let dir =
         std::env::temp_dir().join(format!("engine-cli-previous-{}-{name}", std::process::id()));
@@ -98,12 +104,19 @@ fn a_previous_release_save_finishes_on_its_engine_with_the_same_result() {
     let (program, content) = previous();
     let data = temp("finish");
     let whole = play_whole(&program, &content, &data, 42);
+    let pin = pin();
+    let version = pin["version"].as_str().expect("the pin names a version");
+    let commit = pin["commit"].as_str().expect("the pin names a commit");
 
-    // The save is the previous release's own: format 7, its released build.
+    // The save is the previous release's own: its snapshot format, its released build.
     let bytes = std::fs::read(&whole.snapshot).unwrap();
     let id = Snapshot::identify(&bytes).unwrap();
-    assert_eq!(id.format, 7);
-    assert_eq!(id.engine_version.as_deref(), Some("0.2.0-beta.1"));
+    assert_eq!(
+        Some(u64::from(id.format)),
+        pin["save_format"].as_u64(),
+        "the pin names the snapshot format the previous release saves"
+    );
+    assert_eq!(id.engine_version.as_deref(), Some(version));
     let from = id.tick.unwrap();
 
     // The current release resumes it: `engine-cli resume` with no content folder of the
@@ -127,10 +140,12 @@ fn a_previous_release_save_finishes_on_its_engine_with_the_same_result() {
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
     let resumed = stats(&out);
     assert!(stderr.contains("resume.delegated"), "{stderr}");
-    assert!(stderr.contains("0.2.0-beta.1"), "{stderr}");
-    assert_eq!(
-        resumed["build.hash"], "669f68b",
-        "the previous program played"
+    assert!(stderr.contains(version), "{stderr}");
+    // The build hash is the short form of the pinned commit (`git rev-parse --short`).
+    let hash = resumed["build.hash"].as_str().unwrap_or_default();
+    assert!(
+        hash.len() >= 7 && commit.starts_with(hash),
+        "the previous program played: build {hash}, pinned commit {commit}"
     );
     assert_eq!(resumed["match.id"], whole.stats["match.id"]);
     assert_eq!(resumed["validate.violations"], 0);
@@ -229,8 +244,7 @@ fn the_launcher_resumes_a_previous_release_save_on_its_engine() {
     let _ = launcher.wait();
     let _ = std::fs::remove_dir_all(&data);
 
-    let pin: serde_json::Value =
-        serde_json::from_str(include_str!("../../../packaging/previous-engine.json")).unwrap();
+    let pin = pin();
     assert_eq!(running["engine.state"], "running", "{running}");
     assert_eq!(running["engine.version"], pin["version"]);
     // The page asks the previous engine's socket for the protocol that engine speaks.

@@ -2,5 +2,6 @@
   "tag": "v0.2.0-beta.4",
   "commit": "9b711cec8d92de220fab3f80d6bc427ec80d7dbc",
   "version": "0.2.0-beta.4",
-  "protocol": 6
+  "protocol": 6,
+  "save_format": 13
 }
