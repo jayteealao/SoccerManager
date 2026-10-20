@@ -87,7 +87,7 @@ impl Simulation {
             return None;
         }
         let p = &self.players[i];
-        let instruction = kind.conflict_in(self.teams[p.team].plan.held[p.slot])?;
+        let instruction = kind.conflict_in(self.teams[p.team].plan_for(p.slot).held[p.slot])?;
         let chance = tuning.override_chance.of(kind);
         if chance <= 0.0 {
             return None;
@@ -109,7 +109,7 @@ impl Simulation {
             return false;
         }
         let p = &self.players[i];
-        let held = self.teams[p.team].plan.held[p.slot];
+        let held = self.teams[p.team].plan_for(p.slot).held[p.slot];
         held != 0
             && TraitKind::ALL
                 .iter()

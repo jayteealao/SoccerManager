@@ -111,7 +111,7 @@ primitive.
 | Step | Rule |
 |---|---|
 | Address | `ws://127.0.0.1:<port>/?v=<protocol version>` |
-| Version | `v` must equal `7`. Any other value, or no value, is refused with both versions named. |
+| Version | `v` must equal `9`. Any other value, or no value, is refused with both versions named. |
 | Origin | Any port of `http://localhost` or `http://127.0.0.1`, or no `Origin` header at all. Any other origin is refused, including `null` (a sandboxed frame or a `data:` document) and a `file://` page. |
 | Clients | One viewer per match. |
 | First message | `hello`, always before the first tick frame. |

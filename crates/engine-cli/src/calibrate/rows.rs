@@ -47,9 +47,10 @@ use crate::report::MEASURES_VERSION;
 
 /// The row file format this program writes.
 pub const ROWS_FORMAT: u32 = 3;
-/// The row file formats this program reads: format 1 has no measures, and formats 1 and 2
-/// no substitutions.
-pub const READ_FORMATS: [u32; 3] = [1, 2, 3];
+/// The row file formats this program reads: format 1 (the previous release's) has no measures
+/// and no substitutions. Format 2 is not read: only a development build wrote it, and its
+/// measures version and columns are older than the ones this program reads.
+pub const READ_FORMATS: [u32; 2] = [1, 3];
 /// The substitutions a row keeps per side: more than any rule pack allows with extra time.
 pub const SUB_SLOTS: usize = 8;
 /// The measures version of every file of format 1.
@@ -962,7 +963,7 @@ fn read_file(path: &Path) -> anyhow::Result<Vec<Row>> {
     };
     if !READ_FORMATS.contains(&format) {
         return Err(refuse(format!(
-            "is row format version {format}, and this program reads versions 1 to \
+            "is row format version {format}, and this program reads versions 1 and \
              {ROWS_FORMAT}"
         )));
     }
@@ -1247,7 +1248,7 @@ mod tests {
         let err = read_rows(&dir, &BTreeMap::new()).unwrap_err().to_string();
         assert!(err.contains("row format version 7"), "{err}");
         assert!(
-            err.contains(&format!("reads versions 1 to {ROWS_FORMAT}")),
+            err.contains(&format!("reads versions 1 and {ROWS_FORMAT}")),
             "{err}"
         );
         let _ = fs::remove_dir_all(&dir);

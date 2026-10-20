@@ -1183,8 +1183,9 @@ fn pairing_number(name: &str, pairings: &[[String; 2]]) -> anyhow::Result<usize>
 }
 
 /// SHA-256, as 12 hex characters, over the inputs that decide a run's fixtures: the
-/// attributes, rules and tactics content, the generator block after the flag states, and
-/// the two default clubs. Parsed values are hashed, so a change of layout alone does not
+/// attributes, rules, tactics and trait catalogue content (a generated player's traits are
+/// drawn from the catalogue), the generator block after the flag states, and the two default
+/// clubs. Parsed values are hashed, so a change of layout alone does not
 /// change it. Tuning values outside the generator block and flag states that leave the
 /// generator alone do not change it: they are the change a baseline diff measures.
 pub fn fixtures_hash(content: &Content, teams: &[TeamFile; 2]) -> anyhow::Result<String> {
@@ -1193,6 +1194,7 @@ pub fn fixtures_hash(content: &Content, teams: &[TeamFile; 2]) -> anyhow::Result
         serde_json::to_vec(&content.attributes)?,
         serde_json::to_vec(&content.rules)?,
         serde_json::to_vec(&content.tactics)?,
+        serde_json::to_vec(&content.traits)?,
         serde_json::to_vec(&content.tuning.generator)?,
         serde_json::to_vec(&teams[0])?,
         serde_json::to_vec(&teams[1])?,
@@ -2056,6 +2058,14 @@ mod tests {
             base,
             fixtures_hash(&tactics, &teams).unwrap(),
             "a formation"
+        );
+
+        let mut traits = content.clone();
+        traits.traits.traits.pop();
+        assert_ne!(
+            base,
+            fixtures_hash(&traits, &teams).unwrap(),
+            "the trait catalogue"
         );
 
         let mut generator = content.clone();

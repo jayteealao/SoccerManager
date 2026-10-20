@@ -83,6 +83,8 @@ jobs:
         run: "cargo test --locked -p engine --features sensitivity --lib -- sensitivity::"
       - name: The rules on small batches (ignored full run excluded)
         run: cargo test --locked -p engine --features sensitivity --test sensitivity
+      - name: The trait-override rule (ignored rate batches excluded)
+        run: cargo test --locked -p engine --features sensitivity --test overrides
       - name: clippy of calibrate with the rules stage
         run: cargo clippy -p engine-cli --all-targets --locked --features sensitivity -- -D warnings
       - name: The rules stage of a change run

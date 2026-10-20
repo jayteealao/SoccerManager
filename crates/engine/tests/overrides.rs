@@ -122,6 +122,12 @@ fn hold(config: &mut MatchConfig, slot: usize, code: &str) {
         "duty" => tactics.roles[slot].duty = schema.duty_index(level).unwrap() as u8,
         "mentality" => tactics.mentality = schema.mentality_index(level).unwrap() as u8,
         _ => {
+            // A tempo code names a direction; the level one step that way holds it.
+            let level = match (name, level) {
+                ("tempo", "faster") => "fast",
+                ("tempo", "slower") => "slow",
+                _ => level,
+            };
             let at = INSTRUCTIONS.iter().position(|n| *n == name).unwrap();
             let l = schema.instructions.level_names(at);
             tactics.instructions[at] = l.iter().position(|n| *n == level).unwrap() as u8;
@@ -373,7 +379,8 @@ fn an_anchor_from_an_earlier_spell_never_comes_back_without_a_draw() {
 
 /// A scene: home midfielder 6 carries `releases_ball_early` strong at mood `mood`, his side
 /// plays at a slower tempo, its chance is 1, and he has just gained the ball at (-15, 0) with
-/// no opponent near him: the override events of his first two seconds on the ball.
+/// no opponent near him and his team-mates beyond the other side's line, so no pass tempts his
+/// first decision: the override events of his first two seconds on the ball.
 fn first_touch_scene(mood: f64) -> Vec<EngineEvent> {
     let me = index(0, 6);
     let mut config = common::short_match(10);
@@ -388,7 +395,7 @@ fn first_touch_scene(mood: f64) -> Vec<EngineEvent> {
         .of_mut(TraitKind::ReleasesBallEarly)
         .unwrap() = 1.0;
     let at = DVec2::new(-15.0, 0.0);
-    let mut sim = common::spread(Scene::new(config), -30.0, 30.0)
+    let mut sim = common::spread(Scene::new(config), 40.0, 30.0)
         .tick(1_001)
         .place(me, at)
         .ball(engine::math::DVec3::new(at.x, at.y, 0.0))

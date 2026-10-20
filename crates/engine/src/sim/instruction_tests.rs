@@ -120,9 +120,11 @@ fn each_override_sets_only_its_inputs_in_its_slots_plan() {
                 entry.primitive
             );
         }
+        // The slot's held instructions follow his own levels; the test below reads them.
+        let mut back = own.with_override(p, &entry.inputs, default, &schema, &t);
+        back.held = side.held;
         assert_eq!(
-            own.with_override(p, &entry.inputs, default, &schema, &t),
-            side,
+            back, side,
             "{}: nothing but its inputs moves",
             entry.primitive
         );
@@ -130,6 +132,43 @@ fn each_override_sets_only_its_inputs_in_its_slots_plan() {
             assert_eq!(*sim.teams[0].plan_for(other), side, "{}", entry.primitive);
         }
         assert_eq!(*sim.teams[1].plan_for(slot), sim.teams[1].plan);
+    }
+}
+
+/// A player's own width or pressing instruction is an instruction he holds, so a trait of
+/// play that goes against it is tested against it; his team-mates and the side hold none.
+#[test]
+fn a_players_own_instruction_is_held_for_him_alone() {
+    use crate::tactics::Instruction;
+    for (primitive, level, instruction) in [
+        ("width", "narrow", Instruction::WidthNarrow),
+        ("width", "wide", Instruction::WidthWide),
+        ("pressing", "low", Instruction::PressingLow),
+    ] {
+        let mut sim = calm();
+        let slot = (1..PLAYERS_PER_TEAM)
+            .find(|&s| crate::decision::attack_line(sim.teams[0].plan.slots[s].position))
+            .unwrap();
+        let bit = instruction.bit();
+        assert_eq!(
+            sim.teams[0].plan_for(slot).held[slot] & bit,
+            0,
+            "{primitive}"
+        );
+        instruct(&mut sim, 0, slot, primitive, level);
+        assert_ne!(
+            sim.teams[0].plan_for(slot).held[slot] & bit,
+            0,
+            "{primitive} {level} is held for him"
+        );
+        assert_eq!(sim.teams[0].plan.held[slot] & bit, 0, "the side holds none");
+        for other in (0..PLAYERS_PER_TEAM).filter(|&s| s != slot) {
+            assert_eq!(
+                sim.teams[0].plan_for(other).held[other] & bit,
+                0,
+                "{primitive}: slot {other}"
+            );
+        }
     }
 }
 

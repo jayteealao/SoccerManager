@@ -22,7 +22,7 @@ A team file may name its club's home ground: `"ground": { "length": 100, "width"
 
 ## Feature flags
 
-The `flags` block of `tuning.json` declares switches between the current model and a candidate. It ships empty. Each flag has five fields:
+The `flags` block of `tuning.json` declares switches between the current model and a candidate. It ships with two flags, `team_stands` (off) and `ai_style_pick` (on), which engine code reads by name; see [the data-file reference](../docs/reference/data-files.md). Each flag has five fields:
 
 - `owner`, `hypothesis`, and `removal_condition`: required text. A flag without one of them is refused by name.
 - `state`: `on` or `off`, default `off`.
@@ -34,13 +34,13 @@ Compare a candidate with `calibrate --pair <name>`, then remove the flag with th
 
 ## Realism bands
 
-`realism-bands.json` holds the acceptance criteria that `engine-cli calibrate` checks. It is at version 4: each band has its design range under `design`, and its record: `real` (a pointer to where its real value is measured, the sample size and the date), `evidence` (`calibration` or `validation`), `confidence` (the measurement count, and the competitions, seasons and clubs behind the real value), `condition` (`dry` for every band today) and `gates` (`true` for the 18 bands that change the verdict, `false` for the 35 that only report). The file holds pointers, never a real value: the calibrate command reads each value in place from the measured results (`--real-data`, by default the main checkout's `.scratch/out`) and reports it beside the verdict. Versions 3 and 2 still load and migrate in memory; a migrated band gates, is `dry`, and has no real record. The engine refuses a file of version 1. The bands are criteria, never tuning values: change a band only by a recorded product-owner decision. Every field is in [the data-file reference](../docs/reference/data-files.md#realism-bandsjson).
+`realism-bands.json` holds the acceptance criteria that `engine-cli calibrate` checks. It is at version 5 and holds 154 bands: each band has its design range under `design`, and its record: `real` (a pointer to where its real value is measured, the sample size and the date), `evidence` (`calibration` or `validation`), `confidence` (the measurement count, and the competitions, seasons and clubs behind the real value), `condition` (`dry` for every band today) and `gates` (`true` for the 18 bands that change the verdict, `false` for the 136 that only report). The file holds pointers, never a real value: the calibrate command reads each value in place from the measured results (`--real-data`, by default the main checkout's `.scratch/out`) and reports it beside the verdict. Versions 4, 3 and 2 still load and migrate in memory; a migrated band gates, is `dry`, and has no real record. The engine refuses a file of version 1. The bands are criteria, never tuning values: change a band only by a recorded product-owner decision. Every field is in [the data-file reference](../docs/reference/data-files.md#realism-bandsjson).
 
 The three bands of the strength and red-card suites (`stronger_team_win_rate`, `reduced_minus_full`, `full_over_control`) measure engine experiments that no real match repeats: a club with every attribute times 1.15, and a side a player down from kick-off. Their `real.source` is `{"none": "<reason>"}`, with `real.sample` 0 and the date of that decision, and the report counts them apart from the bands without a real value.
 
 The pointers read these files of the measured results: `wy2_matches.csv` (goals, ten-plus and goalless shares), `wy2_team_matches.csv` (possession and passes; it holds the 1,826 league matches), `wyscout_rates.json` (the means of the five leagues: shots, yellow cards, pass accuracy, corners, throw-ins and goal kicks, halved per team where the band is per team), `sb_action_summary.json` (shots on target and goals per expected goal), and `wy2_events.csv.gz` (sending-off share: the matches with tag 1701 or 1703, counted over the compressed events file).
 
-The 35 bands that only report (`gates: false`) are judged and shown in a table of their own, and never change the verdict. Each range is set from its real value measured on this machine's results, at least two real standard errors either side of it, except fouls and offsides, whose ranges run from the lowest league mean of the five to the highest. A band gates only after a product-owner decision promotes it. The reporting bands read these files of the measured results:
+The 136 bands that only report (`gates: false`) are judged and shown in a table of their own, and never change the verdict. Each range is set from its real value measured on this machine's results, at least two real standard errors either side of it, except fouls and offsides, whose ranges run from the lowest league mean of the five to the highest. A band gates only after a product-owner decision promotes it. 35 of them measure real football from match and event data, and 101 measure the team's shape (below). The real-football reporting bands read these files of the measured results:
 
 - `wyscout_rates.json`: fouls and offsides per team.
 - `wy2_matches.csv`: home goal difference, the 5-1 scoreline.
@@ -71,6 +71,20 @@ The 35 bands that only report (`gates: false`) are judged and shown in a table o
 Each smallest shift is a quarter of the range. The bands from shot distance on read the measures of a build with the `measures` feature; a build without them reports them `not sure`. The speed-zone shares split the players' time on the pitch into the five zones; the high-speed share is the high and sprint zones together.
 
 The pass curve has nine cells, three kinds by three lengths (under 10 m, 10 to 25 m, over 25 m), and six of them are banded. Three are not: a ground pass over 25 m, a chip under 10 m and a cross under 10 m. The engine plays a pass that is not a cross in the air, as a chip, when it is over 25 m, and along the ground otherwise, so it makes no ground pass over 25 m and no chip of 25 m or under, and the real chips and crosses under 10 m are few (3,783 and 2,295 of about 1.4 million passes). For the same reason `pass_completion_chip_10_25` has no engine value: it reports `not sure` with no value until the engine plays a chip of that length.
+
+### Team-shape bands
+
+101 of the bands that only report measure how the teams move, in a build with the `measures` feature. They read `shape3_real.json` of the measured results: one value per real match from 7 tracked Bundesliga and 2. Bundesliga matches, under the bands' floor of 30, so these bands would only report even with `gates: true`. A checkout without that file reads `no real data here` for them. The report groups them by `group`:
+
+| Group | Bands | What they measure |
+|---|---|---|
+| `shape_cb`, `shape_fb`, `shape_cm`, `shape_w`, `shape_st` | 17 each | For each position group: how far behind the ball it stands and how wide, with and without the ball; its share of open play at each pace; its mean speed with the ball on its side and on the other; its sprints forward, back and lateral per minute of ball in play |
+| `shape_slide` | 4 | How the block slides with the ball up the pitch and across it, with and without the ball |
+| `shape_far` | 4 | How far a player 30 to 45 m, or more than 45 m, from the ball follows it over 1 s and 10 s |
+| `shape_calm` | 1 | The share of dead-ball time players spend under 2 m/s |
+| `shape_stoppages` | 7 | Stoppages per match by kind, and the minutes of ball in play |
+
+How to read them is in [Read the team-shape bands and the figures](../docs/how-to/calibration.md#read-the-team-shape-bands-and-the-figures).
 
 ### Whole-distribution bands
 
@@ -135,7 +149,7 @@ The formations suite plays every pairing of the formations in `tactics.json`, a 
 
 ## Gate proof
 
-`gate-proof.json` records how the gate of the realism bands was proven. It declares four broken copies of the engine, each a content flag that moves one measure: `shots_up` (shots per team up about 10 percent), `fouls_halved` (fouls per team about half), `card_storm` (every tackle a foul and every foul booked), and `pass_completion_down` (pass accuracy down about 5 points). `engine-cli calibrate proof` plays the engine against itself and each copy against the engine, and writes under `proof` the pass rate of the self runs, each copy's fail rate, the bands each copy moved, whether any copy moved each whole-distribution band, and the gate it measured: the band file's digest, the measures version, and the judging code's digest. The copies are declared as flags only in the proof's own copy of this folder, so the `flags` block of `tuning.json` still ships empty.
+`gate-proof.json` records how the gate of the realism bands was proven. It declares four broken copies of the engine, each a content flag that moves one measure: `shots_up` (shots per team up about 10 percent), `fouls_halved` (fouls per team about half), `card_storm` (every tackle a foul and every foul booked), and `pass_completion_down` (pass accuracy down about 5 points). `engine-cli calibrate proof` plays the engine against itself and each copy against the engine, and writes under `proof` the pass rate of the self runs, each copy's fail rate, the bands each copy moved, whether any copy moved each whole-distribution band, and the gate it measured: the band file's digest, the measures version, and the judging code's digest. The copies are declared as flags only in the proof's own copy of this folder, so the four broken copies never enter the shipped `flags` block of `tuning.json`.
 
 Every calibrate run compares its gate with the proof's and prints `gate changed since the last proof` when they differ, for example after a band is promoted. Run the proof again then, and commit the new file: see [Run the gate proof](../docs/how-to/calibration.md#run-the-gate-proof). No match reads the file, and it holds no real value.
 

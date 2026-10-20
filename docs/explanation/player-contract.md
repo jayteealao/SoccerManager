@@ -153,7 +153,7 @@ Mood reaches play in two places: the mind family, inside its cap, and the risks 
 
 A trait of play is a habit, such as cutting inside or holding up the ball. A player may carry several, each moderate or strong, and never two opposites. Each trait moves one choice of play by its weight.
 
-A strong trait can also beat an instruction it goes against: a player who holds up the ball when his team plays at a faster tempo, or a winger who cuts inside when the team plays wide. It happens only when the player is pressed or his mood is low, which are the moments when a habit takes over. The feed names each override, with the player, what he did, the instruction and the cause, and the player's panel counts them after the match.
+A strong trait can also beat an instruction it goes against: a player who holds up the ball when his team plays at a faster tempo, or a winger who cuts inside when the team plays wide. The instruction is the one the player himself reads: a player instruction on his width or pressing counts as his, and while a game plan change is being taken up he is tested against the plan he still plays. It happens only when the player is pressed or his mood is low, which are the moments when a habit takes over. The feed names each override, with the player, what he did, the instruction and the cause, and the player's panel counts them after the match.
 
 No limit, cooldown or phase of play throttles overrides. A throttle would make the instruction always win at the moment that matters, and the manager would never learn that a player's habit is stronger than his instruction. The rate is set instead so that a player with a strong conflicting trait overrides a few times a match.
 

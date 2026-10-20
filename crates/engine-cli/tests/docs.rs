@@ -334,3 +334,31 @@ fn the_file_table_gives_each_shipped_files_version() {
     }
     assert!(checked >= 10, "only {checked} rows checked");
 }
+
+/// The content folder's guide gives the band file's version and its counts of bands, of
+/// bands that gate and of bands that only report as the shipped file holds them, and every
+/// version the modding guide tells a modder to copy is the shipped one.
+#[test]
+fn the_band_counts_of_the_guides_are_the_shipped_files() {
+    let bands: serde_json::Value =
+        serde_json::from_str(&read("content/realism-bands.json")).unwrap();
+    let version = bands["schema_version"].as_u64().unwrap();
+    let list = bands["bands"].as_array().unwrap();
+    let gating = list.iter().filter(|b| b["gates"] == true).count();
+    let reporting = list.len() - gating;
+    let guide = read("content/README.md");
+    let text = section(&guide, "Realism bands").expect("a Realism bands section");
+    for phrase in [
+        format!("It is at version {version} and holds {} bands", list.len()),
+        format!("`true` for the {gating} bands that change the verdict"),
+        format!("`false` for the {reporting} that only report"),
+        format!("The {reporting} bands that only report"),
+    ] {
+        assert!(text.contains(&phrase), "content/README.md lacks: {phrase}");
+    }
+    let modding = read("docs/how-to/modding.md");
+    assert!(
+        modding.contains(&format!("copy the shipped file of version {version}")),
+        "modding.md names another band file version to copy"
+    );
+}

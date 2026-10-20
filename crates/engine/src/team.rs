@@ -360,7 +360,7 @@ impl Team {
         }
         self.base_formation = schema.slots(usize::from(tactics.formation));
         self.plan = TeamPlan::from(&tactics, schema, t);
-        self.own = own_plans(&self.plan, &self.game_state, schema, t);
+        self.own = own_plans(&self.plan, &tactics, &self.game_state, schema, t);
         self.take_up = None;
         self.relayout();
     }
@@ -684,7 +684,7 @@ impl Team {
         t: &Tuning,
     ) -> TeamPlan {
         let side = TeamPlan::from(tactics, schema, t);
-        own_plans(&side, &self.game_state, schema, t)[slot]
+        own_plans(&side, tactics, &self.game_state, schema, t)[slot]
             .as_deref()
             .copied()
             .unwrap_or(side)
@@ -720,7 +720,7 @@ impl Team {
         };
         self.tactics = tactics;
         let next = TeamPlan::from(&tactics, schema, t);
-        self.own = own_plans(&next, &self.game_state, schema, t);
+        self.own = own_plans(&next, &tactics, &self.game_state, schema, t);
         self.restore_take_up(
             prior,
             prior_side,
@@ -811,11 +811,14 @@ impl Team {
     }
 }
 
-/// Each slot's own plan under side plan `plan`: `None` for a slot no instruction names, and
-/// the side's plan with each of the slot's instructions applied
-/// ([`TeamPlan::with_override`]) otherwise.
+/// Each slot's own plan under side plan `plan` of `tactics`: `None` for a slot no instruction
+/// names, and the side's plan with each of the slot's instructions applied
+/// ([`TeamPlan::with_override`]) otherwise. Its `held` bits for the slot are those of the
+/// tactics with the slot's own levels, so a trait of play is tested against the instruction
+/// the player himself is given.
 pub fn own_plans(
     plan: &TeamPlan,
+    tactics: &Tactics,
     state: &GameState,
     schema: &TacticsSchema,
     t: &Tuning,
@@ -826,6 +829,7 @@ pub fn own_plans(
         }
         let block = schema.game_state.as_ref()?;
         let mut own = *plan;
+        let mut levels = *tactics;
         for ins in state.instructions_for(slot) {
             let primitive = usize::from(ins.primitive);
             let Some(entry) = schema
@@ -836,7 +840,9 @@ pub fn own_plans(
                 continue;
             };
             own = own.with_override(primitive, &entry.inputs, usize::from(ins.level), schema, t);
+            levels = levels.with_level(primitive, ins.level, schema);
         }
+        own.held[slot] = levels.held(slot, schema);
         Some(Box::new(own))
     })
 }

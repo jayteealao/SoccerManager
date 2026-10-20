@@ -1132,7 +1132,7 @@ fn decode_game_state(
     team.game_state = state;
     team.rules_active = active;
     team.base = base;
-    team.own = crate::team::own_plans(&team.plan, &team.game_state, schema, tuning);
+    team.own = crate::team::own_plans(&team.plan, &team.tactics, &team.game_state, schema, tuning);
     team.take_up = None;
     match r.u8()? {
         0 => {}

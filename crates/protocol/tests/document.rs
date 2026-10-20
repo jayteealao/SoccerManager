@@ -45,3 +45,18 @@ fn the_document_names_the_framing_of_every_message() {
     assert_eq!(binary, vec!["tick"], "only the tick frame is binary");
     assert!(text.contains("Binary, not JSON"));
 }
+
+/// The document's title, its address and the handshake's version row name the version this
+/// build speaks, so a client written to the document is not refused.
+#[test]
+fn the_document_names_the_protocol_version_it_describes() {
+    let text = document();
+    let v = protocol::PROTOCOL_VERSION;
+    for phrase in [
+        format!("# Match stream protocol, version {v}\n"),
+        format!("`ws://127.0.0.1:<port>/?v={v}`"),
+        format!("| Version | `v` must equal `{v}`."),
+    ] {
+        assert!(text.contains(&phrase), "protocol.md lacks: {phrase}");
+    }
+}

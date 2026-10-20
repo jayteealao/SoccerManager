@@ -20,7 +20,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `tuning.json` | 8 | Engine constants, the attribute contract with the state caps, the body jobs and consistency, decision weights, injury rates, the generator's world spread, fatigue curve, stream buffer, the hidden values' words and the match rating |
 | `rules/default.json` | 4 | The rule pack |
 | `tactics.json` | 8 | Ten formations, mentalities, team instructions, roles, duties, the AI manager's settings, and the tactical primitives: what each setting of the tactics board moves, where play reads it, how its levels were fitted to real teams, and the frame of game-state rules and player instructions |
-| `signatures.json` | 5 | The real-team signature table: for each statistic a tactical primitive moves, its spread across real club seasons, the five quintiles and each quintile's median. No match reads it; the primitives harness fits the levels to it. Written by `engine-cli signatures`, never by hand |
+| `signatures.json` | 5 | The real-team signature table: for each statistic a tactical primitive moves, its spread across real club seasons, the five quintiles and each quintile's median. No match reads it; the primitives harness fits the levels to it, and the old engine's cache key leaves it out. Written by `engine-cli signatures`, never by hand |
 | `traits.json` | 1 | The trait catalogue: the 31 traits of play a player may carry, each with the engine choice it acts on and, for nine pairs, its opposite. Part of the content hash; a team file naming a trait it does not hold, or two opposites on one player, is refused |
 | `restart-waits.json` | 1 | The restart wait table: for each kind of restart, the drawn extra wait beyond the visible steps, as 21 quantiles from real restart waits, the limit on the visible steps, the late-lead factor and the quick-restart rule. Optional: content without it plays the fixed `restart_delay_s` delays. Part of the content hash when present; written by `engine-cli restart-waits`, never by hand |
 | `styles.json` | 2 | The eight named styles, each a preset of tactics primitives: its primitive settings (the mentality among them), duty hints, the formations that suit it, the statistics that show it, the attributes its key jobs read, and its game-state rules. A version 1 file converts on load. Optional: content without it keeps the AI manager on the tactics file's default setup and cannot play the styles suite. Part of the content hash when present |
@@ -1250,7 +1250,7 @@ The file starts with a header:
 | Bytes | Field |
 |---|---|
 | 6 | the magic `SMROWS` |
-| 4 | the format version: 3 (formats 1 and 2, written before the realism measures and before the substitutions, are still read) |
+| 4 | the format version: 3. Format 1, written by the previous release before the realism measures and the substitutions, is still read; format 2, written only by development builds, is refused |
 | 4 | the measures version (`run.identity.measures`) |
 | 4 | the number of columns |
 | per column | 1 byte name length, the name, 1 byte type: 1 is an 8-bit integer, 4 a 32-bit integer, 8 a 64-bit integer, 9 a 64-bit float |

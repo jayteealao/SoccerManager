@@ -249,7 +249,7 @@ impl Simulation {
         let side = &mut self.teams[team];
         side.game_state = state.clone();
         let plan = side.take_up.as_ref().map_or(side.plan, |t| t.next);
-        side.own = own_plans(&plan, &side.game_state, &schema, &tuning);
+        side.own = own_plans(&plan, &side.tactics, &side.game_state, &schema, &tuning);
         let active = if state.rules.is_empty() {
             0
         } else {

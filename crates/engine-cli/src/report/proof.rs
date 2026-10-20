@@ -27,8 +27,9 @@ pub const PROOF_VERSION: u32 = 1;
 /// The source files that judge a band, in the order they are hashed: the verdict rules, the
 /// whole-distribution test, the measures and the band record; the report's checks (which pick
 /// each band's margin and resamples) and the real samples they read; and the run's judgement
-/// (which rows gate, how each is judged, and the pass rule).
-const JUDGING: [&str; 7] = [
+/// (which rows gate, how each is judged, and the pass rule); and the shared statistics, whose
+/// quantile rule sets the bounds of every whole-distribution band.
+const JUDGING: [&str; 8] = [
     include_str!("verdict.rs"),
     include_str!("distribution.rs"),
     include_str!("measures.rs"),
@@ -36,6 +37,7 @@ const JUDGING: [&str; 7] = [
     include_str!("mod.rs"),
     include_str!("real.rs"),
     include_str!("../calibrate/mod.rs"),
+    include_str!("../stats.rs"),
 ];
 
 /// The line that starts a judging file's unit tests, which close every one of those files.

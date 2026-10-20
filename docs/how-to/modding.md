@@ -40,7 +40,7 @@ To see the effect over many matches, run a calibration run:
 target/release/engine-cli calibrate --seed 2026 --matches 200 --content-dir my-content
 ```
 
-The run report compares every realism band, and the goal bands of every formation pairing, against `realism-bands.json`. Standard error names each band that fails, and the exit code is 2 when a band fails. Add `--suite equal` to skip the formations suite, which plays 55 pairings. A `realism-bands.json` of version 3 or 2 still loads; one of version 1 is refused: copy the shipped file of version 4.
+The run report compares every realism band, and the goal bands of every formation pairing, against `realism-bands.json`. Standard error names each band that fails, and the exit code is 2 when a band fails. Add `--suite equal` to skip the formations suite, which plays 55 pairings. A `realism-bands.json` of version 4, 3 or 2 still loads; one of version 1 is refused: copy the shipped file of version 5.
 
 To judge the change against the engine before it, add `--base main` from your git checkout: each band then reads `pass`, `fail`, or `not sure`. See [Measure a tuning change](calibration.md).
 
