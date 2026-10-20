@@ -219,8 +219,8 @@ test('a game plan with two conditions that hold switches on, and a seventh canno
     await page.waitForTimeout(250);
     await evidence(page, info, 'plans-t250');
     const editor = board(page).getByRole('group', { name: /^Edit plan/ });
-    await editor.getByLabel('Score').selectOption(state);
-    const minutes = editor.getByLabel('Minutes left');
+    await editor.getByLabel('Score', { exact: true }).selectOption(state);
+    const minutes = editor.getByLabel('Minutes left', { exact: true });
     const values = await minutes.evaluate((s) => [...s.options].map((o) => Number(o.value)));
     await minutes.selectOption(String(Math.max(...values)));
     await editor.getByRole('button', { name: 'Save plan' }).click();
