@@ -24,8 +24,8 @@
       "const": "run-report"
     },
     "schema.version": {
-      "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows. Every key of an older version stays.",
-      "enum": ["1", "2", "3"]
+      "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows; 4 for a calibrate run that reports each band's real value (calib.real, calib.realism, and the real columns of each verdict); 5 for a calibrate run that reports the bands that only report apart (calib.reported), the developer's acceptances (calib.accepted), the match counts (calib.counts), and how each verdict row was judged; 6 for a calibrate run with the whole-distribution bands (upper and noise_floor on a verdict row); 7 for a calibrate run with the formation field rating (calib.nash). Every key of an older version stays.",
+      "enum": ["1", "2", "3", "4", "5", "6", "7"]
     },
     "owner.id": {
       "type": "string",
@@ -129,6 +129,70 @@
     }
   },
   "$defs": {
+    "verdictRow": {
+      "type": "object",
+      "required": ["band", "suite", "word", "value", "lo", "hi"],
+      "properties": {
+        "band": { "type": "string", "minLength": 1 },
+        "suite": { "enum": ["equal", "strength", "formations", "red-card"] },
+        "pairing": { "type": "string" },
+        "word": { "enum": ["pass", "fail", "not sure"] },
+        "value": { "type": "number" },
+        "lo": { "type": "number" },
+        "hi": { "type": "number" },
+        "base_value": { "type": "number" },
+        "diff": { "type": "number" },
+        "se": { "type": "number", "minimum": 0 },
+        "smallest_shift": { "type": "number", "exclusiveMinimum": 0 },
+        "power": { "type": "boolean" },
+        "needed": { "type": "integer", "minimum": 0 },
+        "outside_by": {
+          "description": "A change run: how far the changed engine's value is outside its range, when its range check fails.",
+          "type": "number",
+          "minimum": 0
+        },
+        "no_target": {
+          "description": "A change run: the band was outside its range by more than its noise at the pilot (beyond the joint threshold times its own error), so it set no power target. Its word is judged as for any band.",
+          "const": true
+        },
+        "real": {
+          "description": "The band's real value, read in place from the real-data folder; absent when the band has none here. It never changes the word.",
+          "type": "number"
+        },
+        "distance": {
+          "description": "The run's value minus the real value; for a whole-distribution band (its real column reads whole sample), the distance of the run's whole sample from the real one, which is also its value.",
+          "type": "number"
+        },
+        "upper": {
+          "description": "Since version 6: a whole-distribution band's one-sided upper bound, the 97th percentile of its whole-match resampled distance; the band passes when it is within the margin (hi).",
+          "type": "number",
+          "minimum": 0
+        },
+        "noise_floor": {
+          "description": "Since version 6: a whole-distribution band's noise floor, the 97th percentile of its centred resampled distance: about the distance a perfect engine shows at these sample sizes. A margin at or under it can never pass (margin below noise floor).",
+          "type": "number",
+          "minimum": 0
+        },
+        "report_only": {
+          "description": "Why the band only reports (gates false in the band file, a real sample under its floor, or a generalisation under the floor): its word is shown, but it is left out of the joint word and of calib.pass.",
+          "type": "string",
+          "minLength": 1
+        },
+        "judged": {
+          "description": "Since version 5: paired, by the paired max-t test against the old engine; or range, by its range on this engine alone, with se its own standard error: fail outside the range, pass inside with the nearest edge at least 2.1701 errors away, not sure otherwise. Absent for a gating row of a run without an old engine.",
+          "enum": ["paired", "range"]
+        },
+        "note": {
+          "description": "Since version 5: why the row was judged as it was, or has no value (range only: base has no measures; range only: a per-club spread has no paired test; this build has no measures; no value: ...; acceptance no longer applies: ...).",
+          "type": "string",
+          "minLength": 1
+        },
+        "accepted": {
+          "description": "Since version 5: the developer accepted this not-sure row in the run folder's accepted.json. It is accepted, not shown equivalent: its word stays not sure and it never counts as a pass.",
+          "const": true
+        }
+      }
+    },
     "ruleInterval": {
       "description": "An estimate and its 95 percent interval.",
       "type": "object",
@@ -385,6 +449,34 @@
                 },
                 "ten_plus_goals_share": { "type": "number", "minimum": 0, "maximum": 1 },
                 "goalless_share": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            }
+          },
+          "calib.nash": {
+            "description": "Since version 7: the formation field rating of the formations suite, report only; it never changes the verdict, calib.pass or the exit code. Each formation's win_rate is its mean win share over every formation of the field, itself included (a draw is not a win); its field_rating is the same win share weighted by the maximum-entropy Nash equilibrium of the payoff table wins minus losses (weight); nash_average is that table times the equilibrium, as Nash averaging defines it (0 inside the equilibrium's support, at most 0 outside it). A formation is flagged when its field rating exceeds its win rate by more than flag_margin. converged is false when the solve stopped at its iteration cap; matches_per_pairing is the fewest finished matches of a pairing. Absent unless every pairing of the formations suite finished a match, and in a paired run it describes the off arm, as calib.formations does.",
+            "type": "object",
+            "required": ["flag_margin", "converged", "iterations", "matches_per_pairing", "formations"],
+            "additionalProperties": false,
+            "properties": {
+              "flag_margin": { "type": "number", "minimum": 0 },
+              "converged": { "type": "boolean" },
+              "iterations": { "type": "integer", "minimum": 0 },
+              "matches_per_pairing": { "type": "integer", "minimum": 0 },
+              "formations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["formation", "weight", "win_rate", "field_rating", "nash_average", "flagged"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "formation": { "type": "string", "minLength": 1 },
+                    "weight": { "type": "number", "minimum": 0, "maximum": 1 },
+                    "win_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+                    "field_rating": { "type": "number", "minimum": 0, "maximum": 1 },
+                    "nash_average": { "type": "number" },
+                    "flagged": { "type": "boolean" }
+                  }
+                }
               }
             }
           },
@@ -700,6 +792,10 @@
             "required": ["format", "files", "rows", "recorded"],
             "properties": {
               "format": { "type": "integer", "minimum": 1 },
+              "measures": {
+                "description": "true when the build records the realism measures (built with the measures feature); absent in reports of earlier builds.",
+                "type": "boolean"
+              },
               "files": { "type": "integer", "minimum": 0 },
               "rows": { "type": "integer", "minimum": 0 },
               "recorded": {
@@ -712,31 +808,40 @@
           "calib.verdicts": {
             "description": "Each band's word. In a change run it comes from the paired max-t test: fail when the value is outside the range or the change is beyond the joint threshold and at least the band's smallest shift, pass when inside, not a fail, and with the power to see the band's smallest shift, not sure otherwise. In a run without an old engine it is the range check, without the time budget (wall_ms), which calib.pass still includes. A change-run row outside its range carries outside_by; one that set no power target carries no_target.",
             "type": "array",
-            "items": {
-              "type": "object",
-              "required": ["band", "suite", "word", "value", "lo", "hi"],
-              "properties": {
-                "band": { "type": "string", "minLength": 1 },
-                "suite": { "enum": ["equal", "strength", "formations", "red-card"] },
-                "pairing": { "type": "string" },
-                "word": { "enum": ["pass", "fail", "not sure"] },
-                "value": { "type": "number" },
-                "lo": { "type": "number" },
-                "hi": { "type": "number" },
-                "base_value": { "type": "number" },
-                "diff": { "type": "number" },
-                "se": { "type": "number", "minimum": 0 },
-                "smallest_shift": { "type": "number", "exclusiveMinimum": 0 },
-                "power": { "type": "boolean" },
-                "needed": { "type": "integer", "minimum": 0 },
-                "outside_by": {
-                  "description": "A change run: how far the changed engine's value is outside its range, when its range check fails.",
-                  "type": "number",
-                  "minimum": 0
-                },
-                "no_target": {
-                  "description": "A change run: the band was outside its range by more than its noise at the pilot (beyond the joint threshold times its own error), so it set no power target. Its word is judged as for any band.",
-                  "const": true
+            "items": { "$ref": "#/$defs/verdictRow" }
+          },
+          "calib.reported": {
+            "description": "Since version 5: the rows of the bands that only report (gates false, a real sample under its floor, or a generalisation under the floor), each judged by the same rules as a gating band, with the same keys as calib.verdicts. They never enter the joint word, calib.pass, calib.bands or a suite's power target.",
+            "type": "array",
+            "items": { "$ref": "#/$defs/verdictRow" }
+          },
+          "calib.accepted": {
+            "description": "Since version 5: the run folder's accepted.json, the bands it accepts, and why it was ignored when it was (another run or identity, or a file that cannot be read).",
+            "type": "object",
+            "required": ["file", "bands"],
+            "properties": {
+              "file": { "type": "string", "minLength": 1 },
+              "bands": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+              "ignored": { "type": "string", "minLength": 1 }
+            }
+          },
+          "calib.counts": {
+            "description": "Since version 5: the matches the run judged: every engine's rows in total, the fixtures both engines of a change run played (0 otherwise), and each engine's matches: changed and old in a change run, this otherwise, each with its build.",
+            "type": "object",
+            "required": ["total_matches", "pairs", "observations"],
+            "properties": {
+              "total_matches": { "type": "integer", "minimum": 0 },
+              "pairs": { "type": "integer", "minimum": 0 },
+              "observations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["engine", "build", "matches"],
+                  "properties": {
+                    "engine": { "enum": ["changed", "old", "this"] },
+                    "build": { "type": "string", "minLength": 1 },
+                    "matches": { "type": "integer", "minimum": 0 }
+                  }
                 }
               }
             }
@@ -778,8 +883,75 @@
               }
             }
           },
+          "calib.real": {
+            "description": "The real-data folder the run read (--real-data, or the main checkout's .scratch/out), whether it exists, the bands without a real value (not read here, or migrated without a record), the bands with no real counterpart (engine experiments, never counted as missing), the folder when it does not exist, and one entry per band with its real value, standard error, record and confidence words.",
+            "type": "object",
+            "required": ["from", "present", "missing", "no_counterpart", "bands"],
+            "properties": {
+              "folder": { "type": "string", "minLength": 1 },
+              "from": { "enum": ["flag", "default", "not_found"] },
+              "present": { "type": "boolean" },
+              "missing": { "type": "integer", "minimum": 0 },
+              "no_counterpart": { "type": "integer", "minimum": 0 },
+              "missing_path": { "type": "string", "minLength": 1 },
+              "bands": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["band", "status", "measurement", "generalisation"],
+                  "properties": {
+                    "band": { "type": "string", "minLength": 1 },
+                    "status": { "enum": ["read", "not_here", "no_counterpart", "no_record"] },
+                    "value": { "type": "number" },
+                    "se": { "type": "number", "minimum": 0 },
+                    "file_date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+                    "reason": { "type": "string", "minLength": 1 },
+                    "source": {
+                      "description": "A pointer (dataset, file, key, and how to reduce it) or a no-counterpart record (none, with its reason).",
+                      "type": "object"
+                    },
+                    "sample": { "type": "integer", "minimum": 0 },
+                    "date": { "type": "string", "minLength": 1 },
+                    "evidence": { "enum": ["calibration", "validation"] },
+                    "measurement": {
+                      "type": "object",
+                      "required": ["word"],
+                      "properties": {
+                        "count": { "type": "integer", "minimum": 0 },
+                        "se": { "type": "number", "minimum": 0 },
+                        "word": { "enum": ["precise", "fair", "rough", "unknown", "n/a"] }
+                      }
+                    },
+                    "generalisation": {
+                      "type": "object",
+                      "required": ["word"],
+                      "properties": {
+                        "competitions": { "type": "integer", "minimum": 0 },
+                        "seasons": { "type": "integer", "minimum": 0 },
+                        "clubs": { "type": "integer", "minimum": 0 },
+                        "units": { "type": "integer", "minimum": 0 },
+                        "word": { "enum": ["broad", "narrow", "thin", "unknown", "n/a"] }
+                      }
+                    },
+                    "report_only": { "type": "string", "minLength": 1 }
+                  }
+                }
+              }
+            }
+          },
+          "calib.realism": {
+            "description": "The realism claim: only gating bands with evidence validation and a real counterpart count toward it; calibration bands, which tuning may have read, are counted apart and never toward the claim.",
+            "type": "object",
+            "required": ["validation_bands", "validation_inside", "calibration_bands", "claim"],
+            "properties": {
+              "validation_bands": { "type": "integer", "minimum": 0 },
+              "validation_inside": { "type": "integer", "minimum": 0 },
+              "calibration_bands": { "type": "integer", "minimum": 0 },
+              "claim": { "type": "string", "minLength": 1 }
+            }
+          },
           "calib.registry": {
-            "description": "The band registry the run was judged with: its layout version, the digest of its bands, and the version it was migrated from when it was.",
+            "description": "The band registry the run was judged with: its layout version (4 since the band record), the digest of what decides each band's verdict, and the version it was migrated from when it was.",
             "type": "object",
             "required": ["version", "digest"],
             "properties": {
@@ -879,7 +1051,7 @@
       "if": {
         "properties": {
           "operation": { "const": "calibrate" },
-          "schema.version": { "enum": ["2", "3"] },
+          "schema.version": { "enum": ["2", "3", "4", "5", "6", "7"] },
           "outcome": { "not": { "const": "error" } }
         },
         "required": ["operation", "schema.version"]

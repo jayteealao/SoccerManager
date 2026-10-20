@@ -790,13 +790,20 @@ pub struct BenchOpts {
 }
 
 #[derive(Debug, Args)]
+#[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
 pub struct CalibrateOpts {
+    /// Another action on a run folder instead of a run.
+    #[command(subcommand)]
+    pub action: Option<CalibrateAction>,
     /// Seed of the run and of every match.
     #[arg(
-        long,
-        long_help = "Seed of the run: the leagues, the fixtures, and every match seed."
+        long = "seed",
+        value_name = "SEED",
+        required = true,
+        long_help = "Seed of the run: the leagues, the fixtures, and every match seed.\n\n\
+                     Required for a run; not taken by calibrate accept."
     )]
-    pub seed: u64,
+    pub seed_arg: Option<u64>,
     /// Matches per suite or pairing.
     #[arg(
         long,
@@ -932,21 +939,109 @@ pub struct CalibrateOpts {
                      --matches, and its diff uses the matches this run played."
     )]
     pub base: Option<String>,
+    /// The measured real data the bands read.
+    #[arg(
+        long = "real-data",
+        value_name = "DIR",
+        long_help = "The folder of measured real data that each band's real record\n\
+                     points into; default the main checkout's .scratch/out, found\n\
+                     through the git folder of the content folder's checkout.\n\n\
+                     Each band's real value is read in place at each judgement and\n\
+                     reported beside its verdict with its distance from the run's\n\
+                     value; it never changes a verdict. When the folder, a file or\n\
+                     a key is not there, the band reads \"no real data here\", the\n\
+                     run goes on, and the headline states how many bands have no\n\
+                     real value."
+    )]
+    pub real_data: Option<PathBuf>,
     /// A change run's pilot, in matches per suite unit; a test seam (default 200).
     #[arg(long, hide = true, value_name = "N", default_value_t = 200)]
     pub pilot: u32,
     /// The old engine of a change run: a ready executable, played on the run's content.
     #[arg(long, hide = true, value_name = "EXE", conflicts_with = "pair")]
     pub base_binary: Option<PathBuf>,
+    /// The changed engine plays every match on a new engine seed derived with SALT; the old
+    /// engine keeps the planned seeds. A test seam of the gate proof's self runs.
+    #[arg(long, hide = true, value_name = "SALT")]
+    pub reseed: Option<u64>,
+}
+
+impl CalibrateOpts {
+    /// The run's seed; clap requires it whenever no subcommand runs.
+    pub fn seed(&self) -> u64 {
+        self.seed_arg.unwrap_or_default()
+    }
+}
+
+/// What `calibrate` does with a run folder instead of a run.
+#[derive(Debug, Subcommand)]
+pub enum CalibrateAction {
+    /// Accept a not-sure band of a run folder: accepted, not shown equivalent.
+    #[command(
+        long_about = "Accept a band that reads not sure in a run folder's last judgement.\n\n\
+                      The acceptance is written to accepted.json in the folder. Run the\n\
+                      same calibrate command again: the band's row then reads not sure\n\
+                      (accepted, not shown equivalent). It never counts as a pass and\n\
+                      never changes the verdict. A band that reads pass or fail is\n\
+                      refused."
+    )]
+    Accept {
+        /// The band to accept, as the run's verdict rows name it.
+        #[arg(value_name = "BAND")]
+        band: String,
+        /// The run folder whose report.json holds the band's row.
+        #[arg(long, value_name = "DIR")]
+        run: PathBuf,
+    },
+    /// Measure the gate: the engine against itself and four broken copies.
+    #[command(
+        long_about = "Measure the gate's pass and fail rates and write them to gate-proof.json.
+
+                      Plays about 30 change runs of this build against itself: 10 with new
+                      match seeds on the changed side, and 5 of each broken copy that
+                      gate-proof.json declares (a content flag turned on). It takes hours
+                      on a full machine; run the same command again to resume. Needs a
+                      build with the measures feature. Then writes the pass rate of the
+                      self runs, each copy's fail rate, the bands each copy moved, whether
+                      any copy moved each whole-distribution band, and the gate it measured."
+    )]
+    Proof {
+        /// The first run seed: self run i plays SEED+i, copy run j plays SEED+j.
+        #[arg(long, value_name = "SEED")]
+        seed: u64,
+        /// The cap of each change run, as calibrate --matches.
+        #[arg(long, default_value_t = 1000)]
+        matches: u32,
+        /// Folder of the proof's runs; default SM_DATA_DIR/proofs/<registry>-<verdict code>.
+        #[arg(long, value_name = "DIR")]
+        out: Option<PathBuf>,
+        /// The proof file to write; default gate-proof.json in the content folder.
+        #[arg(long, value_name = "FILE")]
+        write: Option<PathBuf>,
+        /// The measured real data every run reads, as calibrate --real-data.
+        #[arg(long = "real-data", value_name = "DIR")]
+        real_data: Option<PathBuf>,
+        /// Self runs; a test seam (default 10).
+        #[arg(long, hide = true, default_value_t = 10)]
+        self_runs: u32,
+        /// Runs of each copy; a test seam (default 5).
+        #[arg(long, hide = true, default_value_t = 5)]
+        copy_runs: u32,
+        /// Minutes of each match; a test seam (default 90).
+        #[arg(long, hide = true, default_value_t = 90)]
+        minutes: u32,
+    },
 }
 
 /// The failure `calibrate --inject-failure` makes: an error in the first match of the work
-/// list, a panic in it, or the build of the old engine (`--base`).
+/// list, a panic in it, the build of the old engine (`--base`), or an old engine whose rows
+/// carry no measures (its folded rows lose them, as rows of a build without the feature).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum InjectFailure {
     Match,
     Panic,
     BaseBuild,
+    BaseWithoutMeasures,
 }
 
 /// The suites a calibration run plays.
@@ -983,4 +1078,75 @@ pub struct GenerateOpts {
     /// Overwrite team files that already exist.
     #[arg(long)]
     pub force: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(args: &[&str]) -> Result<Cli, clap::Error> {
+        Cli::try_parse_from(std::iter::once("engine-cli").chain(args.iter().copied()))
+    }
+
+    fn calibrate(args: &[&str]) -> Result<CalibrateOpts, clap::Error> {
+        parse(args).map(|cli| match cli.command {
+            Command::Calibrate(opts) => opts,
+            other => panic!("{other:?}"),
+        })
+    }
+
+    #[test]
+    fn a_run_needs_its_seed_and_accept_takes_none() {
+        let run = calibrate(&["calibrate", "--seed", "1"]).unwrap();
+        assert_eq!((run.seed(), run.action.is_none()), (1, true));
+        let accept = calibrate(&["calibrate", "accept", "b", "--run", "d"]).unwrap();
+        match accept.action {
+            Some(CalibrateAction::Accept { band, run }) => {
+                assert_eq!((band.as_str(), run), ("b", PathBuf::from("d")));
+            }
+            other => panic!("{other:?}"),
+        }
+        let err = calibrate(&["calibrate"]).unwrap_err();
+        assert!(err.to_string().contains("--seed"), "{err}");
+        assert!(calibrate(&["calibrate", "accept", "b", "--run", "d", "--seed", "1"]).is_err());
+        assert!(calibrate(&["calibrate", "--seed", "1", "accept", "b", "--run", "d"]).is_err());
+        assert!(
+            calibrate(&["calibrate", "accept", "b"]).is_err(),
+            "--run is required"
+        );
+    }
+
+    #[test]
+    fn proof_takes_its_seed_and_defaults_and_reseed_stays_hidden() {
+        let proof = calibrate(&["calibrate", "proof", "--seed", "2027"]).unwrap();
+        match proof.action {
+            Some(CalibrateAction::Proof {
+                seed,
+                matches,
+                out,
+                write,
+                real_data,
+                self_runs,
+                copy_runs,
+                minutes,
+            }) => {
+                assert_eq!(
+                    (seed, matches, self_runs, copy_runs, minutes),
+                    (2027, 1000, 10, 5, 90)
+                );
+                assert_eq!((out, write, real_data), (None, None, None));
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(
+            calibrate(&["calibrate", "proof"]).is_err(),
+            "--seed is required"
+        );
+        let run = calibrate(&["calibrate", "--seed", "1", "--reseed", "3"]).unwrap();
+        assert_eq!(run.reseed, Some(3));
+        assert_eq!(
+            calibrate(&["calibrate", "--seed", "1"]).unwrap().reseed,
+            None
+        );
+    }
 }

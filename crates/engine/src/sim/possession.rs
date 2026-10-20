@@ -217,6 +217,10 @@ impl Simulation {
             self.ball.pos.z = 0.001;
         }
         let team = self.players[i].team;
+        #[cfg(feature = "measures")]
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.touched(team, self.tick);
+        }
         self.last_touch = Some(team);
         self.last_kicker = Some(i);
         self.end_shot();
@@ -231,6 +235,10 @@ impl Simulation {
         }
         if self.ball.vel.z > 0.0 && self.ball.pos.z <= 0.0 {
             self.ball.pos.z = 0.001;
+        }
+        #[cfg(feature = "measures")]
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.touched(self.players[i].team, self.tick);
         }
         self.last_touch = Some(self.players[i].team);
         self.end_shot();
@@ -435,6 +443,14 @@ impl Simulation {
         self.referee.offside = 0;
         self.keeper_beaten = false;
         let team = self.players[i].team;
+        #[cfg(feature = "measures")]
+        if let Some(m) = self.measures.as_deref_mut() {
+            if self.pass_in_flight == Some(team) {
+                m.completed(team);
+            }
+            m.touched(team, self.tick);
+            m.gained(team, self.tick);
+        }
         #[cfg(feature = "sensitivity")]
         if self.probe.is_some() {
             let (at, tick) = (self.players[i].pos, self.tick);

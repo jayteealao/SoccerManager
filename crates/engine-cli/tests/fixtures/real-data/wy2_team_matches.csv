@@ -1,0 +1,5 @@
+match,team,passes,acc,shots,corners,yellows,poss,home
+1,10,400,0.8,12,5,1,0.6,True
+1,11,500,0.85,8,3,2,0.4,False
+2,12,300,0.75,10,4,0,0.45,True
+2,13,600,0.9,14,6,3,0.55,False

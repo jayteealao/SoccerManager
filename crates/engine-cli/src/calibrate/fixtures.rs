@@ -118,6 +118,22 @@ pub struct Keyed {
     pub arm: Option<usize>,
 }
 
+/// The engine seed of a match re-derived under `salt`: the first 8 bytes of SHA-256 over the
+/// seed and the salt. A gate proof's self run gives the changed engine new match seeds this
+/// way while the old engine keeps the planned ones; salt 0 keeps the seed.
+pub fn reseeded(engine_seed: u64, salt: u64) -> u64 {
+    if salt == 0 {
+        return engine_seed;
+    }
+    let mut hasher = Sha256::new();
+    hasher.update(engine_seed.to_le_bytes());
+    hasher.update(salt.to_le_bytes());
+    let digest = hasher.finalize();
+    let mut bytes = [0u8; 8];
+    bytes.copy_from_slice(&digest[..8]);
+    u64::from_be_bytes(bytes)
+}
+
 /// Every match `suite` plays with `matches` matches per suite, pairing, or arm, in fixture
 /// order, each with its key and engine seed. `formations` names the formations of the
 /// tactics file in order; `selected` holds the numbers of the pairings the formations suite
@@ -435,6 +451,15 @@ mod tests {
             clubs.sort_unstable();
             assert_eq!(clubs, (0..20).collect::<Vec<_>>());
         }
+    }
+
+    #[test]
+    fn a_reseed_changes_every_seed_by_salt_and_salt_0_keeps_it() {
+        assert_eq!(reseeded(42, 0), 42);
+        assert_ne!(reseeded(42, 1), 42);
+        assert_ne!(reseeded(42, 1), reseeded(42, 2));
+        assert_ne!(reseeded(42, 1), reseeded(43, 1));
+        assert_eq!(reseeded(42, 1), reseeded(42, 1));
     }
 
     #[test]

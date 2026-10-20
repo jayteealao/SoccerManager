@@ -192,6 +192,10 @@ mod tests {
             },
             se: 0.0,
             informational: None,
+            why_none: None,
+            unjudged: false,
+            whole: false,
+            dist: None,
         }
     }
 
