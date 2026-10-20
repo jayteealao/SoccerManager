@@ -342,7 +342,8 @@ impl Season {
     }
 
     /// Adds both sides of one finished match, each to its club, unless the club already holds
-    /// the match or the record is full (a full club says so in a signal); `files` are the two
+    /// the match or the record is full (a full club says so in a signal, and a club at the
+    /// player cap takes no new player); `files` are the two
     /// sides' team files, home first, from which a player entering the record gets his goal.
     /// Returns how many clubs recorded the match: 0 when the record did not change.
     pub fn ingest(
@@ -376,6 +377,18 @@ impl Season {
                 let Some(player) = file.players.iter().find(|p| p.id == entry.id) else {
                     continue;
                 };
+                // A club at the player cap takes no new player, so the file stays one
+                // [`Season::parse`] reads; its players already in the record keep counting.
+                if !part.players.contains_key(&entry.id) && part.players.len() >= MAX_PLAYERS {
+                    tracing::warn!(
+                        signal = "launch.season_full",
+                        club = %club,
+                        match_id = %stats.match_id,
+                        player = %entry.id,
+                        players = MAX_PLAYERS
+                    );
+                    continue;
+                }
                 let p = part
                     .players
                     .entry(entry.id.clone())
@@ -878,6 +891,60 @@ pub(crate) mod tests {
         assert_eq!(std::fs::read_to_string(&kept).unwrap(), theirs);
         let second = data.join(format!("{SEASON_FILE}.refused.1"));
         assert_eq!(std::fs::read_to_string(&second).unwrap(), "{ not json");
+    }
+
+    /// A club at the player cap takes no new player: its players already in the record keep
+    /// counting, and the saved file loads back whole instead of being refused.
+    #[test]
+    fn a_club_at_the_player_cap_keeps_its_season_file_through_a_save_and_a_load() {
+        let folder = temp("capped");
+        let data = &folder.0;
+        let (dir, content) = shipped();
+        let teams = sample(&content, &dir);
+        let files = [&teams[0].file, &teams[1].file];
+        let schema = &content.attributes;
+        let known = files[0].players[0].id.clone();
+        let new = files[0].players[1].id.clone();
+        let mut season = Season::default();
+        let part = season.clubs.entry(files[0].club.id.clone()).or_default();
+        part.matches.push("m-0".into());
+        part.players
+            .insert(known.clone(), season_of(GoalKind::Starts, 20.0, &[7.0]));
+        for k in 1..MAX_PLAYERS {
+            part.players.insert(
+                format!("old-{k}"),
+                season_of(GoalKind::Starts, 20.0, &[6.0]),
+            );
+        }
+        assert_eq!(part.players.len(), MAX_PLAYERS);
+
+        let rated = |id: &str| RatingEntry {
+            id: id.into(),
+            team: 0,
+            rating: 7.5,
+            started: true,
+            minutes: 90,
+            goals: 0,
+            assists: 0,
+            clean_sheet: false,
+            red: 0,
+        };
+        let stats = record("m-1", files, vec![rated(&known), rated(&new)]);
+        assert_eq!(season.ingest(&stats, files, schema), 2);
+        let part = &season.clubs[&files[0].club.id];
+        assert_eq!(part.players.len(), MAX_PLAYERS, "no player past the cap");
+        assert!(!part.players.contains_key(&new));
+        assert_eq!(
+            part.players[&known].ratings.len(),
+            2,
+            "a known player counts on"
+        );
+        assert_eq!(part.matches, ["m-0", "m-1"]);
+
+        season.save(data).unwrap();
+        let loaded = Season::load(data);
+        assert_eq!(loaded, season, "the capped file loads back whole");
+        assert!(!data.join(format!("{SEASON_FILE}.refused")).exists());
     }
 
     /// The copy: none for a club with no match; a copy with no input set plays the same seed

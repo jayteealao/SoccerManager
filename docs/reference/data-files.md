@@ -1383,7 +1383,7 @@ The launcher adds the ratings of the home side of the last match it ran, read fr
 | `schema_version` | 1 |
 | `clubs` | an object from club id to that club's part, at most 500 clubs |
 
-Each club's part holds `matches`, the match ids it played, oldest first (at most 200; the record then stops growing and each further match logs the `launch.season_full` signal), and `players`, from player id to his season (at most 1,000 players a club, each with at most 200 ratings):
+Each club's part holds `matches`, the match ids it played, oldest first (at most 200; the record then stops growing and each further match logs the `launch.season_full` signal), and `players`, from player id to his season (at most 1,000 players a club, each with at most 200 ratings; a club at 1,000 takes no new player, logs `launch.season_full` for each one left out, and its players already in the record keep counting):
 
 | Field | Values |
 |---|---|
