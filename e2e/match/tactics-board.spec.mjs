@@ -135,7 +135,7 @@ test('a style pick sets the levels and game plans, and one level after it is one
     await board(page).getByRole('button', { name: /^Tactic:/ }).click();
     await page.waitForTimeout(250);
     await evidence(page, info, 'style-t250');
-    const options = board(page).getByRole('listbox', { name: 'Styles' }).getByRole('option');
+    const options = board(page).getByRole('group', { name: 'Styles' }).getByRole('button');
     const at = await options.count();
     await options.nth(at - 1).click();
     const picked = await hook(page, () => window.__touchline.board());

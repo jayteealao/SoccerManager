@@ -62,7 +62,7 @@ fn keeper(sim: &Simulation, team: usize) -> usize {
     team * PLAYERS_PER_TEAM + sim.teams[team].keeper_slot()
 }
 
-/// AC-10: with no lift and early in the match, each job carries its decided grade on the
+/// With no lift and early in the match, each job carries its decided grade on the
 /// player, and the pace pass writes it.
 fn assert_grades(sim: &Simulation) {
     for (i, p) in sim.players.iter().enumerate() {
@@ -251,7 +251,7 @@ fn a_counter_lifts_support_jobs_only_inside_the_regain_window() {
         settle(&mut sim);
         sim.teams[0].plan.pace_lift = lift;
         let tick = sim.tick;
-        sim.regained_at[0] = since_s.map(|s| {
+        sim.windows.regained_at[0] = since_s.map(|s| {
             // A few seconds: the cast is exact.
             tick - (s * f64::from(crate::TICKS_PER_SECOND)).round() as u32
         });
@@ -363,11 +363,11 @@ fn losing_the_ball_sends_the_nearest_presser_at_a_sprint_and_the_others_jog_back
     assert!(presser_sprinted, "the nearest presser sprinted");
 }
 
-/// AC-14 as narrowed: a team leading late with time wasting drops its NORMAL jobs one step
+/// A team leading late with time wasting drops its NORMAL jobs one step
 /// only while the ball is dead. In open play it keeps its grades with the ball and without it.
 /// The late window covers the whole match here, so a scene a minute in counts as late. The
-/// pace pass runs only in the live phase today; the dead-ball half calls it directly, as the
-/// restarts slice will.
+/// pace pass runs only in the live phase; the dead-ball half calls it directly, as the
+/// restart rules do.
 #[test]
 fn a_leading_team_wastes_time_only_at_a_dead_ball() {
     let mut config = config();

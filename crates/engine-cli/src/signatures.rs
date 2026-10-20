@@ -54,6 +54,7 @@ use engine::decision::{
 use serde::Serialize;
 
 use crate::cli::SignaturesOpts;
+use crate::stats::{quantile_linear, round_to};
 
 pub mod substitutions;
 
@@ -151,7 +152,7 @@ impl Check {
             source: source.into(),
             competitions: competitions.to_vec(),
             teams: v.len(),
-            median: round6(quantile(&v, 0.5)),
+            median: round6(quantile_linear(&v, 0.5)),
             min: round6(v[0]),
             max: round6(v[v.len() - 1]),
             rank_correlation: None,
@@ -244,16 +245,8 @@ fn lines(path: &Path) -> anyhow::Result<Box<dyn Iterator<Item = std::io::Result<
     })
 }
 
-/// The value at share `p` of the sorted values `v`, linear between the two nearest ranks.
-fn quantile(v: &[f64], p: f64) -> f64 {
-    let at = p * (v.len() - 1) as f64;
-    let i = at.floor() as usize;
-    let j = (i + 1).min(v.len() - 1);
-    v[i] + (v[j] - v[i]) * (at - i as f64)
-}
-
 fn round6(x: f64) -> f64 {
-    (x * 1e6).round() / 1e6
+    round_to(x, 6)
 }
 
 /// The row of `values` (one per team).
@@ -272,7 +265,7 @@ pub fn spread(
     }
     let mut v = values.to_vec();
     v.sort_by(f64::total_cmp);
-    let edges: [f64; 4] = std::array::from_fn(|i| quantile(&v, (i + 1) as f64 / 5.0));
+    let edges: [f64; 4] = std::array::from_fn(|i| quantile_linear(&v, (i + 1) as f64 / 5.0));
     let quintile_of = |x: f64| edges.iter().filter(|&&e| x > e).count();
     let mut groups: [Vec<f64>; 5] = Default::default();
     for &x in &v {
@@ -284,7 +277,7 @@ pub fn spread(
         if groups[q].is_empty() {
             (lo(q) + hi(q)) / 2.0
         } else {
-            quantile(&groups[q], 0.5)
+            quantile_linear(&groups[q], 0.5)
         }
     });
     Ok(Row {

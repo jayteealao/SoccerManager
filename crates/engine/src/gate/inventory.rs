@@ -13,7 +13,7 @@ use crate::canon::{self, Writer};
 use crate::math::DVec2;
 use crate::player::Player;
 use crate::rules::{Phase, Referee};
-use crate::sim::{EngineEvent, EventDetail, Simulation};
+use crate::sim::{EngineEvent, EventDetail, Simulation, Windows};
 use crate::tactics::change::{Change, RejectReason};
 
 use super::{FieldKind, Fixture, GATE_SCHEMA, INVENTORY_VERSION};
@@ -67,10 +67,13 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         keeper_beaten,
         pass_in_flight,
         possession_phase,
-        regained_at,
-        lost_at,
-        trigger_at,
-        trap_at,
+        windows:
+            Windows {
+                regained_at,
+                lost_at,
+                trigger_at,
+                trap_at,
+            },
         heavy_mask,
         slide_ball,
         shot_in_flight,

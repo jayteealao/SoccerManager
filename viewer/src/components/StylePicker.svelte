@@ -14,12 +14,24 @@
 
   let open = $state(false);
   let root = $state(null);
+  const menuId = `style-menu-${Math.random().toString(36).slice(2, 8)}`;
 
   let shown = $derived(options.find((o) => o.id === current)?.name ?? 'Custom');
 
   function pick(id) {
     open = false;
     onpick(id);
+  }
+
+  // On open, focus moves to the style on show (or the first), so the list is reached at once.
+  function toggle() {
+    open = !open;
+    if (open) {
+      queueMicrotask(() => {
+        const list = root?.querySelector('.menu');
+        (list?.querySelector('[aria-pressed="true"]') ?? list?.querySelector('button'))?.focus();
+      });
+    }
   }
 
   function keydown(event) {
@@ -43,32 +55,33 @@
   <button
     type="button"
     class="pick"
-    aria-haspopup="listbox"
     aria-expanded={open}
-    aria-label="Tactic: {formation}, {shown}"
+    aria-controls={menuId}
+    aria-label="Tactic: {formation} · {shown}"
     {disabled}
-    onclick={() => (open = !open)}
+    onclick={toggle}
   >
     <span>{formation} · <b>{shown}</b></span>
     <svg width="8" height="8" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 6 8 10.5 12.5 6" /></svg>
   </button>
   {#if open}
-    <div class="menu" role="listbox" aria-label="Styles">
-      <div class="head">Choose a style · sets every team instruction and its game plans</div>
+    <div class="menu" id={menuId}>
+      <div class="head" id="{menuId}-head">Choose a style · sets every team instruction and its game plans</div>
+      <div role="group" aria-label="Styles" aria-describedby="{menuId}-head {menuId}-foot">
       {#each options as option (option.id)}
         <button
           type="button"
-          role="option"
           class="opt"
           class:on={option.id === current}
-          aria-selected={option.id === current}
+          aria-pressed={option.id === current}
           onclick={() => pick(option.id)}
         >
           <b>{option.name}</b><span>{option.note}</span>
           {#if option.id === current && changes > 0}<em>{changes} change{changes > 1 ? 's' : ''}</em>{/if}
         </button>
       {/each}
-      <div class="foot">A new style replaces your team instructions and game plans. Player instructions stay.</div>
+      </div>
+      <div class="foot" id="{menuId}-foot">A new style replaces your team instructions and game plans. Player instructions stay.</div>
     </div>
   {/if}
 </span>

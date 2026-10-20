@@ -1,10 +1,10 @@
 <!-- A short choice list side by side (Full-back runs, Cross type) or Off and On for a switch:
      one group of buttons, the chosen one cyan. Segments change at once, with no animation. -->
 <script>
-  let { full, words = [], value = 0, disabled = false, onchange = () => {} } = $props();
+  let { full, words = [], value = 0, disabled = false, describedby = undefined, onchange = () => {} } = $props();
 </script>
 
-<span class="seg" role="group" aria-label={full}>
+<span class="seg" role="group" aria-label={full} aria-describedby={describedby}>
   {#each words as word, i (i)}
     <button
       type="button"
@@ -54,6 +54,7 @@
 
   button:disabled {
     cursor: default;
+    opacity: 0.5;
   }
 
   button:focus-visible {
@@ -61,7 +62,7 @@
     outline-offset: -2px;
   }
 
-  @media (max-width: 1023px), (max-height: 599px) {
+  @media (max-width: 1023px), (max-height: 599px), (pointer: coarse) {
     button {
       min-height: 44px;
       min-width: 44px;

@@ -862,7 +862,7 @@ mod tests {
         );
     }
 
-    /// Shape AC-6, content part: every role's menu holds only the five stand options, and no
+    /// In the content: every role's menu holds only the five stand options, and no
     /// option names a partner; a menu entry that names one, or an option listed twice, is
     /// refused.
     #[test]

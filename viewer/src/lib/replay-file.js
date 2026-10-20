@@ -590,6 +590,11 @@ const CHANGE_SHAPE = variants({
     roles: list({ squad: 'u64', role: 'u8', duty: 'u8' }),
   },
   rule: { active: 'u8' },
+  // Primitives set to new levels from the tactics board, by the tactics file's names.
+  instructions: { levels: list({ primitive: 'str', level: 'str' }) },
+  // A side's rules and player instructions replaced whole; the engine nests the written
+  // file under its own `game_state` key.
+  game_state: { game_state: 'object' },
 });
 const RECORD_SHAPE = {
   engine: {

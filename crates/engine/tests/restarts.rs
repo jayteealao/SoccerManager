@@ -44,7 +44,7 @@ fn ball(r: &TickRecord) -> DVec2 {
     DVec2::new(f64::from(r.ball[0]), f64::from(r.ball[1]))
 }
 
-/// AC-17: the ball stays at its exit point for the drawn extra, then appears at the spot on a
+/// The ball stays at its exit point for the drawn extra, then appears at the spot on a
 /// tick that carries the restart flag; a quick restart puts it there at once.
 #[test]
 fn the_ball_waits_where_it_left_play_then_appears_at_the_spot() {
@@ -109,7 +109,7 @@ fn steps_and_take(quick: bool) -> (u32, u32, u32) {
     panic!("the throw-in was never taken");
 }
 
-/// AC-21 (part): a quick restart leaves the taker's visible steps as they are and only drops
+/// A quick restart leaves the taker's visible steps as they are and only drops
 /// the drawn extra.
 #[test]
 fn a_quick_restart_never_shortens_the_takers_steps() {
@@ -149,7 +149,7 @@ fn extra_bounds(config: &MatchConfig, kind: engine::StoppageKind) -> (u32, u32) 
     (lo.saturating_sub(1), hi + 1)
 }
 
-/// AC-19: over four seeded 90-minute matches, every stoppage not forced by its hard limit is
+/// Over four seeded 90-minute matches, every stoppage not forced by its hard limit is
 /// taken exactly its drawn extra after its visible steps are done, so it lasts its visible
 /// steps plus the extra, unless a player stands out of place again once the extra has run, when
 /// it waits for him; each extra lies inside what the table allows.
@@ -239,7 +239,7 @@ fn every_stoppage_lasts_its_visible_steps_plus_its_drawn_extra() {
     }
 }
 
-/// AC-22: on every dead tick, every player whose job is to wait stands or walks.
+/// On every dead tick, every player whose job is to wait stands or walks.
 #[test]
 fn players_with_no_job_stand_or_walk_at_a_dead_ball() {
     let content = common::content();
@@ -312,7 +312,7 @@ impl Write for Log {
     }
 }
 
-/// AC-20 (part): a restart whose visible steps never finish (no taker can ever stand close
+/// A restart whose visible steps never finish (no taker can ever stand close
 /// enough to the ball) is taken at its hard limit, `since` plus the extra plus the kind's
 /// steps limit, and logged.
 #[test]
@@ -371,7 +371,7 @@ impl TickSink for Order {
     }
 }
 
-/// AC-24 and charter step 1: a level knockout match gets one walk-on before the first record of
+/// A level knockout match gets one walk-on before the first record of
 /// each of its four halves. Each starts at the tunnel on the near touchline, ends on the
 /// positions of that record, and never moves a player faster than the walk; the records stay
 /// consecutive across it, and the match plays exactly as with no one listening, so the

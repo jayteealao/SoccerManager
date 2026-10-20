@@ -9,6 +9,7 @@
     value = 0,
     def = null,
     disabled = false,
+    describedby = undefined,
     onchange = () => {},
   } = $props();
 
@@ -42,7 +43,7 @@
 
 <!-- The arrow keys reach the group from the focused pip. -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<span class="pips" role="group" aria-label={full} bind:this={group} onkeydown={keydown}>
+<span class="pips" role="group" aria-label={full} aria-describedby={describedby} bind:this={group} onkeydown={keydown}>
   {#each words as word, i (i)}
     <button
       type="button"
@@ -52,6 +53,7 @@
       data-level={i}
       aria-label="{full}: {word}, {i + 1} of {words.length}"
       aria-pressed={i === value}
+      aria-describedby={i === value ? describedby : undefined}
       tabindex={i === value ? 0 : -1}
       {disabled}
       onclick={() => set(i)}
@@ -110,8 +112,10 @@
     border-radius: var(--radius-sm);
   }
 
+  /* A stored match: the pips show the level but are not a control, so they read as faded. */
   .pip:disabled {
     cursor: default;
+    opacity: 0.5;
   }
 
   @media (min-width: 1600px) {
@@ -128,8 +132,8 @@
     }
   }
 
-  /* Compact: every pip is a 44 px target. */
-  @media (max-width: 1023px), (max-height: 599px) {
+  /* Compact, and a touch screen at any step: every pip is a 44 px target. */
+  @media (max-width: 1023px), (max-height: 599px), (pointer: coarse) {
     .pip {
       width: 44px;
       height: 44px;

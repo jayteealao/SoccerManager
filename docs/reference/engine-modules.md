@@ -49,12 +49,12 @@ The table lists the slots in the order the engine resolves them. A required slot
 | `engine.modifier.familiarity` | no | `familiarity@1` | none | `off` | none | none: no familiarity band in realism-bands.json |
 | `engine.modifier.weather` | no | `weather@1` | none | `off` | none | none: no-op stand-in, no effect until its own piece |
 | `engine.clock` | yes | `clock@1` | none | none | AddedTime, ExtraTimeAdded, ExtraKickOff, ShootoutFirstTeam, ShootoutEnd, KeeperDive, ShootoutSaveHold | none: no added-time or shoot-out band in realism-bands.json |
-| `engine.restarts` | yes | `restarts@1` | none | none | none | none: restart placement and timing follow the Laws; no band measures them |
+| `engine.restarts` | yes | `restarts@1` | none | none | RestartWait, QuickRestart | none: restart placement and timing follow the Laws; no band measures them |
 | `engine.discipline` | no | `discipline@1` | none | `off` | none | sending_off_share |
 | `engine.injuries` | no | `injuries@1` | none | `off` | none | none: no injury band in realism-bands.json |
 | `engine.ball` | yes | `ball@1` | none | none | BlockDeflect, ParryAngle, ParryLoft, CrossAngle, CrossLoft | none: ball physics, no realism band |
-| `engine.possession` | yes | `possession@1` | none | none | Block, SaveHold, ParrySide, CrossClear, CrossWide, KeeperCatch, Header | possession_pct |
-| `engine.decision` | yes | `decision@1` | none | none | ShotScore, PassScore, DribbleScore, HoldScore, ClearScore, PassAim, ClearWide, ClearAim, ShotSide, ShotAim, ShotSpread, ShotLoft, Lapse | pass_accuracy_pct |
+| `engine.possession` | yes | `possession@1` | none | none | Block, SaveHold, ParrySide, CrossClear, CrossWide, KeeperCatch, Header, PassCut, TakeOn | possession_pct |
+| `engine.decision` | yes | `decision@1` | none | none | ShotScore, PassScore, DribbleScore, HoldScore, ClearScore, PassAim, ClearWide, ClearAim, ShotSide, ShotAim, ShotSpread, ShotLoft, Lapse, PaceSprint, TraitOverride, PassWeight, PerceiveScore | pass_accuracy_pct |
 | `engine.manager` | no | `ai-manager@1` | none | `off` | none | none: no band in realism-bands.json; calibrate's substitution report reads it against the real eras of the rule pack's limit |
 | `engine.changes` | no | `changes@1` | none | `off` | none | none: Law 3 change rules, no band |
 | `engine.hook.decision` | no | `decision-hook@1` | none | `off` | none | none: plugin hook adapter, no realism band |

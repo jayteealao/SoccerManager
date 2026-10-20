@@ -685,8 +685,7 @@ impl Simulation {
         // window of the side that won the ball and the counter-press window of the side that
         // lost it.
         if self.possession_phase == Some(1 - team) {
-            self.regained_at[team] = Some(self.tick);
-            self.lost_at[1 - team] = Some(self.tick);
+            self.windows.won(team, self.tick);
         }
         self.possession_phase = Some(team);
         self.carrier = Some(i);
@@ -705,7 +704,7 @@ impl Simulation {
     /// Press trigger `kind` of the side with the ball fires for pressing side `def`: its
     /// window opens now.
     pub(crate) fn fire_trigger(&mut self, def: usize, kind: usize) {
-        self.trigger_at[def][kind] = Some(self.tick);
+        self.windows.fire_trigger(def, kind, self.tick);
         #[cfg(feature = "measures")]
         if let Some(m) = self.measures.as_deref_mut() {
             m.trigger(def, kind, self.tick);

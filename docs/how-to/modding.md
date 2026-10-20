@@ -46,7 +46,7 @@ To judge the change against the engine before it, add `--base main` from your gi
 
 ## Add a realism band
 
-Every band is an entry of `bands` in `realism-bands.json`, so a new band needs no code. The file is at version 4: each band has its design range and its record. To check the substitutions of each team in the equal suite, add:
+Every band is an entry of `bands` in `realism-bands.json`, so a new band needs no code. The file is at version 5: each band has its design range and its record. To check the substitutions of each team in the equal suite, add:
 
 ```json
 {
@@ -248,8 +248,8 @@ error: content refused: tuning tuning.json: engine.keeper_catch_chance: greater 
 error: content refused: team teams/x.json: players: player p-club-00000001-00-04: attribute pace is 20.5; allowed 1.0 to 20.0
 error: content refused: team teams/x.json: players: player p-club-00000001-00-04: attribute pace is 12.34; not on a tenth
 error: content refused: team teams/x.json: players: player p-club-00000001-00-04: body field height is missing
-error: content refused: team teams/x.json: schema_version 3; this build reads 2
-error: content refused: rules rules/default.json: schema_version 7; this build reads 3
+error: content refused: team teams/x.json: schema_version 4; this build reads 3
+error: content refused: rules rules/default.json: schema_version 7; this build reads 4
 ```
 
 To correct the error:

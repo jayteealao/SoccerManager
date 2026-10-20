@@ -223,12 +223,15 @@
               {#each group.rows as row, r (row.name)}
                 <!-- The row is a tooltip trigger: it takes focus so the keyboard reaches the
                      list of actions, as the pointer does; it does nothing when pressed. Only one
-                     row is in the Tab order; the arrow keys move between rows.
+                     row is in the Tab order; the arrow keys move between rows. As a named group
+                     a screen reader reads the attribute and its value when the row takes focus.
                      sdlc-debt: the a11y lint knows no focusable tooltip trigger that is not a
                      control; drop the ignore if the row becomes a disclosure button. -->
-                <!-- svelte-ignore a11y_no_static_element_interactions, a11y_no_noninteractive_tabindex -->
+                <!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_no_noninteractive_tabindex -->
                 <div
                   class="attr"
+                  role="group"
+                  aria-label="{row.label} {row.value}, {row.word}"
                   data-attr={row.name}
                   tabindex={row.name === tabStop ? 0 : -1}
                   aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home End"

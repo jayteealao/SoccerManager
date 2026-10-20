@@ -55,6 +55,11 @@ use crate::traits::{
 use crate::tuning::Tuning;
 use serde_json::json;
 
+mod off_ball;
+mod press;
+pub(crate) use off_ball::*;
+pub use press::*;
+
 /// A pass of this length or less that gains less than [`FORWARD_M`] toward goal recycles the
 /// ball: tempo's patience is added to it (hook `pass.recycle`).
 pub const RECYCLE_M: f64 = 20.0;
@@ -95,142 +100,6 @@ pub const COUNTERPRESS_LAST_S: f64 = 10.0;
 /// Metres from the defensive line, per unit of the side's on-winning weight, within which an
 /// attack-line player may start a run in behind while the regain window is open.
 pub const COUNTER_RUN_M: f64 = 10.0;
-
-/// The press triggers, in the order of [`crate::sim::Simulation`]'s trigger ticks: a pass
-/// toward the passer's own goal, a gain after the ball came too fast to control, a receiver
-/// facing his own goal, and a pass to a full-back or into a wide channel.
-pub const TRIGGERS: [&str; 4] = ["back_pass", "poor_touch", "facing_back", "ball_wide"];
-pub const TRIGGER_BACK_PASS: usize = 0;
-pub const TRIGGER_POOR_TOUCH: usize = 1;
-pub const TRIGGER_FACING_BACK: usize = 2;
-pub const TRIGGER_WIDE: usize = 3;
-/// A pass is a back pass when its direction's cosine with the passer's attack direction is
-/// below minus this (more than 60 degrees from square, backward).
-pub const BACK_PASS_COS: f64 = 0.5;
-/// A receiver faces his own goal when his facing's cosine with his attack direction is below
-/// minus this.
-pub const FACING_BACK_COS: f64 = 0.5;
-/// The press-trigger window (hooks `press.trigger.*`): for this many seconds after a trigger
-/// the pressing side switches on fires, while the other side keeps the ball, the side's press
-/// reach takes [`TRIGGER_REACH`] and [`TRIGGER_PRESSERS`] more players press, and its nearest
-/// outfield player presses whatever his reach, at a sprint (an urgent press job).
-pub const TRIGGER_WINDOW_S: f64 = 3.0;
-pub const TRIGGER_REACH: f64 = 1.5;
-pub const TRIGGER_PRESSERS: usize = 1;
-/// Force the opponent (hook `press.force`): metres per unit of force the presser's aim moves
-/// across, toward the centre to show the carrier wide (force above 0) or toward the near
-/// touchline to show him inside (below 0).
-pub const FORCE_M: f64 = 2.0;
-/// The offside trap (hook `line.offside_trap`): the back line steps up this many metres
-/// together for this many seconds once the trap starts.
-pub const TRAP_STEP_M: f64 = 5.0;
-pub const TRAP_WINDOW_S: f64 = 2.0;
-/// Stop short goal kicks (hook `press.screen_short`) and the goal-kick pick: a team-mate of
-/// the kicker with an opponent within this many metres of him is screened.
-pub const SCREEN_M: f64 = 4.0;
-/// The metres of a goal kick's score a screened team-mate loses.
-pub const SCREENED_M: f64 = 20.0;
-/// The score a pass from the passer's own penalty area to a screened team-mate loses in the
-/// carrier's open-play choice (the keeper's goal kick included): the same read as the
-/// restart pick's [`SCREENED_M`], in the option scores' units, where it marks the pass as
-/// one he expects to lose, as [`OFFSIDE_READ_COST`] does.
-pub const SCREENED_COST: f64 = 1.0;
-/// The tackle decision (hook `tackle.decide`): the cost of a foul's chance, in units of the
-/// win chance, at no danger; the danger of a foul doubles it near the own goal. Set from the
-/// probe of the default sides: at 0.1 a defender declines only a tackle he is far likelier to
-/// foul in than to win, and the equal suite's goals stay within 0.05 a match of the automatic
-/// tackle's (at 0.25 seed 9 rises 0.29, at 0.5 both seeds about 0.35, over 200 matches).
-pub const TACKLE_FOUL_COST: f64 = 0.1;
-
-/// Press triggers (hooks `press.trigger.*`): the factor on pressing side `team`'s press reach,
-/// [`TRIGGER_REACH`] while the window of a trigger its plan switches on is open, else 1.
-pub(crate) fn trigger_factor(view: &MatchView<'_>, team: usize) -> f64 {
-    if trigger_open(view, team) {
-        TRIGGER_REACH
-    } else {
-        1.0
-    }
-}
-
-/// Press triggers: the extra pressers of side `team`, [`TRIGGER_PRESSERS`] while the window of
-/// a trigger its plan switches on is open, else 0.
-pub(crate) fn trigger_pressers(view: &MatchView<'_>, team: usize) -> usize {
-    if trigger_open(view, team) {
-        TRIGGER_PRESSERS
-    } else {
-        0
-    }
-}
-
-/// The active outfield player of side `team` (not its keeper `keeper`) nearest `at`, with his
-/// distance.
-fn nearest_outfield(
-    view: &MatchView<'_>,
-    team: usize,
-    keeper: usize,
-    at: DVec2,
-) -> Option<(f64, usize)> {
-    view.players()
-        .iter()
-        .enumerate()
-        .filter(|&(i, p)| p.team == team && p.active() && i != keeper)
-        .map(|(i, p)| ((p.pos - at).length(), i))
-        .min_by(|a, b| a.0.total_cmp(&b.0))
-}
-
-/// Whether the window of a press trigger side `team`'s plan switches on is open.
-pub(crate) fn trigger_open(view: &MatchView<'_>, team: usize) -> bool {
-    let plan = &view.teams()[team].plan;
-    let on = [
-        plan.trigger_back_pass,
-        plan.trigger_poor_touch,
-        plan.trigger_facing_back,
-        plan.trigger_wide,
-    ];
-    on.iter().enumerate().any(|(k, &on)| {
-        on && view
-            .since_trigger_s(team, k)
-            .is_some_and(|s| s < TRIGGER_WINDOW_S)
-    })
-}
-
-/// The line of engagement's press start (hook `press.engage`): `true` while the ball lies
-/// within side `team`'s engage line, a share of the pitch length from its own goal line; the
-/// default share 1 never limits.
-pub(crate) fn engaged(view: &MatchView<'_>, team: usize, ball: DVec2) -> bool {
-    let share = view.teams()[team].plan.engage_line;
-    if share >= 1.0 {
-        return true;
-    }
-    let pitch = view.pitch();
-    let from_own_line = ball.x * view.teams()[team].attack_x + pitch.half_length();
-    from_own_line < share * pitch.length()
-}
-
-/// On winning the ball (hook `regain.counter`): the on-winning weight of the player in slot
-/// `slot` of side `team` (his own plan's) while the side's regain window is open,
-/// [`COUNTER_WINDOW_S`] after it won the ball in open play and still on it; 0 otherwise, and
-/// 0 at the default level.
-pub(crate) fn counter_weight(view: &MatchView<'_>, team: usize, slot: usize) -> f64 {
-    match view.since_regain_s(team) {
-        Some(s) if s < COUNTER_WINDOW_S => view.teams()[team].plan_for(slot).counter,
-        _ => 0.0,
-    }
-}
-
-/// On losing the ball and counter-press length (hooks `loss.counter_press` and
-/// `loss.counter_press_window`): the factor on how far from the carrier side `team`'s nearest
-/// players start to press; how many press stays the pressing level's. While its counter-press
-/// window is open, `counter_press_s` seconds after it lost the ball in open play with the
-/// other side still on it, the factor is 1 plus its counter-press, never below 0; otherwise 1.
-/// The default level's counter-press is 0, so a side presses as its pressing level says. The
-/// window is the side's; `counter_press` is the pressing player's own (his plan's).
-pub(crate) fn counter_press_factor(view: &MatchView<'_>, team: usize, counter_press: f64) -> f64 {
-    match view.since_loss_s(team) {
-        Some(s) if s < view.teams()[team].plan.counter_press_s => (1.0 + counter_press).max(0.0),
-        _ => 1.0,
-    }
-}
 
 /// The channel of a point `y` across the pitch for a side attacking `attack_x`: 0 the side's
 /// left (where its left-back stands), 1 the centre, 2 its right. A point more than
@@ -2691,252 +2560,6 @@ pub(crate) fn rash_chase(distance: f64) -> bool {
     distance > KEEPER_CHASE_M
 }
 
-/// Timed runs (the off-ball movement hook) of team `team` while it has the ball and carrier
-/// `c` is someone else: every active outfield attacker with off-ball movement above the
-/// average (skill `s` of his off-ball run stage, 0 to 1) whose target lies beyond the onside
-/// line, 0.5 m short of the second-last defender, is brought back toward that line by the
-/// share `s`; and his target moves `hooks.anchor_space_m · s` across the pitch away from the
-/// nearest defender, kept on the pitch.
-fn time_runs(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER], team: usize, c: usize) {
-    let space = view.tuning().contract.hooks().anchor_space_m;
-    let side = &view.teams()[team];
-    let attack_x = side.attack_x;
-    let line = offside::second_last_depth(team, view.players(), attack_x) - ONSIDE_MARGIN;
-    let speed = offside::second_last_speed(team, view.players(), attack_x);
-    let keeper = view.keeper(team);
-    for (i, p) in view.players().iter().enumerate() {
-        if p.team != team || i == c || i == keeper || !p.active() {
-            continue;
-        }
-        let s = view.skills(i).skill(Stage::OFF_BALL_RUN_EXECUTE).max(0.0);
-        if s <= 0.0 {
-            continue;
-        }
-        let line = line + line_lag(view, i, speed);
-        let mut at = targets[i];
-        let depth = at.x * attack_x;
-        if line.is_finite() && depth > line {
-            at.x = (depth + s * (line - depth)) * attack_x;
-        }
-        if space > 0.0 {
-            let nearest = view
-                .players()
-                .iter()
-                .filter(|q| q.team != team && q.active())
-                .map(|q| q.pos)
-                .min_by(|a, b| (*a - at).length().total_cmp(&(*b - at).length()));
-            if let Some(q) = nearest {
-                let away = if at.y >= q.y { 1.0 } else { -1.0 };
-                at.y += away * space * s;
-            }
-        }
-        targets[i] = view.pitch().clamp(at, 0.5);
-    }
-}
-
-/// `true` for a slot of the attack line: a winger or a striker by the formation's position.
-pub(crate) fn attack_line(position: Option<crate::data::team::Position>) -> bool {
-    use crate::data::team::Position;
-    matches!(position, Some(Position::LW | Position::RW | Position::ST))
-}
-
-/// The farthest, in metres, a carrier looks for a runner in behind: the longest pass he
-/// considers.
-const RUN_PASS_M: f64 = 45.0;
-
-/// How far beyond the onside line a run in behind aims, in metres.
-const RUN_BEYOND_M: f64 = 6.0;
-/// A run coming short aims this far back from where the forward stands, in metres, and lasts
-/// at most [`COME_SHORT_S`]. Real forwards' coming-short runs take a median of 7.6 m in 1.6 s
-/// (SkillCorner's open data) at speed. An engine forward starts a check from standing in his
-/// place and brakes into its end, so a check of 8 m keeps him at a run's speed (4 m/s) for
-/// under the 1 s a run needs: the engine's run measure read almost none of them. At 12 m the
-/// check is a run by the shared definition.
-const COME_SHORT_M: f64 = 12.0;
-const COME_SHORT_S: f64 = 4.0;
-/// The nearest a run coming short comes to the carrier's depth, in metres.
-const COME_SHORT_TO_M: f64 = 5.0;
-/// A forward within this many metres of his place stands in it.
-const SETTLED_M: f64 = 2.0;
-
-/// How far from the defensive line side `team`'s attack-line players may start a timed run:
-/// its forward runs (hook `run.start`); inside its regain window a positive on-winning weight
-/// lets them start a run in behind from up to `counter x COUNTER_RUN_M` metres.
-fn run_start(view: &MatchView<'_>, team: usize, slot: usize) -> f64 {
-    let start = view.teams()[team].plan_for(slot).run_start_m;
-    let counter = counter_weight(view, team, slot);
-    if counter > 0.0 {
-        start.max(counter * COUNTER_RUN_M)
-    } else {
-        start
-    }
-}
-
-/// The side's forward runs (hook `run.start`) while team `team` has the ball and carrier `c`
-/// is someone else. Nothing moves at the default of 0. The level sets how far from the
-/// defensive line a forward may start a timed run: while a pass is on (the carrier is not
-/// pressed and the runner stands ahead of him within a pass's reach), an active attack-line
-/// player within `|run_start_m|` of the onside line (0.5 m short of the second-last defender)
-/// starts one. Above 0 it is a run in behind: he aims [`RUN_BEYOND_M`] past the onside line,
-/// so a pass played once he is past it is offside. Below 0 he checks short from his place
-/// (within [`SETTLED_M`] of it), pass on or not: he aims [`COME_SHORT_M`] back toward the ball,
-/// never nearer than [`COME_SHORT_TO_M`] ahead of the carrier, keeps that point, and is free
-/// after [`COME_SHORT_S`]; back in his place he may check again. A run under way (the
-/// runner's job is a timed run) goes on until he arrives, and through a pass that travels
-/// forward, while he stays within a pass's reach ([`RUN_PASS_M`]) of the ball. The farther from the line a run may start, the more forwards start one, so the
-/// frequency rises with the level. Returns the roster bits of the runners.
-fn forward_runs(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER], team: usize, c: usize) -> u32 {
-    let side = &view.teams()[team];
-    // Each runner's start reads his own plan (a player instruction may set it); the side
-    // runs nothing when every player's start is 0.
-    let starts: [f64; PLAYERS_PER_TEAM] = std::array::from_fn(|slot| run_start(view, team, slot));
-    let mut running = 0u32;
-    if starts.iter().all(|&s| s == 0.0) {
-        return running;
-    }
-    let attack_x = side.attack_x;
-    let line = offside::second_last_depth(team, view.players(), attack_x) - ONSIDE_MARGIN;
-    if !line.is_finite() {
-        return running;
-    }
-    let speed = offside::second_last_speed(team, view.players(), attack_x);
-    let carrier = view.player(c);
-    let carrier_depth = carrier.pos.x * attack_x;
-    let pass_on = !pressed(view, c);
-    for (i, p) in view.players().iter().enumerate() {
-        if p.team != team || i == c || !p.active() || !attack_line(side.plan.slots[p.slot].position)
-        {
-            continue;
-        }
-        let start = starts[p.slot];
-        if start == 0.0 {
-            continue;
-        }
-        let behind = start > 0.0;
-        let line = line + line_lag(view, i, speed);
-        let depth = p.pos.x * attack_x;
-        let gap = line - depth;
-        let from_carrier = p.pos - carrier.pos;
-        // In behind he aims past the line, keeping his place across; coming short he aims at
-        // the carrier's feet, `COME_SHORT_TO_M` from him on the line between them.
-        let (aim, to_go) = if behind {
-            let mut at = targets[i];
-            at.x = (line + RUN_BEYOND_M) * attack_x;
-            (at, line + RUN_BEYOND_M - depth)
-        } else {
-            let to = (depth - COME_SHORT_M).max(carrier_depth + COME_SHORT_TO_M);
-            let mut at = targets[i];
-            at.x = to * attack_x;
-            (at, depth - to)
-        };
-        if to_go <= 1.0 {
-            continue;
-        }
-        let ahead = depth > carrier_depth && from_carrier.length() <= RUN_PASS_M;
-        // An onside forward starts a run in behind; any forward may come back short.
-        let near = gap <= start.abs() && (!behind || gap >= 0.0);
-        // A forward checks short from his place: one away from it (coming back from a check
-        // or still moving to it) starts no new check.
-        let settled = behind || (p.pos - targets[i]).length() <= SETTLED_M;
-        let starts = (pass_on || !behind) && ahead && near && settled;
-        // A run coming short lasts [`COME_SHORT_S`]: a check toward the ball, then he is free.
-        let short_left = behind
-            || f64::from(view.tick().saturating_sub(p.pace.since))
-                < COME_SHORT_S * f64::from(crate::TICKS_PER_SECOND);
-        // A run goes on only while the runner stays within a pass's reach of the ball, the
-        // reach a run starts in: real runs in behind end within it (99.4 percent of 5,850
-        // tracked runs end within 45 m of the ball).
-        let in_reach = from_carrier.length() <= RUN_PASS_M;
-        let under_way = p.pace.job == Job::TimedRun && short_left && in_reach;
-        if !(starts || under_way) {
-            continue;
-        }
-        // A check under way keeps the point it set out for; a run in behind follows the line.
-        let aim = if under_way && !starts && !behind {
-            p.target
-        } else {
-            aim
-        };
-        targets[i] = view.pitch().clamp(aim, 0.5);
-        running |= 1 << i;
-    }
-    running
-}
-
-/// Box runs (named mechanism) while team `team` has the ball in a wide channel of its final
-/// third, carried by `c`: every other active attack-line player runs into the penalty area,
-/// to the depth of the penalty mark and no wider than the posts' channel
-/// ([`LATE_RUN_DEPTH_M`], [`LATE_RUN_WIDTH_M`]), each keeping his side of the pitch, never past
-/// the onside line. A cross then has a team-mate to find. Returns the roster bits of the
-/// runners.
-fn box_runs(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER], team: usize, c: usize) -> u32 {
-    let side = &view.teams()[team];
-    let attack_x = side.attack_x;
-    let pitch = view.pitch();
-    let half = pitch.half_length();
-    let ball = view.player(c).pos;
-    let mut runners = 0u32;
-    if ball.y.abs() <= contract::CROSS_WIDE_M || ball.x * attack_x <= half / 3.0 {
-        return runners;
-    }
-    let line = offside::second_last_depth(team, view.players(), attack_x) - ONSIDE_MARGIN;
-    let speed = offside::second_last_speed(team, view.players(), attack_x);
-    for (i, p) in view.players().iter().enumerate() {
-        if p.team != team || i == c || !p.active() || !attack_line(side.plan.slots[p.slot].position)
-        {
-            continue;
-        }
-        let depth = if line.is_finite() {
-            (half - LATE_RUN_DEPTH_M).min(line + line_lag(view, i, speed))
-        } else {
-            half - LATE_RUN_DEPTH_M
-        };
-        let at = DVec2::new(
-            depth * attack_x,
-            targets[i].y.clamp(-LATE_RUN_WIDTH_M, LATE_RUN_WIDTH_M),
-        );
-        targets[i] = pitch.clamp(at, 0.5);
-        runners |= 1 << i;
-    }
-    runners
-}
-
-/// The line hold (named mechanism) of team `team`'s lone forward while his team has the
-/// ball and carrier `c` is someone else: his target moves from his anchor toward the
-/// onside line, 0.5 m short of the second-last defender, by the share `lone_line_hold`,
-/// and never past that line. His place across the pitch stays the anchor's.
-fn hold_the_line(view: &MatchView<'_>, targets: &mut [DVec2; ROSTER], team: usize, c: usize) {
-    let share = view.tuning().lone_line_hold;
-    if share == 0.0 {
-        return;
-    }
-    let side = &view.teams()[team];
-    let Some(slot) = side.lone_forward() else {
-        return;
-    };
-    let i = team * PLAYERS_PER_TEAM + slot;
-    if i == c || !view.player(i).active() {
-        return;
-    }
-    let attack_x = side.attack_x;
-    let line = offside::second_last_depth(team, view.players(), attack_x) - ONSIDE_MARGIN;
-    if !line.is_finite() {
-        return;
-    }
-    let line = line
-        + line_lag(
-            view,
-            i,
-            offside::second_last_speed(team, view.players(), attack_x),
-        );
-    let anchor = targets[i];
-    let depth = anchor.x * attack_x;
-    let held = (depth + share * (line - depth)).min(line);
-    targets[i] = view
-        .pitch()
-        .clamp(DVec2::new(held * attack_x, anchor.y), 0.5);
-}
-
 /// Goal-side cover (named mechanism) while team `def` defends against carrier `c`. The
 /// covered attacker is the carrier when he is in `def`'s half inside the central channel,
 /// otherwise the most advanced attacker there. The nearest active back-line player of
@@ -4207,7 +3830,7 @@ mod tests {
         sim.possession_phase = Some(0);
         sim.tick = 2_000;
         sim.control_since = 2_000;
-        sim.regained_at[0] = since_s.map(|s| 2_000 - ticks(s));
+        sim.windows.regained_at[0] = since_s.map(|s| 2_000 - ticks(s));
         sim.options(striker)
     }
 
@@ -4258,7 +3881,7 @@ mod tests {
         sim.carrier = Some(carrier);
         sim.possession_phase = Some(0);
         sim.tick = 2_000;
-        sim.lost_at[1] = since_s.map(|s| 2_000 - ticks(s));
+        sim.windows.lost_at[1] = since_s.map(|s| 2_000 - ticks(s));
         let view = sim.view();
         sim.config.modules.decision.targets(&view)
     }
@@ -4325,7 +3948,7 @@ mod tests {
             sim.carrier = Some(carrier);
             sim.possession_phase = Some(0);
             sim.tick = 2_000;
-            sim.regained_at[0] = since_s.map(|s| 2_000 - ticks(s));
+            sim.windows.regained_at[0] = since_s.map(|s| 2_000 - ticks(s));
             let view = sim.view();
             sim.config.modules.decision.targets(&view).jobs[9]
         };

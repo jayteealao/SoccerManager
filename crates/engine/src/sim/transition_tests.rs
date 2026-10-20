@@ -24,8 +24,8 @@ fn an_interception_opens_both_windows_and_a_throw_in_closes_them() {
     let t = std::sync::Arc::clone(&sim.tuning);
     assert_eq!(sim.possession_phase, Some(0));
     sim.gain(PLAYERS_PER_TEAM + 5, &t);
-    assert_eq!(sim.regained_at, [None, Some(3_000)]);
-    assert_eq!(sim.lost_at, [Some(3_000), None]);
+    assert_eq!(sim.windows.regained_at, [None, Some(3_000)]);
+    assert_eq!(sim.windows.lost_at, [Some(3_000), None]);
     sim.tick += 50;
     let dt = sim.config.tuning.dt;
     assert_eq!(sim.since_regain_s(1), Some(50.0 * dt));
@@ -40,8 +40,8 @@ fn an_interception_opens_both_windows_and_a_throw_in_closes_them() {
         touchline,
         false,
     );
-    assert_eq!(sim.regained_at, [None; 2]);
-    assert_eq!(sim.lost_at, [None; 2]);
+    assert_eq!(sim.windows.regained_at, [None; 2]);
+    assert_eq!(sim.windows.lost_at, [None; 2]);
     assert_eq!(sim.since_regain_s(1), None);
     assert_eq!(sim.since_loss_s(0), None);
 }
@@ -54,8 +54,8 @@ fn no_window_without_a_change_of_side_and_a_win_back_swaps_the_windows() {
     let mut sim = scene();
     let t = std::sync::Arc::clone(&sim.tuning);
     sim.gain(5, &t);
-    assert_eq!(sim.regained_at, [None; 2]);
-    assert_eq!(sim.lost_at, [None; 2]);
+    assert_eq!(sim.windows.regained_at, [None; 2]);
+    assert_eq!(sim.windows.lost_at, [None; 2]);
     sim.gain(PLAYERS_PER_TEAM + 5, &t);
     sim.tick += 40;
     sim.gain(6, &t);

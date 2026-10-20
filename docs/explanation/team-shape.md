@@ -6,7 +6,7 @@ This page explains how the engine decides where each player stands and how fast 
 
 Each team is in one of two phases: in possession or out of possession. A team changes phase only when a player of the other team controls the ball. A loose ball, a deflection and a pass in flight keep each team in its last phase.
 
-Before this rule, a loose ball and every pass in flight counted as out of possession for both teams. So during every pass both teams took their defensive shape, and the passing team's players ran back for a moment before running forward again. With the phase held until a real change of control, a team that passes keeps its attacking shape until it loses the ball.
+If a loose ball or a pass in flight counted as out of possession for both teams, both teams would take their defensive shape during every pass, and the passing team's players would run back for a moment before running forward again. Because the phase holds until a real change of control, a team that passes keeps its attacking shape until it loses the ball.
 
 ## Where a player stands
 
@@ -51,7 +51,7 @@ The player's attributes and state change the choice:
 - **Determination and professionalism** set how a tired player saves energy: a player high in both keeps his urgent sprints and slows a step on normal jobs, while a player low in both skips the less urgent sprints first.
 - **Instructions and the game state** move a grade by one step: a counter raises pressing and support jobs for the seconds after the team wins the ball, and a team trailing late raises them too. No tempo or pressing level lifts running pace: tempo is how patiently a side circulates the ball, not how fast its players run. A team that leads late and wastes time lowers its normal jobs one step, but only while the ball is dead. In open play both teams keep their normal grades, and an urgent job never drops below urgent.
 
-Before the selector, every player ran to every target at full speed. Matches looked frantic, every player moved alike, and players ran out of energy far too early. The selector brings the sprint and high-speed counts per minute of ball in play toward the real figures, and lets a tired side show it.
+Without the selector every player would run to every target at full speed: matches look frantic, every player moves alike, and players run out of energy far too early. The selector keeps the sprint and high-speed counts per minute of ball in play near the real figures, and lets a tired side show it.
 
 ## Restarts and the walk-on
 
@@ -82,11 +82,11 @@ No mechanism here sets a count or a gap that a realism band then measures. Stopp
 
 ## The stands are off
 
-The stand table moved the back line toward the real phase shapes. But it was seeded as if the ball always sat on the halfway line. Out of possession it lifted the back line far up the pitch and opened the space behind it, and shots per team rose far above the real range.
+The stand table moves the back line toward the real phase shapes. But it is seeded as if the ball always sat on the halfway line. Out of possession it lifts the back line far up the pitch and opens the space behind it, and shots per team rise far above the real range.
 
 The table therefore sits behind the tuning flag `team_stands`, off by default. Off, every stand reads 0: each player stands on his formation slot plus his role's offset. The table is still loaded and checked, and the tests that need it turn the flag on. The per-phase depth and width bands, and the slide band, only report while the stands are off, because they measure the block the stands set.
 
-The stands come back with the later work on off-ball decisions: the table is seeded again from the engine's own measured positions, with a block depth that depends on where the ball is, and the flag goes on once the core realism bands hold with it.
+The flag is meant to go on only once the table is seeded from the engine's own measured positions, with a block depth that depends on where the ball is, and the core realism bands hold with it.
 
 ## Styles and the AI manager's pick
 
@@ -118,22 +118,23 @@ During the match the AI manager reads the situation, never the clock. It replace
 
 The AI manager makes no tactics change of its own. An AI side's in-match tactics are its style's game-state rules, in the same form a person writes: each style chases a game it trails late with the run of play against it, with a more attacking mentality and harder pressing, and holds a late lead with a more cautious mentality and time wasting on. A side with no style has no in-match tactics.
 
-The real substitutions are the benchmark. With three substitutions in three windows (the 2017/18 Wyscout leagues) the AI makes about as many as real teams did, but earlier in the match. With five (the recent StatsBomb tournaments) it makes about three where real teams made about four. Both gaps are recorded in the calibration's substitution report.
+The real substitutions are the benchmark. With three substitutions in three windows (the 2017/18 Wyscout leagues) the AI makes about as many as real teams did, but earlier in the match. With five (the recent StatsBomb tournaments) it makes about three where real teams made about four. Both gaps show in the calibration's substitution report.
+
 ### The styles suite
 
 `engine-cli calibrate --suite styles` plays every ordered pairing of two different styles, with the same squad on both sides, and a formation drawn from each style's list. It reports each style's points per match, the styles it loses to clearly, and a dominance flag: a style with no clear loss, or with more than a fifth of all points, would be a style with no weakness. It also flags an identity statistic that a style does not move in its direction. Every change run plays a small sample, one match per ordered pairing, and reports it beside the verdict; the suite judges no band. See [Run the styles suite](../how-to/calibration.md#run-the-styles-suite).
 
-The suite tests presets only. The AI adapts during a match only through its style's rules, and it does not remember which styles worked; that comes with later work on the AI manager.
+The suite tests presets only. The AI adapts during a match only through its style's rules, and it does not remember which styles worked.
 
 ### The styles gate
 
 The suite ends with one gate over the whole table. It passes when no style is dominant, every style moves each of its identity statistics in its direction, every ordered pairing averages between 4 and 40 shots a match (both sides together), the running checker finds no rule broken and every planned match played. The gate reports; it does not change the exit code or any band. It is measured at 200 matches per ordered pairing, so that every pair of styles meets 400 times and a clear loss can show.
 
-The shipped presets do not pass it yet. One style takes more than a fifth of all the points, some styles do not show their identity statistics against the pooled mean (for example a low block that does not concede less expected goals than the other styles), and many pairings average more than 40 shots a match. These are recorded with their numbers and left to the work that owns their causes: the engine's shot volume, the empty box (team-mates seldom arrive in the box, which waits for the off-ball runs), and closing down and jockeying, which set how a side defends. No preset, rate or bar was changed to pass the gate.
+A failing gate names each failing item. Its cause goes to the general mechanism behind it (the shot volume, how team-mates arrive in the box, how a side closes down), never to a preset, a rate or the gate's own bars. Whether the shipped presets pass is a result of a run; the release notes record the latest one.
 
 ### What the gates check together
 
-The end of this work also checks that the stronger of two sides wins at least half its matches, that the core realism bands are no worse than before the tactical primitives (or are recorded as misses), that the match checker finds no violation, and that every primitive moves its signature statistic in its direction. Where a band is worse, the record names it with its numbers and its cause.
+Beside the styles gate, the calibration checks that the stronger of two sides wins at least half its matches, that the core realism bands hold, that the match checker finds no violation, and that every primitive moves its signature statistic in its direction. A band that misses names a mechanism to look at, with its numbers.
 
 ## Tactical primitives
 
@@ -148,7 +149,7 @@ No engine code names a style, and no place where a player decides reads a settin
 
 ### Tempo is patience
 
-Tempo used to be added to every pass and taken from every hold and dribble, so a slower tempo made the carrier hold the ball and dribble into pressure. Tempo is now how patiently a side circulates the ball: when the carrier picks his pass, a short pass that does not go forward gains the level's value and a forward pass loses it. It moves which pass he picks, never whether he passes, holds or dribbles. Its signature is passes per possession, with the share of passes made before the first forward pass beside it. No tempo level lifts running pace.
+Tempo is how patiently a side circulates the ball, not a bonus on every pass against every hold and dribble, which would make a slower tempo hold the ball and dribble into pressure: when the carrier picks his pass, a short pass that does not go forward gains the level's value and a forward pass loses it. It moves which pass he picks, never whether he passes, holds or dribbles. Its signature is passes per possession, with the share of passes made before the first forward pass beside it. No tempo level lifts running pace.
 
 ### The in-possession primitives
 
@@ -161,11 +162,11 @@ How a side keeps and moves the ball is set by nine graded primitives and three c
 - **The final third** weighs a shot from outside the box and reaches further out at the higher levels.
 - **Dribbling** weighs the dribble option. A take-on counts once for each opponent the dribbler passes within pressing distance.
 - **Creative freedom** scales the spread of each player's choices around the plan. No real data records which option a player passed over, so its levels are spread by hand and only their direction is checked.
-- **Forward runs** set how far from the defensive line a forward may start a timed run. At the higher levels an onside forward that near the line runs beyond it when the carrier is free and the forward is ahead of him within a pass's reach, so a pass played too late is offside. At the lower levels a forward that near the line checks short toward the ball from his place, then goes back. A run goes on while the pass travels forward, and a pass back or across ends it. At the default no forward starts one, so the farther from the line a run may start, the more runs there are. Only the wingers and strikers make these runs for now; runs chosen by role and duty come with the off-ball work.
+- **Forward runs** set how far from the defensive line a forward may start a timed run. At the higher levels an onside forward that near the line runs beyond it when the carrier is free and the forward is ahead of him within a pass's reach, so a pass played too late is offside. At the lower levels a forward that near the line checks short toward the ball from his place, then goes back. A run goes on while the pass travels forward, and a pass back or across ends it. At the default no forward starts one, so the farther from the line a run may start, the more runs there are. Only the wingers and strikers make these runs; role and duty do not pick the runners.
 - **Full-back runs** choose underlap or overlap first in a full-back's menu, and their frequency scales how near the ball a full-back must be to go and how far he runs. A run counts as SkillCorner counts it: a run that starts level with or behind the ball and ends level with or ahead of it, outside the ball for an overlap and inside it for an underlap.
 - **Crossing frequency and cross type** sit on the board with seeded values.
 
-When the ball is wide in the final third, the forwards run into the box, at every level, so a cross has a team-mate to find. The engine still plays few open-play crosses: with the stands off, wide players hold their midfield places and rarely carry the ball high and wide. The crossing primitives and the central channel choices are therefore not fitted yet; they wait for the off-ball work that re-seeds the stands.
+When the ball is wide in the final third, the forwards run into the box, at every level, so a cross has a team-mate to find. The engine still plays few open-play crosses: with the stands off, wide players hold their midfield places and rarely carry the ball high and wide. The crossing primitives and the central channel choices therefore keep seeded levels and are not fitted to real teams.
 
 ### Transitions
 
@@ -175,15 +176,13 @@ Three primitives set what a side does in the seconds after the ball changes side
 - **On losing the ball** runs from always regrouping to always counter-pressing: inside the counter-press window, the nearest players start to press from farther away, or from nearer, or not at all.
 - **Counter-press length** sets how long that window stays open, from about 2 to about 8 seconds.
 
-The default levels are neutral, so a side that sets none of them plays as before. The counter-press levels are on the board but not fitted yet: in this engine, more players pressing for longer after a loss do not win the ball back, so the other side simply keeps it longer. They are fitted with pressing intensity and the tackle decision, which change how a press wins the ball.
+The default levels are neutral, so a side that sets none of them plays as before. The counter-press levels keep seeded values and are not fitted to real teams: in this engine, more players pressing for longer after a loss do not win the ball back, so the other side simply keeps it longer.
 
-The running pace no longer rises with a high press. It rises during a counter, where real runners break at speed.
-
-Two style pairings play far more shots than real matches: a high press against itself, and the counter-attack against the gegenpress. A probe of each pairing traced about half of the excess to the attack duty that those styles give their players, which pushes them higher and makes the carrier take more risks, and the rest to the engine's shot volume, which is high even between two default sides. The duty hints belong to the style presets and the shot volume to the tuning work, so neither was changed here.
+No pressing level raises the running pace. It rises during a counter, where real runners break at speed.
 
 ### Mentality is an appetite for risk
 
-Mentality used to add a flat bonus to shots and forward passes. It is now only how much the side fears losing the ball: a pass, a dribble or a hold loses the mentality's loss weight times its chance of failing times the danger of losing the ball there. A ball lost near the own goal hands the opponent a chance, and one lost near the other goal gives up the side's own, so the danger is highest at either end. An attacking mentality fears a loss least, and its weight can go below 0, so it seeks risk. The mentality also sets how many players stay behind the ball. Where the block stands belongs to the line height, which moves the block only while the other team has the ball.
+Mentality is not a flat bonus to shots and forward passes. It is only how much the side fears losing the ball: a pass, a dribble or a hold loses the mentality's loss weight times its chance of failing times the danger of losing the ball there. A ball lost near the own goal hands the opponent a chance, and one lost near the other goal gives up the side's own, so the danger is highest at either end. An attacking mentality fears a loss least, and its weight can go below 0, so it seeks risk. The mentality also sets how many players stay behind the ball. Where the block stands belongs to the line height, which moves the block only while the other team has the ball.
 
 ### How the carrier weighs an option
 
@@ -212,7 +211,7 @@ A new formation or role waits for the next stoppage that admits a tactics change
 
 A player instruction sets one primitive for one player in one formation slot. Ten primitives take one: dribbling, crossing, cross type, final third, forward runs, width, pressing, tackling, on winning the ball and on losing the ball. The player's own value replaces the side's at the same hook, the place where play reads it, so an instruction never adds a new way to decide; it gives one player another value at the same point. Pressing gives the player his own reach and willingness to press; how many players press stays the side's. A pressing level's reach is sized with its count (more pressers each press from nearer), so a player's own reach is the side's reach scaled by his level's count over the side's: one level up, he presses from farther.
 
-Forward runs reach only the wingers and strikers, because a run in behind starts from the attack line. An instruction for any other slot is refused when the tactic loads, in any formation the tactic or one of its rules can take. Runs from deeper positions, chosen by role and duty, wait for the off-ball work.
+Forward runs reach only the wingers and strikers, because a run in behind starts from the attack line. An instruction for any other slot is refused when the tactic loads, in any formation the tactic or one of its rules can take. Runs from deeper positions, chosen by role and duty, are not modelled.
 
 `engine-cli primitives check --player <slot>` holds each instruction to the same frame as the team primitives: pairs of matches that differ only in one player's instruction, one level up from the default. The player's own statistic must move beyond the noise of the pairs, and the same statistic pooled over his ten team-mates must stay inside it.
 

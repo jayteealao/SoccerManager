@@ -191,7 +191,7 @@ fn by_content(sim: &Simulation, schema: &TacticsSchema, i: usize, phase: bool) -
     )
 }
 
-/// Shape AC-1: with the ball held at the centre spot by each team in turn, every player
+/// With the ball held at the centre spot by each team in turn, every player
 /// the shape pass, pressing and cover leave alone stands at his stand from his formation
 /// slot, within 1 m once the shapes settle.
 #[test]
@@ -268,7 +268,7 @@ fn each_position_settles_at_its_stand_from_its_slot_with_each_team_in_possession
     }
 }
 
-/// Shape AC-2: a pass in flight, a deflection and the loose ball after it keep the
+/// A pass in flight, a deflection and the loose ball after it keep the
 /// passing team in possession; the phase changes on the tick a player of the other team
 /// controls the ball, not before.
 #[test]
@@ -351,7 +351,7 @@ fn a_team_keeps_its_phase_until_the_other_team_controls_the_ball() {
     );
 }
 
-/// Shape AC-4: duties that would send every outfield player forward, a carrier walking
+/// Duties that would send every outfield player forward, a carrier walking
 /// forward from the centre spot, and at every sampled tick after a 2 s grace at least the
 /// mentality's minimum stands goal-side of the ball. With the minimum edited to 0 the same
 /// fixture falls below it, so the check can fail.
@@ -415,7 +415,7 @@ fn rest_defence_keeps_the_minimum_goal_side_under_every_mentality() {
     );
 }
 
-/// Shape AC-5: with the minimum met an attacking full-back goes forward, and a familiar
+/// With the minimum met an attacking full-back goes forward, and a familiar
 /// team-mate stays to cover him while an unfamiliar one goes.
 #[test]
 fn an_attacking_duty_goes_and_a_familiar_team_mate_covers_the_full_back() {
@@ -525,7 +525,7 @@ fn overlap_scene(sim: &mut Simulation, across: f64) {
     clear_around(sim, MID);
 }
 
-/// Shape AC-6: every role with a menu takes each option of its menu when the ball and
+/// Every role with a menu takes each option of its menu when the ball and
 /// its team-mates meet that option's condition, the first in menu order when two hold.
 #[test]
 fn each_role_takes_each_option_of_its_menu_when_its_condition_holds() {
@@ -570,7 +570,7 @@ fn each_role_takes_each_option_of_its_menu_when_its_condition_holds() {
     assert_eq!(both, Some(StandOption::Drop));
 }
 
-/// Shape AC-6, out of possession: a defensive midfielder drops into a gap in the back
+/// Out of possession: a defensive midfielder drops into a gap in the back
 /// line.
 #[test]
 fn a_defensive_midfielder_drops_into_a_gap_in_the_back_line() {

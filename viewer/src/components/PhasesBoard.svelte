@@ -14,7 +14,7 @@
   import StylePicker from './StylePicker.svelte';
   import { BLOCK, CARDS, TOP_BAR } from '../lib/board-cards.js';
   import { rowModel } from '../lib/board-model.js';
-  import { blockWord, levelWord, styleWords } from '../lib/board-words.js';
+  import { blockWord, levelWord, presetNote, styleWords } from '../lib/board-words.js';
   import { presetLevels } from '../lib/presets.js';
   import { levelNames, primitiveIndex, primitivesOf } from '../lib/primitives.js';
 
@@ -41,7 +41,7 @@
     CARDS.map((card) => ({ card, rows: card.rows.map((r) => model(r.primitive)), players: players(card) }))
   );
   let block = $derived(blockWord(levels[primitiveIndex(schema, 'line_of_engagement')] ?? 2));
-  let options = $derived(dugout.presets.map((p) => ({ id: p.name, ...styleWords(p.name) })));
+  let options = $derived(dugout.presets.map((p) => ({ id: p.name, name: styleWords(p.name).name, note: presetNote(schema, p) })));
 
   /// The players with their own instruction on `card.players`, by name and word.
   function players(card) {
@@ -92,7 +92,7 @@
       onpick={(name) => dugout.pickStyle(name)}
     />
     {#if preset && changes > 0}
-      <span class="st ch">● {changes} change{changes > 1 ? 's' : ''}</span>
+      <span class="st ch num">● {changes} change{changes > 1 ? 's' : ''}</span>
       <button type="button" class="btn" {disabled} onclick={() => dugout.pickStyle(preset.name)}
         >Reset to {styleWords(preset.name).name}</button
       >
@@ -126,7 +126,8 @@
     </span>
   </div>
 
-  {#if dugout.live && dugout.liveStrip.length > 0}
+  <!-- Mounted for the whole of play, empty or not, so its first change is announced. -->
+  {#if dugout.live}
     <ChangeChips
       chips={dugout.liveStrip}
       takeUp={schema?.game_state?.take_up_s ?? 30}
@@ -157,9 +158,9 @@
   </div>
 
   <div class="block">
-    <span class="sl-t">Out of possession · {formation?.name ?? ''}</span>
+    <h3 class="sl-t">Out of possession · {formation?.name ?? ''}</h3>
     <span class="div"></span>
-    <b class="cap">Block</b><span class="bw" title="Set by Press from and Defensive line">{block}</span>
+    <b class="cap">Block</b><span class="bw">{block}<span class="sr-only">, read from where the team presses from</span></span>
     {#each blockRows as { placed, row } (placed.primitive)}
       {#if row}
         <BoardRow
@@ -228,10 +229,14 @@
 <style>
   .board {
     min-width: 0;
+    container-type: inline-size;
   }
 
+  /* The bar and the Block strip wrap rather than clip when they are wider than the board. */
   .bar {
     display: flex;
+    flex-wrap: wrap;
+    row-gap: 6px;
     align-items: center;
     gap: 10px;
     min-height: 28px;
@@ -263,7 +268,7 @@
   }
 
   .btn {
-    height: 20px;
+    min-height: var(--hit);
     padding: 0 10px;
     margin: 0;
     border: 1px solid var(--control-edge);
@@ -273,6 +278,10 @@
     font: 600 9.5px var(--fd);
     cursor: pointer;
     white-space: nowrap;
+  }
+
+  .btn:hover:not(:disabled) {
+    border-color: var(--ink-3);
   }
 
   .btn:disabled {
@@ -357,8 +366,18 @@
     gap: 8px;
   }
 
+  /* A board too narrow for four readable cards (the lower part of the standard step, about
+     1024 to 1180 px wide) lays them out two by two, so no row label shrinks to nothing. */
+  @container (max-width: 1099px) {
+    .grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
   .block {
     display: flex;
+    flex-wrap: wrap;
+    row-gap: 6px;
     align-items: center;
     gap: 10px;
     margin: 10px 0 8px;
@@ -367,6 +386,7 @@
   }
 
   .sl-t {
+    margin: 0;
     font: 700 10.5px var(--fd);
     letter-spacing: 0.07em;
     text-transform: uppercase;

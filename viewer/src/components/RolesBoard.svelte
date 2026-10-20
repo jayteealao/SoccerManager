@@ -6,6 +6,7 @@
      changed: before kick-off in the draft, during play at once. Roles and duties stay on the
      Shapes tab; role fit and the role's reading are faded stubs. -->
 <script>
+  import { tick } from 'svelte';
   import ChoiceSegments from './ChoiceSegments.svelte';
   import LevelPips from './LevelPips.svelte';
   import StubSection from './StubSection.svelte';
@@ -103,31 +104,70 @@
     send(mineWith(row.primitive, level), `${name}: ${row.full} → ${row.words[level]}`);
   }
 
+  let root = $state(null);
+  let addButton = $state(null);
+
+  /// Focus, once the table has redrawn, the control of the row for `primitive`, or the next
+  /// row's after a removal, or Add instruction when no row is left: focus never falls to the
+  /// page when the focused control goes away.
+  async function focusAfter(primitive, removedAt = -1) {
+    await tick();
+    const own = [...(root?.querySelectorAll('tr[data-own]') ?? [])];
+    const row =
+      (primitive && own.find((tr) => tr.dataset.own === primitive)) ??
+      (removedAt >= 0 ? (own[removedAt] ?? own.at(-1)) : null);
+    const target = row?.querySelector('button:not([disabled])') ?? addButton;
+    target?.focus();
+  }
+
   function remove(row) {
+    const at = rows.findIndex((r) => r.primitive === row.primitive);
     send(
       mineWith(null, 0).filter((i) => i.primitive !== row.primitive),
       `${name}: ${row.full} back to the team's`
     );
+    focusAfter(null, at);
   }
 
-  function add(primitive) {
-    const at = info(primitive);
+  function add(item) {
+    if (!item.enabled) {
+      return;
+    }
+    const at = info(item.primitive);
     const level = levels[at.index] ?? 0;
-    send([...mineWith(null, 0), { slot, primitive, level: at.names[level] }], `${name}: own ${at.full}`);
+    send([...mineWith(null, 0), { slot, primitive: item.primitive, level: at.names[level] }], `${name}: own ${at.full}`);
     adding = false;
+    focusAfter(item.primitive);
   }
 
   let adding = $state(false);
 
+  function toggleAdding() {
+    adding = !adding;
+    if (adding) {
+      tick().then(() => root?.querySelector('.menu button')?.focus());
+    }
+  }
+
+  /// Escape closes the add menu and puts focus back on its button.
+  function menuKey(event) {
+    if (event.key === 'Escape' && adding) {
+      event.preventDefault();
+      adding = false;
+      addButton?.focus();
+    }
+  }
+
   const step = (d) => (slot = (slot + d + 11) % 11);
 </script>
 
-<div class="board" data-board="roles">
+<div class="board" data-board="roles" bind:this={root}>
   <div class="who">
     <button type="button" class="x" aria-label="The player before" onclick={() => step(-1)}>‹</button>
-    <h3 class="name"><b>{name}</b> <span>{position}</span></h3>
+    <h3 class="name" tabindex="-1" data-focus-start><b>{name}</b> <span>{position}</span></h3>
     <button type="button" class="x" aria-label="The player after" onclick={() => step(1)}>›</button>
     <em>player instructions replace the team instruction, for this player only</em>
+    <span class="sr-only" role="status">Showing {name}, {position}: {rows.length} own instruction{rows.length === 1 ? '' : 's'}</span>
   </div>
 
   <div class="cols">
@@ -136,9 +176,9 @@
     </div>
 
     <div class="mid">
-      <h3 class="sl">Player instructions · {name}<em>{rows.length} of {overrides.length} set · the tick marks the team instruction</em></h3>
+      <h3 class="sl">Player instructions · {name}<em class="num">{rows.length} of {overrides.length} set · the tick marks the team instruction</em></h3>
       <table class="tbl">
-        <thead><tr><th>Instruction</th><th>Team</th><th>His own</th><th></th><th></th></tr></thead>
+        <thead><tr><th>Instruction</th><th>Team</th><th>His own</th><th><span class="sr-only">His level</span></th><th><span class="sr-only">Remove</span></th></tr></thead>
         <tbody>
           {#each rows as row (row.primitive)}
             <tr data-own={row.primitive}>
@@ -169,26 +209,29 @@
         </tbody>
       </table>
       <div class="acts">
-        <button type="button" class="btn" aria-expanded={adding} {disabled} onclick={() => (adding = !adding)}>Add instruction</button>
+        <button type="button" class="btn" aria-expanded={adding} {disabled} bind:this={addButton} onclick={toggleAdding}>Add instruction</button>
         <button type="button" class="btn" disabled={disabled || rows.length === 0} onclick={() => send([], `${name}: every instruction back to the team's`)}>Clear all</button>
       </div>
       {#if adding}
-        <div class="menu" role="listbox" aria-label="Add an instruction for {name}">
-          <div class="head">Add an instruction for {name}</div>
-          {#each menu as item (item.primitive)}
-            <button
-              type="button"
-              role="option"
-              class="opt"
-              aria-selected="false"
-              disabled={!item.enabled}
-              aria-disabled={!item.enabled}
-              data-add={item.primitive}
-              onclick={() => add(item.primitive)}
-            >
-              <b>{item.full}</b><span>{item.note}</span>
-            </button>
-          {/each}
+        <!-- Escape reaches the menu from any of its buttons. -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="menu" onkeydown={menuKey}>
+          <div class="head" id="add-head-{slot}">Add an instruction for {name}</div>
+          <div role="group" aria-labelledby="add-head-{slot}">
+            {#each menu as item (item.primitive)}
+              <!-- An instruction he cannot take stays focusable, so its reason is read. -->
+              <button
+                type="button"
+                class="opt"
+                aria-disabled={!item.enabled}
+                aria-describedby="add-note-{slot}-{item.primitive}"
+                data-add={item.primitive}
+                onclick={() => add(item)}
+              >
+                <b>{item.full}</b><span id="add-note-{slot}-{item.primitive}">{item.note}</span>
+              </button>
+            {/each}
+          </div>
         </div>
       {/if}
     </div>
@@ -315,7 +358,7 @@
   }
 
   .btn {
-    height: 22px;
+    min-height: var(--hit);
     padding: 0 10px;
     margin: 0;
     border: 1px solid var(--control-edge);
@@ -334,8 +377,8 @@
   .x {
     display: inline-grid;
     place-items: center;
-    min-width: 18px;
-    height: 18px;
+    min-width: var(--hit);
+    min-height: var(--hit);
     margin: 0;
     padding: 0 3px;
     border: 0;
@@ -398,13 +441,25 @@
     color: var(--ink-3);
   }
 
-  .opt:hover:not(:disabled) {
+  .opt {
+    min-height: var(--hit);
+  }
+
+  .opt:hover:not([aria-disabled='true']) {
     background: var(--ground-2);
   }
 
-  .opt:disabled {
-    opacity: 0.6;
+  .btn:hover:not(:disabled) {
+    border-color: var(--ink-3);
+  }
+
+  /* An instruction he cannot take: its name fades, its reason stays at full contrast. */
+  .opt[aria-disabled='true'] {
     cursor: default;
+  }
+
+  .opt[aria-disabled='true'] b {
+    opacity: 0.6;
   }
 
   .btn:focus-visible,
@@ -417,13 +472,6 @@
   @media (max-width: 1023px), (max-height: 599px) {
     .cols {
       grid-template-columns: minmax(0, 1fr);
-    }
-
-    .btn,
-    .x,
-    .opt {
-      min-height: 44px;
-      min-width: 44px;
     }
   }
 </style>

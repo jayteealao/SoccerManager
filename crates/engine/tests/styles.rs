@@ -1,11 +1,11 @@
 //! The named styles and the AI's pick of one before a match.
 //!
-//! - AC-33: the shipped file holds eight styles, each a preset of primitive settings with one
+//! - the shipped file holds eight styles, each a preset of primitive settings with one
 //!   mentality setting, duty hints, a non-empty formation list, 2 or 3 identity statistics and
 //!   1 to the tactics file's limit of game-state rules; each style has a signature attribute it
 //!   weighs more than any other style does.
-//! - AC-36: a squad built for each style is picked for it in more than 25 of 50 seeds.
-//! - AC-37: with the tactics set by hand, two matches whose advice differs play identically,
+//! - a squad built for each style is picked for it in more than 25 of 50 seeds.
+//! - with the tactics set by hand, two matches whose advice differs play identically,
 //!   tick for tick: play never reads an estimate.
 //! - A person's side keeps the default tactics; content without styles, or with the style pick
 //!   flag off as shipped, plays them for both.
@@ -122,7 +122,7 @@ fn built_for(content: &Content, style: usize) -> Team {
         .0
 }
 
-/// AC-36: the AI picks the style a squad was built for in more than 25 of 50 seeds.
+/// The AI picks the style a squad was built for in more than 25 of 50 seeds.
 #[test]
 fn a_squad_built_for_a_style_is_picked_for_it_more_often_than_not() {
     let content = common::content();
@@ -164,7 +164,7 @@ fn played(config: MatchConfig) -> (u64, String) {
     (hasher.finish(), format!("{events:?}"))
 }
 
-/// AC-37: two contents that differ only in the advice's error give different estimates; with
+/// Two contents that differ only in the advice's error give different estimates; with
 /// both sides' tactics set by hand the two matches are identical tick for tick.
 #[test]
 fn play_never_reads_the_estimate() {

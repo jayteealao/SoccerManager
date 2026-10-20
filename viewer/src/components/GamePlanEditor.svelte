@@ -3,7 +3,7 @@
      formation, which waits for the next stoppage), with Save plan, Cancel and Delete plan.
      The draft is the written form the game-state change carries. -->
 <script>
-  import { untrack } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import ChoiceSegments from './ChoiceSegments.svelte';
   import LevelPips from './LevelPips.svelte';
   import { controlFor } from '../lib/board-cards.js';
@@ -20,6 +20,19 @@
   let unused = $derived(kinds.filter((k) => !draft.when.some((c) => c.kind === k)));
   let changeable = $derived(primitivesOf(schema).filter((p) => !draft.set.some((a) => a.primitive === p.name)));
   let problem = $derived(ruleProblem(draft));
+  let root = $state(null);
+  const footId = `plan-foot-${Math.random().toString(36).slice(2, 8)}`;
+
+  // Opening the editor puts focus on its first field, so a keyboard player lands in the plan.
+  onMount(() => {
+    root?.querySelector('select, button')?.focus();
+  });
+
+  function trySave() {
+    if (problem === null) {
+      onsave($state.snapshot(draft));
+    }
+  }
 
   const between = (lo, hi, list) => list.filter((v) => v >= lo && v <= hi);
   const count = (c) => between(conditionRange(schema, c.kind).min, conditionRange(schema, c.kind).max, [1, 2, 3, 4, 5]);
@@ -53,7 +66,7 @@
   }
 </script>
 
-<div class="ed" role="group" aria-label="Edit plan {n}">
+<div class="ed" role="group" aria-label="Edit plan {n}" bind:this={root}>
   <div class="head"><b>Plan {n}</b><span>of {ofCount} · checked {n === 1 ? 'first' : 'in order'}</span></div>
   <div class="sub">When all of these are true</div>
   {#each draft.when as c, i (c.kind)}
@@ -91,15 +104,15 @@
         <span class="g">{c.at_least === 1 || c.at_least === undefined ? 'player' : 'players'}</span>
       {:else if c.kind === 'run_of_play'}
         <select
-          aria-label="On top or not"
+          aria-label="Better or worse"
           value={c.above !== undefined ? 'above' : 'below'}
           onchange={(e) => {
             const v = c.above ?? c.below ?? 0;
             setCondition(i, e.currentTarget.value === 'above' ? { kind: c.kind, above: v } : { kind: c.kind, below: v });
           }}
         >
-          <option value="above">above</option>
-          <option value="below">below</option>
+          <option value="above">better than</option>
+          <option value="below">worse than</option>
         </select>
         <select
           aria-label="Run of play"
@@ -111,7 +124,7 @@
         >
           {#each plays(c) as v (v)}<option value={String(v)}>{v}</option>{/each}
         </select>
-        <span class="g">our chances minus theirs, last {schema?.game_state?.run_of_play_window_min ?? 15} min</span>
+        <span class="g">in chances made, ours less theirs, over the last {schema?.game_state?.run_of_play_window_min ?? 15} minutes</span>
       {:else}
         <span class="g">below</span>
         <select aria-label="Energy" value={String(c.below)} onchange={(e) => setCondition(i, { ...c, below: Number(e.currentTarget.value) })}>
@@ -119,7 +132,7 @@
         </select>
       {/if}
       <span class="sp"></span>
-      <button type="button" class="x" aria-label="Remove this condition" onclick={() => draft.when.splice(i, 1)}>×</button>
+      <button type="button" class="x" aria-label="Remove the condition {CONDITION_LABELS[c.kind] ?? c.kind}" onclick={() => draft.when.splice(i, 1)}>×</button>
     </div>
   {/each}
   {#if unused.length}
@@ -166,7 +179,7 @@
         {/if}
       {/if}
       <span class="sp"></span>
-      <button type="button" class="x" aria-label="Remove this change" onclick={() => draft.set.splice(i, 1)}>×</button>
+      <button type="button" class="x" aria-label="Remove the change {a.formation !== undefined ? 'Formation' : primitiveWords(a.primitive, []).full}" onclick={() => draft.set.splice(i, 1)}>×</button>
     </div>
   {/each}
   <div class="add">
@@ -179,9 +192,15 @@
   </div>
 
   <div class="foot">
-    <button type="button" class="btn cy" disabled={problem !== null} onclick={() => onsave($state.snapshot(draft))}>Save plan</button>
+    <button
+      type="button"
+      class="btn cy"
+      aria-disabled={problem !== null}
+      aria-describedby={footId}
+      onclick={trySave}>Save plan</button
+    >
     <button type="button" class="btn" onclick={oncancel}>Cancel</button>
-    <span class="g">{problem ?? 'The plan switches off when these stop being true. If two plans change the same thing, the higher one wins.'}</span>
+    <span class="g" id={footId} role="status">{problem ?? 'The plan switches off when these stop being true. If two plans change the same thing, the higher one wins.'}</span>
     {#if ondelete}<button type="button" class="btn del" onclick={ondelete}>Delete plan</button>{/if}
   </div>
 </div>
@@ -281,7 +300,7 @@
   }
 
   .btn {
-    height: 22px;
+    min-height: var(--hit);
     padding: 0 10px;
     margin: 0;
     border: 1px solid var(--control-edge);
@@ -302,14 +321,18 @@
     color: var(--bad);
   }
 
-  .btn:disabled {
+  .btn:hover:not([aria-disabled='true']) {
+    border-color: var(--ink-3);
+  }
+
+  .btn[aria-disabled='true'] {
     opacity: 0.45;
     cursor: default;
   }
 
   .x {
-    min-width: 18px;
-    height: 18px;
+    min-width: var(--hit);
+    min-height: var(--hit);
     margin: 0;
     padding: 0 3px;
     border: 0;
@@ -333,10 +356,14 @@
       flex-wrap: wrap;
     }
 
-    .btn,
-    .x,
     select {
       min-height: 44px;
+    }
+  }
+
+  @media (pointer: coarse) {
+    select {
+      min-height: var(--hit);
     }
   }
 </style>

@@ -1,20 +1,25 @@
-<!-- The banner for a change the engine did not take: it names the change, the level the
-     board keeps, and the engine's reason as a code for a report, with Try again and Dismiss.
-     It fades in over 200 ms, and not at all under reduced motion. -->
+<!-- The banner for a change that did not go through: it names the change, the level the
+     board keeps, why in a player's words with the next step, and the reason as a code for a
+     report, with Dismiss, and Try again only when trying again can work. It fades in over
+     200 ms, and not at all under reduced motion. -->
 <script>
-  import { reasonSentence } from '../lib/board-words.js';
+  import { reasonAdvice } from '../lib/board-words.js';
 
   let { refused, onretry = () => {}, ondismiss = () => {} } = $props();
+
+  let advice = $derived(reasonAdvice(refused.code));
 </script>
 
 <div class="err" role="alert" data-refused={refused.queue_id}>
   <b class="cap">Not applied</b>
   <span class="text">
     <b>{refused.label}</b> did not go through{#if refused.kept}, so it stays at <b>{refused.kept}</b>{/if}.
-    {reasonSentence(refused.code)} Try again; if it keeps failing, report it with this code:
+    {advice.sentence} Code for a report:
     <span class="code">{refused.code}</span>
   </span>
-  <button type="button" class="btn" onclick={() => onretry(refused.queue_id)}>Try again</button>
+  {#if advice.retry}
+    <button type="button" class="btn" onclick={() => onretry(refused.queue_id)}>Try again</button>
+  {/if}
   <button type="button" class="x" aria-label="Dismiss" onclick={() => ondismiss(refused.queue_id)}>
     <svg width="9" height="9" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" /></svg>
   </button>
@@ -53,7 +58,7 @@
   }
 
   .btn {
-    height: 20px;
+    min-height: var(--hit);
     padding: 0 10px;
     margin: 0;
     border: 1px solid var(--control-edge);
@@ -68,8 +73,8 @@
   .x {
     display: inline-grid;
     place-items: center;
-    width: 18px;
-    height: 18px;
+    min-width: var(--hit);
+    min-height: var(--hit);
     margin: 0;
     padding: 0;
     border: 0;
@@ -110,12 +115,6 @@
   }
 
   @media (max-width: 1023px), (max-height: 599px) {
-    .btn,
-    .x {
-      min-height: 44px;
-      min-width: 44px;
-    }
-
     .err {
       flex-wrap: wrap;
     }

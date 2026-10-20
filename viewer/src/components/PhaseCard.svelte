@@ -141,8 +141,9 @@
   }
 
   .lnk {
+    min-height: var(--hit);
     margin: 0;
-    padding: 3px 0;
+    padding: 0;
     border: 0;
     background: none;
     font: 600 9px var(--fd);
@@ -172,10 +173,6 @@
   @media (max-width: 1023px), (max-height: 599px) {
     .in {
       grid-template-columns: 108px minmax(0, 1fr);
-    }
-
-    .lnk {
-      min-height: 44px;
     }
   }
 </style>

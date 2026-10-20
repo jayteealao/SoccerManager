@@ -544,6 +544,16 @@ test('a replay file that cannot be read shows its refusal on the match view, fro
   assert.equal(session.view, 'match', 'the refusal panel lives on the match view, so the view opens');
 });
 
+test('a chosen file the browser cannot read is refused by name, not dropped', async () => {
+  const { session } = await started(RUNNING);
+  // A file moved or changed after it was chosen: the browser's read fails.
+  const gone = new Blob([new Uint8Array(4)]);
+  gone.arrayBuffer = () => Promise.reject(new Error('A requested file could not be found'));
+  await session.openReplay(gone, 'moved.smfx');
+  assert.equal(session.panel.kind, 'replay-refused');
+  assert.match(session.panel.title, /could not be found/);
+});
+
 test('a saved match of the previous release opens live, naming its engine, with no kick-off', async () => {
   const resumed = {
     ...RUNNING,

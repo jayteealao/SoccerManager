@@ -261,6 +261,7 @@ It is absent otherwise. Each entry is one preset, by name:
 
 | Field | Type | Meaning |
 |---|---|---|
+| `styles` | array | the presets, one object each |
 | `name` | string | the style's name in the styles file; the page owns its display text |
 | `primitives` | array | `{ "primitive", "level" }` pairs by name: the levels the preset sets; every other primitive stays at its default |
 | `formations` | array of strings | the formations the style suits, by name |
@@ -322,11 +323,11 @@ One `match-event` row. The same object is written to
 | `script.detail` | string | on `script`: why, such as `operation budget of 10000 exhausted` or `function http_get is not available` |
 | `trait.name` | string | on `trait-override`: the trait of play that overrode the instruction, its name in the trait catalogue, such as `holds_up_ball` |
 | `trait.cause` | enumeration | on `trait-override`: `pressure` (an opponent was within 2.5 m of the player) or `low-mood` (his mood was at or below the tuning's `traits.low_mood`) |
-| `trait.instruction` | string | on `trait-override`: the instruction the trait went against, as `<instruction>:<level>` (such as `tempo:faster`), `duty:<duty>` or `mentality:<mentality>` |
+| `trait.instruction` | string | on `trait-override`: the instruction the trait went against, as `<instruction>:<level>` (such as `tempo:fast`), `duty:<duty>` or `mentality:<mentality>` |
 
 A `trait-override` event names the player and his club and carries no `commentary`: a page
 builds its line from the three trait fields. For example,
-`{"event.type":"trait-override","player.id":"…","trait.name":"holds_up_ball","trait.cause":"pressure","trait.instruction":"tempo:faster",...}`.
+`{"event.type":"trait-override","player.id":"…","trait.name":"holds_up_ball","trait.cause":"pressure","trait.instruction":"tempo:fast",...}`.
 The page's match feed builds its line from these three fields, and the player panel counts
 the player's overrides after full time.
 
@@ -953,7 +954,7 @@ which the log does not keep. The script runs with no wall-clock limit, so the re
 mark is reported, not made again.
 
 A reader refuses a file with the wrong magic, a format newer than the reader knows or older
-than 3, frames of a protocol version other than 3, 4, 5, 6 and 7, a count mismatch, a truncated entry, an input or
+than 3, frames of a protocol version other than 3, 4, 5, 6, 7, 8 and 9, a count mismatch, a truncated entry, an input or
 record entry in a format-3 file, an input entry after the frames, an entry after the record, a
 format-4 file with no record or with two, a record without one of its fields or with a field
 it does not define, a field of the wrong type or outside its values, a header tick count that

@@ -1080,7 +1080,7 @@
       "if": {
         "properties": {
           "operation": { "const": "calibrate" },
-          "schema.version": { "enum": ["2", "3", "4", "5", "6", "7"] },
+          "schema.version": { "not": { "const": "1" } },
           "outcome": { "not": { "const": "error" } }
         },
         "required": ["operation", "schema.version"]

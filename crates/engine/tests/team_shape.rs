@@ -79,7 +79,7 @@ fn mean_depth(config: MatchConfig, slots: &[usize]) -> f64 {
     sum / n
 }
 
-/// Shape AC-3: over the same 20 seeded minutes, an attacking duty takes the left-back at
+/// Over the same 20 seeded minutes, an attacking duty takes the left-back at
 /// least 2 m further up on average than a defending one, and a high line takes the home back
 /// line at least 2 m further up than a deep one. 2 m is a quarter of the 8 m the content
 /// moves a slot between those duties, and about a third of the 6.25 m between those lines, which
@@ -123,7 +123,7 @@ fn a_duty_and_the_line_height_move_the_shape_the_way_they_say() {
     );
 }
 
-/// The charter's build-up from the back: over a seeded 45 minutes, on the ticks the home
+/// The build-up from the back: over a seeded 45 minutes, on the ticks the home
 /// keeper or a home back-line player holds the ball in the home half, the centre-back without
 /// the ball aims at least 2 m wider than the centre-backs aim out of possession, a central
 /// midfielder's target lies at least 4 m deeper than his stand on at least 30 percent of

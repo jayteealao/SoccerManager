@@ -367,10 +367,10 @@ export class FrontDoor {
   }
 
   /// Plays a replay file from the start screen in the replay view; closing it comes back.
-  async openReplay(bytes, name) {
+  async openReplay(input, name) {
     const session = this.newSession();
     this.view = 'match';
-    await session.openReplay(bytes, name, { leave: true });
+    await session.openReplay(input, name, { leave: true });
   }
 
   // ---- Match setup --------------------------------------------------------------------------

@@ -1014,6 +1014,35 @@ fn the_trait_catalogue_loads_with_thirty_one_traits() {
     assert!(err.contains("trait kicks_long"), "{err}");
 }
 
+/// A content folder made before the trait catalogue existed (no `traits.json`) is not
+/// refused: it reads the catalogue as it first shipped, the one an older replay reads.
+#[test]
+fn a_content_folder_without_a_trait_file_reads_the_first_catalogue() {
+    use engine::data::traits::FROZEN_TRAITS_V1;
+    use engine::data::{ContentFiles, TRAITS_FILE};
+    let shipped = common::content_dir();
+    let root = std::env::temp_dir().join(format!("engine-no-traits-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    copy_dir(shipped.root(), &root);
+    std::fs::remove_file(root.join(TRAITS_FILE)).unwrap();
+    let files = ContentFiles::read(&ContentDir::at(root.clone()));
+    let _ = std::fs::remove_dir_all(&root);
+    assert_eq!(files.unwrap().traits, FROZEN_TRAITS_V1.as_bytes());
+}
+
+fn copy_dir(from: &std::path::Path, to: &std::path::Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_dir(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
 /// A version 4 tuning file (no consistency, hidden-value or match-rating block) converts to
 /// version 5 with the values of the frozen copy, which are the shipped ones.
 #[test]

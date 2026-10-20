@@ -177,3 +177,35 @@ test('a record with game-state rules and a rule change is read', async () => {
     assert.throws(() => requireRecord(copy), (error) => error.reason.includes(reason), reason);
   }
 });
+
+/// A match where the manager moved a level or saved a game plan on the tactics board logs an
+/// `instructions` or a `game_state` change. The shapes are the ones the engine's record test
+/// pins (`a_level_and_a_game_state_change_are_logged_by_name_and_read_back` in
+/// crates/stream/src/record.rs), so a saved replay of such a match opens again.
+test('a record with a level change and a game-state change from the board is read', async () => {
+  const { meta } = await fullRecord();
+  const levels = JSON.parse(
+    '{"instructions":{"levels":[{"primitive":"tempo","level":"very_fast"},{"primitive":"crossing","level":"cross_often"}]}}'
+  );
+  const plan = {
+    game_state: {
+      game_state: {
+        rules: [{ when: [{ kind: 'score', state: 'trailing', by: 1 }], set: [{ primitive: 'mentality', level: 'attacking' }] }],
+        instructions: [{ slot: 9, primitive: 'dribbling', level: 'dribble_often' }],
+      },
+    },
+  };
+  meta.changes.push({ ...clone(meta.changes[0]), order: 2, change: levels });
+  meta.changes.push({ ...clone(meta.changes[0]), order: 3, change: plan });
+  requireRecord(meta);
+  const cases = [
+    [['changes', 2, 'change', 'instructions', 'levels', 0, 'level'], 3, 'changes[2].change.instructions.levels[0].level is not a string'],
+    [['changes', 2, 'change', 'instructions', 'levels'], {}, 'changes[2].change.instructions.levels is not a list'],
+    [['changes', 3, 'change', 'game_state', 'game_state'], 'plan', 'changes[3].change.game_state.game_state is not an object'],
+  ];
+  for (const [steps, value, reason] of cases) {
+    const copy = clone(meta);
+    apply(copy, { path: steps, op: 'set', value });
+    assert.throws(() => requireRecord(copy), (error) => error.reason.includes(reason), reason);
+  }
+});

@@ -115,7 +115,7 @@ fn running(config: MatchConfig, team: usize) -> Running {
     out
 }
 
-/// AC-11: on four seeded full matches, no player moves faster than 7 m/s on a tick of open
+/// On four seeded full matches, no player moves faster than 7 m/s on a tick of open
 /// play while his job is not URGENT.
 #[test]
 fn nobody_sprints_outside_an_urgent_job() {
@@ -169,7 +169,7 @@ fn squad_running(file: &TeamFile, away: &TeamFile, seeds: &[u64]) -> Running {
     total
 }
 
-/// AC-12: two squads that differ only in work rate (6 against 16 for every outfield player)
+/// Two squads that differ only in work rate (6 against 16 for every outfield player)
 /// play the same opponent on the same `BATCH` seeds. The high squad sprints at least 15 percent more
 /// often per ball-in-play minute; the distance per ball-in-play minute differs by less than 5
 /// percent. Control: the same squad on two seed sets differs by less than the 15 percent.
@@ -203,7 +203,7 @@ fn work_rate_changes_how_often_a_squad_sprints_not_how_far_it_runs() {
     );
 }
 
-/// AC-16: in one squad whose outfield players spread from 5 to 18 in work rate,
+/// In one squad whose outfield players spread from 5 to 18 in work rate,
 /// determination and professionalism, players with the same job and grade sprint
 /// differently: the share of their URGENT ticks at sprint pace spreads, and the highest
 /// work rate's share is above the lowest's.

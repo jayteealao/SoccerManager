@@ -206,7 +206,7 @@ fn an_on_winning_instruction_moves_only_its_players_counter() {
         alone(&mut sim, 9, DVec2::new(0.0, 2.0));
         sim.players[10].pos = DVec2::new(ax * 30.0, 2.0);
         let window = (COUNTER_WINDOW_S / 2.0 / sim.config.tuning.dt) as u32;
-        sim.regained_at[0] = Some(2_000 - window);
+        sim.windows.regained_at[0] = Some(2_000 - window);
         sim.options(9).pass.expect("an open team-mate").0
     };
     let base = pass(None);
@@ -264,7 +264,7 @@ fn press_reach(d: usize, since_s: Option<f64>, instruct: impl Fn(&mut Simulation
         sim.possession_phase = Some(0);
         sim.tick = 2_000;
         if let Some(s) = since_s {
-            sim.lost_at[1] = Some(2_000 - (s / sim.config.tuning.dt) as u32);
+            sim.windows.lost_at[1] = Some(2_000 - (s / sim.config.tuning.dt) as u32);
         }
         let targets = sim.config.modules.decision.targets(&sim.view());
         if targets.jobs[d] == Job::Press {

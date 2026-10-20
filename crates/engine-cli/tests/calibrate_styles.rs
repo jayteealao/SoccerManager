@@ -64,7 +64,7 @@ fn check_styles(styles: &Value, per: u64) {
     }
 }
 
-/// AC-34: one match per ordered pairing plays 56 matches, each pairing once, and reports
+/// One match per ordered pairing plays 56 matches, each pairing once, and reports
 /// points, dominance and identity.
 #[test]
 fn the_styles_suite_plays_every_ordered_pairing_and_reports() {

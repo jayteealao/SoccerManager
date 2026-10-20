@@ -272,7 +272,7 @@ impl Simulation {
     /// facing forward with no player of `def` within the pressed distance starts one, once in
     /// his spell on the ball, so the line steps up as he looks to play forward and not before.
     pub(crate) fn arm_trap(&mut self, def: usize, c: usize) {
-        if self.trap_at[def].is_some_and(|at| at >= self.control_since) {
+        if self.windows.trap_since(def, self.control_since) {
             return;
         }
         let carrier = &self.players[c];
@@ -283,7 +283,7 @@ impl Simulation {
         if crate::pressure::pressed(&self.players, carrier, attack_x) {
             return;
         }
-        self.trap_at[def] = Some(self.tick);
+        self.windows.start_trap(def, self.tick);
         #[cfg(feature = "measures")]
         if let Some(m) = self.measures.as_deref_mut() {
             m.trap(def);

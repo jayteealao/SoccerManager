@@ -965,7 +965,7 @@ mod tests {
         assert!(check.pending_shapes.is_empty());
     }
 
-    /// AC-18: the ball appears at its spot seconds after the event that named it, and the
+    /// The ball appears at its spot seconds after the event that named it, and the
     /// restart record is judged against that spot: on it, it passes; 2 m off, `restart_spot`
     /// reports it. The control: a lookup of a spot named on the record's own tick, as before
     /// the fetch, finds none and would judge nothing.
@@ -1004,7 +1004,7 @@ mod tests {
         assert_eq!(latest_spot(&spots, fetched), Some(spot));
     }
 
-    /// AC-23: a player who moves 5 m in one tick breaks `player_speed`; the first record of a
+    /// A player who moves 5 m in one tick breaks `player_speed`; the first record of a
     /// half and a substitute's slot on the tick he comes on are not judged.
     #[test]
     fn a_one_tick_jump_breaks_the_player_speed_rule_except_where_play_places_players() {

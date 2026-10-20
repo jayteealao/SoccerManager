@@ -1609,10 +1609,13 @@ export class MatchSession {
   /// Plays a replay file with no engine: every stored frame goes through the same path live
   /// frames take, so playback and rewind are the same code as a live match.
   /// With `leave`, the replay was opened from the start screen: closing it, or a file that
-  /// cannot be read, goes back there.
-  async openReplay(bytes, name = 'replay', { leave = false } = {}) {
+  /// cannot be read, goes back there. `input` is the file's bytes, or the chosen file itself:
+  /// a file the browser cannot read (moved or changed since it was chosen) is refused like a
+  /// file that is not a replay, with the browser's reason.
+  async openReplay(input, name = 'replay', { leave = false } = {}) {
     let read;
     try {
+      const bytes = input instanceof Blob ? new Uint8Array(await input.arrayBuffer()) : input;
       read = await readReplay(bytes);
     } catch (error) {
       const reason = error.reason ?? error.message;

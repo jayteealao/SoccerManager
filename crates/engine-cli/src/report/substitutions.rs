@@ -20,6 +20,7 @@ use serde::Serialize;
 
 use crate::calibrate::fixtures::FixtureKey;
 use crate::calibrate::rows::{Row, SUB_SLOTS};
+use crate::stats::{quantile_linear, round_to};
 
 /// The reasons a substitution can carry, by number: 0 for a substitution no AI decision
 /// names (a person's), then the AI manager's substitution codes.
@@ -183,17 +184,8 @@ pub struct SubstitutionReport {
     pub quartiles_inside: Option<[bool; 3]>,
 }
 
-/// The value at share `p` of the sorted values `v`, linear between the two nearest ranks, as
-/// the signature table takes it.
-fn quantile(v: &[f64], p: f64) -> f64 {
-    let at = p * (v.len() - 1) as f64;
-    let i = at.floor() as usize;
-    let j = (i + 1).min(v.len() - 1);
-    v[i] + (v[j] - v[i]) * (at - i as f64)
-}
-
 fn round4(x: f64) -> f64 {
-    (x * 1e4).round() / 1e4
+    round_to(x, 4)
 }
 
 /// The era of `limit` in the signature table `table`, when it holds one.
@@ -262,7 +254,7 @@ pub fn report(
     let quartiles = if n == 0 {
         [0.0; 3]
     } else {
-        [0.25, 0.5, 0.75].map(|p| round4(quantile(&minutes, p)))
+        [0.25, 0.5, 0.75].map(|p| round4(quantile_linear(&minutes, p)))
     };
     let per_team = round4(n as f64 / sides);
     let real = table.and_then(|t| real_era(t, limit));

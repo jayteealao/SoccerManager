@@ -630,7 +630,13 @@ impl ContentFiles {
             tuning: read(TUNING_FILE)?,
             rules: read(RULES_FILE)?,
             tactics: read(TACTICS_FILE)?,
-            traits: read(TRAITS_FILE)?,
+            // A content folder made before the trait catalogue existed has no traits file: it
+            // reads the catalogue as it first shipped, as an older replay does.
+            traits: if dir.path(TRAITS_FILE).is_file() {
+                read(TRAITS_FILE)?
+            } else {
+                traits::FROZEN_TRAITS_V1.as_bytes().to_vec()
+            },
             restart_waits: if waits.is_file() {
                 Some(read(RESTART_WAITS_FILE)?)
             } else {

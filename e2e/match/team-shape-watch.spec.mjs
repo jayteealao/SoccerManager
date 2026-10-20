@@ -1,4 +1,4 @@
-// The team-shape charter, steps 1 to 6, watched on the built viewer: a recorded match of the
+// Six team-shape checkpoints, watched on the built viewer: a recorded match of the
 // default teams (seed 42, or SM_WATCH_SEED) replayed with `replay --web`, each moment found
 // from the stored ticks and events, sought with the scrubber, checked on the rendered tick and
 // saved as a screenshot (`step-<n>.png`, in MATCH_EVIDENCE_DIR when it is set).
@@ -281,7 +281,7 @@ function findMoments({ homeId, topSpeed, restMin }) {
   return out;
 }
 
-test('the team-shape charter, steps 1 to 6, on a watched match', async ({ page }, info) => {
+test('six team-shape checkpoints on a watched match', async ({ page }, info) => {
   test.setTimeout(20 * 60_000);
   const dir = tempDir('team-shape-watch');
   const fixture = path.join(dir, 'match.smfx');

@@ -2,18 +2,19 @@
      (green) since its minute; players adjusting (cyan) for about the take-up time; a
      formation at the next stoppage (orange), which can be cancelled. Each chip carries a
      mark and words, never colour alone; chips fade in over 200 ms, and not at all under
-     reduced motion. -->
+     reduced motion. The strip stays mounted through play, empty and out of sight until the first
+     change, so a screen reader announces that change too. -->
 <script>
   let { chips = [], takeUp = 30, oncancel = () => {} } = $props();
 
   const MARK = { ok: '✓', run: '◔', wa: '◷' };
 </script>
 
-<div class="live" role="status" aria-live="polite">
-  <b class="cap">Changes</b>
+<div class="live" class:empty={chips.length === 0} role="status" aria-live="polite">
+  {#if chips.length > 0}<b class="cap">Changes</b>{/if}
   {#each chips as chip (chip.queue_id)}
     <span class="chip {chip.tone}" data-board-chip={chip.queue_id}>
-      {MARK[chip.tone]} {chip.label} <em>{chip.note}</em>
+      <span aria-hidden="true">{MARK[chip.tone]}</span> {chip.label} <em class="num">{chip.note}</em>
       {#if chip.cancellable}
         <button type="button" class="x" aria-label="Cancel: {chip.label}" onclick={() => oncancel(chip.queue_id)}>
           <svg width="9" height="9" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" /></svg>
@@ -21,9 +22,11 @@
       {/if}
     </span>
   {/each}
-  <span class="note"
-    >Changes start at once; players take about {takeUp} s to adjust. A formation change waits for the next stoppage.</span
-  >
+  {#if chips.length > 0}
+    <span class="note"
+      >Changes start at once; players take about {takeUp} s to adjust. A formation change waits for the next stoppage.</span
+    >
+  {/if}
 </div>
 
 <style>
@@ -36,6 +39,18 @@
     background: var(--ground-2);
     border-radius: 3px;
     flex-wrap: wrap;
+  }
+
+  /* Empty: kept in the page for the announcement, drawn nowhere. */
+  .live.empty {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    border: 0;
   }
 
   .cap {
@@ -58,6 +73,7 @@
   }
 
   .chip em {
+    font-variant-numeric: tabular-nums;
     font-style: normal;
     font-weight: 500;
     color: var(--ink-2);
@@ -83,8 +99,8 @@
   .x {
     display: inline-grid;
     place-items: center;
-    width: 18px;
-    height: 18px;
+    min-width: var(--hit);
+    min-height: var(--hit);
     margin: 0;
     padding: 0;
     border: 0;
@@ -128,10 +144,4 @@
     }
   }
 
-  @media (max-width: 1023px), (max-height: 599px) {
-    .x {
-      min-width: 44px;
-      min-height: 44px;
-    }
-  }
 </style>

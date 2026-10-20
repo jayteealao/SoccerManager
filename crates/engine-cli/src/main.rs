@@ -28,6 +28,7 @@ mod serve;
 mod signatures;
 mod simulate;
 mod state_files;
+mod stats;
 mod stream_run;
 mod trace_file;
 mod web;

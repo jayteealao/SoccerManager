@@ -314,6 +314,9 @@ pub const MESSAGES: &[MessageSpec] = &[
             "knockout",
             "ground.length",
             "ground.width",
+            "levels",
+            "game_state",
+            "styles",
         ],
     },
     MessageSpec {
@@ -358,6 +361,9 @@ pub const MESSAGES: &[MessageSpec] = &[
             "script.hook",
             "script.outcome",
             "script.detail",
+            "trait.name",
+            "trait.cause",
+            "trait.instruction",
         ],
     },
     MessageSpec {
@@ -515,13 +521,17 @@ pub const MESSAGES: &[MessageSpec] = &[
             "squad",
             "role",
             "duty",
+            "levels",
+            "primitive",
+            "level",
+            "game_state",
         ],
     },
     MessageSpec {
         name: "set-lineup",
         direction: Direction::ClientToServer,
         encoding: Encoding::JsonText,
-        fields: &["lineup", "bench", "patch"],
+        fields: &["lineup", "bench", "patch", "levels", "game_state"],
     },
     MessageSpec {
         name: "seen",

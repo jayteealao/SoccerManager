@@ -8,10 +8,13 @@
 // light skin is chosen by configuration only: a copy of the content folder whose slot file
 // names it.
 //
-// Message parity: the manager script on the viewer, against seed 42, must send the same
-// lineup and change messages the former page sent for the same script. The former page's
-// messages were recorded once, on the former page, into `fixtures/messages-web-seed42.json`.
-// A control run with one bench place swapped must differ, so the comparison can fail.
+// Message parity: the manager script on the viewer, against seed 42, must send the lineup and
+// change messages the former page sent for the same script. The former page's messages were
+// recorded once, on the former page, into `fixtures/messages-web-seed42.json`; the message
+// kinds and the mentality patch are compared with that file. The players in them come from
+// the engine's own pick before kick-off, which moves when play changes, so they are worked
+// out from the lineup the engine offered and the script's moves on it. A control run with
+// one bench place swapped must differ, so the comparison can fail.
 //
 // Also here: a withdrawn substitution never applies; a Tab walk through both phases never
 // lands in a stub; and the rendered contrast check on both phases.
@@ -159,11 +162,16 @@ for (const skin of SKINS) {
 
 /// The manager script both pages run: drag the first player not picked onto slot 10, move the mentality
 /// one step, kick off, play to minute 3, pause, queue one substitution, and play on until the
-/// engine rules on it. `plant` swaps two bench places first (the control run).
+/// engine rules on it. `plant` swaps two bench places first (the control run). Returns the
+/// lineup the engine offered before the script touched it, and the player it dragged in.
 async function managerScript(page, { plant = false } = {}) {
   await until(page, () => window.__touchline.lineup().phase === 'pre-match', undefined, 30_000);
   const squadRow = (i) => page.locator(`button[data-squad="${i}"]`);
   const slot = (n) => page.locator(`button[data-slot="${n}"]`);
+  const offered = await hook(page, () => {
+    const { slots, bench } = window.__touchline.lineup();
+    return { slots: [...slots], bench: [...bench] };
+  });
   const free = await hook(page, () => {
     const { slots, bench } = window.__touchline.lineup();
     const placed = new Set([...slots, ...bench]);
@@ -205,6 +213,18 @@ async function managerScript(page, { plant = false } = {}) {
     id,
     180_000
   );
+  return { ...offered, free };
+}
+
+/// The messages the script should send from the lineup the engine offered: the dragged-in
+/// player in slot 10, the bench as offered, the mentality patch the former page sent, and the
+/// substitution of the sixth slot's player for the first bench player.
+function expectedMessages({ slots, bench, free }, recorded) {
+  const lineup = slots.map((p, i) => (i === 9 ? free : p));
+  return [
+    { type: 'set-lineup', lineup, bench, patch: recorded[0].patch },
+    { type: 'queue-change', 'change.kind': 'substitution', detail: { off: lineup[5], on: bench[0] } },
+  ];
 }
 
 test.describe('the viewer sends the manager messages the former page sent', () => {
@@ -221,22 +241,24 @@ test.describe('the viewer sends the manager messages the former page sent', () =
       try {
         await page.goto(engine.url);
         await page.waitForFunction(() => Boolean(window.__touchline));
-        await managerScript(page, options);
-        return sent;
+        const start = await managerScript(page, options);
+        return { sent, start };
       } finally {
         engine.cleanUp();
         await page.close();
       }
     };
-    const viewer = await run();
+    const { sent: viewer, start } = await run();
     fs.writeFileSync(evidence(info, 'messages-viewer.json'), `${JSON.stringify(viewer, null, 2)}\n`);
     expect(recorded.map((m) => m.type)).toEqual(['set-lineup', 'queue-change']);
     expect(recorded[0].patch, 'the mentality rides the lineup').toBeTruthy();
-    expect(viewer).toEqual(recorded);
+    expect(viewer.map((m) => m.type)).toEqual(recorded.map((m) => m.type));
+    const expected = expectedMessages(start, recorded);
+    expect(viewer).toEqual(expected);
 
-    const planted = await run({ plant: true });
+    const { sent: planted } = await run({ plant: true });
     fs.writeFileSync(evidence(info, 'messages-control.json'), `${JSON.stringify(planted, null, 2)}\n`);
-    expect(planted, 'a swapped bench place must show in the messages').not.toEqual(recorded);
+    expect(planted, 'a swapped bench place must show in the messages').not.toEqual(expected);
   });
 });
 

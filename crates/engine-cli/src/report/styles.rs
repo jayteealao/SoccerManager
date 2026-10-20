@@ -563,7 +563,7 @@ mod tests {
         out
     }
 
-    /// AC-35, guarded failure: a style that beats everyone loses clearly to no one and takes
+    /// Guarded failure: a style that beats everyone loses clearly to no one and takes
     /// a third of the points; the check must flag it, and only it, when the rest draw.
     #[test]
     fn a_planted_dominant_style_is_flagged() {
@@ -585,7 +585,7 @@ mod tests {
         }
     }
 
-    /// AC-35: a balanced table, where each style beats the next one round the circle and
+    /// A balanced table, where each style beats the next one round the circle and
     /// draws the rest, flags none: every style has a clear loss and an equal share.
     #[test]
     fn a_balanced_table_flags_none() {

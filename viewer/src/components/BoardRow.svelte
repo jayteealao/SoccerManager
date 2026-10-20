@@ -26,6 +26,17 @@
 
   let word = $derived(error ? `⚠ ${words[value] ?? ''}` : (words[value] ?? ''));
   let title = $derived(changed && styleWord ? `Style level: ${styleWord}` : undefined);
+  // What the dot, the cyan word and the red outline show, in words for assistive technology:
+  // the controls point at it, so a screen reader hears it with the control.
+  const noteId = `row-note-${Math.random().toString(36).slice(2, 8)}`;
+  let note = $derived(
+    [
+      error ? `not applied, it stays at ${words[value] ?? ''}` : null,
+      changed ? `changed from the style${styleWord ? `, whose level is ${styleWord}` : ''}` : null,
+    ]
+      .filter(Boolean)
+      .join('; ')
+  );
 </script>
 
 <div
@@ -36,14 +47,16 @@
   data-primitive={primitive}
   {title}
 >
-  <span class="l">{label}</span>
+  <span class="l">{#if error && control !== 'pips'}<b class="warn" aria-hidden="true">⚠ </b>{/if}{label}</span>
+  {#if note}<span class="sr-only" id={noteId}>{note}</span>{/if}
   {#if control === 'pips'}
-    <LevelPips {full} {words} {value} {def} {disabled} {onchange} />
+    <LevelPips {full} {words} {value} {def} {disabled} describedby={note ? noteId : undefined} {onchange} />
     <b class="w">{word}</b>
   {:else if control === 'select'}
     <select
       class="sel"
       aria-label={full}
+      aria-describedby={note ? noteId : undefined}
       {disabled}
       value={String(value)}
       onchange={(e) => onchange(Number(e.currentTarget.value))}
@@ -53,7 +66,7 @@
       {/each}
     </select>
   {:else}
-    <ChoiceSegments {full} {words} {value} {disabled} {onchange} />
+    <ChoiceSegments {full} {words} {value} {disabled} describedby={note ? noteId : undefined} {onchange} />
   {/if}
 </div>
 
@@ -143,7 +156,8 @@
     border-radius: var(--radius-sm);
   }
 
-  .row.err .w {
+  .row.err .w,
+  .warn {
     color: var(--bad);
   }
 
@@ -151,6 +165,7 @@
     justify-self: end;
     height: 17px;
     padding: 0 4px;
+    cursor: pointer;
     border: 1px solid var(--select-edge);
     border-radius: var(--radius-sm);
     background: var(--select-ground);
@@ -171,6 +186,22 @@
 
     .l {
       font-size: 10px;
+    }
+  }
+
+  .sel:hover:not(:disabled) {
+    border-color: var(--ink-3);
+  }
+
+  .sel:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  /* A touch screen at the standard step gets the compact step's targets. */
+  @media (pointer: coarse) {
+    .sel {
+      height: var(--hit);
     }
   }
 

@@ -1275,7 +1275,7 @@ mod tests {
         );
     }
 
-    /// AC-20 and charter step 6: for one draw, a team leading in the late window waits the
+    /// For one draw, a team leading in the late window waits the
     /// late-lead factor longer than in a level game, time wasting multiplies the same part, and
     /// neither touches the visible steps; a trailing side and a side leading early wait as in a
     /// level game.
@@ -1361,7 +1361,7 @@ mod tests {
             .count() as u32
     }
 
-    /// AC-21: with a free team-mate and the opponents out of shape, a trailing side restarts
+    /// With a free team-mate and the opponents out of shape, a trailing side restarts
     /// quickly more often than a level one; with time wasting on, never; and with no free
     /// team-mate, never (the control).
     #[test]

@@ -8,7 +8,18 @@ import path from 'node:path';
 import { test } from 'vitest';
 
 import { BLOCK, CARDS, TOP_BAR, controlFor, placeOf, placements } from '../src/lib/board-cards.js';
-import { blockWord, levelWord, PRIMITIVE_WORDS, primitiveWords, reachWords, reasonSentence, STYLE_WORDS, styleWords } from '../src/lib/board-words.js';
+import {
+  blockWord,
+  levelWord,
+  PRIMITIVE_WORDS,
+  primitiveWords,
+  reachWords,
+  reasonAdvice,
+  presetNote,
+  reasonSentence,
+  STYLE_WORDS,
+  styleWords,
+} from '../src/lib/board-words.js';
 import { fold } from '../src/lib/board-live.js';
 import { rowModel } from '../src/lib/board-model.js';
 import {
@@ -241,7 +252,46 @@ test('a row reads its words, its default and whether it moved from the style', (
 
 test('reach words and reasons read as sentences', () => {
   assert.equal(reachWords(['ST', 'LW', 'RW']), 'wingers and strikers only');
-  assert.equal(reasonSentence('the player instruction does not reach the position of slot 3'), 'That instruction does not suit his position.');
-  assert.equal(reasonSentence('anything else'), 'The engine did not take it.');
+  assert.equal(
+    reasonSentence('the player instruction does not reach the position of slot 3'),
+    'That instruction does not suit his position. Choose one his position takes.'
+  );
+  assert.match(reasonSentence('anything else'), /^The match did not take the change\. Try again/);
+  // Each reason names its next step; only a reason a retry can mend offers Try again, and no
+  // sentence says "engine".
+  const cases = [
+    ['tempo: warp is not a level of tempo', false],
+    ['7 rules; a tactic holds at most 6', false],
+    ['the score condition needs by 1 to 5', false],
+    ['the engine is not connected', true],
+    ['the match has not started', true],
+    ['anything else', true],
+  ];
+  for (const [reason, retry] of cases) {
+    const advice = reasonAdvice(reason);
+    assert.equal(advice.retry, retry, reason);
+    assert.doesNotMatch(advice.sentence, /engine/i, reason);
+  }
   assert.equal(levelWord('no_such', 0, ['fast_one']), 'Fast one');
+});
+
+test('a style’s note is read from its own settings, never written apart from them', () => {
+  for (const p of PRESETS) {
+    const note = presetNote(SCHEMA, p);
+    assert.ok(note.length > 0, `no note for ${p.name}`);
+    assert.doesNotMatch(note, ENGINE_ID, p.name);
+    assert.doesNotMatch(note, /mentality/i, p.name);
+  }
+  // A preset that sets no defensive line says nothing about one.
+  const possession = PRESETS.find((p) => p.name === 'possession');
+  if (possession && !possession.primitives.some((w) => w.primitive === 'line_height')) {
+    assert.doesNotMatch(presetNote(SCHEMA, possession), /line/);
+  }
+  assert.equal(presetNote(SCHEMA, { primitives: [{ primitive: 'tempo', level: 'slow' }] }), 'tempo slow');
+});
+
+test('each control is named with the label it shows, so speech input reaches it', () => {
+  for (const [name, w] of Object.entries(PRIMITIVE_WORDS)) {
+    assert.ok(w.full.toLowerCase().includes(w.label.toLowerCase()), `the name of ${name} holds ${w.label}`);
+  }
 });

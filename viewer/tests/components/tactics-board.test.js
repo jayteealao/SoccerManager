@@ -125,8 +125,14 @@ test('the Roles menu disables forward runs for a centre-back', async () => {
   await tick();
   const runs = board.querySelector('button[data-add="forward_runs"]');
   assert.ok(runs, 'forward runs is on the menu');
-  assert.equal(runs.disabled, true);
+  // It stays focusable so its reason is read, and a press adds nothing.
+  assert.equal(runs.getAttribute('aria-disabled'), 'true');
   assert.match(runs.textContent, /wingers and strikers only/);
+  const note = board.querySelector(`#${runs.getAttribute('aria-describedby')}`);
+  assert.match(note.textContent, /wingers and strikers only/);
+  runs.click();
+  await tick();
+  assert.ok(board.querySelector('button[data-add="forward_runs"]'), 'the menu stays open');
   assert.equal(words(board).match(ENGINE_ID), null);
 });
 
@@ -145,4 +151,26 @@ test('the Plans tab adds a plan and stops at the limit', async () => {
   assert.equal(button('New plan').disabled, true);
   assert.match(board.querySelector('[data-plans-full]').textContent, /remove one to add another/);
   assert.equal(words(board).match(ENGINE_ID), null);
+});
+
+test('a deleted plan can be put back, and focus stays on the list', async () => {
+  const { s } = await opened(BOARD_HELLO);
+  const board = await show('Plans & opposition');
+  const button = (name) => [...board.querySelectorAll('button')].find((b) => b.textContent.trim() === name);
+  button('New plan').click();
+  await tick();
+  assert.ok(board.querySelector('[role="group"][aria-label^="Edit plan"]').contains(document.activeElement), 'the editor has focus');
+  button('Save plan').click();
+  await tick();
+  await tick();
+  assert.equal(s.dugout.gameState.rules.length, 1);
+  assert.equal(document.activeElement?.getAttribute('aria-label'), 'Edit plan 1');
+  board.querySelector('button[aria-label="Delete plan 1"]').click();
+  await tick();
+  await tick();
+  assert.equal(s.dugout.gameState.rules.length, 0);
+  assert.equal(document.activeElement?.textContent.trim(), 'New plan');
+  button('Undo').click();
+  await tick();
+  assert.equal(s.dugout.gameState.rules.length, 1);
 });

@@ -11,12 +11,12 @@ use common::{bin, record, temp};
 const REAL_BAND: (f64, f64) = (8.0, 16.0);
 
 /// The highest value this test accepts. The real band ends at 16, but the engine misses it:
-/// with the AI sides starting in the style their staff picks, an accepted miss carried to the
-/// tuning loop, 40 equal matches give about 24 shots per team on seeds 9 and 42, and this
+/// with the AI sides starting in the style their staff picks, an accepted miss left to later
+/// tuning, 40 equal matches give about 24 shots per team on seeds 9 and 42, and this
 /// test's 12 matches on seed 42 give 26.9 (20.0 before the style pick, when the ceiling was
 /// 22; 18.1 before the player record came in, when it was 20). The ceiling pins that miss
 /// with a margin of 2 shots, so the miss cannot grow unseen; it comes down to the band's 16
-/// when the tuning loop and a shot choice that weighs the chance bring seed 42 inside.
+/// when later tuning and a shot choice that weighs the chance bring seed 42 inside.
 const CEILING: f64 = 29.0;
 
 #[test]

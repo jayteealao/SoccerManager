@@ -22,8 +22,9 @@ use anyhow::{Context, bail};
 use serde::Serialize;
 
 use super::{
-    STATSBOMB, STATSBOMB_HELD_OUT, WYSCOUT, cells, column, lines, quantile, refuse_held_out, round6,
+    STATSBOMB, STATSBOMB_HELD_OUT, WYSCOUT, cells, column, lines, refuse_held_out, round6,
 };
+use crate::stats::quantile_linear;
 
 /// The StatsBomb tournaments of the five-substitution era, as `competition season`.
 pub const FIVE_SUB_TOURNAMENTS: [&str; 3] =
@@ -126,7 +127,7 @@ impl Tally {
             substitutions: n,
             per_team: round6(n as f64 / sides as f64),
             counts,
-            minute_quartiles: [0.25, 0.5, 0.75].map(|p| round6(quantile(&minutes, p))),
+            minute_quartiles: [0.25, 0.5, 0.75].map(|p| round6(quantile_linear(&minutes, p))),
             injury_share: injuries.then(|| round6(self.injuries as f64 / n as f64)),
             national_teams: source == STATSBOMB,
         })
@@ -283,7 +284,7 @@ fn era(competitions: &[Competition], minutes: &[f64]) -> Option<Era> {
         substitutions,
         per_team: round6(substitutions as f64 / (2 * matches) as f64),
         per_team_range: range(&|c| c.per_team),
-        minute_quartiles: [0.25, 0.5, 0.75].map(|p| round6(quantile(&sorted, p))),
+        minute_quartiles: [0.25, 0.5, 0.75].map(|p| round6(quantile_linear(&sorted, p))),
         minute_quartile_ranges: [0, 1, 2].map(|q| range(&|c| c.minute_quartiles[q])),
         injury_share: injuries.map(|i| round6(i / substitutions as f64)),
         injury_share_range: first

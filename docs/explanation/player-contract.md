@@ -133,7 +133,7 @@ A management game must let a manager see a player as a person: where he can play
 
 ### The record
 
-The attribute catalogue (version 4) holds 45 visible attributes, two hidden values (consistency and injury proneness) and eleven personality values. Visible and hidden attributes together stay at 50 or fewer by rule, so a new performance attribute never has to compete with personality for a place; personality is a fifth group in the same record, outside that limit. Communication, determination and bravery are in the mental group; eccentricity is a goalkeeping attribute.
+The attribute catalogue (version 5) holds 45 visible attributes, two hidden values (consistency and injury proneness) and eleven personality values. Visible and hidden attributes together stay at 50 or fewer by rule, so a new performance attribute never has to compete with personality for a place; personality is a fifth group in the same record, outside that limit. Communication, determination and bravery are in the mental group; eccentricity is a goalkeeping attribute.
 
 An attribute and a personality value split their work by scope. An attribute acts on each action in a match: composure on a shot under pressure, bravery on a header in traffic. A personality value acts on occasions and choices: how far a goal or a miss moves his mood, whether he loses his temper in a tackle, how he takes a penalty. Three personality values (loyalty, money motivation and controversy) act off the pitch and are inert in a match; a sensitivity rule proves that changing them moves no match statistic. Ambition acts only before a match: it decides how much his season goal moves his mood at kick-off.
 

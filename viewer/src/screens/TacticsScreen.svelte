@@ -7,6 +7,7 @@
      The Phases, Roles and Plans & opposition tabs hold the tactics board: every team
      instruction by phase of play, one player's own instructions, and the game plans. -->
 <script>
+  import { tick } from 'svelte';
   import AppShell from '../components/AppShell.svelte';
   import Crest from '../components/Crest.svelte';
   import InstructionsPanel from '../components/InstructionsPanel.svelte';
@@ -170,6 +171,15 @@
   }
 
   let side = $state(null);
+  let boardview = $state(null);
+
+  /// A link from one board to another (Edit in Roles): the other board opens with focus on
+  /// its start, so a keyboard player does not land back at the top of the page.
+  async function showBoard(id) {
+    view = id;
+    await tick();
+    boardview?.querySelector('[data-focus-start]')?.focus();
+  }
 
   /// The NOT READY link: brings the squad row the reason is about into view and focuses it,
   /// or the list's first row when no one row is at fault.
@@ -206,11 +216,11 @@
   {/snippet}
 
   {#if view !== 'shapes'}
-    <div class="boardview" data-screen="tactics" data-phase={dugout.phase} data-view={view}>
+    <div class="boardview" data-screen="tactics" data-phase={dugout.phase} data-view={view} bind:this={boardview}>
       {#if stored}
         <Notice kind="neutral" word="STORED" message="This match is stored or takes no lineup, so its tactics cannot change here." />
       {:else if view === 'phases'}
-        <PhasesBoard {dugout} {nameOf} ontab={(id) => (view = id)} />
+        <PhasesBoard {dugout} {nameOf} ontab={showBoard} />
       {:else if view === 'roles'}
         <RolesBoard {dugout} {nameOf} />
       {:else}

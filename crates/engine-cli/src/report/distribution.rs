@@ -21,6 +21,7 @@
 use engine::rng::EngineRng;
 
 use super::verdict::{FALSE_ALARM, Word};
+use crate::stats::quantile_rank;
 
 /// A per-match histogram: each non-empty bin and its count. Bin `k` stands at the point
 /// `k · width`; the last bin holds that point and everything above it.
@@ -168,16 +169,6 @@ fn pooled(per_match: &[Hist], bins: u32) -> Vec<f64> {
     out
 }
 
-/// The `q` quantile of sorted values by the bootstrap's rule: the `ceil((B + 1) q)`-th
-/// smallest of `B`.
-fn quantile(sorted: &[f64], q: f64) -> f64 {
-    if sorted.is_empty() {
-        return 0.0;
-    }
-    let k = ((sorted.len() as f64 + 1.0) * q).ceil() as usize;
-    sorted[k.clamp(1, sorted.len()) - 1]
-}
-
 /// A distribution band judged against its real sample.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DistCheck {
@@ -303,9 +294,9 @@ pub fn judge_to_real(
     let se = (ds.iter().map(|d| (d - mean) * (d - mean)).sum::<f64>() / ds.len() as f64).sqrt();
     ds.sort_by(f64::total_cmp);
     cs.sort_by(f64::total_cmp);
-    let upper = quantile(&ds, 1.0 - FALSE_ALARM);
-    let lower = quantile(&ds, FALSE_ALARM);
-    let floor = quantile(&cs, 1.0 - FALSE_ALARM);
+    let upper = quantile_rank(&ds, 1.0 - FALSE_ALARM);
+    let lower = quantile_rank(&ds, FALSE_ALARM);
+    let floor = quantile_rank(&cs, 1.0 - FALSE_ALARM);
     let (w, note) = word(upper, lower, floor, margin);
     Ok(DistCheck {
         distance: observed,

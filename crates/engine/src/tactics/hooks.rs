@@ -224,7 +224,7 @@ pub const HOOKS: [Hook; 48] = [
         name: "run.start",
         kind: HookKind::Threshold,
         input: "run_start_m",
-        site: "decision.rs: how far from the defensive line a forward may start a timed run, in \
+        site: "decision/off_ball.rs: how far from the defensive line a forward may start a timed run, in \
                behind above 0 or coming short below 0",
     },
     Hook {
@@ -243,7 +243,7 @@ pub const HOOKS: [Hook; 48] = [
         name: "regain.counter",
         kind: HookKind::OptionWeight,
         input: "counter",
-        site: "decision.rs: while the side's regain window is open, a pass's gain toward goal \
+        site: "decision.rs, decision/press.rs: while the side's regain window is open, a pass's gain toward goal \
                scores more, the hold less, and attack-line runners may start a run in behind \
                farther from the line",
     },
@@ -251,7 +251,7 @@ pub const HOOKS: [Hook; 48] = [
         name: "loss.counter_press",
         kind: HookKind::Threshold,
         input: "counter_press",
-        site: "decision.rs: while the side's counter-press window is open, a factor on how far \
+        site: "decision/press.rs: while the side's counter-press window is open, a factor on how far \
                from the carrier its nearest players start to press",
     },
     Hook {
@@ -271,7 +271,7 @@ pub const HOOKS: [Hook; 48] = [
         name: "press.engage",
         kind: HookKind::Threshold,
         input: "engage_line",
-        site: "decision.rs: a player presses the carrier only while the ball is within this \
+        site: "decision/press.rs: a player presses the carrier only while the ball is within this \
                share of the pitch length of the own goal line",
     },
     Hook {

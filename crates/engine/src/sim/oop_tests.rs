@@ -42,17 +42,17 @@ fn a_reception_fires_its_triggers_for_the_other_side() {
     let wide = DVec2::new(0.0, 25.0 * ax);
     sim.heavy_mask = 1 << 6;
     receive(&mut sim, 6, wide, DVec2::new(-ax, 0.0));
-    let fired = sim.trigger_at[1];
+    let fired = sim.windows.trigger_at[1];
     assert_eq!(fired[TRIGGER_POOR_TOUCH], Some(3_000));
     assert_eq!(fired[TRIGGER_FACING_BACK], Some(3_000));
     assert_eq!(fired[TRIGGER_WIDE], Some(3_000));
     assert_eq!(fired[TRIGGER_BACK_PASS], None);
-    assert_eq!(sim.trigger_at[0], [None; 4]);
+    assert_eq!(sim.windows.trigger_at[0], [None; 4]);
     assert_eq!(sim.heavy_mask, 0);
     let mut sim = scene();
     receive(&mut sim, 9, DVec2::new(0.0, 0.0), DVec2::new(ax, 0.0));
-    assert_eq!(sim.trigger_at, [[None; 4]; 2]);
-    sim.trigger_at[1][TRIGGER_WIDE] = Some(3_000);
+    assert_eq!(sim.windows.trigger_at, [[None; 4]; 2]);
+    sim.windows.trigger_at[1][TRIGGER_WIDE] = Some(3_000);
     let touchline = DVec2::new(0.0, sim.config.pitch().half_width());
     sim.open_dead_ball(
         StoppageKind::ThrowIn,
@@ -61,7 +61,7 @@ fn a_reception_fires_its_triggers_for_the_other_side() {
         touchline,
         false,
     );
-    assert_eq!(sim.trigger_at, [[None; 4]; 2]);
+    assert_eq!(sim.windows.trigger_at, [[None; 4]; 2]);
 }
 
 /// Inside a trigger's window the press reach takes its factor and the press its extra players
@@ -71,7 +71,7 @@ fn a_reception_fires_its_triggers_for_the_other_side() {
 fn a_side_reads_only_the_triggers_its_plan_switches_on() {
     let mut sim = scene();
     sim.possession_phase = Some(0);
-    sim.trigger_at[1][TRIGGER_WIDE] = Some(3_000);
+    sim.windows.trigger_at[1][TRIGGER_WIDE] = Some(3_000);
     assert_eq!(trigger_factor(&sim.view(), 1), 1.0);
     sim.teams[1].plan.trigger_back_pass = true;
     assert_eq!(trigger_factor(&sim.view(), 1), 1.0);
@@ -166,7 +166,7 @@ fn the_offside_trap_steps_the_back_line_up_together() {
     }
     let before = crate::decision::DecisionV1.targets(&sim.view());
     sim.arm_trap(1, 9);
-    assert_eq!(sim.trap_at[1], Some(3_000));
+    assert_eq!(sim.windows.trap_at[1], Some(3_000));
     let after = crate::decision::DecisionV1.targets(&sim.view());
     let def_ax = sim.teams[1].attack_x;
     let mut stepped = 0;
@@ -185,10 +185,10 @@ fn the_offside_trap_steps_the_back_line_up_together() {
     // Later in the same spell no new trap starts; a new spell on the ball may start one.
     sim.tick += 200;
     sim.arm_trap(1, 9);
-    assert_eq!(sim.trap_at[1], Some(3_000));
+    assert_eq!(sim.windows.trap_at[1], Some(3_000));
     sim.control_since = sim.tick;
     sim.arm_trap(1, 9);
-    assert_eq!(sim.trap_at[1], Some(3_200));
+    assert_eq!(sim.windows.trap_at[1], Some(3_200));
     // With a player of the side near him the carrier is pressed: no trap starts.
     let mut pressed = scene();
     pressed.players[9].pos = at;
@@ -196,7 +196,7 @@ fn the_offside_trap_steps_the_back_line_up_together() {
     pressed.players[PLAYERS_PER_TEAM + 9].pos = at + DVec2::new(1.0, 0.0);
     pressed.possession_phase = Some(0);
     pressed.arm_trap(1, 9);
-    assert_eq!(pressed.trap_at[1], None);
+    assert_eq!(pressed.windows.trap_at[1], None);
 }
 /// Stop short goal kicks: at the other side's goal kick, a screening side's players in front of
 /// its back line stand beside the kicking side's short options, outside the penalty area; a
@@ -938,9 +938,9 @@ fn inside_a_trigger_window_the_nearest_player_goes_for_the_carrier() {
         (t.targets[d] - at).length()
     };
     let mut off = press_scene(9, d, at, 25.0);
-    off.trigger_at[1][TRIGGER_WIDE] = Some(3_000);
+    off.windows.trigger_at[1][TRIGGER_WIDE] = Some(3_000);
     let mut on = press_scene(9, d, at, 25.0);
-    on.trigger_at[1][TRIGGER_WIDE] = Some(3_000);
+    on.windows.trigger_at[1][TRIGGER_WIDE] = Some(3_000);
     on.teams[1].plan.trigger_wide = true;
     assert!(gap(&off) > 10.0, "{}", gap(&off));
     assert!(gap(&on) < 3.0, "{}", gap(&on));

@@ -30,6 +30,9 @@ mod slide_tests;
 pub mod tally;
 #[cfg(test)]
 mod transition_tests;
+mod windows;
+
+pub(crate) use windows::Windows;
 
 use crate::trace::Point;
 use serde_json::json;
@@ -813,22 +816,10 @@ pub struct Simulation {
     /// other team controls it. The kick-off and each restart set it; every dead ball clears
     /// it with `pass_in_flight`, so the snapshot never needs it.
     pub(crate) possession_phase: Option<usize>,
-    /// Per side, the tick it last won the ball from the other side in open play (a gain that
-    /// changed the team in possession), and the tick it last lost it so. The transition
-    /// windows read them: the regain window while the side keeps the ball, the counter-press
-    /// window while the other side has it. Every dead ball clears both, like
-    /// `possession_phase`, so a restart opens no window and the snapshot never needs them.
-    pub(crate) regained_at: [Option<u32>; 2],
-    pub(crate) lost_at: [Option<u32>; 2],
-    /// Per pressing side, the tick each press trigger of the other side last fired in open
-    /// play, in [`crate::decision::TRIGGERS`] order: a back pass, a poor touch, a receiver
-    /// facing his own goal, a pass to a full-back or into a wide channel. Each fires whatever
-    /// the plan; a side's press reads only the triggers its plan switches on. Every dead ball
-    /// clears them, like `regained_at`, so the snapshot never needs them.
-    pub(crate) trigger_at: [[Option<u32>; 4]; 2],
-    /// Per side, the tick its offside trap last started: an opposing carrier unpressed and
-    /// facing forward while the side's plan sets the trap. A dead ball clears it.
-    pub(crate) trap_at: [Option<u32>; 2],
+    /// The open-play windows: the regain and counter-press windows, the press triggers and
+    /// the offside trap. Every dead ball closes them, like `possession_phase`, so a restart
+    /// opens no window and the snapshot never needs them.
+    pub(crate) windows: Windows,
     /// The players (roster bits) who had the pass in flight within reach while it was too fast
     /// to control: a gain by one of them is a poor touch. Each kick and each dead ball clear it.
     pub(crate) heavy_mask: u32,
@@ -1055,10 +1046,7 @@ impl Simulation {
             keeper_beaten: false,
             pass_in_flight: None,
             possession_phase: None,
-            regained_at: [None; 2],
-            lost_at: [None; 2],
-            trigger_at: [[None; 4]; 2],
-            trap_at: [None; 2],
+            windows: Windows::default(),
             heavy_mask: 0,
             slide_ball: [DVec2::ZERO; crate::modules::ROSTER],
             restart_taker: None,
@@ -1481,37 +1469,51 @@ impl Simulation {
     /// Seconds since `team` won the ball from the other side in open play, while it keeps
     /// the ball; `None` otherwise (the transition primitives' regain window reads it).
     pub fn since_regain_s(&self, team: usize) -> Option<f64> {
-        let at = self.regained_at[team].filter(|_| self.possession_phase == Some(team))?;
-        Some(f64::from(self.tick.saturating_sub(at)) * self.config.tuning.dt)
+        self.windows.since_regain_s(
+            team,
+            self.possession_phase,
+            self.tick,
+            self.config.tuning.dt,
+        )
     }
 
     /// Seconds since `team` lost the ball to the other side in open play, while the other
     /// side has it; `None` otherwise (the counter-press window reads it).
     pub fn since_loss_s(&self, team: usize) -> Option<f64> {
-        let at = self.lost_at[team].filter(|_| self.possession_phase == Some(1 - team))?;
-        Some(f64::from(self.tick.saturating_sub(at)) * self.config.tuning.dt)
+        self.windows.since_loss_s(
+            team,
+            self.possession_phase,
+            self.tick,
+            self.config.tuning.dt,
+        )
     }
 
     /// Seconds since press trigger `kind` of the side without the ball fired, for pressing side
     /// `team`, while the other side has the ball; `None` otherwise.
     pub fn since_trigger_s(&self, team: usize, kind: usize) -> Option<f64> {
-        let at = self.trigger_at[team][kind].filter(|_| self.possession_phase == Some(1 - team))?;
-        Some(f64::from(self.tick.saturating_sub(at)) * self.config.tuning.dt)
+        self.windows.since_trigger_s(
+            team,
+            kind,
+            self.possession_phase,
+            self.tick,
+            self.config.tuning.dt,
+        )
     }
 
     /// Seconds since side `team`'s offside trap started, while the other side has the ball;
     /// `None` otherwise.
     pub fn since_trap_s(&self, team: usize) -> Option<f64> {
-        let at = self.trap_at[team].filter(|_| self.possession_phase == Some(1 - team))?;
-        Some(f64::from(self.tick.saturating_sub(at)) * self.config.tuning.dt)
+        self.windows.since_trap_s(
+            team,
+            self.possession_phase,
+            self.tick,
+            self.config.tuning.dt,
+        )
     }
 
     /// Clears both sides' transition ticks: a dead ball ends every transition window.
     pub(crate) fn clear_transitions(&mut self) {
-        self.regained_at = [None; 2];
-        self.lost_at = [None; 2];
-        self.trigger_at = [[None; 4]; 2];
-        self.trap_at = [None; 2];
+        self.windows.clear();
         self.heavy_mask = 0;
     }
 

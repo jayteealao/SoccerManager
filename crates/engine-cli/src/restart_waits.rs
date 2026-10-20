@@ -19,6 +19,7 @@ use engine::data::restart_waits::{QUANTILES, RestartWaits, WaitKind};
 use engine::{ContentDir, DeadBall, MatchConfig, Simulation};
 
 use crate::cli::RestartWaitsOpts;
+use crate::stats::quantile_linear;
 
 /// The real dead spells file inside the real-data folder.
 pub const DEAD_SPELLS_FILE: &str = "idsse_dead.csv";
@@ -102,15 +103,6 @@ pub fn read_spells(text: &str) -> anyhow::Result<Vec<DeadSpell>> {
     Ok(spells)
 }
 
-/// The value at share `p` (0 to 1) of the sorted values `v`: linear between the two nearest
-/// ranks.
-fn quantile(v: &[f64], p: f64) -> f64 {
-    let at = p * (v.len() - 1) as f64;
-    let i = at.floor() as usize;
-    let j = (i + 1).min(v.len() - 1);
-    v[i] + (v[j] - v[i]) * (at - i as f64)
-}
-
 /// The median of `v`, or `None` when it is empty.
 pub fn median(v: &[f64]) -> Option<f64> {
     if v.is_empty() {
@@ -118,7 +110,7 @@ pub fn median(v: &[f64]) -> Option<f64> {
     }
     let mut sorted = v.to_vec();
     sorted.sort_by(f64::total_cmp);
-    Some(quantile(&sorted, 0.5))
+    Some(quantile_linear(&sorted, 0.5))
 }
 
 /// The table `like` with each kind's extras taken from `spells` less the kind's median
@@ -146,7 +138,7 @@ pub fn build_table(
         }
         extras.sort_by(f64::total_cmp);
         let quantiles: [f64; QUANTILES] = std::array::from_fn(|i| {
-            let q = quantile(&extras, i as f64 / (QUANTILES - 1) as f64);
+            let q = quantile_linear(&extras, i as f64 / (QUANTILES - 1) as f64);
             // Two decimals: a hundredth of a second is below a tick.
             (q * 100.0).round() / 100.0
         });

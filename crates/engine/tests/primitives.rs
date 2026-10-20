@@ -636,11 +636,13 @@ fn decision_sites() -> Vec<PathBuf> {
     .iter()
     .map(|f| src.join(f))
     .collect();
-    for entry in std::fs::read_dir(src.join("sim")).unwrap() {
-        let path = entry.unwrap().path();
-        let name = path.file_name().unwrap().to_string_lossy().to_string();
-        if name.ends_with(".rs") && !name.ends_with("_tests.rs") {
-            out.push(path);
+    for dir in ["sim", "decision"] {
+        for entry in std::fs::read_dir(src.join(dir)).unwrap() {
+            let path = entry.unwrap().path();
+            let name = path.file_name().unwrap().to_string_lossy().to_string();
+            if name.ends_with(".rs") && !name.ends_with("_tests.rs") {
+                out.push(path);
+            }
         }
     }
     out
