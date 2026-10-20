@@ -17,8 +17,12 @@ impl Simulation {
         }
         let tick = self.tick;
         let goals = self.summary.goals;
-        let minute = self.referee.clock.minute(tick).0;
-        let late = minute + t.late_minutes >= self.config.rules.regulation_minutes();
+        let late = crate::rules::clock::late(
+            &self.referee.clock,
+            &self.config.rules,
+            t.late_minutes,
+            tick,
+        );
         let dead = self.referee.phase != Phase::Live;
         let ctx: [TeamPace; 2] = std::array::from_fn(|team| {
             let plan = &self.teams[team].plan;

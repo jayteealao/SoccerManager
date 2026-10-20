@@ -189,8 +189,9 @@ pub struct RestartWaits {
     pub source: Vec<String>,
     #[garde(dive)]
     pub kinds: Kinds,
-    /// A team leading in the last minutes of regulation (the pace tuning's `late_minutes`)
-    /// takes this many times the drawn extra.
+    /// A team leading in the late window (the last minutes of regulation, the pace tuning's
+    /// `late_minutes`, or the closing minutes of an extra-time period) takes this many times
+    /// the drawn extra.
     #[garde(range(min = 1.0, max = 5.0))]
     pub late_lead_factor: f64,
     #[garde(dive, custom(check_quick))]

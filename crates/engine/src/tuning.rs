@@ -276,7 +276,9 @@ pub struct PaceTuning {
     /// skips the job's sprint. Lower for a less urgent job.
     #[garde(dive)]
     pub skip_at: SkipAt,
-    /// The late minutes of a match: the last this many minutes of its regulation length.
+    /// The late minutes of a match: the last this many minutes of its regulation length. Each
+    /// extra-time period has a late window of the same share of its length as this is of a
+    /// half ([`crate::rules::clock::late`]).
     #[garde(range(min = 0, max = 60))]
     pub late_minutes: u32,
 }

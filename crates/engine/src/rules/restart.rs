@@ -673,13 +673,18 @@ pub fn steps_done(dead: &DeadBall, players: &[Player], teams: &[Team; 2], t: &Tu
     })
 }
 
-/// `true` when `team` leads in the late window of regulation: the last `late_minutes` of the
-/// pace tuning, the same late the pace selector reads.
+/// `true` when `team` leads in the late window ([`crate::rules::clock::late`]): the last
+/// `late_minutes` of the pace tuning in regulation, the closing minutes of each extra-time
+/// period, the same late the pace selector reads.
 pub(crate) fn leads_late(view: &MatchView<'_>, team: usize) -> bool {
     let goals = view.goals();
-    let minute = view.referee().clock.minute(view.tick()).0;
     goals[team] > goals[1 - team]
-        && minute + view.tuning().pace.late_minutes >= view.rules().regulation_minutes()
+        && crate::rules::clock::late(
+            &view.referee().clock,
+            view.rules(),
+            view.tuning().pace.late_minutes,
+            view.tick(),
+        )
 }
 
 /// The drawn extra of a restart of `kind` by `team` for the uniform draw `u`, in ticks: the

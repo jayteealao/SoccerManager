@@ -225,6 +225,22 @@ impl MatchClock {
     }
 }
 
+/// `true` when `tick` lies in the late window the pace selector and the restart waits read.
+/// In regulation it is the last `late_minutes` of regulation time. In extra time it is the
+/// closing minutes of each extra-time period: the same share of the period as the regulation
+/// window is of a half, so `late_minutes` scaled by the period length over the half length
+/// (5 of 15 minutes for 15 late minutes and 45-minute halves). Added time is late.
+pub fn late(clock: &MatchClock, rules: &RulePack, late_minutes: u32, tick: u32) -> bool {
+    let minute = clock.minute(tick).0;
+    if clock.in_extra_time() {
+        let window = late_minutes * u32::from(rules.extra_time.period_minutes)
+            / u32::from(rules.half_minutes).max(1);
+        minute + window >= clock.end_minute()
+    } else {
+        minute + late_minutes >= rules.regulation_minutes()
+    }
+}
+
 /// The clock and match end, version 1: the rule pack's added time, the period sequence of
 /// the Laws (half-time, extra time for a level knockout match, then the shoot-out), the
 /// rule pack's minimum players, and the shoot-out law in `shootout`.
@@ -531,5 +547,48 @@ mod tests {
         assert_eq!(clock.minute(second + 45_000 - 1), (119, None));
         assert_eq!(clock.minute(second + 45_000 + 1), (120, Some(1)));
         assert_eq!(clock.end_minute(), 120);
+    }
+
+    /// Regulation keeps its late window: the last 15 minutes of the 90.
+    #[test]
+    fn the_late_window_of_regulation_is_its_last_minutes() {
+        let rules = shipped_content().rules;
+        let mut clock = MatchClock::new(90, &rules, true);
+        assert!(!late(&clock, &rules, 15, 44 * TICKS_PER_MINUTE));
+        clock.added_ticks[0] = Some(0);
+        clock.next_half(135_000);
+        assert!(!late(&clock, &rules, 15, 135_000 + 29 * TICKS_PER_MINUTE));
+        assert!(late(&clock, &rules, 15, 135_000 + 30 * TICKS_PER_MINUTE));
+        assert!(late(&clock, &rules, 15, 270_000 + 1), "added time is late");
+    }
+
+    /// In extra time only the closing minutes of each period are late: 15 late minutes of a
+    /// 45-minute half give the last 5 of each 15-minute period.
+    #[test]
+    fn an_extra_time_minute_is_late_only_near_the_end_of_its_period() {
+        let rules = shipped_content().rules;
+        assert_eq!(rules.half_minutes, 45);
+        assert_eq!(rules.extra_time.period_minutes, 15);
+        let mut clock = MatchClock::new(90, &rules, true);
+        clock.added_ticks[0] = Some(0);
+        clock.next_half(135_000);
+        clock.added_ticks[1] = Some(0);
+        let et = 270_000;
+        clock.next_half(et);
+        assert!(clock.in_extra_time());
+        // Minute 92, early in the first period: not late.
+        assert_eq!(clock.minute(et + 2 * TICKS_PER_MINUTE).0, 92);
+        assert!(!late(&clock, &rules, 15, et + 2 * TICKS_PER_MINUTE));
+        assert!(!late(&clock, &rules, 15, et + 10 * TICKS_PER_MINUTE - 1));
+        // Minute 100 and on, the last 5 of the period and its added time: late.
+        assert!(late(&clock, &rules, 15, et + 10 * TICKS_PER_MINUTE));
+        assert!(late(&clock, &rules, 15, et + 13 * TICKS_PER_MINUTE));
+        assert!(late(&clock, &rules, 15, et + 45_000 + 1));
+        // The second period starts early again and ends late.
+        clock.added_ticks[2] = Some(0);
+        let second = et + 45_000;
+        clock.next_half(second);
+        assert!(!late(&clock, &rules, 15, second + TICKS_PER_MINUTE));
+        assert!(late(&clock, &rules, 15, second + 11 * TICKS_PER_MINUTE));
     }
 }
