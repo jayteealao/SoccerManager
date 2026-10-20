@@ -8,7 +8,9 @@ mod decisions;
 mod fatigue;
 mod hooks;
 mod manager;
+pub mod mood;
 mod movement;
+mod overrides;
 mod possession;
 pub mod tally;
 
@@ -300,6 +302,12 @@ pub enum EventDetail {
     },
     /// A plugin hook failed or was switched off.
     Script(ScriptNote),
+    /// A strong trait of play overrode `instruction` for `cause`.
+    Override {
+        trait_kind: crate::traits::TraitKind,
+        cause: crate::traits::OverrideCause,
+        instruction: crate::tactics::Instruction,
+    },
 }
 
 /// What happened during a tick that a consumer outside the engine must know about. The
@@ -339,11 +347,14 @@ pub enum EngineEventKind {
     /// A plugin hook failed or was switched off; the detail names the hook and the outcome.
     /// Play goes on with the engine's own choice.
     Script,
+    /// `player` of `team` overrode an instruction with a strong trait of play; the detail
+    /// names the trait, the cause and the instruction.
+    TraitOverride,
 }
 
 impl EngineEventKind {
     /// Every event kind, in declaration order.
-    pub const ALL: [EngineEventKind; 18] = [
+    pub const ALL: [EngineEventKind; 19] = [
         EngineEventKind::KickOff,
         EngineEventKind::Goal,
         EngineEventKind::HalfTime,
@@ -362,6 +373,7 @@ impl EngineEventKind {
         EngineEventKind::ChangeApplied,
         EngineEventKind::ChangeRejected,
         EngineEventKind::Script,
+        EngineEventKind::TraitOverride,
     ];
 
     /// The kind as the event contract spells it. Both change verdicts travel as
@@ -385,6 +397,7 @@ impl EngineEventKind {
             EngineEventKind::AiDecision => "ai-decision",
             EngineEventKind::ChangeApplied | EngineEventKind::ChangeRejected => "tactics-change",
             EngineEventKind::Script => "script",
+            EngineEventKind::TraitOverride => "trait-override",
         }
     }
 
@@ -591,6 +604,26 @@ pub struct Simulation {
     pub(crate) shot_on_target: bool,
     pub(crate) shot_quality: f64,
     pub(crate) blockers_tried: u32,
+    /// The shot in flight's expected goals and its shooter, for the big-miss judgement when
+    /// it ends without a goal. Cleared with the shot.
+    pub(crate) shot_xg: f64,
+    pub(crate) shooter: Option<usize>,
+    /// The last completed open-play pass as `(passer, receiver)` while his side keeps the
+    /// ball, for the assist. Every dead ball clears it, like `last_kicker`.
+    pub(crate) last_pass: Option<(usize, usize)>,
+    /// Each side's bench mood: the side's mood events and the drift with a swing of 1, which
+    /// a substitute enters at ([`mood`]).
+    pub(crate) bench_mood: [f64; 2],
+    /// Each side's mood as the last refresh of effective values read it, so the team-mood
+    /// modifier reads it once per side, not once per player ([`Simulation::team_mood`]).
+    pub(crate) team_moods: [f64; 2],
+    /// The trait override each player plays, by roster index, until its action ends
+    /// ([`crate::traits`]).
+    pub(crate) trait_acts: [Option<crate::traits::TraitAct>; 2 * PLAYERS_PER_TEAM],
+    /// Roster bits: carriers whose last decision was a dribble, so the next one is no new
+    /// carry; and keepers who already met this loose ball's moment.
+    pub(crate) carrying: u32,
+    pub(crate) chase_seen: u32,
     /// The restart taker until his first kick or until another player touches the ball;
     /// his first kick is a restart kick. Every dead ball clears it.
     pub(crate) restart_taker: Option<usize>,
@@ -767,6 +800,14 @@ impl Simulation {
             shot_on_target: false,
             shot_quality: 0.0,
             blockers_tried: 0,
+            shot_xg: 0.0,
+            shooter: None,
+            last_pass: None,
+            bench_mood: [0.0; 2],
+            team_moods: [0.0; 2],
+            trait_acts: [None; 2 * PLAYERS_PER_TEAM],
+            carrying: 0,
+            chase_seen: 0,
             #[cfg(feature = "scenario")]
             census: ShotCensus::default(),
             #[cfg(feature = "scenario")]
@@ -796,6 +837,7 @@ impl Simulation {
         // ([`Self::kick_off_form`]), so a restored match takes no draw here.
         for i in 0..sim.players.len() {
             sim.tally_played(i);
+            sim.tally_started(i);
         }
         sim.refresh_effective();
         Ok(sim)
@@ -941,6 +983,10 @@ impl Simulation {
     /// (sharpness on the technical group, adaptation on the mental group, capped as in play)
     /// and fresh, in tenths: `[today, fresh]`. Reads the squad entry only; it writes nothing.
     /// A hidden value never moves it.
+    ///
+    /// It rebuilds the shipped condition and familiarity drops by hand rather than through
+    /// the match's modifier slots, so a slot set off or replaced still shows the shipped
+    /// drop in this pre-match range.
     pub fn squad_level_range(&self, team: usize, squad: usize) -> [u8; 2] {
         use crate::contract::body::BodyJobs;
         use crate::contract::states::{self, GROUP_COUNT};
@@ -953,13 +999,57 @@ impl Simulation {
         families[Family::Body as usize][Group::Technical as usize] =
             BodyJobs::drop(&body.sharpness, entry.condition.sharpness);
         families[Family::Mind as usize][Group::Mental as usize] =
-            BodyJobs::drop(&body.adaptation, entry.condition.adaptation);
+            BodyJobs::drop(&body.adaptation, entry.condition.adaptation)
+                * crate::modules::modifier::condition::adaptation_scale(
+                    &entry.personality,
+                    &self.config.tuning,
+                );
+        // A player in the lineup plays his slot's position; a bench player reads his natural
+        // position, which costs nothing.
+        let side = &self.teams[team];
+        if let Some(slot) = side.lineup.iter().position(|&s| s == squad) {
+            let drop = states::familiarity_drop(
+                &entry.positions,
+                self.slot_position(team, slot),
+                &entry.personality,
+                &self.config.tuning.contract.person().familiarity,
+            );
+            families[Family::Familiarity as usize][Group::Technical as usize] = drop;
+            families[Family::Familiarity as usize][Group::Mental as usize] = drop;
+        }
         let deltas = states::capped(families, &self.config.tuning.contract.states);
         let today = states::effective(&entry.attributes, schema, deltas);
         [
             overall_level(&today, schema, entry.position),
             overall_level(&entry.attributes, schema, entry.position),
         ]
+    }
+
+    /// The position formation slot `slot` of `team` plays in the formation in force.
+    pub fn slot_position(&self, team: usize, slot: usize) -> crate::data::team::Position {
+        let formation = usize::from(self.teams[team].tactics.formation);
+        self.config.tactics.formations[formation].slots[slot].position
+    }
+
+    /// The position player `i` plays now: his formation slot's.
+    pub fn played_position(&self, i: usize) -> crate::data::team::Position {
+        let p = &self.players[i];
+        self.slot_position(p.team, p.slot)
+    }
+
+    /// Player `i`'s rating at each position, in [`crate::data::team::Position::ALL`] order,
+    /// from his squad entry.
+    #[inline]
+    pub fn position_ratings(&self, i: usize) -> &[crate::rating::Rating; 10] {
+        let p = &self.players[i];
+        &self.teams[p.team].squad[p.squad].positions
+    }
+
+    /// Player `i`'s feet, from his squad entry.
+    #[inline]
+    pub fn foot(&self, i: usize) -> crate::data::team::Foot {
+        let p = &self.players[i];
+        self.teams[p.team].squad[p.squad].foot
     }
 
     /// Player `i`'s match condition inputs, from his squad entry.
@@ -978,7 +1068,8 @@ impl Simulation {
 
     /// Sets player `i`'s state deltas and form offset and derives his effective values from
     /// them: his squad entry's when all are 0, otherwise blended again from his ratings moved
-    /// by both ([`crate::contract::states::effective_with_form`]) through the contract.
+    /// by his deltas ([`crate::contract::states::effective`]), with the form offset moving each
+    /// stage by its action's consistency degree after the blend.
     pub(crate) fn set_state(
         &mut self,
         i: usize,
@@ -992,19 +1083,22 @@ impl Simulation {
             self.stages[i] = entry.stages;
         } else {
             let schema = &self.config.attributes;
-            let ratings = crate::contract::states::effective_with_form(
-                &entry.attributes,
-                schema,
-                deltas,
-                form,
-                &self.config.tuning.contract.states,
-            );
-            let (derived, stages) = crate::player::Derived::from_blend(
+            let ratings = crate::contract::states::effective(&entry.attributes, schema, deltas);
+            // The shared floor binds only with a person block in the tuning.
+            let floor = self
+                .config
+                .tuning
+                .contract
+                .person
+                .map(|person| (&entry.stages, person.floor_drop));
+            let (derived, stages) = crate::player::Derived::from_blend_floored(
                 &ratings,
                 &self.blend,
                 schema,
                 &self.config.tuning,
                 entry.body,
+                form,
+                floor,
             );
             self.players[i].derived = derived;
             self.stages[i] = stages;
@@ -1314,6 +1408,7 @@ impl Simulation {
             }
         }
         if let Some(stoppage) = self.stoppage {
+            self.end_acts_on_stoppage();
             self.apply_changes(stoppage);
             self.script_cache = None;
         }
@@ -1398,7 +1493,14 @@ impl Simulation {
         let mut shooter = None;
         self.end_shot();
         self.clearers_tried = 0;
+        // A kick starts a new flight: each keeper meets its loose ball afresh.
+        self.chase_seen = 0;
         if let Some(c) = self.carrier {
+            // The kick ends his carry or hold.
+            if self.trait_acts[c].is_some_and(|a| matches!(a.ends, crate::traits::ActEnd::Tick(_)))
+            {
+                self.trait_acts[c] = None;
+            }
             let team = self.players[c].team;
             self.pass_in_flight = None;
             // A shot is always a shot; otherwise the restart taker's first kick is a restart
@@ -1434,6 +1536,8 @@ impl Simulation {
                 }
                 self.shot_in_flight = Some(team);
                 self.shot_quality = quality;
+                self.shot_xg = xg;
+                self.shooter = Some(c);
                 shooter = Some((team, attack_x, c));
             } else if restart_kick {
                 self.summary.restart_kicks[team] += 1;
@@ -1462,10 +1566,7 @@ impl Simulation {
                 self.pass_in_flight = Some(team);
                 #[cfg(feature = "sensitivity")]
                 if self.probe.is_some() {
-                    let (from, attack_x) = (self.ball.xy(), self.teams[team].attack_x);
-                    if let Some(p) = self.probe.as_deref_mut() {
-                        p.kicked_pass(c, team, from, attack_x);
-                    }
+                    self.probe_pass(c, team);
                 }
                 #[cfg(feature = "measures")]
                 if let Some(m) = self.measures.as_deref_mut() {
@@ -1510,8 +1611,15 @@ impl Simulation {
         self.keeper_beaten = false;
     }
 
-    /// Ends the shot in flight, if any.
+    /// Ends the shot in flight, if any. A shot of at least the big-chance expected goals that
+    /// ends here, not in a goal (the goal takes its shooter first), is a big miss.
     pub(crate) fn end_shot(&mut self) {
+        if let Some(s) = self.shooter.take()
+            && self.shot_xg >= self.config.tuning.contract.person().mood.big_chance_xg
+        {
+            self.mood_event(s, mood::MoodEvent::BigMiss);
+        }
+        self.shot_xg = 0.0;
         self.shot_in_flight = None;
         self.shot_on_target = false;
         self.shot_quality = 0.0;
@@ -1663,17 +1771,15 @@ mod tests {
 
     #[test]
     fn every_play_event_names_a_player() {
-        // The seed-42 match ends 0-0 since a pressed lone forward stopped dribbling into
-        // defenders, and the seed-7 match since every sprint costs stamina; the seed-9 match
-        // scores, so its goal events are checked too.
-        let events = full_match(9, |_| {}).take_events();
-        let goals = events
-            .iter()
-            .filter(|e| e.kind == EngineEventKind::Goal)
-            .count();
-        assert!(goals > 0, "the match scored no goal");
+        // The first match from seed 9 that scores, so its goal events are checked too: which
+        // seeds score moves whenever play changes on purpose.
+        let events = (9..40)
+            .map(|seed| full_match(seed, |_| {}).take_events())
+            .find(|events| events.iter().any(|e| e.kind == EngineEventKind::Goal))
+            .expect("a match from seeds 9 to 39 scores");
         for e in &events {
-            // The manager's own events and the whistles at the end of a half name nobody.
+            // The manager's own events and the whistles at the end of a half name nobody; an
+            // override names the player who overrode.
             let named = !matches!(
                 e.kind,
                 EngineEventKind::HalfTime

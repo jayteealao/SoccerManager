@@ -190,7 +190,7 @@ struct Watched {
 
 /// The `--fast-forward-to` tick of the launches whose match is left running. Their seed (7)
 /// stops play before it, so the worker has a save past kick-off once the page passes it.
-const FAST_FORWARD: u32 = 4_000;
+const FAST_FORWARD: u32 = 5_300;
 
 /// Connects to the running worker and kicks off. With `skip`, the page skips at once and
 /// reads to the close. Without, it reads and reports each tick as a page does until it has
@@ -596,7 +596,11 @@ fn the_squad_views_hold_across_launches() {
         assert_eq!(code, 200, "{read}");
         assert_eq!(
             serde_json::from_str::<Value>(&read).unwrap(),
-            serde_json::json!({"views": [], "ratings": {}})
+            serde_json::json!({
+                "views": [],
+                "ratings": {},
+                "season": {"matches": [], "players": {}}
+            })
         );
         let (code, _) = http(launched.port, "GET", "/engine/views", false, "");
         assert_eq!(code, 400, "a read names a club");

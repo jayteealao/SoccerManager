@@ -1,6 +1,8 @@
-//! The sensitivity rules on small batches: every job has one rule, the job probe changes no
-//! tick, a working job passes its rule, a job planted at zero weight fails it, amplified pace
-//! does not pass its ceiling, and the five-match rule returns a share and a word. The full
+//! The sensitivity rules on small batches: every job has one rule, the new jobs' rules are
+//! report-only, the four personality values that act off the pitch move no match statistic,
+//! the job probe changes no tick, a working job passes its rule, a job planted at zero weight
+//! fails it, amplified pace does not pass its ceiling, and the five-match rule returns a share
+//! and a word. The full
 //! run of every rule is `sensitivity_full.rs`. The working, planted and amplified-pace check
 //! plays about 2,600 matches, so it is ignored and runs with the full run:
 //!
@@ -82,6 +84,52 @@ fn every_job_has_exactly_one_rule() {
     }
     assert!(file.rules.iter().all(|r| r.job != "build"));
     assert_eq!(file.derived, vec!["build".to_string()]);
+}
+
+/// Every job the version 4 catalogue added has a rule with the report-only flag,
+/// and no other rule carries it, so the 40 older rules still fail the full run.
+#[test]
+fn the_new_rules_are_report_only() {
+    let content = common::content();
+    let file = sensitivity::load_rules(&content, &common::content_dir()).unwrap();
+    for r in &file.rules {
+        let new = engine::data::convert::V4_ADDED.contains(&r.job.as_str());
+        assert_eq!(r.report_only, new, "{}", r.job);
+    }
+    assert_eq!(file.rules.iter().filter(|r| r.report_only).count(), 21);
+}
+
+/// Ambition, loyalty, money motivation and controversy, each at 1.0 and at 20.0
+/// for every player of the measured club, over six seeds: every match reads the same (every
+/// statistic's parts, the goal and expected-goal difference, and every match rating). No
+/// match reads the four values; ambition acts only through the season goal at kick-off, which
+/// a match without a season record does not have.
+#[test]
+fn the_four_inert_values_move_no_statistic() {
+    use engine::sensitivity::design::{Target, parallel, play, set};
+    let content = common::content();
+    let clubs = sensitivity::default_clubs(&content, &common::content_dir()).unwrap();
+    let values = ["ambition", "loyalty", "money_motivation", "controversy"];
+    let seeds = 6;
+    let cases: Vec<(usize, u64)> = (0..values.len())
+        .flat_map(|v| (0..seeds).map(move |s| (v, 100 + s as u64)))
+        .collect();
+    let rows = parallel(cases.len() * 2, |k| {
+        let (v, seed) = cases[k / 2];
+        let level = if k % 2 == 0 { 1.0 } else { 20.0 };
+        let mut file = clubs.measured.clone();
+        let index = content.attributes.index(values[v]).unwrap();
+        set(&mut file, &content, Target::Attribute(index), level);
+        play(&content, [&file, &clubs.opponent], 0, seed, Vec::new())
+    });
+    for (k, pair) in rows.chunks(2).enumerate() {
+        let (v, seed) = cases[k];
+        assert_eq!(
+            pair[0], pair[1],
+            "{} at 1.0 and 20.0 differ on seed {seed}",
+            values[v]
+        );
+    }
 }
 
 /// The SHA-256 of every tick's state bytes, and the events, of the seed's default match.

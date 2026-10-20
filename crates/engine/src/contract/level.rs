@@ -22,6 +22,8 @@ pub fn overall_level(ratings: &Attributes, schema: &AttributeSchema, position: P
             Group::Technical => !keeper,
             Group::Goalkeeping => keeper,
             Group::Mental | Group::Physical => true,
+            // Hidden, so filtered out above; personality never makes a level.
+            Group::Personality => false,
         })
         .fold((0u32, 0u32), |(s, n), (i, _)| {
             (s + u32::from(ratings.get(i).tenths()), n + 1)

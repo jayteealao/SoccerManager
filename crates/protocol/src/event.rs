@@ -1,7 +1,8 @@
 //! Match events: the `match-event` record kind the observability contract reserves. The
 //! engine produces kick-off, goal, half-time, full-time, the law events (offside, foul, card,
 //! and every restart), injuries, substitutions, the AI manager's choices, the verdict on a
-//! queued change, and a script hook that failed.
+//! queued change, a script hook that failed, and a strong trait of play overriding an
+//! instruction.
 
 use serde::{Deserialize, Serialize};
 
@@ -34,11 +35,14 @@ pub enum EventType {
     /// A script pack's hook failed or was switched off; play went on with the engine's own
     /// choice.
     Script,
+    /// A player's strong trait of play overrode one of his team's instructions; the event
+    /// names the player, the trait, the cause and the instruction.
+    TraitOverride,
 }
 
 impl EventType {
     /// Every event type, in declaration order.
-    pub const ALL: [EventType; 17] = [
+    pub const ALL: [EventType; 18] = [
         EventType::KickOff,
         EventType::Goal,
         EventType::HalfTime,
@@ -56,6 +60,7 @@ impl EventType {
         EventType::Substitution,
         EventType::AiDecision,
         EventType::Script,
+        EventType::TraitOverride,
     ];
 
     /// The value as the contract writes it.
@@ -78,6 +83,7 @@ impl EventType {
             EventType::Substitution => "substitution",
             EventType::AiDecision => "ai-decision",
             EventType::Script => "script",
+            EventType::TraitOverride => "trait-override",
         }
     }
 }
@@ -164,7 +170,8 @@ pub struct MatchEvent {
     /// Additive extra, on `half-time` and `full-time`: the seconds added to the half.
     #[serde(rename = "added_time.s", skip_serializing_if = "Option::is_none")]
     pub added_time_s: Option<u32>,
-    /// One English commentary line, on every play event; absent on `tactics-change`.
+    /// One English commentary line, on every play event; absent on `tactics-change` and on
+    /// `trait-override`, whose fields the page builds its own line from.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub commentary: Option<String>,
     /// Additive extra, on the `half-time` break before an extra-time period and on its
@@ -232,6 +239,30 @@ pub struct MatchEvent {
         default
     )]
     pub script_detail: Option<String>,
+    /// Additive extra, on a `trait-override` event: the trait's catalogue name, such as
+    /// `holds_up_ball`.
+    #[serde(
+        rename = "trait.name",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub trait_name: Option<String>,
+    /// Additive extra, on a `trait-override` event: `pressure` or `low-mood`.
+    #[serde(
+        rename = "trait.cause",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub trait_cause: Option<String>,
+    /// Additive extra, on a `trait-override` event: the instruction it went against, as
+    /// `<instruction>:<level>`, `duty:<duty>` or `mentality:<mentality>`, such as
+    /// `tempo:faster`.
+    #[serde(
+        rename = "trait.instruction",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub trait_instruction: Option<String>,
 }
 
 impl MatchEvent {
@@ -277,7 +308,18 @@ impl MatchEvent {
             script_hook: None,
             script_outcome: None,
             script_detail: None,
+            trait_name: None,
+            trait_cause: None,
+            trait_instruction: None,
         }
+    }
+
+    /// A trait override: the trait's name, the cause and the instruction it went against.
+    pub fn trait_override(mut self, name: &str, cause: &str, instruction: &str) -> Self {
+        self.trait_name = Some(name.to_string());
+        self.trait_cause = Some(cause.to_string());
+        self.trait_instruction = Some(instruction.to_string());
+        self
     }
 
     /// The minute of play and the added minute, as the engine clock shows them.
@@ -436,6 +478,38 @@ mod tests {
             assert!(json.contains(key), "missing {key} in {json}");
         }
         assert!(!json.contains("change."), "{json}");
+    }
+
+    #[test]
+    fn a_trait_override_names_the_player_the_trait_the_cause_and_the_instruction() {
+        let e = MatchEvent::play(
+            "0123456789abcdef0123456789abcdef",
+            "000000000000002a-1",
+            183_000,
+            EventType::TraitOverride,
+            Some("club-a".into()),
+            [0, 0],
+        )
+        .at_minute(61, None)
+        .player(Some("p-club-a-08".into()))
+        .trait_override("holds_up_ball", "pressure", "tempo:faster");
+        let json = serde_json::to_string(&e).unwrap();
+        for key in [
+            "\"event.type\":\"trait-override\"",
+            "\"player.id\":\"p-club-a-08\"",
+            "\"team.id\":\"club-a\"",
+            "\"trait.name\":\"holds_up_ball\"",
+            "\"trait.cause\":\"pressure\"",
+            "\"trait.instruction\":\"tempo:faster\"",
+        ] {
+            assert!(json.contains(key), "missing {key} in {json}");
+        }
+        assert!(!json.contains("commentary"), "{json}");
+        let back: MatchEvent = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, e);
+        // Every other event leaves the three fields out, so an older reader still reads.
+        let goal = MatchEvent::play("o", "m", 1, EventType::Goal, None, [1, 0]);
+        assert!(!serde_json::to_string(&goal).unwrap().contains("trait."));
     }
 
     #[test]

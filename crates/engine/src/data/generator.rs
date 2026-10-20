@@ -9,22 +9,32 @@
 //! one after the last visible attribute (added at the schema's end) comes from a stream of its
 //! own, drawn after the league, so adding it moves no earlier draw. The body fields come
 //! from a second stream keyed from the seed, drawn after the league, so no attribute draw
-//! moves.
+//! moves. The person fields of a version 3 file (position ratings, the feet, the traits of
+//! play) come from a third keyed stream drawn after the bodies; the personality values are
+//! hidden values after the last visible attribute, so the hidden stream draws them. The whole
+//! league is still made in one generator run.
 
 use std::collections::BTreeMap;
 
 use sha2::{Digest, Sha256};
 
+use crate::contract::level::overall_level;
+use crate::data::attributes::AttributeSchema;
 use crate::data::team::{
-    AGE_YEARS, Club, Ground, HEIGHT_CM, Kit, PlayerEntry, TEAM_VERSION, TeamFile,
+    AGE_YEARS, Club, Foot, Ground, HEIGHT_CM, Kit, PlayerEntry, Position, Side, TEAM_VERSION,
+    TeamFile,
 };
-use crate::data::tuning::{BodyTuning, HiddenDist};
+use crate::data::traits::{TraitCatalogue, TraitStrength};
+use crate::data::tuning::{BodyTuning, HiddenDist, PersonTuning};
 use crate::data::{Content, hex12, names};
-use crate::rating::Rating;
+use crate::player::Attributes;
+use crate::rating::{MAX_TENTHS, MIN_TENTHS, Rating};
 use crate::rng::EngineRng;
 
 /// The key the body-field stream's seed is mixed with.
 const BODY_KEY: u64 = 0x626f_6479_6669_656c; // "bodyfiel"
+/// The key the person-field stream's seed is mixed with.
+const PERSON_KEY: u64 = 0x7065_7273_6f6e_6669; // "personfi"
 /// Keys the stream of the hidden values added at the schema's end.
 const HIDDEN_KEY: u64 = 0x6869_6464_656e_7661; // "hiddenva"
 
@@ -97,6 +107,9 @@ pub fn generate_league_in_tier(
                 shirt: (i + 1) as u8,
                 position,
                 attributes,
+                positions: None,
+                foot: None,
+                traits: BTreeMap::new(),
                 height: None,
                 age: None,
                 nationality: None,
@@ -105,6 +118,7 @@ pub fn generate_league_in_tier(
         }
         out.push(TeamFile {
             schema_version: TEAM_VERSION,
+            converted_from: None,
             club: Club {
                 id: club_id,
                 name,
@@ -118,6 +132,9 @@ pub fn generate_league_in_tier(
     draw_appended_hidden(&mut out, &schema[appended..], world.hidden, seed);
     if let Some(body) = &spec.body {
         draw_bodies(&mut out, body, seed);
+    }
+    if let Some(person) = &spec.person {
+        draw_person(&mut out, person, &content.traits, &content.attributes, seed);
     }
     let json = serde_json::to_vec(&out).unwrap_or_default();
     let hash = hex12(&Sha256::digest(&json));
@@ -185,6 +202,113 @@ fn draw_bodies(league: &mut [TeamFile], body: &BodyTuning, seed: u64) {
                 &nation.home
             };
             p.nationality = Some(code.clone());
+        }
+    }
+}
+
+/// A rating of `value` on the 1 to 20 scale, rounded to a tenth and kept to 1.0 to `top`.
+fn kept(value: f64, top: Rating) -> Rating {
+    let tenths = (value * 10.0)
+        .round()
+        .clamp(f64::from(MIN_TENTHS), f64::from(top.tenths()));
+    // The clamp keeps the value inside 10..=200, so the cast cannot truncate.
+    Rating::from_tenths(tenths as u8)
+}
+
+/// Draws every player's position ratings, feet, and traits of play from the person stream, in
+/// league order. His natural position is rated at his level; each position the tuning relates
+/// to it sits its gap below, give or take the spread; every other position (and, for a keeper,
+/// every outfield position, and for an outfield player the keeper position) is drawn around
+/// the far mean. No position is above the natural one. A keeper carries only the keeper
+/// traits, an outfield player never one of them; no player carries two opposites.
+fn draw_person(
+    league: &mut [TeamFile],
+    person: &PersonTuning,
+    catalogue: &TraitCatalogue,
+    schema: &AttributeSchema,
+    seed: u64,
+) {
+    let mut rng = EngineRng::from_seed(seed ^ PERSON_KEY);
+    let draw = &person.positions;
+    let traits = &person.traits;
+    let total: f64 = traits.count_weights.iter().sum();
+    for team in league {
+        for p in &mut team.players {
+            let level = overall_level(
+                &Attributes::from_entry(&p.attributes, schema),
+                schema,
+                p.position,
+            )
+            .clamp(MIN_TENTHS, MAX_TENTHS);
+            let natural = Rating::from_tenths(level);
+            let keeper = p.position == Position::GK;
+            let related = draw.related.get(p.position.code());
+            let positions = Position::ALL
+                .into_iter()
+                .map(|code| {
+                    if code == p.position {
+                        return (code, natural);
+                    }
+                    let gap = related
+                        .and_then(|r| r.get(code.code()))
+                        .filter(|_| keeper == (code == Position::GK));
+                    let value = match gap {
+                        Some(gap) => natural.decimal() - gap + rng.bell(0.0, draw.spread),
+                        None => rng.bell(draw.far.mean, draw.far.spread),
+                    };
+                    (code, kept(value, natural))
+                })
+                .collect();
+            p.positions = Some(positions);
+            let foot = &person.foot;
+            let strong = if rng.chance(foot.left_share) {
+                Side::Left
+            } else {
+                Side::Right
+            };
+            let weaker = rng
+                .bell(foot.weaker.mean, foot.weaker.spread)
+                .round()
+                .clamp(f64::from(foot.weaker.min), f64::from(foot.weaker.max));
+            // The clamp keeps the draw inside 1..=100, so the cast cannot truncate.
+            p.foot = Some(Foot {
+                strong,
+                weaker: weaker as u8,
+            });
+            let mut pick = rng.next_f64() * total;
+            let mut count = traits.count_weights.len() - 1;
+            for (n, w) in traits.count_weights.iter().enumerate() {
+                if pick < *w {
+                    count = n;
+                    break;
+                }
+                pick -= w;
+            }
+            p.traits = BTreeMap::new();
+            while p.traits.len() < count {
+                let open: Vec<&str> = catalogue
+                    .traits
+                    .iter()
+                    .map(|t| t.name.as_str())
+                    .filter(|n| traits.keeper_only.iter().any(|k| k == n) == keeper)
+                    .filter(|n| !p.traits.contains_key(*n))
+                    .filter(|n| {
+                        catalogue
+                            .opposite(n)
+                            .is_none_or(|o| !p.traits.contains_key(o))
+                    })
+                    .collect();
+                if open.is_empty() {
+                    break;
+                }
+                let name = open[rng.range_usize(open.len())].to_string();
+                let strength = if rng.chance(traits.strong_share) {
+                    TraitStrength::Strong
+                } else {
+                    TraitStrength::Moderate
+                };
+                p.traits.insert(name, strength);
+            }
         }
     }
 }

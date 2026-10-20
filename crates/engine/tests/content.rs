@@ -9,6 +9,7 @@
 mod common;
 
 use engine::EngineError;
+use engine::contract::{ActionKind, StageKind};
 use engine::data::{
     ATTRIBUTES_VERSION, AttributeSchema, RULES_VERSION, RulePack, StoppageKind, load_json,
 };
@@ -18,18 +19,31 @@ use engine::{ContentDir, Tuning};
 fn the_shipped_attribute_schema_has_thirty_to_fifty_grouped_names() {
     let content = common::content();
     let n = content.attributes.len();
-    assert!((30..=50).contains(&n), "{n} attributes");
+    let performance = content
+        .attributes
+        .attributes
+        .iter()
+        .filter(|d| !d.is_personality())
+        .count();
+    assert!((30..=50).contains(&performance), "{performance} attributes");
     for def in &content.attributes.attributes {
         assert!(!def.name.is_empty());
         // The group is an enum: every loaded definition carries one of the four.
         let _ = def.group;
     }
-    // The default teams are version 1 files: every value converts to 2 to 200 tenths
-    // (0.2 to 20.0), and only a converted value may sit under 1.0.
+    // The default teams are version 1 files: every old value converts to 2 to 200 tenths
+    // (0.2 to 20.0), even, and only a converted value may sit under 1.0. A value added since
+    // (a mean of related values, or communication from the mental mean) may be any tenth.
+    let added = |name: &str| {
+        name == "communication"
+            || engine::data::convert::V3_RELATED
+                .iter()
+                .any(|(n, _)| *n == name)
+    };
     for team in common::default_teams(&content) {
         for p in &team.players {
             assert_eq!(p.attributes.len(), n, "player {} attribute count", p.id);
-            for (name, v) in &p.attributes {
+            for (name, v) in p.attributes.iter().filter(|(name, _)| !added(name)) {
                 assert!(
                     (2..=200).contains(&v.tenths()) && v.tenths() % 2 == 0,
                     "player {} {name} = {v}",
@@ -388,6 +402,23 @@ fn the_shipped_flags_block_matches_the_code_flags() {
 }
 
 /// The shipped tuning file as JSON.
+/// The shipped tuning file's value with the personality word bands taken out: they joined the
+/// file after version 5, so an older file converts without them.
+fn shipped_without_personality_words() -> serde_json::Value {
+    let mut v = shipped_tuning_json();
+    let content = common::content();
+    let words = v["hidden"]["words"].as_object_mut().unwrap();
+    for def in content
+        .attributes
+        .attributes
+        .iter()
+        .filter(|d| d.is_personality())
+    {
+        words.remove(&def.name).unwrap();
+    }
+    v
+}
+
 fn shipped_tuning_json() -> serde_json::Value {
     let path = common::content_dir().path(engine::data::TUNING_FILE);
     serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
@@ -409,7 +440,7 @@ fn a_version_3_tuning_file_converts_to_the_shipped_version_4() {
     let loaded = engine::data::load_tuning_bytes(&bytes, "tuning-v3.json").unwrap();
     assert_eq!(loaded.converted_from, Some(3));
     let shipped = engine::data::load_tuning_bytes(
-        &serde_json::to_vec(&shipped_tuning_json()).unwrap(),
+        &serde_json::to_vec(&shipped_without_personality_words()).unwrap(),
         "tuning.json",
     )
     .unwrap();
@@ -432,8 +463,9 @@ fn a_tuning_file_of_version_9_is_refused_naming_both_versions() {
     );
 }
 
-/// A version 1 slot file (no sharpness or adaptation slot) converts to version 2 with both
-/// slots at their first version, and resolves to the built-in selection.
+/// A version 1 slot file (no sharpness, adaptation or familiarity slot) converts through
+/// version 2 to version 3 with the three slots at their first version, and resolves to the
+/// built-in selection.
 #[test]
 fn a_version_1_slot_file_converts_and_resolves_to_the_built_in_selection() {
     use engine::modules::{REGISTRY, ResolvedModules, SlotFile, resolve};
@@ -443,6 +475,7 @@ fn a_version_1_slot_file_converts_and_resolves_to_the_built_in_selection() {
     let slots = v1["slots"].as_object_mut().unwrap();
     slots.remove("engine.modifier.sharpness").unwrap();
     slots.remove("engine.modifier.adaptation").unwrap();
+    slots.remove("engine.modifier.familiarity").unwrap();
     let loaded = engine::data::load_slots_bytes(&serde_json::to_vec(&v1).unwrap()).unwrap();
     assert_eq!(loaded.converted_from, Some(1));
     assert_eq!(loaded.value, SlotFile::builtin_default());
@@ -458,7 +491,7 @@ fn a_version_1_slot_file_converts_and_resolves_to_the_built_in_selection() {
             err,
             EngineError::Version {
                 found: 9,
-                expected: 2,
+                expected: 3,
                 ..
             }
         ),
@@ -467,11 +500,11 @@ fn a_version_1_slot_file_converts_and_resolves_to_the_built_in_selection() {
 }
 
 /// The version 2 attribute schema (the one shipped before the hidden values, kept as a
-/// fixture) converts to version 3: injury resistance becomes injury proneness, hidden, with
-/// its job turned up, and consistency is added from the frozen copy. The result is the
-/// shipped schema.
+/// fixture) converts through version 3: injury resistance becomes injury proneness, hidden,
+/// with its job turned up, and consistency is added from the frozen copy. The result is the
+/// version 3 file the build shipped before (`attributes-v3.json`), converted the same way.
 #[test]
-fn a_version_2_attribute_schema_converts_to_the_shipped_version_3() {
+fn a_version_2_attribute_schema_converts_as_the_shipped_version_3_did() {
     let bytes = std::fs::read(common::fixture_path("attributes-v2.json")).unwrap();
     let v2: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(v2["schema_version"], 2);
@@ -483,9 +516,294 @@ fn a_version_2_attribute_schema_converts_to_the_shipped_version_3() {
         engine::data::attributes::ATTRIBUTES_VERSION
     );
     assert!(schema.index("injury_resistance").is_none());
-    let hidden: Vec<&str> = schema.hidden_names().collect();
+    let hidden: Vec<&str> = schema
+        .attributes
+        .iter()
+        .filter(|d| d.hidden && !d.is_personality())
+        .map(|d| d.name.as_str())
+        .collect();
     assert_eq!(hidden, ["injury_proneness", "consistency"]);
-    assert_eq!(schema, &common::content().attributes);
+    let v3 = std::fs::read(common::fixture_path("attributes-v3.json")).unwrap();
+    let v3 = engine::data::load_attributes_bytes(&v3, "attributes-v3.json").unwrap();
+    assert_eq!(schema, &v3.value);
+}
+
+// --- The version 4 record: counts, groups, jobs, the version 3 conversion, the traits.
+
+/// The shipped catalogue as JSON, edited by `edit`, loaded.
+fn edited_catalogue(
+    edit: impl FnOnce(&mut serde_json::Value),
+) -> Result<AttributeSchema, EngineError> {
+    let path = common::content_dir().path("attributes.json");
+    let mut v: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    edit(&mut v);
+    engine::data::load_attributes_bytes(&serde_json::to_vec(&v).unwrap(), "attributes.json")
+        .map(|l| l.value)
+}
+
+fn def_of<'a>(v: &'a mut serde_json::Value, name: &str) -> &'a mut serde_json::Value {
+    v["attributes"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|a| a["name"] == name)
+        .unwrap()
+}
+
+/// `count` copies of the hidden consistency value under new names: each counts toward the 50
+/// and, with the spread for its job, needs no stage table.
+fn add_copies(v: &mut serde_json::Value, count: usize) {
+    let consistency = def_of(v, "consistency").clone();
+    let list = v["attributes"].as_array_mut().unwrap();
+    for i in 0..count {
+        let mut copy = consistency.clone();
+        copy["name"] = format!("consistency_copy_{i}").into();
+        list.push(copy);
+    }
+}
+
+/// The record: 45 visible and 2 hidden attributes, 11 personality values; communication,
+/// determination and bravery in the mental group, eccentricity in goalkeeping.
+#[test]
+fn the_shipped_catalogue_holds_forty_five_visible_two_hidden_and_eleven_personality_values() {
+    use engine::data::attributes::Group;
+    let content = common::content();
+    let s = &content.attributes;
+    assert_eq!(s.schema_version, ATTRIBUTES_VERSION);
+    assert_eq!(ATTRIBUTES_VERSION, 4);
+    let visible = s.attributes.iter().filter(|d| !d.hidden).count();
+    let hidden = s
+        .attributes
+        .iter()
+        .filter(|d| d.hidden && !d.is_personality())
+        .count();
+    let personality: Vec<&str> = s
+        .attributes
+        .iter()
+        .filter(|d| d.is_personality())
+        .map(|d| d.name.as_str())
+        .collect();
+    assert_eq!((visible, hidden, personality.len()), (45, 2, 11));
+    assert!(visible + hidden <= 50);
+    assert!(s.len() <= engine::data::MAX_ATTRIBUTES);
+    let group = |n: &str| s.attributes[s.index(n).unwrap()].group;
+    for n in ["communication", "determination", "bravery"] {
+        assert_eq!(group(n), Group::Mental, "{n}");
+    }
+    assert_eq!(group("eccentricity"), Group::Goalkeeping);
+    assert_eq!(
+        personality,
+        [
+            "professionalism",
+            "temperament",
+            "pressure_handling",
+            "sportsmanship",
+            "leadership",
+            "adaptability",
+            "versatility",
+            "ambition",
+            "loyalty",
+            "money_motivation",
+            "controversy"
+        ]
+    );
+    for d in s.attributes.iter().filter(|d| d.is_personality()) {
+        assert!(d.hidden, "{}", d.name);
+    }
+    // The hidden-name list carries the personality values too, so no page shows them.
+    let hidden_names: Vec<&str> = s.hidden_names().collect();
+    assert_eq!(hidden_names.len(), 13);
+    assert!(hidden_names.contains(&"temperament"));
+}
+
+/// The limit: 51 visible and hidden attributes are refused with the count; 50 load.
+#[test]
+fn a_catalogue_with_fifty_one_visible_and_hidden_attributes_is_refused_with_the_count() {
+    let err = edited_catalogue(|v| add_copies(v, 4))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("51 visible and hidden attributes; at most 50"),
+        "{err}"
+    );
+    let fifty = edited_catalogue(|v| add_copies(v, 3)).unwrap();
+    assert_eq!(fifty.len(), 50 + 11);
+}
+
+/// A fifteenth personality value is refused with the count.
+#[test]
+fn a_fifteenth_personality_value_is_refused() {
+    let err = edited_catalogue(|v| {
+        let loyalty = def_of(v, "loyalty").clone();
+        let list = v["attributes"].as_array_mut().unwrap();
+        for i in 0..4 {
+            let mut copy = loyalty.clone();
+            copy["name"] = format!("character_{i}").into();
+            list.push(copy);
+        }
+    })
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("15 personality values; at most 14"), "{err}");
+}
+
+/// Every attribute added in version 4 names a stage job, and every personality
+/// value an occasion job or "inert in a match".
+#[test]
+fn every_new_attribute_names_a_stage_job_and_every_personality_value_an_occasion() {
+    use engine::data::attributes::JobStage;
+    use engine::data::convert::V4_ADDED;
+    let content = common::content();
+    let s = &content.attributes;
+    for name in V4_ADDED {
+        let def = &s.attributes[s.index(name).unwrap_or_else(|| panic!("{name} missing"))];
+        if def.is_personality() {
+            assert!(def.job.action.is_none(), "{name}");
+            match def.job.stage {
+                JobStage::Occasion => assert!(!def.job.statistic.is_empty(), "{name}"),
+                JobStage::Inert => assert_eq!(def.job.statistic, "inert in a match", "{name}"),
+                other => panic!("{name}: {other:?}"),
+            }
+        } else {
+            let stage = def
+                .job
+                .stage
+                .stage()
+                .unwrap_or_else(|| panic!("{name}: no stage"));
+            let action = def
+                .job
+                .action
+                .unwrap_or_else(|| panic!("{name}: no action"));
+            assert!(s.in_stage(name, action, stage), "{name}");
+        }
+    }
+    let inert: Vec<&str> = s
+        .attributes
+        .iter()
+        .filter(|d| d.job.stage == JobStage::Inert)
+        .map(|d| d.name.as_str())
+        .collect();
+    assert_eq!(inert, ["loyalty", "money_motivation", "controversy"]);
+}
+
+/// A personality value given a stage job, an action, a table place, or `hidden: false` is
+/// refused, naming it.
+#[test]
+fn a_personality_value_outside_its_rules_is_refused_by_name() {
+    let refusal = |edit: &dyn Fn(&mut serde_json::Value)| {
+        edited_catalogue(|v| edit(v)).unwrap_err().to_string()
+    };
+    let err = refusal(&|v| {
+        let d = def_of(v, "temperament");
+        d["job"]["stage"] = "execute".into();
+        d["job"]["action"] = "tackle".into();
+    });
+    assert!(err.contains("personality value temperament"), "{err}");
+    let err = refusal(&|v| def_of(v, "temperament")["job"]["action"] = "tackle".into());
+    assert!(
+        err.contains("personality value temperament: it acts on an occasion"),
+        "{err}"
+    );
+    let err = refusal(&|v| {
+        v["actions"]["tackle"]["choose"]["minor"] =
+            serde_json::json!([{ "attribute": "temperament", "weight": 0.05 }]);
+    });
+    assert!(
+        err.contains("personality value temperament: it is in a stage table"),
+        "{err}"
+    );
+    let err = refusal(&|v| def_of(v, "temperament")["hidden"] = false.into());
+    assert!(
+        err.contains("personality value temperament: a personality value is hidden"),
+        "{err}"
+    );
+    let err = refusal(&|v| def_of(v, "loyalty")["job"]["statistic"] = "transfer requests".into());
+    assert!(
+        err.contains("personality value loyalty: an inert job"),
+        "{err}"
+    );
+}
+
+/// The version 3 file the build shipped before converts to version 4 with the same names,
+/// groups, jobs and gates as the shipped file; only the order of the attributes differs, as
+/// the new ones are appended. Its tables are the shipped ones but for the two small weights of
+/// bravery the shipped file tunes, and it keeps the uniform consistency degree 1.0, which is how
+/// a version 3 catalogue played.
+#[test]
+fn the_version_3_catalogue_converts_to_the_shipped_version_4() {
+    let bytes = std::fs::read(common::fixture_path("attributes-v3.json")).unwrap();
+    let v3: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(v3["schema_version"], 3);
+    let loaded = engine::data::load_attributes_bytes(&bytes, "attributes-v3.json").unwrap();
+    assert_eq!(loaded.converted_from, Some(3));
+    let converted = &loaded.value;
+    let content = common::content();
+    let shipped = &content.attributes;
+    assert_eq!(converted.schema_version, shipped.schema_version);
+    let by_name = |s: &AttributeSchema| {
+        let mut defs = s.attributes.clone();
+        defs.sort_by(|a, b| a.name.cmp(&b.name));
+        defs
+    };
+    assert_eq!(by_name(converted), by_name(shipped));
+    let mut tuned = shipped.actions.clone();
+    for action in [ActionKind::Block, ActionKind::Tackle] {
+        let table = tuned
+            .get_mut(&action)
+            .unwrap()
+            .get_mut(&StageKind::Execute)
+            .unwrap();
+        assert_eq!(table.minor[0].attribute, "bravery");
+        assert_eq!(table.minor[0].weight, 0.14);
+        table.minor[0].weight = 0.05;
+    }
+    assert_eq!(converted.actions, tuned);
+    assert_eq!(
+        converted.consistency_degrees.len(),
+        shipped.consistency_degrees.len()
+    );
+    assert!(converted.consistency_degrees.values().all(|&d| d == 1.0));
+    assert_eq!(converted.gates, shipped.gates);
+}
+
+/// Every action with a table has its own consistency degree: finishing and saving swing most,
+/// the body's actions least, and the injury roll, whose main is a hidden value, not at all.
+#[test]
+fn every_action_has_its_own_consistency_degree() {
+    let content = common::content();
+    let degrees = &content.attributes.consistency_degrees;
+    assert_eq!(degrees.len(), engine::contract::ACTION_COUNT);
+    let d = |a: ActionKind| degrees[&a];
+    assert_eq!(d(ActionKind::Shot), 1.3);
+    assert_eq!(d(ActionKind::Save), 1.3);
+    assert_eq!(d(ActionKind::Pass), 0.9);
+    assert_eq!(d(ActionKind::Sprint), 0.4);
+    assert_eq!(d(ActionKind::Injury), 0.0);
+    assert!(degrees.values().any(|&v| v != 1.0), "{degrees:?}");
+}
+
+/// The trait catalogue loads with its 31 traits, nine opposite pairs named from both sides,
+/// and a hook each; a broken opposite is refused naming the trait.
+#[test]
+fn the_trait_catalogue_loads_with_thirty_one_traits() {
+    use engine::data::traits::load_traits_bytes;
+    let path = common::content_dir().path("traits.json");
+    let bytes = std::fs::read(path).unwrap();
+    let c = load_traits_bytes(&bytes, "traits.json").unwrap().value;
+    assert_eq!(c.traits.len(), 31);
+    let pairs = c.traits.iter().filter(|t| t.opposite.is_some()).count() / 2;
+    assert_eq!(pairs, 9);
+    assert!(c.traits.iter().all(|t| !t.hook.is_empty()));
+    let mut v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    for t in v["traits"].as_array_mut().unwrap() {
+        if t["name"] == "kicks_long" {
+            t["opposite"] = "plays_out".into();
+        }
+    }
+    let err = load_traits_bytes(&serde_json::to_vec(&v).unwrap(), "traits.json")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("trait kicks_long"), "{err}");
 }
 
 /// A version 4 tuning file (no consistency, hidden-value or match-rating block) converts to
@@ -511,7 +829,7 @@ fn a_version_4_tuning_file_converts_to_the_shipped_version_5() {
     let loaded = engine::data::load_tuning_bytes(&bytes, "tuning-v4.json").unwrap();
     assert_eq!(loaded.converted_from, Some(4));
     let shipped = engine::data::load_tuning_bytes(
-        &serde_json::to_vec(&shipped_tuning_json()).unwrap(),
+        &serde_json::to_vec(&shipped_without_personality_words()).unwrap(),
         "tuning.json",
     )
     .unwrap();
@@ -541,4 +859,316 @@ fn word_bands_out_of_order_or_short_of_one_are_refused_by_name() {
         .unwrap_err()
         .to_string();
     assert!(err.contains("injury_proneness"), "{err}");
+}
+
+/// The trait catalogue is part of the content: the content holds its 31 traits, an edit to the
+/// file changes the content digest, a one-sided opposite is refused naming the trait, and a
+/// keeper-only trait the generator names but the catalogue lacks is refused naming it.
+#[test]
+fn the_trait_catalogue_is_part_of_the_content_and_its_digest() {
+    use engine::data::ContentFiles;
+    let shipped = ContentFiles::read(&common::content_dir()).unwrap();
+    let content = engine::Content::from_files(&shipped).unwrap();
+    assert_eq!(content.traits.traits.len(), 31);
+
+    let mut edited = shipped.clone();
+    let mut traits: serde_json::Value = serde_json::from_slice(&shipped.traits).unwrap();
+    traits["traits"][2]["hook"] = "shoot_threshold_by_distance".into();
+    edited.traits = serde_json::to_vec(&traits).unwrap();
+    let other = engine::Content::from_files(&edited).unwrap();
+    assert_ne!(other.digest, content.digest);
+
+    let mut traits: serde_json::Value = serde_json::from_slice(&shipped.traits).unwrap();
+    for t in traits["traits"].as_array_mut().unwrap() {
+        if t["name"] == "hugs_touchline" {
+            t.as_object_mut().unwrap().remove("opposite");
+        }
+    }
+    let mut one_sided = shipped.clone();
+    one_sided.traits = serde_json::to_vec(&traits).unwrap();
+    let err = engine::Content::from_files(&one_sided)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("trait cuts_inside: its opposite hugs_touchline does not name it back"),
+        "{err}"
+    );
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    tuning["generator"]["person"]["traits"]["keeper_only"][0] = "saves_with_feet".into();
+    let mut unknown = shipped.clone();
+    unknown.tuning = serde_json::to_vec(&tuning).unwrap();
+    let err = engine::Content::from_files(&unknown)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(
+        err,
+        "content refused: tuning tuning.json: generator.person.traits.keeper_only: \
+         trait saves_with_feet is not in the trait catalogue"
+    );
+}
+
+/// The hooks: the shipped tuning carries the five new actions' entries and the hooks block; a
+/// tuning file without them (as an old replay embeds it) loads with every hook neutral and
+/// plays; and a hook value out of its range is refused naming the field.
+#[test]
+fn the_hooks_ship_read_neutral_when_absent_and_refuse_a_value_out_of_range() {
+    use engine::contract::{ActionKind, HookTuning};
+    use engine::data::ContentFiles;
+    let shipped = ContentFiles::read(&common::content_dir()).unwrap();
+    let content = engine::Content::from_files(&shipped).unwrap();
+    let c = &content.tuning.engine.contract;
+    for a in [
+        ActionKind::Mark,
+        ActionKind::OffBallRun,
+        ActionKind::Corner,
+        ActionKind::FreeKick,
+        ActionKind::LongThrow,
+    ] {
+        assert!(c.actions.get(a).is_some(), "{a} has its entry");
+    }
+    assert!(c.hooks.is_some());
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    let contract = tuning["engine"]["contract"].as_object_mut().unwrap();
+    assert!(contract.remove("hooks").is_some());
+    let actions = contract["actions"].as_object_mut().unwrap();
+    for name in ["mark", "off_ball_run", "corner", "free_kick", "long_throw"] {
+        assert!(actions.remove(name).is_some(), "{name}");
+    }
+    let mut old = shipped.clone();
+    old.tuning = serde_json::to_vec(&tuning).unwrap();
+    let old = engine::Content::from_files(&old).unwrap();
+    assert_eq!(old.tuning.engine.contract.hooks(), HookTuning::NEUTRAL);
+    let [a, b] = common::default_teams(&old);
+    let config = engine::MatchConfig::new(7, 5, &old, [&a, &b]).unwrap();
+    let mut sim = engine::Simulation::new(config).unwrap();
+    while !sim.is_over() {
+        sim.step();
+    }
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    tuning["engine"]["contract"]["hooks"]["flair_gate"] = 9.0.into();
+    let mut wide = shipped.clone();
+    wide.tuning = serde_json::to_vec(&tuning).unwrap();
+    let err = engine::Content::from_files(&wide).unwrap_err().to_string();
+    assert!(err.contains("engine.contract.hooks.flair_gate"), "{err}");
+}
+
+/// A version 2 slot file (no familiarity slot) converts to version 3 with the familiarity
+/// slot at its first version, and equals the built-in selection; the shipped file is it.
+#[test]
+fn a_version_2_slot_file_converts_and_the_shipped_file_is_the_built_in_selection() {
+    use engine::modules::SlotFile;
+    let path = common::content_dir().path(engine::data::SLOTS_FILE);
+    let bytes = std::fs::read(path).unwrap();
+    let shipped = engine::data::load_slots_bytes(&bytes).unwrap();
+    assert_eq!(shipped.converted_from, None);
+    assert_eq!(shipped.value, SlotFile::builtin_default());
+    let mut v2: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    v2["schema_version"] = 2.into();
+    let slots = v2["slots"].as_object_mut().unwrap();
+    slots.remove("engine.modifier.familiarity").unwrap();
+    let loaded = engine::data::load_slots_bytes(&serde_json::to_vec(&v2).unwrap()).unwrap();
+    assert_eq!(loaded.converted_from, Some(2));
+    assert_eq!(loaded.value, SlotFile::builtin_default());
+}
+
+/// The shipped tuning carries the person block; a tuning file without it loads and plays a
+/// ten-minute match exactly as one whose person values are all neutral; and a floor wider than
+/// a delta can hold is refused, naming the field.
+#[test]
+fn the_person_block_ships_reads_neutral_when_absent_and_refuses_a_wide_floor() {
+    use engine::contract::PersonTuning;
+    use engine::data::ContentFiles;
+    let shipped = ContentFiles::read(&common::content_dir()).unwrap();
+    let content = engine::Content::from_files(&shipped).unwrap();
+    assert!(content.tuning.engine.contract.person.is_some());
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    let contract = tuning["engine"]["contract"].as_object_mut().unwrap();
+    assert!(contract.remove("person").is_some());
+    let mut old = shipped.clone();
+    old.tuning = serde_json::to_vec(&tuning).unwrap();
+    let old = engine::Content::from_files(&old).unwrap();
+    assert_eq!(old.tuning.engine.contract.person(), PersonTuning::NEUTRAL);
+    let [a, b] = common::default_teams(&old);
+    let play = |config: engine::MatchConfig| {
+        let mut sim = engine::Simulation::new(config).unwrap();
+        while !sim.is_over() {
+            sim.step();
+        }
+        sim.finish();
+        let moods: Vec<u64> = (0..22).map(|i| sim.mood(i).to_bits()).collect();
+        (sim.take_events(), moods)
+    };
+    let absent = engine::MatchConfig::new(7, 10, &old, [&a, &b]).unwrap();
+    let mut neutral = absent.clone();
+    neutral.tuning.contract.person = Some(PersonTuning::NEUTRAL);
+    let (absent, neutral) = (play(absent), play(neutral));
+    assert_eq!(absent.0, neutral.0, "the events differ");
+    assert_eq!(absent.1, neutral.1);
+    assert!(
+        absent.1.iter().all(|&m| m == 0.0f64.to_bits()),
+        "no mood moves"
+    );
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    tuning["engine"]["contract"]["person"]["floor_drop"] = 13.0.into();
+    let mut wide = shipped.clone();
+    wide.tuning = serde_json::to_vec(&tuning).unwrap();
+    let err = engine::Content::from_files(&wide).unwrap_err().to_string();
+    assert!(err.contains("engine.contract.person.floor_drop"), "{err}");
+}
+
+/// The shipped tuning carries the traits block; a tuning file without it loads and plays a
+/// ten-minute match, with players carrying strong traits, exactly as one whose trait values
+/// are all 0; and a chance above 1 is refused, naming the field.
+#[test]
+fn the_traits_block_ships_reads_as_no_trait_when_absent_and_refuses_a_chance_above_one() {
+    use engine::contract::TraitTuning;
+    use engine::data::ContentFiles;
+    use engine::data::traits::TraitStrength;
+    use engine::traits::TraitKind;
+    let shipped = ContentFiles::read(&common::content_dir()).unwrap();
+    let content = engine::Content::from_files(&shipped).unwrap();
+    assert_eq!(
+        content.tuning.engine.contract.traits,
+        Some(TraitTuning::shipped())
+    );
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    let contract = tuning["engine"]["contract"].as_object_mut().unwrap();
+    assert!(contract.remove("traits").is_some());
+    let mut old = shipped.clone();
+    old.tuning = serde_json::to_vec(&tuning).unwrap();
+    let old = engine::Content::from_files(&old).unwrap();
+    assert_eq!(*old.tuning.engine.contract.traits(), TraitTuning::NONE);
+    let [a, b] = common::default_teams(&old);
+    let play = |config: engine::MatchConfig| {
+        let mut sim = engine::Simulation::new(config).unwrap();
+        while !sim.is_over() {
+            sim.step();
+        }
+        sim.finish();
+        sim.take_events()
+    };
+    let mut absent = engine::MatchConfig::new(7, 10, &old, [&a, &b]).unwrap();
+    for (slot, kind) in [
+        (5, TraitKind::RunsWithBallOften),
+        (6, TraitKind::TriesKillerBalls),
+        (0, TraitKind::KicksLong),
+    ] {
+        let squad = absent.players[slot].squad;
+        absent.teams[0].squad[squad].set_trait(kind, Some(TraitStrength::Strong));
+    }
+    let mut zero = absent.clone();
+    zero.tuning.contract.traits = Some(TraitTuning::NONE);
+    let (absent, zero) = (play(absent), play(zero));
+    assert_eq!(absent, zero, "the events differ");
+    assert!(
+        absent
+            .iter()
+            .all(|e| e.kind != engine::EngineEventKind::TraitOverride)
+    );
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    tuning["engine"]["contract"]["traits"]["override_chance"]["tries_killer_balls"] = 1.5.into();
+    let mut high = shipped.clone();
+    high.tuning = serde_json::to_vec(&tuning).unwrap();
+    let err = engine::Content::from_files(&high).unwrap_err().to_string();
+    assert!(
+        err.contains("engine.contract.traits.override_chance.tries_killer_balls"),
+        "{err}"
+    );
+}
+
+/// The shipped tuning carries the season block; a tuning file without it loads and plays a
+/// ten-minute match exactly as one whose season block is neutral; and a cap above 100 is
+/// refused, naming the field.
+#[test]
+fn the_season_block_ships_reads_as_neutral_when_absent_and_refuses_a_wide_cap() {
+    use engine::contract::params::SeasonTuning;
+    use engine::data::ContentFiles;
+    let shipped = ContentFiles::read(&common::content_dir()).unwrap();
+    let content = engine::Content::from_files(&shipped).unwrap();
+    assert_eq!(
+        content.tuning.engine.contract.season,
+        Some(SeasonTuning::shipped())
+    );
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    let contract = tuning["engine"]["contract"].as_object_mut().unwrap();
+    assert!(contract.remove("season").is_some());
+    let mut old = shipped.clone();
+    old.tuning = serde_json::to_vec(&tuning).unwrap();
+    let old = engine::Content::from_files(&old).unwrap();
+    assert_eq!(old.tuning.engine.contract.season(), SeasonTuning::NEUTRAL);
+    let [a, b] = common::default_teams(&old);
+    let play = |config: engine::MatchConfig| {
+        let mut sim = engine::Simulation::new(config).unwrap();
+        while !sim.is_over() {
+            sim.step();
+        }
+        sim.finish();
+        sim.take_events()
+    };
+    let absent = engine::MatchConfig::new(7, 10, &old, [&a, &b]).unwrap();
+    let mut neutral = absent.clone();
+    neutral.tuning.contract.season = Some(SeasonTuning::NEUTRAL);
+    assert_eq!(play(absent), play(neutral), "the events differ");
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    tuning["engine"]["contract"]["season"]["cap"] = 120.0.into();
+    let mut wide = shipped.clone();
+    wide.tuning = serde_json::to_vec(&tuning).unwrap();
+    let err = engine::Content::from_files(&wide).unwrap_err().to_string();
+    assert!(err.contains("engine.contract.season.cap"), "{err}");
+}
+
+/// The shipped tuning carries the foot block; a tuning file without it loads and plays a
+/// ten-minute match exactly as one whose foot cost cap and showing distance are 0; and a cost
+/// cap above 5 points is refused, naming the field.
+#[test]
+fn the_foot_block_ships_reads_as_no_cost_when_absent_and_refuses_a_cap_above_five() {
+    use engine::contract::FootTuning;
+    use engine::data::ContentFiles;
+    let shipped = ContentFiles::read(&common::content_dir()).unwrap();
+    let content = engine::Content::from_files(&shipped).unwrap();
+    assert_eq!(
+        content.tuning.engine.contract.foot,
+        Some(FootTuning::shipped())
+    );
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    let contract = tuning["engine"]["contract"].as_object_mut().unwrap();
+    assert!(contract.remove("foot").is_some());
+    let mut old = shipped.clone();
+    old.tuning = serde_json::to_vec(&tuning).unwrap();
+    let old = engine::Content::from_files(&old).unwrap();
+    assert_eq!(old.tuning.engine.contract.foot(), FootTuning::NONE);
+    let [a, b] = common::default_teams(&old);
+    let play = |config: engine::MatchConfig| {
+        let mut sim = engine::Simulation::new(config).unwrap();
+        while !sim.is_over() {
+            sim.step();
+        }
+        sim.finish();
+        sim.take_events()
+    };
+    let absent = engine::MatchConfig::new(7, 10, &old, [&a, &b]).unwrap();
+    let mut zero = absent.clone();
+    zero.tuning.contract.foot = Some(FootTuning {
+        cost_cap: 0.0,
+        show_m: 0.0,
+        ..FootTuning::shipped()
+    });
+    assert_eq!(play(absent), play(zero), "the events differ");
+
+    let mut tuning: serde_json::Value = serde_json::from_slice(&shipped.tuning).unwrap();
+    tuning["engine"]["contract"]["foot"]["cost_cap"] = 5.5.into();
+    let mut high = shipped.clone();
+    high.tuning = serde_json::to_vec(&tuning).unwrap();
+    let err = engine::Content::from_files(&high).unwrap_err().to_string();
+    assert!(err.contains("engine.contract.foot.cost_cap"), "{err}");
 }

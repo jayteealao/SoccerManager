@@ -229,8 +229,12 @@ fn the_launcher_resumes_a_previous_release_save_on_its_engine() {
     let _ = launcher.wait();
     let _ = std::fs::remove_dir_all(&data);
 
+    let pin: serde_json::Value =
+        serde_json::from_str(include_str!("../../../packaging/previous-engine.json")).unwrap();
     assert_eq!(running["engine.state"], "running", "{running}");
-    assert_eq!(running["engine.version"], "0.2.0-beta.1");
+    assert_eq!(running["engine.version"], pin["version"]);
+    // The page asks the previous engine's socket for the protocol that engine speaks.
+    assert_eq!(running["protocol.version"], pin["protocol"]);
     assert_eq!(running["launcher.version"], engine::version());
     assert_eq!(running["match.id"], whole.stats["match.id"]);
     assert!(running["match.resumed_from"].as_u64().is_some());

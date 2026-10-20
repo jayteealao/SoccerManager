@@ -16,7 +16,7 @@ import { benchModel, lineupModel } from './lineups.js';
 import { createPendingList } from './pending.js';
 import { signal } from './signal.js';
 import { pickerBlock, pickerPlayers } from './substitution-picker.js';
-import { benchRows, pickDetail, pickKey, playerStateRows, proposalRows } from './touchline.js';
+import { benchRows, outOfPositionNote, pickDetail, pickKey, playerStateRows, proposalRows } from './touchline.js';
 import {
   applyPatch,
   copyTactics,
@@ -66,6 +66,9 @@ export class Dugout {
   /// The Touchline's player state (the home eleven's energy and cards) and the other bench,
   /// at the rendered tick.
   playerState = $state.raw([]);
+  /// The starters playing away from their listed position and rated lower there, in words, or
+  /// null.
+  outOfPosition = $state.raw(null);
   otherBench = $state.raw({ players: [], used: 0, limit: 0, text: '' });
 
   /// `send(command)` sends one client command and returns `false` when no socket takes it;
@@ -120,6 +123,7 @@ export class Dugout {
     this.stateKey = '';
     this.benchKey = '';
     this.playerState = [];
+    this.outOfPosition = null;
     this.otherBench = { players: [], used: 0, limit: this.limit, text: '' };
     if (stored || !this.setup || !this.schema || !Array.isArray(this.schema.formations)) {
       this.editor = null;
@@ -517,12 +521,14 @@ export class Dugout {
   /// changes.
   refreshTouchline(rows, otherBench, state) {
     const cards = state.entries ? state.entries.filter((e) => e['event.type'] === 'card').length : 0;
+    const slots = this.slotPositions();
     const key =
-      rows.map((r) => `${r.wire}:${Math.round(r.energy * 100)}:${r.condition}:${r.level}:${r.base}`).join(',') +
-      `|${cards}`;
+      rows.map((r) => `${r.wire}:${r.id}:${Math.round(r.energy * 100)}:${r.condition}:${r.level}:${r.base}:${r.mood}`).join(',') +
+      `|${cards}|${slots?.join(',') ?? ''}`;
     if (key !== this.stateKey) {
       this.stateKey = key;
       this.playerState = playerStateRows(rows, state.entries);
+      this.outOfPosition = outOfPositionNote(rows, slots, this.squad);
     }
     const out = benchRows(otherBench, state, this.teamIds[1], this.limit);
     const benchKey = `${out.players.map((p) => p.id).join(',')}|${out.text}`;
@@ -530,6 +536,17 @@ export class Dugout {
       this.benchKey = benchKey;
       this.otherBench = out;
     }
+  }
+
+  /// The position code of each slot of the formation in force, in slot order, once the lineup
+  /// has kicked off; null before it, for a stored match, or with no formation.
+  slotPositions() {
+    if (!Array.isArray(this.lineup)) {
+      return null;
+    }
+    const formation = this.tactics?.formation ?? this.confirmed?.formation;
+    const slots = this.schema?.formations?.[formation]?.slots;
+    return Array.isArray(slots) ? slots.map((s) => s.position ?? null) : null;
   }
 
   refreshPicker(rows = [], bench = [], used = 0) {

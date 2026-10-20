@@ -71,6 +71,61 @@ impl<'a> MatchView<'a> {
         self.sim.body(i)
     }
 
+    /// Player `i`'s mood, −100 to 100 ([`crate::sim::mood`]).
+    #[inline]
+    pub fn mood(&self, i: usize) -> f64 {
+        self.sim.mood(i)
+    }
+
+    /// The mood of `team`: its players' moods on the pitch, weighted by leadership, as the
+    /// current refresh of effective values read it (0 when the team-mood weight is 0).
+    #[inline]
+    pub fn team_mood(&self, team: usize) -> f64 {
+        self.sim.team_moods[team]
+    }
+
+    /// The position player `i` plays now: his formation slot's.
+    #[inline]
+    pub fn played_position(&self, i: usize) -> crate::data::team::Position {
+        self.sim.played_position(i)
+    }
+
+    /// Player `i`'s rating at each position, from his squad entry.
+    #[inline]
+    pub fn position_ratings(&self, i: usize) -> &'a [crate::rating::Rating; 10] {
+        self.sim.position_ratings(i)
+    }
+
+    /// Player `i`'s strong foot and his weaker foot's percent, from his squad entry.
+    #[inline]
+    pub fn foot(&self, i: usize) -> crate::data::team::Foot {
+        self.sim.foot(i)
+    }
+
+    /// Player `i`'s personality scales, from his squad entry.
+    #[inline]
+    pub fn personality(&self, i: usize) -> crate::contract::PersonalityScales {
+        self.sim.personality(i)
+    }
+
+    /// Player `i`'s traits of play, from his squad entry.
+    #[inline]
+    pub fn traits(&self, i: usize) -> &'a crate::traits::TraitSet {
+        self.sim.traits(i)
+    }
+
+    /// The team-mate whose completed pass reached player `i`, while his side keeps the ball.
+    #[inline]
+    pub fn last_passer(&self, i: usize) -> Option<usize> {
+        self.sim.last_passer(i)
+    }
+
+    /// The trait override player `i` plays now, while its action lasts.
+    #[inline]
+    pub fn trait_act(&self, i: usize) -> Option<crate::traits::TraitAct> {
+        self.sim.trait_act(i)
+    }
+
     /// The current tick.
     #[inline]
     pub fn tick(&self) -> u32 {

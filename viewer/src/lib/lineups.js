@@ -54,6 +54,7 @@ export function lineupModel(rosters, teamIds, state) {
       const energy = state.energy ? state.energy[wire] : null;
       const level = state.level?.[wire] ?? null;
       const base = state.base?.[wire] ?? null;
+      const mood = state.mood?.[wire] ?? null;
       const band = energyBand(energy);
       const card = state.cards.get(id) ?? null;
       const sentOff = state.sentOff.has(id);
@@ -74,6 +75,7 @@ export function lineupModel(rosters, teamIds, state) {
         energy: energy ?? 1,
         level,
         base,
+        mood,
         band: band.word,
         token: band.token,
         condition,

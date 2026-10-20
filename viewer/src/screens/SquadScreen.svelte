@@ -2,9 +2,12 @@
      shell with SQUAD in the header; the sub-navigation (back to the view it opened from, then
      Squad and the sketch's other squad views as stubs); the navy strip (players and view, and
      average condition built; load, familiarity, morale and homegrown LATER); the toolbar (the
-     view chip with Save view, the Columns chip and its menu, Position and Find a player built;
-     Available only, Hide loanees and Compare LATER); the squad table driven by the active
-     named view; and the three footer notes, LATER. A player's name opens his panel. -->
+     view chip with Save view, the Columns chip and its menu, Position, Rated at and Find a
+     player built; Available only, Hide loanees and Compare LATER); the squad table driven by
+     the active named view; and the three footer notes, LATER. A player's name opens his panel.
+     The Rated-at chip (board 3) picks a position and a minimum rating there: the rated column
+     shows that position, and a minimum keeps only the players rated at least that. It is page
+     state, like Position, and no view stores it. -->
 <script>
   import AppShell from '../components/AppShell.svelte';
   import ColumnMenu from '../components/ColumnMenu.svelte';
@@ -13,7 +16,18 @@
   import SectionLabel from '../components/SectionLabel.svelte';
   import SquadTable from '../components/SquadTable.svelte';
   import StubSection from '../components/StubSection.svelte';
-  import { allColumns, nextSort, shownColumns, sortRows, squadRows } from '../lib/columns.js';
+  import {
+    allColumns,
+    nextSort,
+    RATED_DEFAULT,
+    RATED_MINIMUMS,
+    RATED_POSITIONS,
+    ratedFilter,
+    shownColumns,
+    sortRows,
+    squadRows,
+    withRatedAt,
+  } from '../lib/columns.js';
   import { defaultView, freeName, MAX_VIEWS, readPart, resetView, sameView } from '../lib/views.js';
 
   let { session } = $props();
@@ -41,11 +55,14 @@
   let working = $derived(draft ?? stored);
   let menuOpen = $state(false);
   let position = $state('all');
+  let ratedAt = $state(RATED_DEFAULT);
+  let ratedMin = $state('any');
   let find = $state('');
 
   let squad = $derived(session.squad);
-  let ctx = $derived({ ratings: session.squadRatings });
-  let columns = $derived(shownColumns(working, COLUMNS));
+  let ctx = $derived({ ratings: session.squadRatings, ratedAt, season: session.squadSeason ?? null });
+  let columns = $derived(withRatedAt(shownColumns(working, COLUMNS), ratedAt));
+  let minimum = $derived(RATED_MINIMUMS.find((m) => m.id === ratedMin) ?? RATED_MINIMUMS[0]);
   let positions = $derived([...new Set(squad.map((p) => p['player.position']).filter(Boolean))]);
   let rows = $derived.by(() => {
     const needle = find.trim().toLowerCase();
@@ -54,9 +71,9 @@
         (position === 'all' || r.player['player.position'] === position) &&
         (!needle || String(r.player['player.name'] ?? '').toLowerCase().includes(needle))
     );
-    return sortRows(picked, working.sort, ctx, COLUMNS);
+    return sortRows(ratedFilter(picked, ratedAt, minimum.min), working.sort, ctx, COLUMNS);
   });
-  let unfiltered = $derived(position === 'all' && !find.trim() && !working.sort);
+  let unfiltered = $derived(position === 'all' && minimum.min === 0 && !find.trim() && !working.sort);
 
   let viewWord = $derived(
     draft && !sameView(draft, stored)
@@ -185,6 +202,16 @@
           {#each positions as p (p)}<option value={p}>{p}</option>{/each}
         </select>
       </label>
+      <span class="chip rated" class:on={minimum.min > 0} data-rated-chip>
+        <span>Rated at</span>
+        <select bind:value={ratedAt} aria-label="Rated at position" data-rated-at={ratedAt}>
+          {#each RATED_POSITIONS as p (p)}<option value={p}>{p}</option>{/each}
+        </select>
+        <span aria-hidden="true">·</span>
+        <select bind:value={ratedMin} aria-label="Minimum rating at {ratedAt}" data-rated-min={ratedMin}>
+          {#each RATED_MINIMUMS as m (m.id)}<option value={m.id}>{m.label}</option>{/each}
+        </select>
+      </span>
       <StubSection note="available only filter" inline><span class="chip">Available only</span></StubSection>
       <StubSection note="hide loanees filter" inline><span class="chip">Hide loanees</span></StubSection>
       <div class="anchor">
@@ -216,6 +243,10 @@
       <button type="button" class="btn" data-save-view disabled={part.views.length >= MAX_VIEWS} onclick={saveAsNew}>Save view</button>
       <StubSection note="compare two players" inline><span class="btn gh">Compare 2</span></StubSection>
     </div>
+
+    <p class="filter" data-filter-line>
+      Filter · Rated at {ratedAt} · {minimum.label}{#if working.sort?.column === 'rated'} · sorted by {ratedAt} rating{/if}
+    </p>
 
     <div class="table" data-may-scroll-x>
       <SquadTable
@@ -384,6 +415,17 @@
   }
 
   .g {
+    color: var(--ink-3);
+  }
+
+  .chip.rated {
+    height: auto;
+    min-height: max(22px, var(--hit));
+  }
+
+  .filter {
+    margin: 0 0 6px;
+    font-size: 9.5px;
     color: var(--ink-3);
   }
 

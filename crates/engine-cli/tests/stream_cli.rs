@@ -43,17 +43,28 @@ fn record_writes_a_fixture_and_prints_its_counts() {
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("\"ticks\":3000"), "stdout: {stdout}");
-    // The hello, 3,000 tick frames, four events (the two kick-offs, half-time and full
-    // time), 60 running statistics and 60 condition messages
-    // (one of each every simulated second), the closing statistics, and the full-time
-    // ratings. The hello is stored so a replay forwards the recorded match rather than
-    // describing the replaying build.
-    assert!(stdout.contains("\"frames\":3127"), "stdout: {stdout}");
     assert!(stdout.contains("\"hash\":\""), "stdout: {stdout}");
 
     let read = stream::read_fixture(&fixture).unwrap();
     assert_eq!(read.seed, 9);
     assert_eq!(read.ticks, 3_000);
+    // The hello, 3,000 tick frames, the events (at least the two kick-offs, half-time and
+    // full time; how many more depends on how the minute plays), 60 running statistics and 60
+    // condition messages (one of each every simulated second), the closing statistics, and the
+    // full-time ratings. The hello is stored so a replay forwards the recorded match rather
+    // than describing the replaying build.
+    let events = read
+        .frames
+        .iter()
+        .filter(
+            |f| matches!(&f.frame, protocol::Frame::Text(t) if t.contains("\"type\":\"event\"")),
+        )
+        .count();
+    assert!(events >= 4, "{events} events");
+    assert!(
+        stdout.contains(&format!("\"frames\":{}", 1 + 3_000 + events + 120 + 2)),
+        "stdout: {stdout}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -145,7 +156,7 @@ fn a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on() {
         .args([
             "serve",
             "--seed",
-            "41",
+            "3",
             "--minutes",
             "2",
             "--reconnect-wait",
@@ -214,7 +225,7 @@ fn a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on() {
         }
     }
     let first_tick = first_tick.expect("the match goes on after the reconnect");
-    // Seed 41 stops play at ticks 2,292 and 3,000 (half-time of a two-minute match), so the
+    // Seed 3 stops play at ticks 2,694 and 3,000 (half-time of a two-minute match), so the
     // match goes back to a stoppage the viewer held, never to kick-off and never past it.
     assert!(
         first_tick > 2_000 && first_tick <= last_tick + 1,

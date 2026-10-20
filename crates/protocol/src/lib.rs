@@ -21,7 +21,7 @@ pub use message::{
     Confidence, DEFAULT_GROUND_LENGTH, DEFAULT_GROUND_WIDTH, GroundEvent, GroundKind,
     GroundProgress, Hello, HiddenWord, Jump, Matchday, MatchdayFixture, PatchWire, QueueChange,
     RatingWire, Ratings, RoleWire, RosterEntry, Seen, ServerMessage, SetLineup, SetSpeed, Side,
-    SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup,
+    SlotRole, SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup, TraitWire,
 };
 
 /// The protocol version a client must ask for. A client that asks for another version is
@@ -125,7 +125,17 @@ pub use message::{
 /// `base`, each wire slot's overall level now and fresh. Every added field is optional, so an
 /// older message still reads; no field was removed and the tick frames are unchanged. A hidden
 /// value is never part of a level.
-pub const PROTOCOL_VERSION: u16 = 6;
+///
+/// Version 7 sends the player as a person: a squad entry gains `player.positions` (his rating
+/// at each of the ten positions, in tenths, by code), `player.strong_foot` (`left` or
+/// `right`), `player.weaker_foot` (the weaker foot as a whole percent of the strong one),
+/// `player.traits` (each trait of play as a `name` and a `strength`) and `player.personality`
+/// (each personality value as a word key and a confidence, never a number) and `player.mood`
+/// (his kick-off mood as a word key, never a number). The `condition` message gains `mood`,
+/// each wire slot's mood now as a word key, never a number. Every added field
+/// is optional, so a protocol 6 message still reads and a reader shows the fields it lacks as
+/// unknown; no field was removed and the tick frames are unchanged.
+pub const PROTOCOL_VERSION: u16 = 7;
 
 /// The protocol version before ratings moved to tenths. Replay readers still read its
 /// frames; a hello of this version carries ratings on the 1 to 100 scale.
@@ -140,6 +150,10 @@ pub const PROTOCOL_V4: u16 = 4;
 /// attributes, body fields or levels, and the `condition` message no levels. Replay readers
 /// still read its frames.
 pub const PROTOCOL_V5: u16 = 5;
+
+/// The protocol version before the person: a squad entry carries no position ratings, feet,
+/// traits or personality. Replay readers still read its frames.
+pub const PROTOCOL_V6: u16 = 6;
 
 /// Errors this crate returns.
 #[derive(Debug, Error)]
@@ -260,6 +274,13 @@ pub const MESSAGES: &[MessageSpec] = &[
             "player.matches_at_club",
             "player.level",
             "player.plays_between",
+            "player.positions",
+            "player.strong_foot",
+            "player.weaker_foot",
+            "player.traits",
+            "player.personality",
+            "player.mood",
+            "strength",
             "knockout",
             "ground.length",
             "ground.width",
@@ -343,6 +364,7 @@ pub const MESSAGES: &[MessageSpec] = &[
             "windows_used",
             "level",
             "base",
+            "mood",
         ],
     },
     MessageSpec {
@@ -590,6 +612,7 @@ mod tests {
                 windows_used: [0; 2],
                 level: Vec::new(),
                 base: Vec::new(),
+                mood: Vec::new(),
             }),
             ServerMessage::Ack(Ack {
                 command: String::new(),

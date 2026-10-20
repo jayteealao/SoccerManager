@@ -68,11 +68,21 @@ pub enum Measure {
     RatingSpread,
     LateEnergyLoss,
     MentalRating,
+    CoverDistance,
+    TimedRuns,
+    CornerDelivery,
+    FreeKickSuccess,
+    PenaltiesScored,
+    ThrowDistance,
+    FlairAttempts,
+    RashChases,
+    PressesBehind,
+    HeadersInTraffic,
 }
 
 impl Measure {
     /// Every measure, in declaration order.
-    pub const ALL: [Measure; 38] = [
+    pub const ALL: [Measure; 48] = [
         Measure::PassCompletion,
         Measure::TakeOnCompletion,
         Measure::ReceiptLoss,
@@ -111,6 +121,16 @@ impl Measure {
         Measure::RatingSpread,
         Measure::LateEnergyLoss,
         Measure::MentalRating,
+        Measure::CoverDistance,
+        Measure::TimedRuns,
+        Measure::CornerDelivery,
+        Measure::FreeKickSuccess,
+        Measure::PenaltiesScored,
+        Measure::ThrowDistance,
+        Measure::FlairAttempts,
+        Measure::RashChases,
+        Measure::PressesBehind,
+        Measure::HeadersInTraffic,
     ];
 
     /// The measure's index in [`Measure::ALL`].
@@ -194,6 +214,24 @@ pub struct RuleDef {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(skip)]
     pub reason: Option<String>,
+    /// A rule that runs and reports: its word is printed, but the full run does not fail on
+    /// it. The rules of the jobs the version 4 catalogue added carry it.
+    #[serde(default, skip_serializing_if = "is_false")]
+    #[garde(skip)]
+    pub report_only: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
+/// What a rule expects of its statistic: a move in its job's direction, or no move at all
+/// for a value that is inert in a match.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Expect {
+    Move,
+    NoMove,
 }
 
 impl RuleDef {
@@ -249,12 +287,14 @@ pub struct SensitivityFile {
     pub five_match: FiveMatch,
 }
 
-/// One job as its owner names it: the label and the direction of its statistic.
+/// One job as its owner names it: the label and the direction of its statistic, and whether
+/// it is inert in a match.
 struct JobText<'a> {
     name: &'a str,
     kind: JobKind,
     statistic: &'a str,
     direction: Direction,
+    inert: bool,
 }
 
 /// Every job the rules must cover: each attribute of `schema`, then the three body jobs.
@@ -267,6 +307,7 @@ fn jobs<'a>(schema: &'a AttributeSchema, body: &'a BodyJobs) -> Vec<JobText<'a>>
             kind: JobKind::Attribute,
             statistic: &a.job.statistic,
             direction: a.job.direction,
+            inert: a.job.stage == crate::data::attributes::JobStage::Inert,
         })
         .collect();
     for (name, row) in [
@@ -279,6 +320,7 @@ fn jobs<'a>(schema: &'a AttributeSchema, body: &'a BodyJobs) -> Vec<JobText<'a>>
             kind: JobKind::Body,
             statistic: &row.statistic,
             direction: row.direction,
+            inert: false,
         });
     }
     out
@@ -433,6 +475,15 @@ impl SensitivityFile {
             .find(|j| j.name == rule.job)
             .map_or(Direction::Up, |j| j.direction)
     }
+
+    /// What `rule` expects: no move for a job inert in a match, a move otherwise.
+    pub fn expect(&self, rule: &RuleDef, schema: &AttributeSchema, body: &BodyJobs) -> Expect {
+        let inert = jobs(schema, body)
+            .into_iter()
+            .find(|j| j.name == rule.job)
+            .is_some_and(|j| j.inert);
+        if inert { Expect::NoMove } else { Expect::Move }
+    }
 }
 
 #[cfg(test)]
@@ -488,6 +539,26 @@ mod tests {
         .unwrap();
         assert_eq!(file.rules.len(), content.attributes.len() + 3);
         assert_eq!(file.derived, vec!["build".to_string()]);
+        let flagged: Vec<&str> = file
+            .rules
+            .iter()
+            .filter(|r| r.report_only)
+            .map(|r| r.job.as_str())
+            .collect();
+        assert_eq!(flagged.len(), 21);
+        for job in flagged {
+            assert!(crate::data::convert::V4_ADDED.contains(&job), "{job}");
+        }
+        let inert: Vec<&str> = file
+            .rules
+            .iter()
+            .filter(|r| {
+                file.expect(r, &content.attributes, &content.tuning.engine.contract.body)
+                    == Expect::NoMove
+            })
+            .map(|r| r.job.as_str())
+            .collect();
+        assert_eq!(inert, ["loyalty", "money_motivation", "controversy"]);
     }
 
     #[test]
@@ -504,9 +575,26 @@ mod tests {
 
     #[test]
     fn a_rule_with_no_job_is_refused() {
-        let (field, reason) = refusal(edited(|v| rule_of(v, "vision")["job"] = "flair".into()));
+        let (field, reason) = refusal(edited(|v| rule_of(v, "vision")["job"] = "panache".into()));
         assert!(field.ends_with(".job"), "{field}");
-        assert!(reason.contains("flair"), "{reason}");
+        assert!(reason.contains("panache"), "{reason}");
+    }
+
+    #[test]
+    fn a_new_job_without_its_rule_is_refused_too() {
+        for job in ["marking", "controversy", "consistency"] {
+            let (field, reason) = refusal(edited(|v| {
+                v["rules"]
+                    .as_array_mut()
+                    .unwrap()
+                    .retain(|r| r["job"] != job);
+            }));
+            assert_eq!(field, "rules");
+            assert!(
+                reason.contains(&format!("job {job} has no rule")),
+                "{reason}"
+            );
+        }
     }
 
     #[test]

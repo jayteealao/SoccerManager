@@ -321,8 +321,8 @@ impl Simulation {
                             .tested(Key::player(Action::Header, p), &[chance]);
                         let won = draw < chance;
                         #[cfg(feature = "sensitivity")]
-                        if let Some(probe) = self.probe.as_deref_mut() {
-                            probe.header(self.players[i].team, won);
+                        if self.probe.is_some() {
+                            self.probe_header(i, won);
                         }
                         if self.trace_on() {
                             self.trace_point(
@@ -412,6 +412,8 @@ impl Simulation {
                     match outcome {
                         Tackle::Win => {
                             self.tally(i, Count::TackleWon);
+                            self.mood_event(i, crate::sim::mood::MoodEvent::DuelWon);
+                            self.mood_event(c, crate::sim::mood::MoodEvent::DuelLost);
                             self.gain(i, t);
                             self.tackle_injury_roll(c);
                             return;
@@ -451,6 +453,7 @@ impl Simulation {
             m.touched(team, self.tick);
             m.gained(team, self.tick);
         }
+        let changed = self.last_touch != Some(team);
         #[cfg(feature = "sensitivity")]
         if self.probe.is_some() {
             let (at, tick) = (self.players[i].pos, self.tick);
@@ -463,10 +466,20 @@ impl Simulation {
                 self.summary.passes_completed[team] += 1;
                 if let Some(k) = self.last_kicker {
                     self.tally(k, Count::PassCompleted);
+                    self.last_pass = Some((k, i));
                 }
             }
-            Some(_) => self.tally(i, Count::Interception),
+            Some(_) => {
+                self.tally(i, Count::Interception);
+                if let Some(k) = self.last_kicker {
+                    self.mood_event(k, crate::sim::mood::MoodEvent::Error);
+                }
+            }
             None => {}
+        }
+        // The other side has the ball: no pass of the old side can be an assist.
+        if self.last_touch != Some(team) {
+            self.last_pass = None;
         }
         self.clearers_tried = 0;
         if self.restart_taker != Some(i) {
@@ -480,5 +493,11 @@ impl Simulation {
         self.carrier = Some(i);
         self.control_since = self.tick;
         self.script_cache = None;
+        // The gain ends the overrides it ends, and a side that gains the ball is a moment
+        // for its anchor traits.
+        self.end_acts_on_gain(i);
+        if changed {
+            self.gain_override(team);
+        }
     }
 }

@@ -15,12 +15,26 @@
 //! raises the injury chance as it rises, and consistency joins the file with its spread, its
 //! words, and the match rating's weights. A version 1 team file converts each player's injury
 //! resistance R to injury proneness 21.0 − R and gives him consistency 10.0.
+//!
+//! A version 3 attribute file takes the version 4 additions from a fourth frozen copy
+//! (`contract/frozen-v4.json`): the new performance attributes and the personality values,
+//! communication moved to the mental group, the new and changed stage tables, and a
+//! consistency degree per action.
+//!
+//! A version 1 or 2 team file converts to version 3 with values from related attributes
+//! ([`team_v2_to_v3`]): each new performance attribute is the mean of the attributes it grows
+//! from ([`V3_RELATED`]), an outfield player's communication is the mean of the old mental
+//! group, every personality value is 10.0, his listed position is rated at his level and every
+//! other at 1.0, and his weaker foot is 50 percent. The table is fixed in code and never edited,
+//! so an old replay's team file converts the same way however the catalogue is tuned later.
 
 use std::collections::BTreeMap;
 
 use garde::Validate;
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 
+use crate::contract::level::overall_level;
 use crate::contract::{ActionKind, GateDefs, StageKind};
 use crate::data::attributes::{
     ATTRIBUTES_VERSION, ActionTables, AttributeDef, AttributeSchema, Direction, Group, Job,
@@ -29,16 +43,21 @@ use crate::data::tactics::{
     AiTuning, Duty, Formation, Instructions, Mentality, Offset, PreferredActions, Role,
     TacticsSchema, Teammates,
 };
-use crate::data::team::{Club, MAX_SQUAD, PlayerEntry, Position, TEAM_VERSION, TeamFile};
-use crate::rating::Rating;
+use crate::data::team::{
+    Club, Foot, MAX_SQUAD, PlayerEntry, Position, Side, TEAM_VERSION, TeamFile,
+};
+use crate::player::Attributes;
+use crate::rating::{MAX_TENTHS, MIN_TENTHS, Rating};
 
-/// The team file version the converter reads.
+/// The team file versions the converters read.
 pub const TEAM_V1: u32 = 1;
+pub const TEAM_V2: u32 = 2;
 /// The tactics file version the converter reads.
 pub const TACTICS_V1: u32 = 1;
 /// The attribute file versions the converters read.
 pub const ATTRIBUTES_V1: u32 = 1;
 pub const ATTRIBUTES_V2: u32 = 2;
+pub const ATTRIBUTES_V3: u32 = 3;
 /// The tuning file versions the converters read.
 pub const TUNING_V2: u32 = 2;
 pub const TUNING_V3: u32 = 3;
@@ -131,6 +150,7 @@ pub fn attributes_v1_to_v2(file: AttributeSchemaV1) -> Result<AttributeSchema, S
         schema_version: ATTRIBUTES_V2,
         attributes,
         actions: frozen.actions,
+        consistency_degrees: BTreeMap::new(),
         gates: frozen.gates,
     })
 }
@@ -167,7 +187,7 @@ fn frozen_v3() -> FrozenV3 {
 /// as its main attribute and drops its supports, each of which lowered injuries. Consistency
 /// joins from the frozen copy. The caller validates the result as a current file.
 pub fn attributes_v2_to_v3(mut file: AttributeSchema) -> AttributeSchema {
-    file.schema_version = ATTRIBUTES_VERSION;
+    file.schema_version = ATTRIBUTES_V3;
     let mut renamed = false;
     for def in &mut file.attributes {
         if def.name == RESISTANCE {
@@ -199,6 +219,77 @@ pub fn attributes_v2_to_v3(mut file: AttributeSchema) -> AttributeSchema {
         && let Some(def) = frozen_v3().attributes.remove(CONSISTENCY)
     {
         file.attributes.push(def);
+    }
+    file
+}
+
+/// The version 4 additions as they first shipped: the new definitions, the group moves, the
+/// new and changed stage tables, and the consistency degrees. Never edited: tuning the shipped
+/// file leaves it alone.
+pub const FROZEN_V4: &str = include_str!("../contract/frozen-v4.json");
+
+/// The attributes version 4 adds, in the order a converted file appends them: the new
+/// performance attributes, then the personality values.
+pub const V4_ADDED: [&str; 21] = [
+    "marking",
+    "off_ball_movement",
+    "corners",
+    "free_kicks",
+    "penalties",
+    "long_throws",
+    "flair",
+    "determination",
+    "bravery",
+    "eccentricity",
+    "professionalism",
+    "temperament",
+    "pressure_handling",
+    "sportsmanship",
+    "leadership",
+    "adaptability",
+    "versatility",
+    "ambition",
+    "loyalty",
+    "money_motivation",
+    "controversy",
+];
+
+/// The fourth frozen copy's parts.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrozenV4 {
+    attributes: BTreeMap<String, AttributeDef>,
+    moved: BTreeMap<String, Group>,
+    tables: ActionTables,
+    consistency_degrees: BTreeMap<ActionKind, f64>,
+}
+
+/// A version 3 attribute file in the version 4 shape: each version 4 attribute it lacks is
+/// appended in [`V4_ADDED`] order, communication moves to the mental group, each frozen table
+/// replaces or adds its stage, and each missing consistency degree is added. The caller
+/// validates the result as a current file.
+pub fn attributes_v3_to_v4(mut file: AttributeSchema) -> AttributeSchema {
+    let mut frozen: FrozenV4 =
+        serde_json::from_str(FROZEN_V4).expect("the fourth frozen copy parses; a test checks it");
+    file.schema_version = ATTRIBUTES_VERSION;
+    for name in V4_ADDED {
+        if file.index(name).is_none()
+            && let Some(def) = frozen.attributes.remove(name)
+        {
+            file.attributes.push(def);
+        }
+    }
+    for def in &mut file.attributes {
+        if let Some(&group) = frozen.moved.get(&def.name) {
+            def.group = group;
+        }
+    }
+    for (action, stages) in frozen.tables {
+        let tables = file.actions.entry(action).or_default();
+        tables.extend(stages);
+    }
+    for (action, degree) in frozen.consistency_degrees {
+        file.consistency_degrees.entry(action).or_insert(degree);
     }
     file
 }
@@ -333,6 +424,34 @@ pub fn slots_v1_to_v2(mut file: serde_json::Value) -> Result<serde_json::Value, 
     let obj = file
         .as_object_mut()
         .ok_or_else(|| "the file is not an object".to_string())?;
+    obj.insert("schema_version".into(), serde_json::Value::from(SLOTS_V2));
+    let slots = obj
+        .get_mut("slots")
+        .and_then(|s| s.as_object_mut())
+        .ok_or_else(|| "slots is missing".to_string())?;
+    for (slot, module, version) in SLOTS_V2_ADDED {
+        slots.insert(
+            slot.into(),
+            serde_json::json!({ "module": module, "version": version }),
+        );
+    }
+    Ok(file)
+}
+
+/// The slot file version before the familiarity slot.
+pub const SLOTS_V2: u32 = 2;
+
+/// The slots a version 3 slot file declares that version 2 did not, with the module and
+/// version each takes when a version 2 file converts.
+pub const SLOTS_V3_ADDED: [(&str, &str, u32); 1] =
+    [("engine.modifier.familiarity", "familiarity", 1)];
+
+/// A version 2 slot file, as JSON, in the version 3 shape: the familiarity modifier slot
+/// takes its first version. The caller parses and resolves the result.
+pub fn slots_v2_to_v3(mut file: serde_json::Value) -> Result<serde_json::Value, String> {
+    let obj = file
+        .as_object_mut()
+        .ok_or_else(|| "the file is not an object".to_string())?;
     obj.insert(
         "schema_version".into(),
         serde_json::Value::from(crate::modules::SLOTS_VERSION),
@@ -341,7 +460,7 @@ pub fn slots_v1_to_v2(mut file: serde_json::Value) -> Result<serde_json::Value, 
         .get_mut("slots")
         .and_then(|s| s.as_object_mut())
         .ok_or_else(|| "slots is missing".to_string())?;
-    for (slot, module, version) in SLOTS_V2_ADDED {
+    for (slot, module, version) in SLOTS_V3_ADDED {
         slots.insert(
             slot.into(),
             serde_json::json!({ "module": module, "version": version }),
@@ -380,13 +499,148 @@ pub struct TeamFileV1 {
 }
 
 /// The name `def` had in a version 1 team file: injury proneness was injury resistance, and
-/// consistency did not exist.
+/// consistency and the version 4 attributes did not exist.
 fn v1_name(def: &AttributeDef) -> Option<&str> {
     match def.name.as_str() {
         CONSISTENCY => None,
+        name if V4_ADDED.contains(&name) => None,
         PRONENESS => Some(RESISTANCE),
         name => Some(name),
     }
+}
+
+/// The new performance attributes of a version 3 team file and the attributes each is
+/// converted from: the mean of their ratings, rounded to a tenth. Never edited.
+pub const V3_RELATED: [(&str, &[&str]); 10] = [
+    ("marking", &["tackling", "positioning", "concentration"]),
+    ("off_ball_movement", &["anticipation", "decisions"]),
+    ("corners", &["crossing", "technique"]),
+    ("free_kicks", &["crossing", "technique", "finishing"]),
+    ("penalties", &["finishing", "composure", "technique"]),
+    ("long_throws", &["strength", "technique"]),
+    ("flair", &["dribbling", "technique", "vision"]),
+    ("determination", &["work_rate", "composure"]),
+    ("bravery", &["aggression", "heading", "strength"]),
+    ("eccentricity", &["rushing_out", "aggression"]),
+];
+
+/// The mental group before version 4; a converted outfield player's communication is their
+/// mean. Never edited.
+pub const MENTAL_V3: [&str; 9] = [
+    "positioning",
+    "vision",
+    "decisions",
+    "composure",
+    "anticipation",
+    "work_rate",
+    "aggression",
+    "concentration",
+    "teamwork",
+];
+
+/// The communication attribute, which moved from the goalkeeping group to the mental group.
+pub const COMMUNICATION: &str = "communication";
+
+/// The weaker foot of a converted player, in percent of the strong one.
+pub const CONVERTED_WEAKER_FOOT: u8 = 50;
+
+/// The mean of the ratings of `names` that `attributes` holds, rounded to a tenth (half up)
+/// and kept to 1.0 to 20.0; `None` when it holds none of them.
+fn mean_of(attributes: &BTreeMap<String, Rating>, names: &[&str]) -> Option<Rating> {
+    let values: Vec<u32> = names
+        .iter()
+        .filter_map(|n| attributes.get(*n))
+        .map(|r| u32::from(r.tenths()))
+        .collect();
+    if values.is_empty() {
+        return None;
+    }
+    let n = values.len() as u32;
+    let mean = (values.iter().sum::<u32>() + n / 2) / n;
+    // The clamp keeps the mean inside 10..=200, so it fits a u8.
+    let tenths = mean.clamp(u32::from(MIN_TENTHS), u32::from(MAX_TENTHS)) as u8;
+    Some(Rating::from_tenths(tenths))
+}
+
+/// The strong side of a converted player, fixed by his id: left when the first byte of the
+/// SHA-256 of the id is divisible by 4 (about one in four), else right.
+pub fn strong_side_of(id: &str) -> Side {
+    if Sha256::digest(id.as_bytes())[0] % 4 == 0 {
+        Side::Left
+    } else {
+        Side::Right
+    }
+}
+
+/// The position ratings of a player whose file gives none: his listed position at his level
+/// (the overall level of his ratings there), every other position 1.0.
+pub fn listed_positions_only(
+    entry: &PlayerEntry,
+    schema: &AttributeSchema,
+) -> BTreeMap<Position, Rating> {
+    let level = overall_level(
+        &Attributes::from_entry(&entry.attributes, schema),
+        schema,
+        entry.position,
+    )
+    .clamp(MIN_TENTHS, MAX_TENTHS);
+    Position::ALL
+        .into_iter()
+        .map(|code| {
+            let tenths = if code == entry.position {
+                level
+            } else {
+                MIN_TENTHS
+            };
+            (code, Rating::from_tenths(tenths))
+        })
+        .collect()
+}
+
+/// The feet of a player whose file gives none: the strong side from his id
+/// ([`strong_side_of`]) and a weaker foot of 50 percent.
+pub fn converted_foot(id: &str) -> Foot {
+    Foot {
+        strong: strong_side_of(id),
+        weaker: CONVERTED_WEAKER_FOOT,
+    }
+}
+
+/// A version 2 team file (or a version 1 file converted to version 2) in the version 3 shape.
+/// For each player, in this order, filling only what is missing: each new performance
+/// attribute from its related ones ([`V3_RELATED`]); an outfield player's communication from
+/// the old mental group ([`MENTAL_V3`]), replacing his old value, while a keeper keeps his;
+/// each personality value 10.0; his listed position at his level and every other at 1.0; a
+/// weaker foot of 50 percent on the side his id fixes; no traits. The caller checks the result
+/// as a current file.
+pub fn team_v2_to_v3(mut file: TeamFile, schema: &AttributeSchema) -> TeamFile {
+    file.schema_version = TEAM_VERSION;
+    for p in &mut file.players {
+        for (name, from) in V3_RELATED {
+            if !p.attributes.contains_key(name)
+                && let Some(value) = mean_of(&p.attributes, from)
+            {
+                p.attributes.insert(name.to_string(), value);
+            }
+        }
+        if p.position != Position::GK
+            && let Some(value) = mean_of(&p.attributes, &MENTAL_V3)
+        {
+            p.attributes.insert(COMMUNICATION.to_string(), value);
+        }
+        for def in schema.attributes.iter().filter(|d| d.is_personality()) {
+            p.attributes
+                .entry(def.name.clone())
+                .or_insert(Rating::from_tenths(100));
+        }
+        if p.positions.is_none() {
+            p.positions = Some(listed_positions_only(p, schema));
+        }
+        if p.foot.is_none() {
+            p.foot = Some(converted_foot(&p.id));
+        }
+    }
+    file
 }
 
 /// The version 1 squad check, with its messages as version 1 gave them, against the names the
@@ -434,10 +688,12 @@ fn check_squad_v1(players: &[PlayerEntryV1], schema: &AttributeSchema) -> garde:
 /// A checked version 1 team file in the current shape: every value `v` becomes `2v`
 /// tenths, at least 1.0, so 1 to 4 become 1.0; injury resistance R becomes injury proneness
 /// 21.0 − R, which keeps the order of players and stays inside 1.0 to 20.0; every player gets
-/// consistency 10.0; no player has body fields.
+/// consistency 10.0; no player has body fields. The caller converts the result on to version 3
+/// ([`team_v2_to_v3`]).
 pub fn team_v1_to_v2(file: TeamFileV1) -> TeamFile {
     TeamFile {
-        schema_version: TEAM_VERSION,
+        schema_version: TEAM_V2,
+        converted_from: None,
         club: file.club,
         players: file
             .players
@@ -464,6 +720,9 @@ pub fn team_v1_to_v2(file: TeamFileV1) -> TeamFile {
                         Rating::from_tenths(100),
                     )))
                     .collect(),
+                positions: None,
+                foot: None,
+                traits: BTreeMap::new(),
                 height: None,
                 age: None,
                 nationality: None,

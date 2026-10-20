@@ -92,8 +92,8 @@ fn sequences(keys: &[Key], skip: Option<Key>, extra: usize) -> Vec<Vec<u64>> {
 #[test]
 fn extra_draws_on_one_key_leave_every_other_key_unchanged() {
     let keys = sample_keys();
-    // 5 match rows and 35 player rows.
-    assert_eq!(keys.len(), 5 + 2 * 35);
+    // 5 match rows and 36 player rows.
+    assert_eq!(keys.len(), 5 + 2 * 36);
     let control = sequences(&keys, None, 0);
     for (x, &key) in keys.iter().enumerate() {
         let disturbed = sequences(&keys, Some(key), 100);
@@ -272,7 +272,7 @@ fn counter_fixtures() -> [Fixture; 2] {
         Fixture::seed(42),
         Fixture {
             pack: None,
-            ..Fixture::knockout(11)
+            ..Fixture::knockout(12)
         },
     ]
 }

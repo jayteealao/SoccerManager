@@ -3,14 +3,16 @@
 //! on the measured side's goal difference over the move of all jobs together between the two
 //! arms). A percentile bootstrap over matches gives a 95 percent interval for each, and the
 //! word follows the intervals: pass only when both are sure, fail when either is surely
-//! wrong, not sure otherwise. Not sure is never a pass.
+//! wrong, not sure otherwise. Not sure is never a pass. A job inert in a match expects no
+//! move: it passes when the move's interval lies inside the least move either way, and fails
+//! when the interval of the absolute move clears it.
 
 use serde::Serialize;
 
 use crate::data::attributes::Direction;
 use crate::rng::EngineRng;
 use crate::sensitivity::design::MatchRow;
-use crate::sensitivity::rules::{Measure, Thresholds};
+use crate::sensitivity::rules::{Expect, Measure, Thresholds};
 
 /// The verdict on one rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -170,6 +172,9 @@ pub struct Ask {
     pub factor: usize,
     pub direction: Direction,
     pub thresholds: Thresholds,
+    pub expect: Expect,
+    /// The rule reports its word, and the full run does not fail on it.
+    pub report_only: bool,
 }
 
 /// The result of one rule.
@@ -185,7 +190,23 @@ pub struct RuleResult {
     pub share: Option<Interval>,
     pub min_move: f64,
     pub ceiling: f64,
+    pub expect: Expect,
     pub word: Word,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub report_only: bool,
+}
+
+/// The word of a job expected not to move: pass when the move's interval lies inside
+/// `min_move` either way, fail when the absolute move's interval lies wholly at or beyond it,
+/// not sure otherwise. The share is not read: an inert job carries none of the outcome.
+pub fn no_move_word(mv: Interval, t: Thresholds) -> Word {
+    if mv.lo > -t.min_move && mv.hi < t.min_move {
+        Word::Pass
+    } else if mv.abs().lo >= t.min_move {
+        Word::Fail
+    } else {
+        Word::NotSure
+    }
 }
 
 /// The word of a move and a share interval against `t`.
@@ -276,7 +297,12 @@ pub fn judge(
                 share,
                 min_move: a.thresholds.min_move,
                 ceiling: a.thresholds.ceiling,
-                word: word(mv, share, a.thresholds),
+                expect: a.expect,
+                word: match a.expect {
+                    Expect::Move => word(mv, share, a.thresholds),
+                    Expect::NoMove => no_move_word(mv, a.thresholds),
+                },
+                report_only: a.report_only,
             }
         })
         .collect()
@@ -339,6 +365,8 @@ mod tests {
             factor: 0,
             direction,
             thresholds: T,
+            expect: Expect::Move,
+            report_only: false,
         }
     }
 
@@ -407,6 +435,25 @@ mod tests {
         assert_eq!(down.word, Word::Pass);
         let up = one(&[ask(Measure::Lapses, Direction::Up)], &d, &lo, &hi);
         assert_eq!(up.word, Word::Fail);
+    }
+
+    #[test]
+    fn an_inert_job_passes_with_no_move_and_fails_with_a_sure_one() {
+        let still = rows(400, 0.7, 0.7, [0.0, 0.0], 1.0, 4);
+        let lo = arm(200, -2.0, 2);
+        let hi = arm(200, 2.0, 3);
+        let mut a = ask(Measure::PassCompletion, Direction::Up);
+        a.expect = Expect::NoMove;
+        a.report_only = true;
+        let r = one(std::slice::from_ref(&a), &still, &lo, &hi);
+        assert_eq!(r.word, Word::Pass, "{r:?}");
+        assert!(r.report_only);
+        let moved = rows(400, 0.6, 0.75, [0.0, 0.0], 1.0, 1);
+        let r = one(std::slice::from_ref(&a), &moved, &lo, &hi);
+        assert_eq!(r.word, Word::Fail, "{r:?}");
+        let i = |lo: f64, hi: f64| Interval { est: 0.0, lo, hi };
+        assert_eq!(no_move_word(i(-0.02, 0.07), T), Word::NotSure);
+        assert_eq!(no_move_word(i(-0.2, -0.06), T), Word::Fail);
     }
 
     #[test]

@@ -8,7 +8,7 @@ The engine reads `slots.json` from the content folder (see [where the engine loo
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "slots": {
     "engine.fouls": { "module": "fouls", "version": 1 },
     "engine.offside": { "module": "off" }
@@ -18,12 +18,12 @@ The engine reads `slots.json` from the content folder (see [where the engine loo
 
 | Field | Type | Meaning |
 |---|---|---|
-| `schema_version` | integer | `2`. This build reads versions 1 and 2. |
+| `schema_version` | integer | `3`. This build reads versions 1, 2 and 3. |
 | `slots` | object | One entry for each declared slot, keyed by the slot id. |
 | `slots.<id>.module` | string | The registered module name, or `off` to switch an optional slot off. |
 | `slots.<id>.version` | integer | The module version. Required for a module; not allowed with `off`. |
 
-A version 1 file converts on load: the `engine.modifier.sharpness` and `engine.modifier.adaptation` slots, which version 1 does not have, take `sharpness@1` and `adaptation@1`. A replay that carries a version 1 slot file converts the same way. Any other version is refused, naming the version found and the version this build reads.
+An older file converts on load. A version 1 file first gains the `engine.modifier.sharpness` and `engine.modifier.adaptation` slots, which version 1 does not have, at `sharpness@1` and `adaptation@1`. A version 2 file, and a converted version 1 file, then gains the `engine.modifier.familiarity` slot at `familiarity@1`. A replay that carries an older slot file converts the same way. Any other version is refused, naming the version found and the version this build reads.
 
 The engine resolves the file when a command that plays or serves a match starts. The file must name every declared slot and no other slot. An unknown field is refused.
 
@@ -43,9 +43,10 @@ The table lists the slots in the order the engine resolves them. A required slot
 | `engine.pre-match` | no | `pre-match@1` | none | `off` | none | none: lineup choice, no realism band |
 | `engine.modifier.fatigue` | no | `fatigue-curve@1` | none | `off` | none | none: no fatigue band in realism-bands.json |
 | `engine.modifier.sharpness` | no | `sharpness@1` | none | `off` | none | none: no sharpness band in realism-bands.json |
-| `engine.modifier.pressure` | no | `pressure@1` | none | `off` | none | none: no-op stand-in, no effect until its own piece |
-| `engine.modifier.momentum` | no | `momentum@1` | none | `off` | none | none: no-op stand-in, no effect until its own piece |
+| `engine.modifier.pressure` | no | `pressure@1` | none | `off` | none | none: no mood band in realism-bands.json |
+| `engine.modifier.momentum` | no | `momentum@1` | none | `off` | none | none: no mood band in realism-bands.json |
 | `engine.modifier.adaptation` | no | `adaptation@1` | none | `off` | none | none: no adaptation band in realism-bands.json |
+| `engine.modifier.familiarity` | no | `familiarity@1` | none | `off` | none | none: no familiarity band in realism-bands.json |
 | `engine.modifier.weather` | no | `weather@1` | none | `off` | none | none: no-op stand-in, no effect until its own piece |
 | `engine.clock` | yes | `clock@1` | none | none | AddedTime, ExtraTimeAdded, ExtraKickOff, ShootoutFirstTeam, ShootoutEnd, KeeperDive, ShootoutSaveHold | none: no added-time or shoot-out band in realism-bands.json |
 | `engine.restarts` | yes | `restarts@1` | none | none | none | none: restart placement and timing follow the Laws; no band measures them |
@@ -103,18 +104,19 @@ The engine also refuses a slot id that is not declared (`"<id>" is not a declare
 
 ## Modifier slots
 
-The six `engine.modifier.*` slots hold modifiers. A modifier reads the match view and returns one delta, in rating points, for each attribute group: technical, mental, physical and goalkeeping. A delta of 0 is no effect; a negative delta lowers every rating of the group.
+The seven `engine.modifier.*` slots hold modifiers. A modifier reads the match view and returns one delta, in rating points, for each attribute group: technical, mental, physical and goalkeeping. A delta of 0 is no effect; a negative delta lowers every rating of the group.
 
 | Slot | Family | What it does |
 |---|---|---|
 | `engine.modifier.fatigue` | body | Lowers a tired player's ratings by the fatigue curve at his energy: `width · ln(multiplier)` times the group's weight in `fatigue.group_weights` (physical 1.0, technical 0.5, goalkeeping 0.5). Nothing at or above the fatigue threshold. |
 | `engine.modifier.sharpness` | body | Lowers the technical group by `(1 − sharpness / 100) · contract.body.sharpness.max_drop` (1.5 points at sharpness 0). |
-| `engine.modifier.pressure` | mind | No effect: a stand-in until its own piece. |
-| `engine.modifier.momentum` | mind | No effect: a stand-in until its own piece. |
-| `engine.modifier.adaptation` | mind | Lowers the mental group by `(1 − adaptation / 100) · contract.body.adaptation.max_drop` (1.0 point at adaptation 0). |
+| `engine.modifier.pressure` | mind | Own mood: moves the mental group by `contract.person.mood.own_weight · mood / 100` (0.8 points at a full mood either way). |
+| `engine.modifier.momentum` | mind | Team mood: moves the mental group by `contract.person.mood.team_weight · team mood / 100` (0.4 points at a full team mood either way); the team mood is the mean of the side's moods on the pitch, each weighted by `1 + leadership_weight · leadership`. |
+| `engine.modifier.adaptation` | mind | Lowers the mental group by `(1 − adaptation / 100) · contract.body.adaptation.max_drop` (1.0 point at adaptation 0), times `1 − contract.person.occasions.adaptation · adaptability`. |
+| `engine.modifier.familiarity` | familiarity | Lowers the technical and mental groups by `cost_per_point` per point of the gap between the player's natural rating (his highest) and his rating at the position his formation slot plays, times `1 − versatility_weight · versatility` and `1 − adaptability_weight · adaptability`; nothing at his natural position. |
 | `engine.modifier.weather` | surroundings | No effect: a stand-in until its own piece. |
 
-The fourth family, familiarity, has no modifier yet. Sharpness and adaptation read the player's condition block in the team file ([data files](data-files.md#match-condition)); a player with no block is fully sharp and fully adapted.
+Mood and familiarity read the person block of the tuning file (`engine.contract.person`, [data files](data-files.md#contract)); a tuning file without it reads every mood weight and familiarity cost as 0. Sharpness and adaptation read the player's condition block in the team file ([data files](data-files.md#match-condition)); a player with no block is fully sharp and fully adapted.
 
 The engine turns the deltas into effective ratings in this order:
 
@@ -124,8 +126,19 @@ The engine turns the deltas into effective ratings in this order:
 4. Across families, the soft combine skips the deltas of exactly 0, splits the rest into the negative and the positive deltas, and sorts each group by size, largest first. The delta in place `j` (counted from 0) counts times the weights 1.0, 0.5, 0.25 and 0.125. One delta alone passes through unchanged, bit for bit.
 5. The result is clamped to the total cap, −5.0 to +2.25, and rounded to a tenth.
 6. Each effective rating is the base rating plus its group's delta, kept inside 1.0 to 20.0.
+7. With the person block, the shared floor: after the blend and the form offset, no stage value reads more than `contract.person.floor_drop` (7) rating points below the player's base stage value, so an 18 never plays an action below 11.
 
 The engine refreshes the deltas every 50 ticks. When a player's deltas change, his stage values, top speed, acceleration, turning, reach and knobs are blended again from his effective ratings through the attribute contract; while all his deltas are 0 he plays from his base values.
+
+## Traits of play
+
+A player's traits of play reach play through the modules: the match view gives each player's traits (`MatchView::traits`), and the decision, fouls and possession modules read them with the weights of the traits block (`engine.contract.traits`, [data files](data-files.md#contract)). The decision module moves its option scores, its carry direction, its shot aim and speed, its restart pass, its off-ball targets, its press reach and its keeper's chase range; the fouls module moves a tackle's win and foul chances and the card chance; the possession module moves a keeper's chance to hold a save. A trait's weight never decides alone: each module's card names `contract.traits` among its tuning.
+
+The override of an instruction is loop work, in `sim/overrides.rs`. At a moment of play (a carrier's release or first decision, the start of a carry from a wide channel, a new opposing carrier for a presser, a side gaining the ball, a loose ball near a keeper), the loop reads the player's strong traits that go against an instruction his team holds for him, his pressure and his mood, and draws the `trait_override` key on his own key. A win replaces the decision's choice for that action and writes a `trait-override` event. The decision module's card lists the key.
+
+## The weaker foot
+
+The decision module reads each player's feet through the match view (`MatchView::foot`) with the values of the foot block (`engine.contract.foot`, [data files](data-files.md#contract)). A pass, chip, cross, open shot or long shot to the side of the kicker's weaker foot, without time to shift the ball, loses rating points on its execute and pressure stages, shrunk to the shared floor when the person block is present; a closing presser stands toward a carrier's strong side by how one-footed he is. The cost and the offset are pure reads of the moment: no draw, event or state is added, and the decision module's card names `contract.foot` among its tuning.
 
 ## Hook slots
 

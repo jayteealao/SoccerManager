@@ -3,9 +3,20 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
-import { EMPTY_TEXT, FeedBatcher, FeedFollow, feedRow, minuteStamp } from '../src/lib/feed.js';
+import fs from 'node:fs';
+import path from 'node:path';
+
+import {
+  EMPTY_TEXT,
+  FeedBatcher,
+  FeedFollow,
+  feedRow,
+  instructionWords,
+  minuteStamp,
+  TRAIT_ACTS,
+} from '../src/lib/feed.js';
 import { KIND, MatchState } from '../src/lib/match-state.js';
-import { eventMessage } from './helpers.js';
+import { eventMessage, REPO_ROOT } from './helpers.js';
 
 test('a burst of 40 events inside one simulated second at 8x all appear, in order, none twice', () => {
   const state = new MatchState();
@@ -131,4 +142,37 @@ test('the feed keeps following the newest row when a panel beside it shrinks it'
   assert.equal(follow.following, false);
   follow.onScroll({ scrollHeight: 844, scrollTop: 748, clientHeight: 96 });
   assert.equal(follow.following, true);
+});
+
+test('a trait override names the player, what he did, the instruction and the cause, and is not read out', () => {
+  const names = new Map([['p', 'Alvin Lomrick']]);
+  const event = (fields) => eventMessage(300, KIND.traitOverride, { 'player.id': 'p', 'team.id': 't', ...fields });
+  const held = feedRow(
+    event({ 'trait.name': 'holds_up_ball', 'trait.cause': 'pressure', 'trait.instruction': 'tempo:faster' }),
+    new Map(),
+    names
+  );
+  assert.equal(held.kind, KIND.traitOverride);
+  assert.equal(held.text, "Lomrick holds up the ball against 'Higher tempo' — strong trait, under pressure.");
+  assert.equal(held.word, 'Trait');
+  assert.equal(held.announce, false);
+  assert.equal(held.player, 'p');
+  assert.equal(held.example, "holds up the ball against 'Higher tempo', under pressure");
+  const forward = feedRow(
+    event({ 'trait.name': 'gets_forward', 'trait.cause': 'low-mood', 'trait.instruction': 'duty:defend' }),
+    new Map(),
+    names
+  );
+  assert.equal(forward.text, 'Lomrick gets forward against a defend duty — strong trait, in a low mood.');
+  assert.equal(instructionWords('duty:attack'), 'an attack duty');
+  assert.equal(instructionWords('mentality:defensive'), 'a defensive mentality');
+  assert.equal(instructionWords('passing_directness:short'), "'Shorter passing'");
+  assert.equal(instructionWords('time_wasting:on'), "'Time wasting: on'");
+  const unknown = feedRow(event({ 'player.id': 'x', 'trait.name': 'new_habit', 'trait.instruction': 'width:wide' }), new Map(), names);
+  assert.equal(unknown.text, "A player new habit against 'Wider shape' — strong trait.");
+});
+
+test('every trait of the catalogue has an act phrase', () => {
+  const catalogue = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'content/traits.json'), 'utf8'));
+  assert.deepEqual(Object.keys(TRAIT_ACTS).sort(), catalogue.traits.map((t) => t.name).sort());
 });

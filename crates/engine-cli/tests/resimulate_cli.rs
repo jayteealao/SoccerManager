@@ -158,7 +158,7 @@ fn a_replay_file_alone_reproduces_its_tick_frames_with_every_source_file_deleted
             .all(|c| c.team == 0 && c.source == ChangeSource::Manager)
     );
     assert_eq!(rejected_rows(&fixture), 1);
-    assert_eq!(fixture.inputs.len(), 10);
+    assert_eq!(fixture.inputs.len(), 11);
 
     // Every source file goes: the content folder with its teams and the script pack, and
     // the change file.
@@ -270,6 +270,7 @@ fn a_new_replay_file_holds_the_engine_identity_every_input_and_every_applied_cha
         ("team_a", "teams/default-a.json"),
         ("team_b", "teams/default-b.json"),
         ("slots", "slots.json"),
+        ("traits", "traits.json"),
         ("pack_manifest", "scripts/sample/pack.json"),
         ("pack_script", "scripts/sample/main.rhai"),
     ];
@@ -670,8 +671,8 @@ fn state_digests_give_one_line_per_tick_and_the_same_file_twice() {
     let lines = digest_lines(&a);
     let header: serde_json::Value = serde_json::from_str(&lines[0]).unwrap();
     assert_eq!(header["state_digests"], 1);
-    assert_eq!(header["inventory"], 4);
-    assert_eq!(header["gate_schema"], 4);
+    assert_eq!(header["inventory"], 5);
+    assert_eq!(header["gate_schema"], 5);
     assert_eq!(header["scheme"], header["engine"]["scheme"]);
     let ticks: Vec<&str> = lines[1..lines.len() - 2]
         .iter()

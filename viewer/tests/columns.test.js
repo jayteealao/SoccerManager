@@ -13,11 +13,16 @@ import {
   ATTRIBUTE_GROUPS,
   choosable,
   DEFAULT_COLUMNS,
+  LATER_COLUMNS,
   nextSort,
+  RATED_MINIMUMS,
+  ratedFilter,
   ratingFigures,
   shownColumns,
   sortRows,
   squadRows,
+  TRAILING_LATER,
+  withRatedAt,
 } from '../src/lib/columns.js';
 import { bandOf } from '../src/lib/scale.js';
 import { REPO_ROOT } from './helpers.js';
@@ -160,5 +165,88 @@ test('no 1-20 cell, title or label carries a decimal or a value over 20', () => 
         }
       }
     }
+  }
+});
+
+/// A protocol 7 player: rated at CM and ST, at the converter's floor elsewhere, right footed.
+function person(i, over = {}) {
+  return player(i, {
+    'player.positions': { GK: 10, CB: 10, LB: 10, RB: 10, DM: 120, CM: 150 + i * 10, AM: 130, LW: 10, RW: 10, ST: 90 + i * 20 },
+    'player.strong_foot': 'right',
+    'player.weaker_foot': 64,
+    ...over,
+  });
+}
+
+const SEASON = {
+  matches: ['m-1'],
+  players: {
+    'p-0': { starts: 3, minutes: 270, goals: 0, assists: 6, clean_sheets: 0, red_cards: 0, ratings: [], goal: { kind: 'assists', target: 10 }, form: 7.6, progress: 100 },
+    'p-1': { starts: 1, minutes: 90, goals: 0, assists: 0, clean_sheets: 0, red_cards: 0, ratings: [], goal: { kind: 'no_own_fault_absence', target: 0 }, form: 6.0, progress: 50 },
+  },
+};
+
+test('the person columns read the natural and rated-at ratings, the weaker foot, form and the season goal', () => {
+  const cols = new Map(allColumns().map((c) => [c.id, c]));
+  const ctx = { ratedAt: 'ST', season: SEASON };
+  const a = person(0);
+  assert.equal(cols.get('natural').cell(a).text, '15');
+  assert.equal(cols.get('natural').value(a), 15);
+  assert.equal(cols.get('rated').cell(a, ctx).text, '9');
+  assert.equal(cols.get('rated').cell(a, ctx).band, 'v2');
+  assert.equal(cols.get('rated').cell(a, { ratedAt: 'LW' }).text, '—', 'the converter floor is not a rating');
+  assert.equal(cols.get('rated').value(a, { ratedAt: 'LW' }), null);
+  const foot = cols.get('foot').cell(a);
+  assert.deepEqual([foot.lead, foot.text, foot.ring], ['Right ·', '64%', 'lo']);
+  assert.equal(cols.get('foot').cell(person(0, { 'player.weaker_foot': 20 })).ring, 'vl');
+  assert.equal(cols.get('foot').cell(player(0)).text, '—', 'an older hello has no feet');
+  const form = cols.get('form').cell(a, ctx);
+  assert.deepEqual([form.text, form.mark, form.token], ['In form', '▲', '--good']);
+  assert.equal(cols.get('form').value(a, ctx), 7.6);
+  assert.equal(cols.get('season').cell(a, ctx).text, 'Make 10 assists · 6');
+  assert.equal(cols.get('season').cell(person(1), ctx).text, 'No absences · behind');
+  assert.equal(cols.get('form').cell(person(1), ctx).text, 'Out of form');
+  const c = person(2);
+  assert.equal(cols.get('form').cell(c, ctx).text, 'Not yet known');
+  assert.equal(cols.get('form').cell(c, ctx).muted, true);
+  assert.equal(cols.get('season').cell(c, ctx).text, '—');
+  assert.equal(cols.get('form').value(c, ctx), null);
+  assert.equal(withRatedAt([cols.get('rated'), cols.get('natural')], 'CM')[0].label, 'CM');
+  assert.equal(withRatedAt([cols.get('rated'), cols.get('natural')], 'CM')[1].label, 'Natural');
+});
+
+test('the rated-at filter keeps players rated at least the minimum there; any keeps everyone', () => {
+  const rows = squadRows([person(0), person(1), person(2), player(3)]);
+  assert.deepEqual(RATED_MINIMUMS.map((m) => m.label), ['any', '10+', '13+', '16+']);
+  assert.equal(ratedFilter(rows, 'ST', 0).length, 4);
+  assert.deepEqual(ratedFilter(rows, 'ST', 10).map((r) => r.index), [1, 2]);
+  assert.deepEqual(ratedFilter(rows, 'ST', 13).map((r) => r.index), [2]);
+  assert.deepEqual(ratedFilter(rows, 'CM', 16).map((r) => r.index), [1, 2]);
+  assert.deepEqual(ratedFilter(rows, 'GK', 10), []);
+  const sorted = sortRows(rows, { column: 'rated', direction: 'down' }, { ratedAt: 'ST' });
+  assert.deepEqual(sorted.map((r) => r.index), [2, 1, 0, 3], 'highest first, an unrated player last');
+});
+
+test('the position and foot columns are built now; only contract trails as LATER', () => {
+  const later = LATER_COLUMNS.map((c) => c.id);
+  assert.ok(!later.includes('competence') && !later.includes('feet'), later.join(', '));
+  assert.ok(later.includes('morale'), 'morale is the dressing room, still LATER');
+  assert.deepEqual([...TRAILING_LATER], ['contract']);
+  const ids = choosable().map((c) => c.id);
+  for (const id of ['natural', 'rated', 'foot', 'form', 'season']) {
+    assert.ok(ids.includes(id), id);
+  }
+});
+
+test('no form cell, title or label carries a digit, and none takes a band', () => {
+  const column = allColumns().find((c) => c.id === 'form');
+  for (const form of [9.1, 7.2, 6.8, 6.3, 2.0, undefined]) {
+    const ctx = { season: { players: { 'p-0': { form } } } };
+    const cell = column.cell(player(0), ctx);
+    for (const text of [cell.text, cell.label ?? '']) {
+      assert.ok(!/\d/.test(text), `${form}: ${text}`);
+    }
+    assert.equal(cell.band, undefined);
+    assert.equal(cell.ring, undefined);
   }
 });

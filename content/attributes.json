@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "attributes": [
     {
       "name": "passing",
@@ -92,6 +92,76 @@
       }
     },
     {
+      "name": "marking",
+      "group": "technical",
+      "job": {
+        "action": "mark",
+        "stage": "execute",
+        "statistic": "distance kept from the attacker he covers",
+        "direction": "down"
+      }
+    },
+    {
+      "name": "off_ball_movement",
+      "group": "technical",
+      "job": {
+        "action": "off_ball_run",
+        "stage": "execute",
+        "statistic": "runs timed onside against the line per match",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "corners",
+      "group": "technical",
+      "job": {
+        "action": "corner",
+        "stage": "execute",
+        "statistic": "corner deliveries reaching a team-mate, share",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "free_kicks",
+      "group": "technical",
+      "job": {
+        "action": "free_kick",
+        "stage": "execute",
+        "statistic": "direct free kicks on target or reaching a team-mate, share",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "penalties",
+      "group": "technical",
+      "job": {
+        "action": "penalty",
+        "stage": "execute",
+        "statistic": "penalties scored share",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "long_throws",
+      "group": "technical",
+      "job": {
+        "action": "long_throw",
+        "stage": "execute",
+        "statistic": "mean long-throw distance",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "flair",
+      "group": "technical",
+      "job": {
+        "action": "pass",
+        "stage": "choose",
+        "statistic": "killer passes and take-ons tried per match",
+        "direction": "up"
+      }
+    },
+    {
       "name": "positioning",
       "group": "mental",
       "job": {
@@ -179,6 +249,36 @@
         "stage": "execute",
         "statistic": "mean distance from anchor out of possession",
         "direction": "down"
+      }
+    },
+    {
+      "name": "determination",
+      "group": "mental",
+      "job": {
+        "action": "press",
+        "stage": "choose",
+        "statistic": "presses per match when behind",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "bravery",
+      "group": "mental",
+      "job": {
+        "action": "header",
+        "stage": "execute",
+        "statistic": "headers won in traffic share",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "communication",
+      "group": "mental",
+      "job": {
+        "action": "organise",
+        "stage": "execute",
+        "statistic": "offsides won by his side per match",
+        "direction": "up"
       }
     },
     {
@@ -343,22 +443,22 @@
       }
     },
     {
-      "name": "communication",
-      "group": "goalkeeping",
-      "job": {
-        "action": "organise",
-        "stage": "execute",
-        "statistic": "offsides won by his side per match",
-        "direction": "up"
-      }
-    },
-    {
       "name": "rushing_out",
       "group": "goalkeeping",
       "job": {
         "action": "rush",
         "stage": "choose",
         "statistic": "balls swept outside the box per match",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "eccentricity",
+      "group": "goalkeeping",
+      "job": {
+        "action": "rush",
+        "stage": "choose",
+        "statistic": "rash keeper actions per match",
         "direction": "up"
       }
     },
@@ -370,6 +470,116 @@
         "stage": "spread",
         "statistic": "spread of the player's match rating across matches",
         "direction": "down"
+      }
+    },
+    {
+      "name": "professionalism",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "occasion",
+        "statistic": "concentration lapses",
+        "direction": "down"
+      }
+    },
+    {
+      "name": "temperament",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "occasion",
+        "statistic": "reactions to fouls, cards and provocation",
+        "direction": "down"
+      }
+    },
+    {
+      "name": "pressure_handling",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "occasion",
+        "statistic": "penalties and late close games under pressure",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "sportsmanship",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "occasion",
+        "statistic": "dives and cynical fouls",
+        "direction": "down"
+      }
+    },
+    {
+      "name": "leadership",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "occasion",
+        "statistic": "weight in team mood",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "adaptability",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "occasion",
+        "statistic": "familiarity cost of new conditions",
+        "direction": "down"
+      }
+    },
+    {
+      "name": "versatility",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "occasion",
+        "statistic": "out-of-position familiarity cost",
+        "direction": "down"
+      }
+    },
+    {
+      "name": "ambition",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "occasion",
+        "statistic": "season-goal weight at kick-off",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "loyalty",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "inert",
+        "statistic": "inert in a match",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "money_motivation",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "inert",
+        "statistic": "inert in a match",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "controversy",
+      "group": "personality",
+      "hidden": true,
+      "job": {
+        "stage": "inert",
+        "statistic": "inert in a match",
+        "direction": "up"
       }
     }
   ],
@@ -405,6 +615,10 @@
           {
             "attribute": "vision",
             "weight": 0.2
+          },
+          {
+            "attribute": "flair",
+            "weight": 0.15
           }
         ],
         "source": "design"
@@ -670,6 +884,10 @@
           {
             "attribute": "strength",
             "weight": 0.2
+          },
+          {
+            "attribute": "bravery",
+            "weight": 0.15
           }
         ],
         "source": "design"
@@ -678,17 +896,23 @@
     "penalty": {
       "execute": {
         "main": {
-          "attribute": "finishing",
+          "attribute": "penalties",
           "weight": 1.0
         },
         "supports": [
           {
-            "attribute": "technique",
+            "attribute": "finishing",
             "weight": 0.3
           },
           {
             "attribute": "composure",
             "weight": 0.2
+          }
+        ],
+        "minor": [
+          {
+            "attribute": "technique",
+            "weight": 0.1
           }
         ],
         "source": "design"
@@ -725,6 +949,10 @@
           {
             "attribute": "vision",
             "weight": 0.1
+          },
+          {
+            "attribute": "flair",
+            "weight": 0.15
           }
         ],
         "source": "design"
@@ -746,6 +974,12 @@
           {
             "attribute": "technique",
             "weight": 0.2
+          }
+        ],
+        "minor": [
+          {
+            "attribute": "flair",
+            "weight": 0.05
           }
         ],
         "source": "design"
@@ -782,6 +1016,12 @@
           {
             "attribute": "balance",
             "weight": 0.15
+          }
+        ],
+        "minor": [
+          {
+            "attribute": "flair",
+            "weight": 0.05
           }
         ],
         "source": "design"
@@ -824,6 +1064,12 @@
             "weight": 0.15
           }
         ],
+        "minor": [
+          {
+            "attribute": "bravery",
+            "weight": 0.14
+          }
+        ],
         "source": "design"
       }
     },
@@ -860,6 +1106,10 @@
           {
             "attribute": "stamina",
             "weight": 0.15
+          },
+          {
+            "attribute": "determination",
+            "weight": 0.1
           }
         ],
         "source": "design"
@@ -915,6 +1165,12 @@
           {
             "attribute": "agility",
             "weight": 0.15
+          }
+        ],
+        "minor": [
+          {
+            "attribute": "bravery",
+            "weight": 0.14
           }
         ],
         "source": "design"
@@ -1199,11 +1455,151 @@
           {
             "attribute": "decisions",
             "weight": 0.15
+          },
+          {
+            "attribute": "eccentricity",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "mark": {
+      "execute": {
+        "main": {
+          "attribute": "marking",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "positioning",
+            "weight": 0.3
+          },
+          {
+            "attribute": "concentration",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "off_ball_run": {
+      "execute": {
+        "main": {
+          "attribute": "off_ball_movement",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "anticipation",
+            "weight": 0.3
+          },
+          {
+            "attribute": "decisions",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "corner": {
+      "execute": {
+        "main": {
+          "attribute": "corners",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "crossing",
+            "weight": 0.3
+          },
+          {
+            "attribute": "technique",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "free_kick": {
+      "execute": {
+        "main": {
+          "attribute": "free_kicks",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "crossing",
+            "weight": 0.25
+          },
+          {
+            "attribute": "technique",
+            "weight": 0.2
+          },
+          {
+            "attribute": "finishing",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "long_throw": {
+      "execute": {
+        "main": {
+          "attribute": "long_throws",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "strength",
+            "weight": 0.3
+          },
+          {
+            "attribute": "technique",
+            "weight": 0.1
           }
         ],
         "source": "design"
       }
     }
+  },
+  "consistency_degrees": {
+    "pass": 0.9,
+    "chip": 1.0,
+    "cross": 1.1,
+    "shot": 1.3,
+    "long_shot": 1.3,
+    "header": 1.1,
+    "penalty": 1.2,
+    "dribble": 1.1,
+    "receive": 0.9,
+    "tackle": 1.0,
+    "intercept": 0.9,
+    "press": 0.6,
+    "shape": 0.8,
+    "block": 0.9,
+    "sprint": 0.4,
+    "endure": 0.3,
+    "shield": 0.6,
+    "turn": 0.6,
+    "stay_up": 0.6,
+    "aerial_reach": 0.5,
+    "recover": 0.3,
+    "injury": 0.0,
+    "hold": 1.2,
+    "save": 1.3,
+    "claim": 1.1,
+    "one_on_one": 1.3,
+    "keeper_kick": 1.0,
+    "keeper_throw": 0.9,
+    "organise": 0.7,
+    "rush": 0.8,
+    "mark": 0.9,
+    "off_ball_run": 1.0,
+    "corner": 1.1,
+    "free_kick": 1.2,
+    "long_throw": 0.7
   },
   "gates": {
     "chip": {

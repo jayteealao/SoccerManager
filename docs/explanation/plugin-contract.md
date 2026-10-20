@@ -44,7 +44,7 @@ Every module carries a card: its purpose, what it reads, what it returns, the tu
 
 ## Modifiers
 
-Effects on a player, such as fatigue, are modifiers. Each modifier belongs to a family (body, mind, familiarity, surroundings) and returns a factor for each effective value. Factors multiply within a family. Across families a soft combine makes each further effect in one direction count for less than the one before, so four small effects do not stack into an absurd one. Fatigue is the one modifier with an effect today; pressure, momentum and weather are stand-ins with none.
+Effects on a player, such as fatigue, are modifiers. Each modifier belongs to a family (body, mind, familiarity, surroundings) and returns a factor for each effective value. Factors multiply within a family. Across families a soft combine makes each further effect in one direction count for less than the one before, so four small effects do not stack into an absurd one. Fatigue, sharpness, adaptation, mood (his own and his team's) and familiarity have effects today; weather is a stand-in with none.
 
 ## Stubs
 

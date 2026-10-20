@@ -35,6 +35,16 @@ fn sim(seed: u64, home: impl Fn(&mut TeamFile)) -> Simulation {
     Simulation::new(MatchConfig::new(seed, 90, &content, [&a, &b]).unwrap()).unwrap()
 }
 
+/// As [`sim`], without the person block: no mood, familiarity or personality reaches play, so
+/// a state shows alone.
+fn sim_alone(seed: u64, home: impl Fn(&mut TeamFile)) -> Simulation {
+    let content = common::content();
+    let [a, b] = clubs(seed, home);
+    let mut config = MatchConfig::new(seed, 90, &content, [&a, &b]).unwrap();
+    config.tuning.contract.person = None;
+    Simulation::new(config).unwrap()
+}
+
 fn heights(cm: u8) -> impl Fn(&mut TeamFile) {
     move |f| f.players.iter_mut().for_each(|p| p.height = Some(cm))
 }
@@ -197,14 +207,14 @@ fn short_rest_lowers_the_kick_off_energy_and_raises_the_injury_chance() {
 fn adaptation_lowers_only_the_mental_ratings() {
     let content = common::content();
     let schema = &content.attributes;
-    let adapting = sim(
+    let adapting = sim_alone(
         1,
         condition(Condition {
             adaptation: Some(30),
             ..Condition::default()
         }),
     );
-    let settled = sim(
+    let settled = sim_alone(
         1,
         condition(Condition {
             adaptation: Some(100),

@@ -22,16 +22,24 @@ export function teamOf(sample) {
   };
 }
 
+/// What the conversion of an older team file fills in, whatever its version.
+const FILLED_IN =
+  'its missing values were filled in: new attributes from related ones, personality at the middle of the scale, each weaker foot at 50 percent, only each player’s listed position rated, and no traits of play.';
+
 /// The setup notice for a home team loaded from an older team file, naming the club; null for
 /// a team of the current file version or no team. `/engine.json` marks such a team
-/// `converted`.
+/// `converted`, with the version it was written in as `converted_from`. Only a version 1 file
+/// was on the 1 to 100 scale.
 export function convertedNotice(team) {
   if (!team?.converted) {
     return null;
   }
+  const rescaled = (team.converted_from ?? 1) === 1;
   return {
     club: team.name,
-    text: 'uses an older team file. Its ratings were converted to the 1 to 20 scale as it loaded; ratings that came out below 1.0 are now 1.0.',
+    text: rescaled
+      ? `uses an older team file. As it loaded, its ratings were converted to the 1 to 20 scale (ratings that came out below 1.0 are now 1.0) and ${FILLED_IN}`
+      : `uses an older team file. As it loaded, ${FILLED_IN}`,
   };
 }
 

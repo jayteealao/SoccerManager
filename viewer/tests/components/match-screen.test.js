@@ -364,3 +364,35 @@ test('full time holds FULL TIME, opens the report again, and keeps only the repl
   await tick();
   assert.equal(s.view, 'report', 'REPORT opens the full-time report again');
 });
+
+test('a trait override is one feed row of its own kind, with the warning mark and the sentence', async () => {
+  const { s, socket } = await session(RUNNING);
+  socket.deliver(HELLO);
+  s.act();
+  for (let t = 1; t <= 400; t += 1) {
+    socket.deliver(encodeKeyframe(t, new Array(COMPONENT_COUNT).fill(0)));
+  }
+  socket.deliver(
+    JSON.stringify(
+      eventMessage(300, 'trait-override', {
+        commentary: undefined,
+        'player.id': 'p-0-7',
+        'team.id': 'a',
+        'trait.name': 'holds_up_ball',
+        'trait.cause': 'pressure',
+        'trait.instruction': 'tempo:faster',
+      })
+    )
+  );
+  s.rewind(400);
+  await tick();
+  const rows = document.querySelectorAll('li[data-kind="trait-override"]');
+  assert.equal(rows.length, 1);
+  assert.equal(
+    rows[0].textContent.replace(/\s+/g, ' ').trim(),
+    "0' ! Trait0-7 holds up the ball against 'Higher tempo' — strong trait, under pressure."
+  );
+  assert.equal(rows[0].querySelector('em').textContent, 'Trait');
+  assert.equal(rows[0].querySelector('.mk').getAttribute('aria-hidden'), 'true');
+  assert.ok(rows[0].classList.contains('ovr'));
+});

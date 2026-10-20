@@ -22,7 +22,7 @@ use super::{
     FatigueModule, FoulsModule, InjuriesModule, LooseBall, ManagerModule, MatchView, OffsideModule,
     OptionDraft, OptionDraws, ParrySide, PeriodEnd, PossessionModule, PreMatchModule, Proposal,
     ROSTER, RestartPass, RestartsModule, RuleHookModule, RulesModule, Scored, ShootoutLineup,
-    ShotDraws, ShotModule, SteeringModule, SubEntry, SubRequest, TackleChances, Targets,
+    ShotDraws, ShotKind, ShotModule, SteeringModule, SubEntry, SubRequest, TackleChances, Targets,
 };
 use crate::ai::Setup;
 use crate::ball::Ball;
@@ -402,13 +402,20 @@ impl DecisionModule for StandIn<dyn DecisionModule> {
         c: usize,
         goal: DVec2,
         keeper: usize,
-        spread_scale: f64,
+        kind: ShotKind,
         draws: &ShotDraws,
     ) -> Kick {
-        self.0.shot_kick(view, c, goal, keeper, spread_scale, draws)
+        self.0.shot_kick(view, c, goal, keeper, kind, draws)
     }
-    fn restart_pass(&self, view: &MatchView<'_>, taker: usize, kind: StoppageKind) -> RestartPass {
-        self.0.restart_pass(view, taker, kind)
+    fn restart_pass(
+        &self,
+        view: &MatchView<'_>,
+        taker: usize,
+        kind: StoppageKind,
+        direct: bool,
+        aim: f64,
+    ) -> RestartPass {
+        self.0.restart_pass(view, taker, kind, direct, aim)
     }
 }
 

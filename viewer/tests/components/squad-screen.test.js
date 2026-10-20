@@ -208,3 +208,84 @@ test('a protocol 5 player with no attributes still shows his hidden values in wo
   assert.ok(panel.querySelector('[data-hidden="injury_proneness"]'));
   assert.match(panel.textContent, /Hidden values/);
 });
+
+/// The harness hello as protocol 7: position ratings, feet, and the season part of the views.
+const HELLO7 = {
+  ...HELLO6,
+  'protocol.version': 7,
+  teams: [
+    {
+      ...HELLO6.teams[0],
+      squad: HELLO6.teams[0].squad.map((p, i) => ({
+        ...p,
+        'player.positions': { [p['player.position']]: 160, CM: Math.min(200, 80 + i * 6), ST: 100 },
+        'player.strong_foot': i % 3 ? 'right' : 'left',
+        'player.weaker_foot': 20 + i * 3,
+      })),
+    },
+    HELLO6.teams[1],
+  ],
+};
+
+test('the person columns are added through the menu, and Rated at CM 13+ filters the rows', async () => {
+  const { s } = await openSquad(HELLO7);
+  s.squadViews = {
+    ...s.squadViews,
+    season: {
+      matches: ['m-1'],
+      players: {
+        'p-0-1': { starts: 1, minutes: 90, goals: 0, assists: 0, clean_sheets: 1, red_cards: 0, ratings: [], goal: { kind: 'clean_sheets', target: 12 }, form: 7.4, progress: 120 },
+        'p-0-2': { starts: 1, minutes: 90, goals: 0, assists: 0, clean_sheets: 0, red_cards: 0, ratings: [], goal: { kind: 'starts', target: 30 }, form: 6.0, progress: 80 },
+      },
+    },
+  };
+  await settle();
+  const root = squadRoot();
+  root.querySelector('[data-columns-chip]').click();
+  await settle();
+  for (const id of ['natural', 'rated', 'foot', 'form', 'season']) {
+    const add = root.querySelector(`[data-column-menu] button[data-add="${id}"]`);
+    assert.ok(add, `the menu offers ${id}`);
+    add.click();
+    await settle();
+  }
+  root.querySelector('[data-columns-chip]').click();
+  await settle();
+  const headers = [...root.querySelectorAll('thead th[data-col]')];
+  for (const id of ['natural', 'rated', 'foot', 'form', 'season']) {
+    assert.ok(headers.some((th) => th.dataset.col === id), id);
+  }
+  assert.equal(drawn(root.querySelector('th[data-col="rated"]')), 'ST');
+  assert.equal(drawn(root.querySelector('tr[data-row="0"] td[data-cell="form"]')), '▲ In form');
+  assert.equal(drawn(root.querySelector('tr[data-row="0"] td[data-cell="season"]')), 'Keep 12 clean sheets · 1');
+  assert.match(drawn(root.querySelector('tr[data-row="0"] td[data-cell="foot"]')), /^Left · \d+%$/);
+  assert.equal(root.querySelectorAll('[data-squad-table] th[aria-hidden="true"]').length, 1, 'only contract trails');
+  // Form on the Squad screen is words only: no digit, band class or bar in a form cell, its title or label.
+  for (const cell of root.querySelectorAll('td[data-cell="form"]')) {
+    assert.ok(!/\d/.test(cell.textContent), cell.textContent);
+    assert.equal(cell.querySelector('.v1, .v2, .v3, .v4, .bar, .pc'), null);
+    for (const el of [cell, ...cell.querySelectorAll('*')]) {
+      assert.ok(!/\d/.test(el.getAttribute('aria-label') ?? ''), el.outerHTML);
+      assert.ok(!/\d/.test(el.getAttribute('title') ?? ''), el.outerHTML);
+    }
+  }
+  // Rated at CM, 13 and up.
+  const at = root.querySelector('select[data-rated-at]');
+  at.value = 'CM';
+  at.dispatchEvent(new Event('change', { bubbles: true }));
+  await settle();
+  const min = root.querySelector('select[data-rated-min]');
+  min.value = '13';
+  min.dispatchEvent(new Event('change', { bubbles: true }));
+  await settle();
+  assert.equal(drawn(root.querySelector('th[data-col="rated"]')), 'CM');
+  const shown = [...root.querySelectorAll('[data-squad-table] tbody tr[data-row]')];
+  assert.ok(shown.length > 0 && shown.length < 22, `${shown.length} rows`);
+  for (const tr of shown) {
+    const n = Number(drawn(tr.querySelector('td[data-cell="rated"]')));
+    assert.ok(Number.isInteger(n) && n >= 13, `${tr.dataset.row}: ${n}`);
+  }
+  assert.match(root.querySelector('[data-filter-line]').textContent.replace(/\s+/g, ' '), /Filter · Rated at CM · 13\+/);
+  assert.match(root.querySelector('[data-view-status]').textContent, new RegExp(`Showing ${shown.length} of 22`));
+  assert.deepEqual(stubFaults(root), []);
+});

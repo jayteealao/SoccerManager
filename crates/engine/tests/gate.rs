@@ -621,16 +621,26 @@ fn each_result_change_is_one_regenerate_entry_with_its_band_result() {
         .collect();
     assert_eq!(
         regenerations,
-        [2, 3, 4, 5, 6, 7],
-        "six regenerate entries, entries 2 to 7"
+        [2, 3, 4, 5, 6, 7, 8],
+        "seven regenerate entries, entries 2 to 8"
     );
-    let named: [(usize, &[&str]); 6] = [
+    let named: [(usize, &[&str]); 7] = [
         (2, &["libm", "keyed"]),
         (3, &["restart position check", "Law 8", "goal line"]),
         (4, &["tenths", "version 2", "every tick of play unchanged"]),
         (5, &["stage blend", "exponential curve", "1.0"]),
         (6, &["caps", "sharpness", "every sprint costs stamina"]),
         (7, &["Consistency", "injury proneness", "match rating"]),
+        (
+            8,
+            &[
+                "person",
+                "familiarity",
+                "mood",
+                "traits of play",
+                "weaker foot",
+            ],
+        ),
     ];
     for (index, words) in named {
         let entry = &file.ledger[index];
@@ -718,14 +728,14 @@ fn band_result_holds_every_band(entry: &golden::LedgerEntry, index: usize) {
     }
 }
 
-/// The regeneration kept what the gate measures: gate schema 4 with state inventory 4, and
+/// The regeneration kept what the gate measures: gate schema 5 with state inventory 5, and
 /// the fixture list of the golden-file guard, by its digest at the guard's commit.
 #[test]
 fn the_regeneration_kept_the_gate_schema_and_the_fixture_list() {
     use sha2::{Digest, Sha256};
     let file = committed();
-    assert_eq!(file.gate_schema, 4);
-    assert_eq!(file.inventory_version, 4);
+    assert_eq!(file.gate_schema, 5);
+    assert_eq!(file.inventory_version, 5);
     let list = serde_json::to_string(&file.fixtures).unwrap();
     let hex: String = Sha256::digest(list.as_bytes())
         .iter()

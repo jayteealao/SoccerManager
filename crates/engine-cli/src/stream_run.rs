@@ -8,6 +8,7 @@
 //! the home team, and it names the change on its verdict event by the identifier the page
 //! was given, because the two queues number their changes independently.
 
+use engine::data::traits::TraitStrength;
 use engine::observe::{MatchFigures, round_to};
 use engine::record::TickSink;
 use engine::tactics::planned::PlannedChange;
@@ -18,7 +19,7 @@ use engine::{
 use protocol::{
     CardKind, ChangeKind, ChangeOutcome, ChangeState, ChangeStateNote, Condition, Confidence,
     EventType, HiddenWord, MatchEvent, RatingWire, Ratings, RosterEntry, ServerMessage, SlotRole,
-    SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup,
+    SquadEntry, Stats, SubstitutionRules, TeamRef, TeamSetup, TraitWire,
 };
 use std::cell::RefCell;
 
@@ -421,9 +422,13 @@ pub(crate) fn stats_message(sim: &Simulation) -> Stats {
 }
 
 /// Every wire slot's energy at the current tick, home first, three decimals, with each
-/// slot's overall level now and fresh in tenths ([`Simulation::overall_levels`]).
+/// slot's overall level now and fresh in tenths ([`Simulation::overall_levels`]) and his mood
+/// now as a word key ([`engine::sim::mood::mood_word`]), never a number.
 pub(crate) fn condition_message(sim: &Simulation) -> Condition {
     let (level, base) = sim.overall_levels();
+    let mood = (0..sim.players().len())
+        .map(|i| engine::sim::mood::mood_word(sim.mood(i)).to_string())
+        .collect();
     Condition {
         tick: sim.tick(),
         energy: sim
@@ -435,6 +440,7 @@ pub(crate) fn condition_message(sim: &Simulation) -> Condition {
         windows_used: sim.ledgers().map(|l| l.windows),
         level,
         base,
+        mood,
     }
 }
 
@@ -502,6 +508,34 @@ pub(crate) fn hello_teams(sim: &Simulation, page_lineup: bool) -> [TeamRef; 2] {
                     matches_at_club: player.condition.matches_at_club,
                     level: Some(range[1]),
                     plays_between: Some(range),
+                    positions: engine::data::Position::ALL
+                        .iter()
+                        .zip(player.positions)
+                        .map(|(code, rating)| (code.code().to_string(), rating.tenths()))
+                        .collect(),
+                    strong_foot: Some(player.foot.strong.code().to_string()),
+                    weaker_foot: Some(player.foot.weaker),
+                    traits: player
+                        .traits
+                        .iter()
+                        .map(|(name, strength)| TraitWire {
+                            name: name.clone(),
+                            strength: match strength {
+                                TraitStrength::Moderate => "moderate",
+                                TraitStrength::Strong => "strong",
+                            }
+                            .to_string(),
+                        })
+                        .collect(),
+                    // Personality leaves only as a word and a confidence, never a number.
+                    personality: schema
+                        .attributes
+                        .iter()
+                        .filter(|def| def.is_personality())
+                        .map(|def| (def.name.clone(), hidden_word(config, player, &def.name)))
+                        .collect(),
+                    // The kick-off mood leaves only as a word key, never a number.
+                    mood: Some(engine::sim::mood::mood_word(player.kick_off_mood).to_string()),
                 })
                 .collect()
         } else {
@@ -739,6 +773,7 @@ pub(crate) fn event_type(kind: EngineEventKind) -> EventType {
         EngineEventKind::Substitution => EventType::Substitution,
         EngineEventKind::AiDecision => EventType::AiDecision,
         EngineEventKind::Script => EventType::Script,
+        EngineEventKind::TraitOverride => EventType::TraitOverride,
         EngineEventKind::ChangeApplied | EngineEventKind::ChangeRejected => {
             EventType::TacticsChange
         }
@@ -796,7 +831,7 @@ pub(crate) fn match_event(
         Some(EventDetail::Ai { code }) => Some(code.code().to_string()),
         _ => None,
     };
-    MatchEvent::play(
+    let row = MatchEvent::play(
         owner_id,
         match_id,
         event.tick,
@@ -817,7 +852,15 @@ pub(crate) fn match_event(
         event.shootout_scored,
         event.shootout_scores,
     )
-    .decided_by(event.decided_by.map(|d| d.code().to_string()))
+    .decided_by(event.decided_by.map(|d| d.code().to_string()));
+    match event.detail {
+        Some(EventDetail::Override {
+            trait_kind,
+            cause,
+            instruction,
+        }) => row.trait_override(trait_kind.name(), cause.code(), instruction.code()),
+        _ => row,
+    }
 }
 
 /// One engine event as the rows it becomes: the event with its commentary line, which the
@@ -1112,10 +1155,41 @@ mod tests {
             assert_eq!((entry.sharpness, entry.matches_at_club), (None, None));
             let level = entry.level.expect("a level");
             assert!((10..=200).contains(&level), "{entry:?}");
-            // No condition inputs: today's level is the fresh one.
-            assert_eq!(entry.plays_between, Some([level, level]), "{entry:?}");
+            // No condition inputs: today's best is the fresh level. A starter the lineup puts
+            // away from his listed position may play below it (familiarity).
+            let [low, high] = entry.plays_between.expect("a range");
+            assert!(high == level && low <= level, "{entry:?}");
+            // Protocol 7: the converted player is rated at his listed position only, has a
+            // weaker foot of 50 percent, no traits, and his personality only as words not yet
+            // known.
+            assert_eq!(entry.positions.len(), 10, "{entry:?}");
+            let natural = entry.positions[&entry.position];
+            assert!(entry.positions.values().all(|&t| t <= natural), "{entry:?}");
+            assert!(
+                entry
+                    .positions
+                    .iter()
+                    .all(|(code, &t)| *code == entry.position || t == 10),
+                "{entry:?}"
+            );
+            assert!(matches!(
+                entry.strong_foot.as_deref(),
+                Some("left" | "right")
+            ));
+            assert_eq!(entry.weaker_foot, Some(50));
+            assert!(entry.traits.is_empty());
+            let personality = schema
+                .attributes
+                .iter()
+                .filter(|d| d.is_personality())
+                .count();
+            assert_eq!(entry.personality.len(), personality, "{entry:?}");
+            for word in entry.personality.values() {
+                assert_eq!(word.confidence, Confidence::NotYetKnown, "{entry:?}");
+                assert_eq!(word.word, None, "{entry:?}");
+            }
         }
-        assert_eq!(protocol::PROTOCOL_VERSION, 6);
+        assert_eq!(protocol::PROTOCOL_VERSION, 7);
         let setup = teams[HOME]
             .setup
             .as_ref()
@@ -1156,6 +1230,127 @@ mod tests {
         assert_eq!(subs.windows_exempt, ["half_time"]);
     }
 
+    /// Each home squad entry carries his kick-off mood as a word key: steady with no season
+    /// inputs, confident or rattled when his form and goal progress are planted at the ends.
+    #[test]
+    fn a_page_lineup_hello_carries_the_kick_off_mood_as_a_word() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let mut home = a.clone();
+        for (p, (form, progress)) in [(100, 200), (10, 0)].into_iter().enumerate() {
+            let mut c = home.players[p].condition.unwrap_or_default();
+            c.recent_rating = Some(form);
+            c.goal_progress = Some(progress);
+            home.players[p].condition = Some(c);
+        }
+        let config = MatchConfig::new(42, 2, &loaded.content, [&home, b]).unwrap();
+        let sim = Simulation::new(config).unwrap();
+        let squad = &hello_teams(&sim, true)[HOME].squad;
+        assert_eq!(
+            squad[0].mood.as_deref(),
+            Some("confident"),
+            "{:?}",
+            squad[0]
+        );
+        assert_eq!(squad[1].mood.as_deref(), Some("rattled"), "{:?}", squad[1]);
+        assert!(
+            squad[2..]
+                .iter()
+                .all(|e| e.mood.as_deref() == Some("steady")),
+            "no season inputs: steady"
+        );
+        let json = serde_json::to_string(squad).unwrap();
+        assert!(!json.contains("\"player.mood\":-") && !json.contains("\"player.mood\":0"));
+    }
+
+    /// The rank of a mood word key, from rattled (0) to confident (4).
+    fn mood_rank(word: &str) -> usize {
+        ["rattled", "low", "steady", "lifted", "confident"]
+            .iter()
+            .position(|w| *w == word)
+            .unwrap_or_else(|| panic!("not a mood word: {word}"))
+    }
+
+    /// The condition message carries each wire slot's mood as a word key: at kick-off the
+    /// home starters' words are the hello's kick-off words, and a scorer's word right after
+    /// his goal is at or above his word before it.
+    #[test]
+    fn the_condition_message_carries_each_slots_mood_as_a_word() {
+        let loaded = loaded();
+        let [a, b] = &loaded.teams;
+        let mut home = a.clone();
+        for (p, (form, progress)) in [(100, 200), (10, 0)].into_iter().enumerate() {
+            let mut c = home.players[p].condition.unwrap_or_default();
+            c.recent_rating = Some(form);
+            c.goal_progress = Some(progress);
+            home.players[p].condition = Some(c);
+        }
+        let config = MatchConfig::new(42, 90, &loaded.content, [&home, b]).unwrap();
+        let sim = Simulation::new(config).unwrap();
+        let squad = &hello_teams(&sim, true)[HOME].squad;
+        let first = condition_message(&sim);
+        assert_eq!(first.mood.len(), 22);
+        for (i, word) in first.mood.iter().enumerate() {
+            let p = &sim.players()[i];
+            if p.team == HOME {
+                assert_eq!(
+                    Some(word.as_str()),
+                    squad[p.squad].mood.as_deref(),
+                    "slot {i}"
+                );
+            }
+        }
+        assert!(
+            first.mood.iter().any(|w| w == "confident"),
+            "{:?}",
+            first.mood
+        );
+        let json = serde_json::to_string(&ServerMessage::Condition(first)).unwrap();
+        assert!(!json.contains("\"mood\":[-") && !json.contains("\"mood\":[0"));
+
+        // A scorer's word right after his goal, over the first seeds with a goal. The words
+        // each tick come from the engine's mood, the message's words only at a goal: a
+        // condition message every tick of a debug match would take minutes.
+        let words = |sim: &Simulation| -> Vec<&'static str> {
+            (0..sim.players().len())
+                .map(|i| engine::sim::mood::mood_word(sim.mood(i)))
+                .collect()
+        };
+        let mut scored = 0;
+        for seed in 1..=20u64 {
+            let config = MatchConfig::new(seed, 90, &loaded.content, [a, b]).unwrap();
+            let mut sim = Simulation::new(config).unwrap();
+            let mut before = words(&sim);
+            while !sim.is_over() && scored < 3 {
+                sim.step();
+                let goals: Vec<usize> = sim
+                    .events()
+                    .iter()
+                    .filter(|e| e.kind == engine::EngineEventKind::Goal)
+                    .filter_map(|e| e.player.filter(|&i| Some(sim.players()[i].team) == e.team))
+                    .collect();
+                sim.take_events();
+                if !goals.is_empty() {
+                    let now = condition_message(&sim).mood;
+                    for i in goals {
+                        assert!(
+                            mood_rank(&now[i]) >= mood_rank(before[i]),
+                            "seed {seed}, scorer {i}: {} after his goal, {} before",
+                            now[i],
+                            before[i]
+                        );
+                        scored += 1;
+                    }
+                }
+                before = words(&sim);
+            }
+            if scored >= 3 {
+                break;
+            }
+        }
+        assert!(scored >= 3, "three goals in the first 20 seeds: {scored}");
+    }
+
     /// The condition message carries each slot's overall level now and fresh; a player who
     /// tires late in a seeded match plays below his fresh level, and the levels read the match
     /// without moving it.
@@ -1170,10 +1365,21 @@ mod tests {
         let first = condition_message(&sim);
         assert_eq!(first.level.len(), 22);
         assert_eq!(first.base.len(), 22);
-        assert_eq!(
-            first.level, first.base,
-            "fresh at kick-off with no condition inputs"
-        );
+        // Fresh at kick-off with no condition inputs: each player at his fresh level, below it
+        // only away from his natural position (familiarity).
+        for (i, (level, base)) in first.level.iter().zip(&first.base).enumerate() {
+            let positions = sim.position_ratings(i);
+            let natural = positions.iter().max().copied();
+            let k = engine::data::team::Position::ALL
+                .iter()
+                .position(|&q| q == sim.played_position(i));
+            let at_home = k.map(|k| positions[k]) == natural;
+            if at_home {
+                assert_eq!(level, base, "player {i}");
+            } else {
+                assert!(level < base, "player {i}: {level} against {base}");
+            }
+        }
         let minute_75 = (75.0 * 60.0 / sim.tuning().dt).round() as u32;
         for _ in 0..minute_75 {
             sim.step();
@@ -1880,6 +2086,8 @@ mod tests {
             .map(str::to_string)
             .collect();
         hidden.push("injury_resistance".into());
+        // Mood is never a number either: the hello's kick-off word and the condition words.
+        hidden.push("mood".into());
         assert!(hidden.iter().any(|h| h == "consistency"), "{hidden:?}");
         let mut sim = Simulation::new(config).unwrap();
         let hello = serde_json::to_value(hello_teams(&sim, true)).unwrap();

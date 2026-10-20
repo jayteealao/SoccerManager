@@ -19,7 +19,7 @@ pub const SQUAD_MAX: usize = crate::data::team::MAX_SQUAD;
 /// Player slots per action in the dense key index: two squads, then the match key.
 pub(crate) const SLOTS_PER_ACTION: usize = 2 * SQUAD_MAX + 1;
 
-/// Every possible key: 40 actions times 81 player slots.
+/// Every possible key: 41 actions times 81 player slots.
 pub const KEY_COUNT: usize = Action::ALL.len() * SLOTS_PER_ACTION;
 
 /// The part of the engine a draw belongs to; the number is its stream-id code.
@@ -112,11 +112,14 @@ pub enum Action {
     FormMatch,
     /// The period part of a player's form offset, drawn again every period of the match.
     FormPeriod,
+    /// Whether a strong trait of play overrides an instruction at a moment that meets the
+    /// override's conditions.
+    TraitOverride,
 }
 
 impl Action {
     /// Every action in table order.
-    pub const ALL: [Action; 40] = [
+    pub const ALL: [Action; 41] = [
         Action::ShotScore,
         Action::PassScore,
         Action::DribbleScore,
@@ -157,6 +160,7 @@ impl Action {
         Action::Header,
         Action::FormMatch,
         Action::FormPeriod,
+        Action::TraitOverride,
     ];
 
     /// The action's table row.
@@ -200,7 +204,7 @@ use PlayerKind::{Actor, Match};
 use Subsystem::{Ball, Decision, Fatigue, Kick, Laws, Shootout};
 
 /// The stream-id table, one row per draw call in match play, in [`Action`] order.
-pub const TABLE: [Row; 40] = [
+pub const TABLE: [Row; 41] = [
     row(
         Action::ShotScore,
         Decision,
@@ -374,6 +378,14 @@ pub const TABLE: [Row; 40] = [
         Actor,
         Unscripted,
     ),
+    row(
+        Action::TraitOverride,
+        Decision,
+        7,
+        "trait_override",
+        Actor,
+        Unscripted,
+    ),
 ];
 
 /// Who a key names: `team << 8 | squad index`, or [`PlayerKey::MATCH`].
@@ -521,7 +533,7 @@ const ACTION_SHIFT: u32 = 32;
 /// keeps the scheme id and updates its digest.
 pub const SCHEME_DIGESTS: [(u8, &str); 1] = [(
     1,
-    "c53b3a5d71688a6063c390de2b095097efb7faedf02fcbae9a808d699765e3fa",
+    "b5a3ec9ef41d0ed6087ed021989d710ce4aa1bea55e851158c3dd8120b1acc84",
 )];
 
 /// The SHA-256, as lowercase hex, of what fixes `scheme`: the scheme id, every row (the
@@ -616,7 +628,7 @@ mod tests {
         let count = |c: Class| TABLE.iter().filter(|r| r.class == c).count();
         assert_eq!(count(Class::Referee), 15);
         assert_eq!(count(Class::Injury), 2);
-        assert_eq!(count(Class::Unscripted), 23);
+        assert_eq!(count(Class::Unscripted), 24);
         let mut codes: Vec<(u8, u8)> = TABLE.iter().map(|r| (r.subsystem as u8, r.code)).collect();
         codes.sort_unstable();
         codes.dedup();

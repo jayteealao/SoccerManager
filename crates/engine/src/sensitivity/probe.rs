@@ -79,6 +79,56 @@ pub struct SideCounts {
     pub high_claims: f64,
     pub crosses_claimed: f64,
     pub sweeps: f64,
+    /// Samples of the distance between a covering defender of the side and the carrier he
+    /// tracks, and their sum in metres.
+    pub cover_n: f64,
+    pub cover_m: f64,
+    /// Passes to an attacker of the side who stood onside within [`TIMED_RUN_M`] of the
+    /// second-last defender at the kick.
+    pub timed_runs: f64,
+    /// Corners the side took, and those a team-mate reached first.
+    pub corners: f64,
+    pub corners_reached: f64,
+    /// Direct free kicks the side took, and those on target or reaching a team-mate first.
+    pub free_kicks: f64,
+    pub free_kicks_success: f64,
+    /// Penalties the side took in play, and those it scored.
+    pub penalties: f64,
+    pub penalties_scored: f64,
+    /// Throw-ins the side took, and the metres from the thrower to where each was aimed.
+    pub throws_in: f64,
+    pub throw_m: f64,
+    /// Open-play passes by the side's outfield players that gain at least
+    /// [`FLAIR_PASS_M`] toward the opponents' goal.
+    pub flair_passes: f64,
+    /// Chases the side's keeper started from beyond the average keeper's chase distance.
+    pub rash_chases: f64,
+    /// Presses the side's players started while it trailed, and the ticks it trailed while
+    /// the other side had the ball.
+    pub presses_behind: f64,
+    pub behind_ticks: f64,
+    /// Headers the side's outfield players contested with an opponent close, and those won.
+    pub headers_traffic: f64,
+    pub headers_traffic_won: f64,
+}
+
+/// The distance in metres short of the second-last defender within which an onside attacker
+/// receiving a pass has timed his run.
+pub const TIMED_RUN_M: f64 = 2.0;
+
+/// The metres toward goal a pass must gain to count as a flair attempt.
+pub const FLAIR_PASS_M: f64 = 15.0;
+
+/// The distance in metres from the ball within which an opponent makes a header one in
+/// traffic.
+pub const TRAFFIC_M: f64 = 2.0;
+
+/// A set piece whose outcome the probe waits on.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum SetPiece {
+    Corner,
+    FreeKick,
+    Penalty,
 }
 
 /// An open-play pass the carrier chose this tick, until its kick.
@@ -130,9 +180,29 @@ pub struct JobProbe {
     shot: Option<Shot>,
     /// The roster bit of the carrier whose last decision was a take-on.
     taking_on: u32,
+    /// The set piece taken, by which side, until its outcome.
+    set_piece: Option<(SetPiece, usize)>,
+    /// Whether each side's keeper chased on the last decision.
+    chasing: [bool; 2],
+    /// The roster bits of the pressers on the last decision.
+    pressing: u32,
+    /// By roster index: the trait-override moments each player met (each a draw on his
+    /// `trait_override` key), and the overrides he took.
+    pub trait_moments: [u32; 22],
+    pub trait_overrides: [u32; 22],
 }
 
 impl JobProbe {
+    /// Player `i` met a trait-override moment; `won` when he overrode.
+    pub(crate) fn trait_moment(&mut self, i: usize, won: bool) {
+        if let Some(m) = self.trait_moments.get_mut(i) {
+            *m += 1;
+        }
+        if won && let Some(o) = self.trait_overrides.get_mut(i) {
+            *o += 1;
+        }
+    }
+
     /// The carrier `c` of `team` chose a dribble (`dribble`) with an opponent close
     /// (`pressed`): a new take-on unless his last decision was one.
     pub(crate) fn decided(&mut self, c: usize, team: usize, dribble: bool, pressed: bool) {
@@ -236,8 +306,102 @@ impl JobProbe {
         self.kicked_other();
     }
 
+    /// `team` took a restart of `kind` (`direct` for a direct free kick): a corner, a direct
+    /// free kick and a penalty wait on their outcome.
+    pub(crate) fn restart(
+        &mut self,
+        team: usize,
+        kind: crate::data::rules::StoppageKind,
+        direct: bool,
+    ) {
+        use crate::data::rules::StoppageKind as K;
+        let s = &mut self.sides[team];
+        self.set_piece = match kind {
+            K::Corner => {
+                s.corners += 1.0;
+                Some((SetPiece::Corner, team))
+            }
+            K::FreeKick if direct => {
+                s.free_kicks += 1.0;
+                Some((SetPiece::FreeKick, team))
+            }
+            K::Penalty => {
+                s.penalties += 1.0;
+                Some((SetPiece::Penalty, team))
+            }
+            _ => None,
+        };
+    }
+
+    /// `team` threw the ball in toward a point `distance` metres from the thrower.
+    pub(crate) fn throw_in(&mut self, team: usize, distance: f64) {
+        let s = &mut self.sides[team];
+        s.throws_in += 1.0;
+        s.throw_m += distance;
+    }
+
+    /// A player of `team` reached the ball first after the set piece: a corner or a direct
+    /// free kick reached a team-mate when it is his side's.
+    fn reached(&mut self, team: usize) {
+        if let Some((kind, by)) = self.set_piece.take()
+            && by == team
+        {
+            match kind {
+                SetPiece::Corner => self.sides[team].corners_reached += 1.0,
+                SetPiece::FreeKick => self.sides[team].free_kicks_success += 1.0,
+                SetPiece::Penalty => {}
+            }
+        }
+    }
+
+    /// A covering defender of `team` stood `distance` metres from the carrier he tracks.
+    pub(crate) fn cover(&mut self, team: usize, distance: f64) {
+        let s = &mut self.sides[team];
+        s.cover_n += 1.0;
+        s.cover_m += distance;
+    }
+
+    /// One decision while the ball is loose: `chasing` says, per side, whether its keeper
+    /// chases from beyond the average keeper's distance (`Some(true)`), from within it
+    /// (`Some(false)`), or not at all. A rash chase counts once, when it starts.
+    pub(crate) fn keepers(&mut self, chasing: [Option<bool>; 2]) {
+        for (team, c) in chasing.into_iter().enumerate() {
+            if c == Some(true) && !self.chasing[team] {
+                self.sides[team].rash_chases += 1.0;
+            }
+            self.chasing[team] = c.is_some();
+        }
+    }
+
+    /// One decision while a carrier of the other side has the ball: the roster bits of
+    /// `team`'s pressers, and whether `team` trails. A press counts when it starts while the
+    /// side trails.
+    pub(crate) fn pressers(&mut self, team: usize, bits: u32, behind: bool) {
+        self.chasing = [false; 2];
+        if behind {
+            let s = &mut self.sides[team];
+            s.behind_ticks += 1.0;
+            s.presses_behind += f64::from((bits & !self.pressing).count_ones());
+        }
+        self.pressing = bits;
+    }
+
+    /// An outfield player of `team` contested a header with an opponent close; `won` when he
+    /// won it.
+    pub(crate) fn header_in_traffic(&mut self, team: usize, won: bool) {
+        let s = &mut self.sides[team];
+        s.headers_traffic += 1.0;
+        if won {
+            s.headers_traffic_won += 1.0;
+        }
+    }
+
     /// The open-play shot just kicked heads on target.
     pub(crate) fn on_target(&mut self) {
+        if let Some((SetPiece::FreeKick, team)) = self.set_piece {
+            self.set_piece = None;
+            self.sides[team].free_kicks_success += 1.0;
+        }
         let Some(shot) = self.shot.as_mut() else {
             return;
         };
@@ -274,8 +438,13 @@ impl JobProbe {
         }
     }
 
-    /// `team` scored while its shot was in flight.
+    /// `team` scored while its shot was in flight, or from the penalty it took.
     pub(crate) fn scored(&mut self, team: usize) {
+        if let Some((SetPiece::Penalty, by)) = self.set_piece.take()
+            && by == team
+        {
+            self.sides[team].penalties_scored += 1.0;
+        }
         if let Some(shot) = self.shot.take()
             && shot.team == team
             && shot.on_target
@@ -340,6 +509,11 @@ impl JobProbe {
         in_own_box: bool,
         close: bool,
     ) {
+        if !keeper {
+            self.reached(team);
+        } else {
+            self.set_piece = None;
+        }
         let own_pass = self.flight.is_some_and(|f| f.team == team);
         let their_cross = self
             .flight
@@ -367,6 +541,7 @@ impl JobProbe {
     /// completed when it was his side's, and lost otherwise.
     pub(crate) fn gained(&mut self, team: usize, at: DVec2, tick: u32) {
         self.shot = None;
+        self.reached(team);
         let Some(f) = self.flight.take() else {
             return;
         };
@@ -455,6 +630,108 @@ impl crate::sim::Simulation {
             p.decided(c, team, dribble, pressed);
             if let Some((j, kind, keeper)) = pass {
                 p.planned_pass(c, j, kind, pressed, keeper);
+            }
+        }
+    }
+
+    /// Count site: carrier `c` of `team` kicked an open-play pass. A pass to a team-mate who
+    /// stands onside within [`TIMED_RUN_M`] of the second-last defender is a timed run; a
+    /// pass gaining [`FLAIR_PASS_M`] toward goal is a flair attempt.
+    pub(crate) fn probe_pass(&mut self, c: usize, team: usize) {
+        let (from, attack_x) = (self.ball.xy(), self.teams[team].attack_x);
+        let mate = self
+            .probe
+            .as_deref()
+            .and_then(|p| p.planned)
+            .filter(|p| p.carrier == c && !p.keeper)
+            .map(|p| p.mate);
+        let (timed, flair) = mate.map_or((false, false), |j| {
+            let at = self.players[j].pos;
+            let line = crate::rules::offside::second_last_depth(team, &self.players, attack_x);
+            let depth = at.x * attack_x;
+            let timed = line.is_finite() && depth <= line && depth >= line - TIMED_RUN_M;
+            (timed, (at.x - from.x) * attack_x >= FLAIR_PASS_M)
+        });
+        if let Some(p) = self.probe.as_deref_mut() {
+            p.kicked_pass(c, team, from, attack_x);
+            let s = &mut p.sides[team];
+            if timed {
+                s.timed_runs += 1.0;
+            }
+            if flair {
+                s.flair_passes += 1.0;
+            }
+        }
+    }
+
+    /// Count site: a restart is taken.
+    pub(crate) fn probe_restart(&mut self, dead: &crate::rules::DeadBall) {
+        if let Some(p) = self.probe.as_deref_mut() {
+            p.restart(dead.team, dead.kind, dead.direct);
+        }
+    }
+
+    /// Count site: the decision pass set the targets and wrote `trace`.
+    pub(crate) fn probe_targets(&mut self, trace: crate::modules::TargetsTrace) {
+        use crate::modules::{CoverTrace, TargetsTrace};
+        match trace {
+            TargetsTrace::Carrier {
+                def,
+                count,
+                pressers,
+                cover,
+                ..
+            } => {
+                let Some(c) = self.carrier else {
+                    return;
+                };
+                let goals = self.summary.goals;
+                let behind = goals[def] < goals[1 - def];
+                let bits = pressers[..count]
+                    .iter()
+                    .filter(|&&(_, i)| i != usize::MAX)
+                    .fold(0u32, |b, &(_, i)| b | (1 << i));
+                let sample = self.tick.is_multiple_of(10);
+                let covered = match cover {
+                    CoverTrace::Covered {
+                        attacker, defender, ..
+                    } if attacker == c && sample => {
+                        Some((self.players[defender].pos - self.players[c].pos).length())
+                    }
+                    _ => None,
+                };
+                if let Some(p) = self.probe.as_deref_mut() {
+                    p.pressers(def, bits, behind);
+                    if let Some(d) = covered {
+                        p.cover(def, d);
+                    }
+                }
+            }
+            TargetsTrace::Loose { keepers, .. } => {
+                let ball = self.ball.xy();
+                let chasing = keepers.map(|k| {
+                    k.map(|gk| crate::decision::rash_chase((self.players[gk].pos - ball).length()))
+                });
+                if let Some(p) = self.probe.as_deref_mut() {
+                    p.keepers(chasing);
+                }
+            }
+        }
+    }
+
+    /// Count site: player `i` of `team` contested a header, `won` or not; it counts as one in
+    /// traffic when an opponent outfield player stands within [`TRAFFIC_M`] of the ball.
+    pub(crate) fn probe_header(&mut self, i: usize, won: bool) {
+        let team = self.players[i].team;
+        let ball = self.ball.xy();
+        let keeper = self.keeper(1 - team);
+        let traffic = self.players.iter().enumerate().any(|(j, q)| {
+            q.team != team && j != keeper && q.active() && (q.pos - ball).length() <= TRAFFIC_M
+        });
+        if let Some(p) = self.probe.as_deref_mut() {
+            p.header(team, won);
+            if traffic {
+                p.header_in_traffic(team, won);
             }
         }
     }
@@ -592,6 +869,51 @@ mod tests {
             (1.0, 1.0, 1.0, 0.0)
         );
         assert_eq!((k.saves, k.saves_held), (1.0, 1.0));
+    }
+
+    #[test]
+    fn a_corner_counts_when_a_team_mate_reaches_it_and_a_penalty_when_it_is_scored() {
+        use crate::data::rules::StoppageKind as K;
+        let mut p = JobProbe::default();
+        p.restart(0, K::Corner, false);
+        p.loose(0, false, true, false, true);
+        p.restart(0, K::Corner, false);
+        p.loose(1, true, true, true, false);
+        assert_eq!((p.sides[0].corners, p.sides[0].corners_reached), (2.0, 1.0));
+        p.restart(1, K::FreeKick, true);
+        p.kicked_shot(1, false, false, 0.05);
+        p.on_target();
+        assert_eq!(
+            (p.sides[1].free_kicks, p.sides[1].free_kicks_success),
+            (1.0, 1.0)
+        );
+        p.restart(0, K::Penalty, true);
+        p.kicked_penalty();
+        p.scored(0);
+        assert_eq!(
+            (p.sides[0].penalties, p.sides[0].penalties_scored),
+            (1.0, 1.0)
+        );
+        p.restart(0, K::FreeKick, false);
+        assert_eq!(
+            p.sides[0].free_kicks, 0.0,
+            "an indirect free kick is not counted"
+        );
+    }
+
+    #[test]
+    fn a_rash_chase_and_a_press_while_behind_count_once_as_they_start() {
+        let mut p = JobProbe::default();
+        p.keepers([Some(true), None]);
+        p.keepers([Some(true), Some(false)]);
+        assert_eq!((p.sides[0].rash_chases, p.sides[1].rash_chases), (1.0, 0.0));
+        p.pressers(1, 0b11, true);
+        p.pressers(1, 0b110, true);
+        p.pressers(1, 0b110, false);
+        assert_eq!(
+            (p.sides[1].presses_behind, p.sides[1].behind_ticks),
+            (3.0, 2.0)
+        );
     }
 
     #[test]

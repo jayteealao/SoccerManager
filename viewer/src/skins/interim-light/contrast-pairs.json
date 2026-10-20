@@ -1054,5 +1054,125 @@
     "bg": "--picked-ground",
     "kind": "text",
     "where": "Match setup: the club name under the pointer on the picked row"
+  },
+  {
+    "fg": "--position-chip-ink",
+    "bg": "--position-chip",
+    "kind": "text",
+    "where": "Player panel: position chip codes"
+  },
+  {
+    "fg": "--good",
+    "bg": "--position-chip",
+    "kind": "text",
+    "where": "Player panel: a position chip rated 16 or more"
+  },
+  {
+    "fg": "--mid",
+    "bg": "--position-chip",
+    "kind": "text",
+    "where": "Player panel: a position chip rated 13 to 15"
+  },
+  {
+    "fg": "--warn",
+    "bg": "--position-chip",
+    "kind": "text",
+    "where": "Player panel: a position chip rated 9 to 12"
+  },
+  {
+    "fg": "--bad",
+    "bg": "--position-chip",
+    "kind": "text",
+    "where": "Player panel: a position chip rated 8 or less"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--position-chip",
+    "kind": "text",
+    "where": "Player panel: a position chip he is not rated at"
+  },
+  {
+    "fg": "--good",
+    "bg": "--ground-2",
+    "kind": "boundary",
+    "where": "Player panel: a position chip outline on the pitch"
+  },
+  {
+    "fg": "--mid",
+    "bg": "--ground-2",
+    "kind": "boundary",
+    "where": "Player panel: a position chip outline on the pitch"
+  },
+  {
+    "fg": "--warn",
+    "bg": "--ground-2",
+    "kind": "boundary",
+    "where": "Player panel: a position chip outline on the pitch"
+  },
+  {
+    "fg": "--bad",
+    "bg": "--ground-2",
+    "kind": "boundary",
+    "where": "Player panel: a position chip outline on the pitch"
+  },
+  {
+    "fg": "--cyan",
+    "bg": "--well",
+    "kind": "text",
+    "where": "Player panel: the attribute hover title"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--well",
+    "kind": "text",
+    "where": "Player panel: the attribute hover main role"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--well",
+    "kind": "text",
+    "where": "Player panel: the attribute hover actions"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--well",
+    "kind": "text",
+    "where": "Player panel: the attribute hover support role and footnote"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--toggle-on-ground",
+    "kind": "text",
+    "where": "Player panel: the assistant manager view"
+  },
+  {
+    "fg": "--ink",
+    "bg": "--toggle-on-ground",
+    "kind": "text",
+    "where": "Player panel: the assistant manager label"
+  },
+  {
+    "fg": "--ink-2",
+    "bg": "--page",
+    "kind": "text",
+    "where": "Player panel: mood, season rows and personality words"
+  },
+  {
+    "fg": "--ink-3",
+    "bg": "--page",
+    "kind": "text",
+    "where": "Player panel: not yet known and notes"
+  },
+  {
+    "fg": "--good",
+    "bg": "--page",
+    "kind": "text",
+    "where": "Player panel: a rising mood or form mark"
+  },
+  {
+    "fg": "--warn",
+    "bg": "--page",
+    "kind": "text",
+    "where": "Player panel: a falling mood or form mark"
   }
 ]

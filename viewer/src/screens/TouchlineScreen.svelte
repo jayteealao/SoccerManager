@@ -133,7 +133,7 @@
       </div>
 
       <div class="col mid">
-        <PlayerState rows={dugout.playerState} clock={session.clockText} />
+        <PlayerState rows={dugout.playerState} clock={session.clockText} outOfPosition={dugout.outOfPosition} />
         <SectionLabel label="What each change did" note="since your earlier changes" rule later />
         <!-- STUB: the effect of each change needs a model the engine does not have. -->
         <StubSection note="what each change did">
