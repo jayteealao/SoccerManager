@@ -1,0 +1,1113 @@
+{
+  "width": {
+    "default": "normal",
+    "levels": [
+      {
+        "name": "very_narrow",
+        "value": 0.75,
+        "wide_target": 0.03125
+      },
+      {
+        "name": "narrow",
+        "value": 0.88,
+        "wide_target": -0.01171875
+      },
+      {
+        "name": "normal",
+        "value": 1.0
+      },
+      {
+        "name": "wide",
+        "value": 1.12,
+        "wide_target": 0.01171875
+      },
+      {
+        "name": "very_wide",
+        "value": 1.25,
+        "wide_target": 0.05859375
+      }
+    ]
+  },
+  "passing_directness": {
+    "default": "mixed",
+    "levels": [
+      {
+        "name": "very_short",
+        "value": -0.171875
+      },
+      {
+        "name": "short",
+        "value": -0.0625
+      },
+      {
+        "name": "mixed",
+        "value": 0.0
+      },
+      {
+        "name": "direct",
+        "value": 0.125
+      },
+      {
+        "name": "very_direct",
+        "value": 0.21875
+      }
+    ]
+  },
+  "primitives": [
+    {
+      "name": "width",
+      "kind": "graded",
+      "levels": "instructions.width",
+      "default": "normal",
+      "inputs": [
+        {
+          "input": "wide_target",
+          "hook": "shape.width"
+        },
+        {
+          "input": "width",
+          "hook": "shape.width"
+        }
+      ],
+      "signature": [
+        {
+          "stat": "wide_pass_share",
+          "direction": "up"
+        }
+      ],
+      "data": {
+        "source": "wyscout_2017_18",
+        "competitions": [
+          "England",
+          "France",
+          "Italy",
+          "Spain"
+        ],
+        "row": "width"
+      },
+      "fits": [
+        {
+          "level": "very_narrow",
+          "values": {
+            "wide_target": 0.03125
+          },
+          "target": 0.864234,
+          "achieved": 0.872793,
+          "noise": 0.017487,
+          "matches": 1000,
+          "seed": 9
+        },
+        {
+          "level": "narrow",
+          "values": {
+            "wide_target": -0.01171875
+          },
+          "target": 0.961237,
+          "achieved": 0.969771,
+          "noise": 0.01804,
+          "matches": 1000,
+          "seed": 9
+        },
+        {
+          "level": "wide",
+          "values": {
+            "wide_target": 0.01171875
+          },
+          "target": 1.051005,
+          "achieved": 1.033123,
+          "noise": 0.018446,
+          "matches": 1000,
+          "seed": 9
+        },
+        {
+          "level": "very_wide",
+          "values": {
+            "wide_target": 0.05859375
+          },
+          "target": 1.093604,
+          "achieved": 1.109546,
+          "noise": 0.020452,
+          "matches": 1000,
+          "seed": 9
+        }
+      ]
+    },
+    {
+      "name": "passing_directness",
+      "kind": "graded",
+      "levels": "instructions.passing_directness",
+      "default": "mixed",
+      "inputs": [
+        {
+          "input": "directness",
+          "hook": "pass.directness"
+        }
+      ],
+      "signature": [
+        {
+          "stat": "forward_pass_share",
+          "direction": "up"
+        },
+        {
+          "stat": "long_ball_share",
+          "direction": "up"
+        }
+      ],
+      "data": {
+        "source": "wyscout_2017_18",
+        "competitions": [
+          "England",
+          "France",
+          "Italy",
+          "Spain"
+        ],
+        "row": "passing_directness"
+      },
+      "fits": [
+        {
+          "level": "very_short",
+          "values": {
+            "directness": -0.171875
+          },
+          "target": 0.934481,
+          "achieved": 0.934893,
+          "noise": 0.011896,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "short",
+          "values": {
+            "directness": -0.0625
+          },
+          "target": 0.972315,
+          "achieved": 0.967047,
+          "noise": 0.012007,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "direct",
+          "values": {
+            "directness": 0.125
+          },
+          "target": 1.019934,
+          "achieved": 1.016024,
+          "noise": 0.012418,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "very_direct",
+          "values": {
+            "directness": 0.21875
+          },
+          "target": 1.048983,
+          "achieved": 1.050827,
+          "noise": 0.013945,
+          "matches": 200,
+          "seed": 9
+        }
+      ]
+    },
+    {
+      "name": "build_up",
+      "kind": "graded",
+      "levels": "own",
+      "steps": [
+        {
+          "name": "play_out",
+          "values": {
+            "build_up": -0.078125
+          }
+        },
+        {
+          "name": "build_short",
+          "values": {
+            "build_up": -0.03125
+          }
+        },
+        {
+          "name": "mixed_build",
+          "values": {
+            "build_up": 0.0
+          }
+        },
+        {
+          "name": "build_long",
+          "values": {
+            "build_up": 0.03125
+          }
+        },
+        {
+          "name": "go_long",
+          "values": {
+            "build_up": 0.0703125
+          }
+        }
+      ],
+      "default": "mixed_build",
+      "inputs": [
+        {
+          "input": "build_up",
+          "hook": "pass.build_up"
+        }
+      ],
+      "signature": [
+        {
+          "stat": "own_third_long_share",
+          "direction": "up"
+        },
+        {
+          "stat": "goal_kick_m",
+          "direction": "up"
+        },
+        {
+          "stat": "keeper_long_share",
+          "direction": "up"
+        }
+      ],
+      "data": {
+        "source": "wyscout_2017_18",
+        "competitions": [
+          "England",
+          "France",
+          "Italy",
+          "Spain"
+        ],
+        "row": "build_up"
+      },
+      "fits": [
+        {
+          "level": "play_out",
+          "values": {
+            "build_up": -0.078125
+          },
+          "target": 0.750519,
+          "achieved": 0.76076,
+          "noise": 0.028598,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "build_short",
+          "values": {
+            "build_up": -0.03125
+          },
+          "target": 0.877767,
+          "achieved": 0.893201,
+          "noise": 0.025697,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "build_long",
+          "values": {
+            "build_up": 0.03125
+          },
+          "target": 1.140805,
+          "achieved": 1.122133,
+          "noise": 0.030014,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "go_long",
+          "values": {
+            "build_up": 0.0703125
+          },
+          "target": 1.309614,
+          "achieved": 1.298673,
+          "noise": 0.037941,
+          "matches": 200,
+          "seed": 9
+        }
+      ]
+    },
+    {
+      "name": "attacking_channel",
+      "kind": "choice",
+      "choices": [
+        {
+          "name": "left",
+          "values": {
+            "channel_left": 0.3,
+            "channel_centre": 0.0,
+            "channel_right": 0.0
+          },
+          "stat": "entries_left_share"
+        },
+        {
+          "name": "right",
+          "values": {
+            "channel_left": 0.0,
+            "channel_centre": 0.0,
+            "channel_right": 0.3
+          },
+          "stat": "entries_right_share"
+        },
+        {
+          "name": "both_wings",
+          "values": {
+            "channel_left": 0.3,
+            "channel_centre": 0.0,
+            "channel_right": 0.3
+          },
+          "stat": "entries_wide_share"
+        },
+        {
+          "name": "centre",
+          "values": {
+            "channel_left": 0.0,
+            "channel_centre": 0.3,
+            "channel_right": 0.0
+          },
+          "stat": "entries_centre_share"
+        },
+        {
+          "name": "centre_left",
+          "values": {
+            "channel_left": 0.3,
+            "channel_centre": 0.3,
+            "channel_right": 0.0
+          },
+          "stat": "entries_centre_left_share"
+        },
+        {
+          "name": "centre_right",
+          "values": {
+            "channel_left": 0.0,
+            "channel_centre": 0.3,
+            "channel_right": 0.3
+          },
+          "stat": "entries_centre_right_share"
+        },
+        {
+          "name": "balanced",
+          "values": {
+            "channel_left": 0.0,
+            "channel_centre": 0.0,
+            "channel_right": 0.0
+          },
+          "stat": "entries_centre_share"
+        }
+      ],
+      "default": "balanced",
+      "inputs": [
+        {
+          "input": "channel_left",
+          "hook": "pass.channel.left"
+        },
+        {
+          "input": "channel_centre",
+          "hook": "pass.channel.centre"
+        },
+        {
+          "input": "channel_right",
+          "hook": "pass.channel.right"
+        }
+      ],
+      "signature": [
+        {
+          "stat": "entries_left_share",
+          "direction": "up"
+        },
+        {
+          "stat": "entries_right_share",
+          "direction": "up"
+        },
+        {
+          "stat": "entries_centre_share",
+          "direction": "up"
+        }
+      ],
+      "data": {
+        "source": "wyscout_2017_18",
+        "competitions": [
+          "England",
+          "France",
+          "Italy",
+          "Spain"
+        ],
+        "row": "attacking_channel",
+        "deferred": "centre, centre_left and centre_right are deferred to the off-ball work that re-seeds the stands: at balanced nearly every final-third entry is already central, so these choices are not judged until wide play exists; left, right and both_wings are judged"
+      }
+    },
+    {
+      "name": "final_third",
+      "kind": "graded",
+      "levels": "own",
+      "steps": [
+        {
+          "name": "work_into_box",
+          "values": {
+            "long_shot": -0.125,
+            "shot_reach_m": 0.0
+          }
+        },
+        {
+          "name": "look_inside",
+          "values": {
+            "long_shot": -0.0625,
+            "shot_reach_m": 0.0
+          }
+        },
+        {
+          "name": "mixed_final_third",
+          "values": {
+            "long_shot": 0.0,
+            "shot_reach_m": 0.0
+          }
+        },
+        {
+          "name": "shoot_early",
+          "values": {
+            "long_shot": -0.125,
+            "shot_reach_m": 4.0
+          }
+        },
+        {
+          "name": "shoot_on_sight",
+          "values": {
+            "long_shot": -0.1875,
+            "shot_reach_m": 8.0
+          }
+        }
+      ],
+      "default": "mixed_final_third",
+      "inputs": [
+        {
+          "input": "long_shot",
+          "hook": "shot.outside_box"
+        },
+        {
+          "input": "shot_reach_m",
+          "hook": "shot.range"
+        }
+      ],
+      "signature": [
+        {
+          "stat": "outside_box_shot_share",
+          "direction": "up"
+        },
+        {
+          "stat": "shot_distance_m",
+          "direction": "up"
+        }
+      ],
+      "data": {
+        "source": "wyscout_2017_18",
+        "competitions": [
+          "England",
+          "France",
+          "Italy",
+          "Spain"
+        ],
+        "row": "final_third"
+      },
+      "fits": [
+        {
+          "level": "work_into_box",
+          "values": {
+            "long_shot": -0.125
+          },
+          "target": 0.880557,
+          "achieved": 0.876484,
+          "noise": 0.046446,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "look_inside",
+          "values": {
+            "long_shot": -0.0625
+          },
+          "target": 0.963974,
+          "achieved": 0.962381,
+          "noise": 0.043706,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "shoot_early",
+          "values": {
+            "long_shot": -0.125
+          },
+          "target": 1.060848,
+          "achieved": 1.080108,
+          "noise": 0.051079,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "shoot_on_sight",
+          "values": {
+            "long_shot": -0.1875
+          },
+          "target": 1.154052,
+          "achieved": 1.169308,
+          "noise": 0.054227,
+          "matches": 200,
+          "seed": 9
+        }
+      ]
+    },
+    {
+      "name": "dribbling",
+      "kind": "graded",
+      "levels": "own",
+      "steps": [
+        {
+          "name": "dribble_rarely",
+          "values": {
+            "dribble": -0.0625
+          }
+        },
+        {
+          "name": "dribble_less",
+          "values": {
+            "dribble": -0.03125
+          }
+        },
+        {
+          "name": "dribble_normally",
+          "values": {
+            "dribble": 0.0
+          }
+        },
+        {
+          "name": "dribble_more",
+          "values": {
+            "dribble": 0.03125
+          }
+        },
+        {
+          "name": "dribble_often",
+          "values": {
+            "dribble": 0.0625
+          }
+        }
+      ],
+      "default": "dribble_normally",
+      "inputs": [
+        {
+          "input": "dribble",
+          "hook": "dribble.weight"
+        }
+      ],
+      "signature": [
+        {
+          "stat": "takeons_per_90",
+          "direction": "up"
+        }
+      ],
+      "data": {
+        "source": "wyscout_2017_18",
+        "competitions": [
+          "England",
+          "France",
+          "Italy",
+          "Spain"
+        ],
+        "row": "dribbling"
+      },
+      "fits": [
+        {
+          "level": "dribble_rarely",
+          "values": {
+            "dribble": -0.0625
+          },
+          "target": 0.812379,
+          "achieved": 0.823572,
+          "noise": 0.029808,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "dribble_less",
+          "values": {
+            "dribble": -0.03125
+          },
+          "target": 0.930368,
+          "achieved": 0.913059,
+          "noise": 0.030824,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "dribble_more",
+          "values": {
+            "dribble": 0.03125
+          },
+          "target": 1.073501,
+          "achieved": 1.082757,
+          "noise": 0.033738,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "dribble_often",
+          "values": {
+            "dribble": 0.0625
+          },
+          "target": 1.17795,
+          "achieved": 1.200073,
+          "noise": 0.038236,
+          "matches": 200,
+          "seed": 9
+        }
+      ]
+    },
+    {
+      "name": "crossing",
+      "kind": "graded",
+      "levels": "own",
+      "steps": [
+        {
+          "name": "cross_rarely",
+          "values": {
+            "crossing": -0.3
+          }
+        },
+        {
+          "name": "cross_less",
+          "values": {
+            "crossing": -0.15
+          }
+        },
+        {
+          "name": "cross_normally",
+          "values": {
+            "crossing": 0.0
+          }
+        },
+        {
+          "name": "cross_more",
+          "values": {
+            "crossing": 0.15
+          }
+        },
+        {
+          "name": "cross_often",
+          "values": {
+            "crossing": 0.3
+          }
+        }
+      ],
+      "default": "cross_normally",
+      "inputs": [
+        {
+          "input": "crossing",
+          "hook": "pass.cross"
+        }
+      ],
+      "signature": [
+        {
+          "stat": "crosses_per_final_third_possession",
+          "direction": "up"
+        }
+      ],
+      "data": {
+        "source": "wyscout_2017_18",
+        "competitions": [
+          "England",
+          "France",
+          "Italy",
+          "Spain"
+        ],
+        "row": "crossing",
+        "deferred": "deferred to the off-ball work that re-seeds the stands: with the stands off, wide players hold their midfield places and the engine plays almost no open-play cross, so crossing frequency is neither fitted nor judged; its levels keep their seeded values"
+      }
+    },
+    {
+      "name": "cross_type",
+      "kind": "choice",
+      "choices": [
+        {
+          "name": "early",
+          "values": {
+            "early_cross": 0.3,
+            "cross_loft": 0.0
+          },
+          "stat": "cross_origin_m"
+        },
+        {
+          "name": "low_driven",
+          "values": {
+            "early_cross": 0.0,
+            "cross_loft": -1.0
+          },
+          "stat": "low_cross_share"
+        },
+        {
+          "name": "floated",
+          "values": {
+            "early_cross": 0.0,
+            "cross_loft": 1.0
+          },
+          "stat": "high_cross_share"
+        },
+        {
+          "name": "mixed_crosses",
+          "values": {
+            "early_cross": 0.0,
+            "cross_loft": 0.0
+          },
+          "stat": "high_cross_share"
+        }
+      ],
+      "default": "mixed_crosses",
+      "inputs": [
+        {
+          "input": "early_cross",
+          "hook": "pass.cross_early"
+        },
+        {
+          "input": "cross_loft",
+          "hook": "cross.trajectory"
+        }
+      ],
+      "signature": [
+        {
+          "stat": "high_cross_share",
+          "direction": "up"
+        },
+        {
+          "stat": "low_cross_share",
+          "direction": "up"
+        },
+        {
+          "stat": "cross_origin_m",
+          "direction": "up"
+        }
+      ],
+      "data": {
+        "source": "wyscout_2017_18",
+        "competitions": [
+          "England",
+          "France",
+          "Italy",
+          "Spain"
+        ],
+        "row": "cross_type",
+        "deferred": "deferred to the off-ball work that re-seeds the stands: with almost no open-play cross there is nothing to type, so the choices are not judged; they keep their seeded values"
+      }
+    },
+    {
+      "name": "creative_freedom",
+      "kind": "graded",
+      "levels": "own",
+      "steps": [
+        {
+          "name": "disciplined",
+          "values": {
+            "freedom": 0.6
+          }
+        },
+        {
+          "name": "structured",
+          "values": {
+            "freedom": 0.8
+          }
+        },
+        {
+          "name": "free_within_plan",
+          "values": {
+            "freedom": 1.0
+          }
+        },
+        {
+          "name": "expressive",
+          "values": {
+            "freedom": 1.2
+          }
+        },
+        {
+          "name": "free_rein",
+          "values": {
+            "freedom": 1.4
+          }
+        }
+      ],
+      "default": "free_within_plan",
+      "inputs": [
+        {
+          "input": "freedom",
+          "hook": "option.noise"
+        }
+      ],
+      "signature": [
+        {
+          "stat": "off_plan_share",
+          "direction": "up"
+        }
+      ],
+      "data": {
+        "none": "no real data records which option a player passed over, so no fit reads one"
+      }
+    },
+    {
+      "name": "forward_runs",
+      "kind": "graded",
+      "levels": "own",
+      "steps": [
+        {
+          "name": "come_short",
+          "values": {
+            "run_start_m": -16.40625
+          }
+        },
+        {
+          "name": "show_short",
+          "values": {
+            "run_start_m": -14.736328125
+          }
+        },
+        {
+          "name": "mixed_runs",
+          "values": {
+            "run_start_m": 0.0
+          }
+        },
+        {
+          "name": "push_up",
+          "values": {
+            "run_start_m": 0.9375
+          }
+        },
+        {
+          "name": "run_in_behind",
+          "values": {
+            "run_start_m": 1.875
+          }
+        }
+      ],
+      "default": "mixed_runs",
+      "inputs": [
+        {
+          "input": "run_start_m",
+          "hook": "run.start"
+        }
+      ],
+      "signature": [
+        {
+          "stat": "runs_in_behind_share",
+          "direction": "up",
+          "steps": "above_default"
+        },
+        {
+          "stat": "coming_short_share",
+          "direction": "down",
+          "steps": "below_default"
+        }
+      ],
+      "data": {
+        "source": "pff_wc2022",
+        "competitions": [
+          "FIFA World Cup 2022"
+        ],
+        "row": "forward_runs"
+      },
+      "fits": [
+        {
+          "level": "come_short",
+          "values": {
+            "run_start_m": -16.40625
+          },
+          "target": 1.43907,
+          "achieved": 1.435691,
+          "noise": 0.041103,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "show_short",
+          "values": {
+            "run_start_m": -14.736328125
+          },
+          "target": 1.219541,
+          "achieved": 1.223845,
+          "noise": 0.031556,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "push_up",
+          "values": {
+            "run_start_m": 0.9375
+          },
+          "target": 1.247955,
+          "achieved": 1.272421,
+          "noise": 0.131257,
+          "matches": 200,
+          "seed": 9
+        },
+        {
+          "level": "run_in_behind",
+          "values": {
+            "run_start_m": 1.875
+          },
+          "target": 1.49591,
+          "achieved": 1.482523,
+          "noise": 0.15404,
+          "matches": 200,
+          "seed": 9
+        }
+      ]
+    },
+    {
+      "name": "fullback_runs",
+      "kind": "choice",
+      "choices": [
+        {
+          "name": "stay_back",
+          "values": {
+            "fullback_run": 0.0
+          },
+          "stat": "fullback_runs_per_match"
+        },
+        {
+          "name": "underlap",
+          "values": {
+            "fullback_run": -1.0
+          },
+          "stat": "underlaps_per_match"
+        },
+        {
+          "name": "overlap",
+          "values": {
+            "fullback_run": 1.0
+          },
+          "stat": "overlaps_per_match"
+        }
+      ],
+      "default": "stay_back",
+      "inputs": [
+        {
+          "input": "fullback_run",
+          "hook": "shape.fullback_run"
+        }
+      ],
+      "signature": [
+        {
+          "stat": "overlaps_per_match",
+          "direction": "up"
+        },
+        {
+          "stat": "underlaps_per_match",
+          "direction": "up"
+        }
+      ],
+      "data": {
+        "source": "skillcorner_open",
+        "competitions": [
+          "A-League"
+        ],
+        "row": "fullback_runs"
+      }
+    },
+    {
+      "name": "fullback_run_frequency",
+      "kind": "graded",
+      "levels": "own",
+      "steps": [
+        {
+          "name": "runs_rarely",
+          "values": {
+            "fullback_reach": 0.25
+          }
+        },
+        {
+          "name": "runs_less",
+          "values": {
+            "fullback_reach": 0.89453125
+          }
+        },
+        {
+          "name": "runs_normally",
+          "values": {
+            "fullback_reach": 1.0
+          }
+        },
+        {
+          "name": "runs_more",
+          "values": {
+            "fullback_reach": 1.173
+          }
+        },
+        {
+          "name": "runs_often",
+          "values": {
+            "fullback_reach": 1.625
+          }
+        }
+      ],
+      "default": "runs_normally",
+      "inputs": [
+        {
+          "input": "fullback_reach",
+          "hook": "shape.fullback_reach"
+        }
+      ],
+      "signature": [
+        {
+          "stat": "fullback_runs_per_match",
+          "direction": "up"
+        }
+      ],
+      "data": {
+        "source": "skillcorner_open",
+        "competitions": [
+          "A-League"
+        ],
+        "row": "fullback_run_frequency"
+      },
+      "fits": [
+        {
+          "level": "runs_rarely",
+          "values": {
+            "fullback_reach": 0.25
+          },
+          "target": 0.2,
+          "achieved": 0.208882,
+          "noise": 0.059715,
+          "matches": 1000,
+          "seed": 9
+        },
+        {
+          "level": "runs_less",
+          "values": {
+            "fullback_reach": 0.89453125
+          },
+          "target": 0.6,
+          "achieved": 0.652961,
+          "noise": 0.12513,
+          "matches": 1000,
+          "seed": 9
+        },
+        {
+          "level": "runs_more",
+          "values": {
+            "fullback_reach": 1.173
+          },
+          "target": 1.4,
+          "achieved": 1.422535,
+          "noise": 0.280941,
+          "matches": 1000,
+          "seed": 9
+        },
+        {
+          "level": "runs_often",
+          "values": {
+            "fullback_reach": 1.625
+          },
+          "target": 1.8,
+          "achieved": 1.957237,
+          "noise": 0.38796,
+          "matches": 1000,
+          "seed": 9
+        }
+      ]
+    }
+  ]
+}

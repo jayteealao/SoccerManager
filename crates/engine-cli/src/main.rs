@@ -15,15 +15,20 @@ mod generate;
 mod guard;
 mod launch;
 mod matchday;
+mod measure_rows;
 mod record;
 mod replay;
 mod replay_inputs;
 mod report;
 mod resimulate;
+mod restart_waits;
 mod resume;
+mod season;
 mod serve;
+mod signatures;
 mod simulate;
 mod state_files;
+mod stats;
 mod stream_run;
 mod trace_file;
 mod web;
@@ -69,7 +74,11 @@ fn main() {
     let on_failure = match &args.command {
         cli::Command::Simulate(opts) => Some(("match-stats", "simulate", opts.seed)),
         cli::Command::Bench(opts) => Some(("run-report", "benchmark", opts.seed)),
-        cli::Command::Calibrate(opts) => Some(("run-report", "calibrate", opts.seed)),
+        // `calibrate accept` and `calibrate proof` write no run report, so they print none
+        // when they fail.
+        cli::Command::Calibrate(opts) if opts.action.is_none() => {
+            Some(("run-report", "calibrate", opts.seed()))
+        }
         _ => None,
     };
     let started = Instant::now();
@@ -84,10 +93,39 @@ fn main() {
         cli::Command::Resimulate(opts) => resimulate::run(content_dir, &opts),
         cli::Command::Bisect(opts) => bisect::run(content_dir, &opts),
         cli::Command::Resume(opts) => resume::run(content_dir, &opts),
-        cli::Command::Calibrate(opts) => calibrate::run(content_dir, &opts),
+        cli::Command::Calibrate(opts) => match &opts.action {
+            Some(cli::CalibrateAction::Accept { band, run }) => report::accepted::accept(band, run),
+            Some(cli::CalibrateAction::Proof {
+                seed,
+                matches,
+                out,
+                write,
+                real_data,
+                self_runs,
+                copy_runs,
+                minutes,
+            }) => calibrate::gate_proof::run(
+                content_dir,
+                &calibrate::gate_proof::Opts {
+                    seed: *seed,
+                    matches: *matches,
+                    out: out.clone(),
+                    write: write.clone(),
+                    real_data: real_data.clone(),
+                    self_runs: *self_runs,
+                    copy_runs: *copy_runs,
+                    minutes: *minutes,
+                },
+            ),
+            None => calibrate::run(content_dir, &opts),
+        },
         cli::Command::Gate(opts) => gate::run(content_dir, &opts),
         cli::Command::Guard(opts) => guard::run(&opts),
         cli::Command::FastModel(opts) => fast_model::run(content_dir, &opts),
+        cli::Command::RestartWaits(opts) => restart_waits::run(content_dir, &opts),
+        cli::Command::Signatures(opts) => signatures::run(content_dir, &opts),
+        #[cfg(feature = "measures")]
+        cli::Command::Primitives(opts) => calibrate::primitives::run(content_dir, &opts),
         cli::Command::MatchdayTiming(opts) => matchday::timing::run(content_dir, &opts),
     };
     match result {

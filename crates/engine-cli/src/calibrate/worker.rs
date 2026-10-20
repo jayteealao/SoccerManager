@@ -85,6 +85,12 @@ pub struct MatchInput<'a> {
     pub teams: &'a [TeamFile; 2],
     /// Each side's starting formation, in the formations suite.
     pub formations: Option<[u8; 2]>,
+    /// Each side's starting tactics, in the styles suite: its style in a formation of the
+    /// style's list.
+    pub tactics: Option<[Tactics; 2]>,
+    /// Each side's game-state rules and player instructions, in the styles suite: its
+    /// style's own, set after `tactics`, so each side plays its preset whole.
+    pub game_state: Option<[engine::tactics::rules::GameState; 2]>,
     /// The red-card suite: cards otherwise off, and the player sent off at kick-off.
     pub red_card: Option<Option<usize>>,
     pub key: FixtureKey,
@@ -98,6 +104,9 @@ pub struct MatchInput<'a> {
 pub struct Played {
     pub stats: MatchStats,
     pub row: Row,
+    /// The match's realism measures, in a measures build.
+    #[cfg(feature = "measures")]
+    pub measures: Option<Box<engine::measures::MatchMeasures>>,
 }
 
 /// One match to full time, checked by the running rule checker as it plays (every tick
@@ -120,6 +129,18 @@ pub fn play_match(
             config = config.with_ai_tactics(team, tactics);
         }
     }
+    if let Some(sides) = m.tactics {
+        for (team, tactics) in sides.into_iter().enumerate() {
+            config = config.with_ai_tactics(team, tactics);
+        }
+    }
+    if let Some(sides) = &m.game_state {
+        for (team, state) in sides.iter().enumerate() {
+            if !state.is_empty() {
+                config = config.with_game_state(team, state.clone());
+            }
+        }
+    }
     if m.red_card.is_some() {
         // Set on the match, not in the content, so the content hash is unchanged.
         config.tuning.red_base = 0.0;
@@ -134,13 +155,35 @@ pub fn play_match(
     if let Some(Some(player)) = m.red_card {
         sim.send_off_before_kickoff(player);
     }
+    // A measures build counts the realism measures, each player's running and the team
+    // shape as it plays; the running and shape sinks' time falls in the play stage, after
+    // the checker's.
+    #[cfg(feature = "measures")]
+    sim.with_measures();
     // Each tick and event is judged as the match plays; no record is kept.
-    let mut check = Timed::new(RunningCheck::for_match(&sim, rules));
+    let check = Timed::new(RunningCheck::for_match(&sim, rules));
+    #[cfg(feature = "measures")]
+    let mut sink = engine::FanoutSink::new(
+        check,
+        engine::FanoutSink::new(
+            super::physical::Physical::default(),
+            engine::measures::shape::ShapeSink::default(),
+        ),
+    );
+    #[cfg(not(feature = "measures"))]
+    let mut sink = check;
     let started = Instant::now();
     {
         let _play = stages::enter(Stage::Play);
-        sim.run(&mut check)?;
+        sim.run(&mut sink)?;
     }
+    #[cfg(feature = "measures")]
+    let (check, (physical, shape)) = {
+        let (check, running) = sink.into_parts();
+        (check, running.into_parts())
+    };
+    #[cfg(not(feature = "measures"))]
+    let check = sink;
     let elapsed = started.elapsed();
     stages::shift(Stage::Play, Stage::Checks, check.sampled * CHECK_STRIDE);
     let written = check.check.ticks();
@@ -152,7 +195,7 @@ pub fn play_match(
     let events = sim.take_events();
     let summary = sim.summary();
     let tactics = TacticsStats::new(&sim);
-    let row = Row::played(
+    let mut row = Row::played(
         (m.key, m.seed),
         &summary,
         &tactics,
@@ -160,6 +203,16 @@ pub fn play_match(
         sim.tick(),
         u64::try_from(elapsed.as_micros()).unwrap_or(u64::MAX),
     );
+    row.subs = crate::report::substitutions::of_match(&events, &sim);
+    #[cfg(feature = "measures")]
+    let row = match sim.measures() {
+        Some(measures) => row.with_measures(measures, &physical, &shape.finish()),
+        None => row,
+    };
+    #[cfg(feature = "measures")]
+    if let Some(measures) = sim.measures() {
+        write_probe(m.seed, &sim, &summary, &measures.probe);
+    }
     if let Some(path) = events_to(&row) {
         let _commentary = stages::enter(Stage::Commentary);
         let mut ids = Ids::new(&sim);
@@ -202,7 +255,101 @@ pub fn play_match(
         script: ScriptFigures::new(sim.plugins()),
         ratings: RatingEntry::of_match(&sim),
     };
-    Ok(Played { stats, row })
+    Ok(Played {
+        stats,
+        row,
+        #[cfg(feature = "measures")]
+        measures: sim.measures().cloned().map(Box::new),
+    })
+}
+
+/// The decision probe of a measures build: with `SM_PROBE_OUT` set, each match appends one
+/// JSON line to that file: its seed, goals, goals with no shot, shots and clearances, every
+/// keeper who played (his rating, post-shot expected goals faced, goals from shots conceded,
+/// goals conceded, saves, completed passes and clearances), and the probe.
+#[cfg(feature = "measures")]
+fn write_probe(
+    seed: u64,
+    sim: &Simulation,
+    summary: &engine::Summary,
+    probe: &engine::measures::probe::Probe,
+) {
+    use std::io::Write as _;
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let Some(path) = std::env::var_os("SM_PROBE_OUT") else {
+        return;
+    };
+    let teams = sim.teams();
+    let keepers: Vec<_> = sim
+        .match_ratings()
+        .into_iter()
+        .filter(|r| teams[r.team].squad[r.squad].position == engine::data::team::Position::GK)
+        .map(|r| {
+            let t = &sim.tallies()[r.team][r.squad];
+            serde_json::json!({
+                "team": r.team,
+                "rating": r.rating(),
+                "psxg_faced": t.psxg_faced,
+                "shot_goals_conceded": t.shot_goals_conceded,
+                "conceded": t.conceded,
+                "saves": t.saves,
+                "passes_completed": t.passes_completed,
+                "clearances": t.clearances,
+                "minutes": t.ticks_played / engine::rules::clock::TICKS_PER_MINUTE,
+            })
+        })
+        .collect();
+    // Every player who played, with the counts the rating read before it moved to the threat
+    // added, so a run can compare the two ratings on the same matches.
+    let players: Vec<_> = sim
+        .match_ratings()
+        .into_iter()
+        .map(|r| {
+            let t = &sim.tallies()[r.team][r.squad];
+            serde_json::json!({
+                "team": r.team,
+                "position": teams[r.team].squad[r.squad].position,
+                "rating": r.rating(),
+                "ticks": t.ticks_played,
+                "value_added": t.value_added,
+                "goals": t.goals,
+                "shots": t.shots,
+                "shots_on_target": t.shots_on_target,
+                "xg": t.xg,
+                "passes": t.passes,
+                "passes_completed": t.passes_completed,
+                "tackles_won": t.tackles_won,
+                "interceptions": t.interceptions,
+                "blocks": t.blocks,
+                "clearances": t.clearances,
+                "fouls": t.fouls,
+                "yellow": t.yellow,
+                "red": t.red,
+                "conceded": t.conceded,
+                "psxg_faced": t.psxg_faced,
+                "shot_goals_conceded": t.shot_goals_conceded,
+            })
+        })
+        .collect();
+    let line = serde_json::json!({
+        "seed": seed,
+        "goals": summary.goals,
+        "goals_no_shot": summary.goals_no_shot,
+        "keepers": keepers,
+        "players": players,
+        "ticks": sim.tick(),
+        "shots": summary.shots,
+        "clearances": summary.clearances,
+        "probe": probe,
+    });
+    let _guard = LOCK.lock();
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
+        let _ = writeln!(f, "{line}");
+    }
 }
 
 /// The checker calls timed: one in this many, scaled up, so the clock costs less than the
@@ -369,6 +516,8 @@ mod tests {
                 commentary: &s.commentary,
                 teams,
                 formations,
+                tactics: None,
+                game_state: None,
                 red_card,
                 key: FixtureKey::from_u64(seed),
                 seed,

@@ -13,6 +13,7 @@ pub const MOVED_KEYS: &[Action] = &[
     Action::ShootoutSave,
     Action::InjuryMinute,
     Action::InjuryTackle,
+    Action::KnockTackle,
     Action::AddedTime,
     Action::ExtraTimeAdded,
     Action::ExtraKickOff,
@@ -47,6 +48,14 @@ pub const MOVED_KEYS: &[Action] = &[
     Action::Header,
     Action::FormMatch,
     Action::FormPeriod,
+    Action::PaceSprint,
+    Action::RestartWait,
+    Action::QuickRestart,
+    Action::TraitOverride,
+    Action::PassCut,
+    Action::PassWeight,
+    Action::TakeOn,
+    Action::PerceiveScore,
 ];
 
 /// What one module is.

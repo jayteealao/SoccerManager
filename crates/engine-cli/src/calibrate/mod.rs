@@ -29,14 +29,32 @@
 //! bootstrap gives each band pass, fail or not sure, and one joint verdict. The target is
 //! kept in `target.json`; a run into a finished folder plays nothing and judges again from
 //! the stored rows. Every run reports the time and memory of each stage.
+//!
+//! Each judgement also reads every band's real value in place from the real-data folder
+//! (`--real-data`, default the main checkout's `.scratch/out`) and reports it beside the
+//! verdict with its distance from the run's value; it never changes a verdict. A band that
+//! only reports (`gates: false`, a real sample under its floor, or a generalisation under
+//! the floor) is judged by the same rules in a second table, "reported bands", and in
+//! `calib.reported`, apart from the gating bands: it never moves the joint threshold, a
+//! suite's power target, the joint word or `calib.pass`. A band that reads the realism
+//! measures, or a per-club spread, is judged on its range alone when the old engine's rows
+//! do not carry what it reads. `calibrate accept <band> --run <dir>` records the developer's
+//! acceptance of a not-sure band in the folder; the next judgement marks it "accepted, not
+//! shown equivalent", and its word stays not sure.
 
 pub mod base;
 pub mod fixtures;
+pub mod gate_proof;
+#[cfg(feature = "measures")]
+pub mod physical;
+#[cfg(feature = "measures")]
+pub mod primitives;
 pub mod rows;
 pub mod rules;
 pub mod run_folder;
 pub mod runner;
 pub mod stages;
+pub mod styles;
 pub mod worker;
 
 use std::collections::BTreeMap;
@@ -53,24 +71,34 @@ use sha2::{Digest, Sha256};
 
 use crate::bench::BenchFigures;
 use crate::cli::{CalibrateOpts, InjectFailure, SuiteArg};
+use crate::measure_rows::SHAPE_FIELDS;
+use crate::report::bands::{BandDef, Measure};
 use crate::report::bands::{REGISTRY_VERSION, Registry};
 use crate::report::baseline::{self, Identity};
 use crate::report::compare::{self, Guard};
-use crate::report::verdict;
+use crate::report::measures::Extras;
 use crate::report::{
-    ArmReport, BandCheck, BaseCache, BaseReport, CalibrationReport, FlagEntry, MEASURES_VERSION,
-    PairInfo, PairingFigures, PowerInfo, RED_CARD_ARMS, Recorded, RedCardFigures, RegistryInfo,
-    RowsInfo, RunBuilder, Selection, Suite, SuiteFigures, Units,
+    ArmReport, BandCheck, BaseCache, BaseReport, CalibrationReport, Counts, FlagEntry,
+    MEASURES_VERSION, Observations, PairInfo, PairingFigures, PowerInfo, RED_CARD_ARMS, Recorded,
+    RedCardFigures, RegistryInfo, RowsInfo, RunBuilder, Selection, Suite, SuiteFigures, Units,
 };
+use crate::report::{accepted, nash, proof, real, verdict};
 use fixtures::{FIXTURE_SCHEME, FixtureKey, Keyed};
 use rows::{Outcome, ROWS_FORMAT, Row, reason};
 use run_folder::{Opened, RunIdentity, TARGET_VERSION, Target};
 use stages::Stage;
 
+/// Matches per ordered pairing of styles in a change run's styles sample.
+pub const STYLES_SAMPLE: u32 = 1;
+
 /// Matches the single-thread benchmark times after its warm-up.
 const BENCH_MATCHES: u32 = 5;
 /// Set by a change run on the old engine's own `calibrate`: no verdict or stage table.
 pub const QUIET_ENV: &str = "SM_CALIBRATE_QUIET";
+/// The line a build without the `measures` feature prints as a run starts: it records no
+/// realism measures and judges the bands of the band file only.
+pub const NO_MEASURES: &str =
+    "this build has no measures; build engine-cli with --features measures to record them";
 
 pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i32> {
     let run_started = Instant::now();
@@ -87,7 +115,12 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     }
 
     // Every flag name and state is checked before any match plays.
-    let loaded = crate::content::load(Some(dir.root()), None, None, None)?;
+    let mut loaded = crate::content::load(Some(dir.root()), None, None, None)?;
+    if let Some(path) = &opts.rules {
+        let bytes =
+            std::fs::read(path).with_context(|| format!("cannot read {}", path.display()))?;
+        loaded.content = engine::Content::load_with_rules(&dir, bytes)?;
+    }
     let arms: Vec<(&str, FlagStates)> = match &opts.pair {
         None => vec![("", states.clone())],
         Some(flag) => {
@@ -113,7 +146,11 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         SuiteArg::Strength => vec![Suite::Strength],
         SuiteArg::Formations => vec![Suite::Formations],
         SuiteArg::RedCard => vec![Suite::RedCard],
+        SuiteArg::Styles => return styles_alone(&dir, opts, &loaded, &arms[0].1),
     };
+    if !opts.style_pairings.is_empty() {
+        anyhow::bail!("--style-pairing needs --suite styles");
+    }
     let formation_names: Vec<String> = loaded
         .content
         .tactics
@@ -127,6 +164,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         .collect();
     let registry = Registry::load(&dir)?;
     let (suites, selected) = select(&requested, opts, &pairings, &registry)?;
+    let real_folder = real::resolve(opts.real_data.as_deref(), dir.root());
 
     // The baseline is checked before the run folder exists and before any match plays.
     let fixtures_hash = fixtures_hash(&loaded.content.with_flags(&arms[0].1)?, &loaded.teams)?;
@@ -137,7 +175,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
             baseline::load(
                 path,
                 Identity {
-                    seed: opts.seed,
+                    seed: opts.seed(),
                     matches: opts.matches,
                     fixtures_hash: &fixtures_hash,
                     fixtures_scheme: FIXTURE_SCHEME,
@@ -180,7 +218,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     } else {
         None
     };
-    let fresh_id = format!("calib-{:016x}-{millis}", opts.seed);
+    let fresh_id = format!("calib-{:016x}-{millis}", opts.seed());
     let run_dir = opts
         .out
         .clone()
@@ -223,6 +261,9 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         millis,
         run_id: String::new(),
         session: format!("{millis}-{}", std::process::id()),
+        real_folder: real_folder.clone(),
+        quiet: std::env::var_os(QUIET_ENV).is_some(),
+        samples: std::sync::OnceLock::new(),
     };
 
     // The old engine's results come before the run folder exists and before any match of
@@ -263,7 +304,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         signal = "calibrate.run_started",
         run.id = %run_id,
         mode,
-        seed = opts.seed,
+        seed = opts.seed(),
         matches = opts.matches,
         threads = jobs,
         resumed = session.opened == Opened::Resumed,
@@ -309,6 +350,27 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         ),
     }
 
+    if !quiet && !cfg!(feature = "measures") {
+        eprintln!("{NO_MEASURES}");
+    }
+    // Whether the gate proof in the content folder measured this gate; it decides nothing.
+    if !quiet {
+        let gate = proof::current(&ctx.bands);
+        let check = proof::check(&dir, &gate);
+        if let Some(lines) = check.lines() {
+            eprint!("{lines}");
+        }
+        let state = check.state();
+        if check == proof::Check::Matches {
+            tracing::info!(signal = "calibrate.gate_proof", run.id = %run_id, state,
+                registry = %gate.registry, measures = gate.measures,
+                verdict_code = %gate.verdict_code);
+        } else {
+            tracing::warn!(signal = "calibrate.gate_proof", run.id = %run_id, state,
+                registry = %gate.registry, measures = gate.measures,
+                verdict_code = %gate.verdict_code);
+        }
+    }
     let started = Instant::now();
     let stopped = || {
         eprintln!(
@@ -397,12 +459,113 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
 
     // The verdict: a change run's paired max-t test, or each band's range check.
     let Judged {
-        verdicts,
+        mut verdicts,
+        mut reported,
         joint,
         power,
     } = ctx.judge_run(first, old.as_ref().map(|(_, f)| f), change, pilot_used);
+    // The real values, read in place at each judgement; the old engine's own quiet run
+    // leaves them to the parent.
+    let real_info = (!quiet).then(|| {
+        let _judge = stages::enter(Stage::Judge);
+        let info = real::read_all(&real_folder, &ctx.bands, &ctx.real_samples());
+        attach_real(&mut verdicts, &info, &ctx.bands);
+        attach_real(&mut reported, &info, &ctx.bands);
+        info
+    });
+    let identity_value = serde_json::to_value(&identity)?;
+    // The developer's acceptances in the run folder mark not-sure rows; a word never moves.
+    let acceptances = (!quiet)
+        .then(|| {
+            accepted::read(
+                &run_dir,
+                &run_id,
+                &accepted::identity_digest(&identity_value),
+            )
+        })
+        .flatten();
+    if let Some(a) = &acceptances {
+        mark_accepted(&mut verdicts, a);
+        mark_accepted(&mut reported, a);
+        if let Some(why) = &a.ignored {
+            eprintln!("acceptances ignored: {why}");
+            tracing::warn!(
+                signal = "calibrate.accepted_ignored",
+                run.id = %run_id,
+                file = %a.file,
+                reason = %why
+            );
+        }
+    }
+    let counts = match_counts(
+        &played,
+        old.as_ref().map(|(b, f)| (b, f)),
+        joint.as_ref(),
+        &identity.build.executable_sha256,
+    );
+    let realism = real_info
+        .as_ref()
+        .map(|_| real::realism(&ctx.bands, &verdicts));
+    if let Some(info) = &real_info {
+        eprint!("{}", info.headline());
+        tracing::info!(
+            signal = "calibrate.real_data",
+            run.id = %run_id,
+            folder = info.folder.as_deref(),
+            from = info.from,
+            present = info.present,
+            missing = info.missing,
+            no_counterpart = info.no_counterpart
+        );
+    }
     if !verdicts.is_empty() && !quiet {
         eprint!("{}", verdict::render_table(&verdicts, joint.as_ref()));
+    }
+    // The formation field rating: report only, read by nothing that decides the verdict.
+    // It describes the same arm as `calib.formations`, and needs every pairing.
+    let nash_rating = (!quiet && ctx.suites.contains(&Suite::Formations)).then(|| {
+        if ctx.selected.len() < ctx.pairings.len() {
+            Err((ctx.selected.len(), ctx.pairings.len()))
+        } else {
+            first
+                .builder
+                .formation_table()
+                .map(|(names, wins, matches)| nash::rate(&names, &wins, matches))
+        }
+    });
+    if !quiet {
+        eprint!("{}", verdict::render_reported(&reported, joint.is_some()));
+        eprint!("{}", crate::report::render_figures(&first.figure_rows));
+        match &nash_rating {
+            Some(Ok(r)) => eprint!("{}", nash::render(r)),
+            Some(Err((played, total))) => eprint!("{}", nash::incomplete_line(*played, *total)),
+            None => {}
+        }
+        eprint!("{}", counts.line());
+    }
+    if let Some(Ok(r)) = &nash_rating {
+        tracing::info!(
+            signal = "calibrate.nash",
+            run.id = %run_id,
+            formations = r.formations.len(),
+            flagged = r.formations.iter().filter(|f| f.flagged).count(),
+            converged = r.converged
+        );
+    }
+    if !reported.is_empty() {
+        let count = |w: verdict::Word| reported.iter().filter(|r| r.word == w).count();
+        tracing::info!(
+            signal = "calibrate.reported",
+            run.id = %run_id,
+            bands = reported.len(),
+            pass = count(verdict::Word::Pass),
+            fail = count(verdict::Word::Fail),
+            not_sure = count(verdict::Word::NotSure),
+            accepted = reported.iter().filter(|r| r.accepted == Some(true)).count()
+        );
+    }
+    if let Some(r) = &realism {
+        eprintln!("{}", r.claim);
     }
     let rules = rule_set.map(|set| rules::run(&loaded.content, &set));
     if let Some(r) = &rules {
@@ -412,15 +575,38 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         eprintln!("{}", rules::line(r));
     }
     ctx.write_target(&run_dir, change, pilot_used)?;
+    // A change run's styles sample: one match per ordered pairing on the changed engine, and
+    // never on the old one; report only.
+    let styles_sample = if change {
+        let content = loaded.content.with_flags(&arms[0].1)?;
+        let sample = styles::play(&styles::SuiteInput {
+            content: &content,
+            commentary: &loaded.commentary,
+            seed: opts.seed(),
+            matches: STYLES_SAMPLE,
+            minutes: opts.minutes,
+            jobs,
+            owner_id: &owner_id,
+            pairings: None,
+        })?;
+        if let Some(s) = &sample {
+            if !quiet {
+                eprint!("{}", crate::report::styles::render(s));
+            }
+        }
+        sample
+    } else {
+        None
+    };
 
     let mut report = CalibrationReport {
         owner_id,
         run_id: run_id.clone(),
-        seed: opts.seed,
+        seed: opts.seed(),
         content_hash: first.content_hash.clone(),
         fixtures_hash,
         fixtures_scheme: FIXTURE_SCHEME,
-        identity: serde_json::to_value(&identity)?,
+        identity: identity_value,
         outcome: "success",
         error_type: None,
         error_code: None,
@@ -437,6 +623,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
             first.checks.clone()
         },
         formations: first.formations.clone(),
+        nash: nash_rating.and_then(Result::ok),
         selection: ctx.selection.clone(),
         red_card: first.red_card.clone(),
         baseline: None,
@@ -473,14 +660,47 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         verdicts,
         joint,
         power,
+        reported,
+        figures: first.figure_rows.clone(),
+        accepted: acceptances,
+        counts,
         registry: RegistryInfo {
             version: REGISTRY_VERSION,
             digest: ctx.bands.digest(),
             migrated_from: ctx.bands.migrated_from,
         },
+        real: real_info,
+        realism,
         stages: stages::snapshot(run_started.elapsed()),
         rules,
+        styles: None,
+        substitutions: None,
     };
+    if let Some(sample) = styles_sample {
+        report.stages.insert(
+            "styles".to_string(),
+            crate::report::StageCost {
+                ms: sample.wall_ms,
+                peak_mb: None,
+            },
+        );
+        report.styles = Some(sample);
+    }
+    // The substitutions of the first arm's matches against the real era of the rule pack's
+    // limit; report only.
+    if !quiet {
+        let table: Option<serde_json::Value> = std::fs::read(dir.path("signatures.json"))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok());
+        report.substitutions = crate::report::substitutions::report(
+            &first.rows,
+            loaded.content.rules.substitutions.limit,
+            table.as_ref(),
+        );
+        if let Some(s) = &report.substitutions {
+            eprint!("{}", crate::report::substitutions::render(s));
+        }
+    }
     if let Some(base) = &base {
         let diff = baseline::diff(base, &report.content_hash, &report.bands);
         eprint!("{}", baseline::render_table(&base.info, &diff));
@@ -519,6 +739,115 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     Ok(code)
 }
 
+/// `--suite styles`: the styles suite alone, `--matches` matches per ordered pairing. It
+/// judges no band and keeps no rows: it writes its report to `report.json` in the run
+/// folder, prints the table, and exits 0.
+fn styles_alone(
+    dir: &ContentDir,
+    opts: &CalibrateOpts,
+    loaded: &crate::content::Loaded,
+    states: &FlagStates,
+) -> anyhow::Result<i32> {
+    if opts.base.is_some() || opts.base_binary.is_some() || opts.pair.is_some() {
+        anyhow::bail!(
+            "--suite styles runs alone: a change run (--base) already plays a styles sample, \
+             and a paired run compares bands, which the styles suite does not judge"
+        );
+    }
+    if opts.baseline.is_some() || !opts.bands.is_empty() || !opts.pairings.is_empty() {
+        anyhow::bail!("--suite styles takes no --baseline, --band or --pairing");
+    }
+    let content = loaded.content.with_flags(states)?;
+    let Some(styles_file) = content.styles.as_ref() else {
+        anyhow::bail!(
+            "--suite styles: the content folder {} has no styles.json",
+            dir.root().display()
+        );
+    };
+    let pairings = opts
+        .style_pairings
+        .iter()
+        .map(|name| style_pairing(name, styles_file))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    let data = data_dir();
+    let owner_id = load_or_create_owner_id(&data)?;
+    let millis = u64::try_from(unix_millis()).unwrap_or(u64::MAX);
+    let run_id = format!("styles-{:016x}-{millis}", opts.seed());
+    let run_dir = opts
+        .out
+        .clone()
+        .unwrap_or_else(|| data.join("runs").join(&run_id));
+    let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
+    let jobs = opts
+        .jobs
+        .unwrap_or(u32::try_from(cores).unwrap_or(u32::MAX))
+        .max(1);
+    let report = styles::play(&styles::SuiteInput {
+        content: &content,
+        commentary: &loaded.commentary,
+        seed: opts.seed(),
+        matches: opts.matches,
+        minutes: opts.minutes,
+        jobs,
+        owner_id: &owner_id,
+        pairings: (!pairings.is_empty()).then_some(pairings.as_slice()),
+    })?
+    .context("the content has no styles")?;
+    eprint!("{}", crate::report::styles::render(&report));
+    let record = serde_json::json!({
+        "record.kind": "styles-report",
+        "operation": "calibrate",
+        "run.id": run_id,
+        "seed": opts.seed(),
+        "content.hash": hex12(&content.digest),
+        "calib.matches": opts.matches,
+        "calib.minutes": opts.minutes,
+        "calib.jobs": jobs,
+        "calib.styles": report,
+    });
+    std::fs::create_dir_all(&run_dir)
+        .with_context(|| format!("cannot create the run folder {}", run_dir.display()))?;
+    let line = serde_json::to_string(&record)?;
+    std::fs::write(run_dir.join("report.json"), format!("{line}\n"))
+        .with_context(|| format!("cannot write {}", run_dir.join("report.json").display()))?;
+    println!("{line}");
+    tracing::info!(
+        signal = "calibrate.styles",
+        run.id = %run_id,
+        matches = report.matches,
+        played = report.played,
+        dominant = report.dominant.len(),
+        identity_flags = report.identity_flags.len(),
+        violations = report.violations,
+        gate_pass = report.gate.pass,
+        pairings_outside = report.gate.pairings_outside.len()
+    );
+    Ok(0)
+}
+
+/// The styles of `--style-pairing` `name`, "<home> v <away>", as indices into the styles
+/// file.
+fn style_pairing(name: &str, styles: &engine::data::styles::Styles) -> anyhow::Result<[usize; 2]> {
+    let index = |s: &str| {
+        styles
+            .styles
+            .iter()
+            .position(|x| x.name == s.trim())
+            .with_context(|| {
+                let all: Vec<&str> = styles.styles.iter().map(|x| x.name.as_str()).collect();
+                format!(
+                    "--style-pairing {name}: no style {}; the styles are {}",
+                    s.trim(),
+                    all.join(", ")
+                )
+            })
+    };
+    let (home, away) = name
+        .split_once(" v ")
+        .with_context(|| format!("--style-pairing {name}: name it as \"<home> v <away>\""))?;
+    Ok([index(home)?, index(away)?])
+}
+
 /// The identity of a run: what decides its results, so a run folder of the same identity
 /// resumes and one of another identity starts again.
 fn run_identity(
@@ -544,13 +873,14 @@ fn run_identity(
             .map(|(n, s)| (n.clone(), s.code().to_string()))
             .collect(),
         pair: opts.pair.clone(),
-        seed: opts.seed,
+        seed: opts.seed(),
         minutes: opts.minutes,
         strength_boost: bands.stronger_team.attribute_boost,
         rng_scheme: engine::rng::STREAM_SCHEME,
         fixture_scheme: FIXTURE_SCHEME.to_string(),
         measures: MEASURES_VERSION,
         registry: REGISTRY_VERSION,
+        reseed: opts.reseed.filter(|&s| s != 0),
     })
 }
 
@@ -622,6 +952,7 @@ fn rows_of_every_arm(played: &[Arm]) -> Option<RowsInfo> {
         .filter_map(|a| a.rows_info)
         .reduce(|a, b| RowsInfo {
             format: a.format,
+            measures: a.measures,
             files: a.files + b.files,
             rows: a.rows + b.rows,
             recorded: Recorded {
@@ -646,9 +977,85 @@ fn informational(mut checks: Vec<BandCheck>) -> Vec<BandCheck> {
     checks
 }
 
-/// A run's verdict: each band's word, and a change run's joint word and power.
+/// Marks each row of a band the acceptances name: a not-sure row is accepted, not shown
+/// equivalent, and keeps its word; a row that no longer reads not sure gets a note instead.
+fn mark_accepted(rows: &mut [verdict::VerdictRow], a: &accepted::AcceptedInfo) {
+    for r in rows.iter_mut().filter(|r| a.bands.contains(&r.band)) {
+        if r.word == verdict::Word::NotSure {
+            r.accepted = Some(true);
+        } else {
+            r.note = Some(format!(
+                "acceptance no longer applies: it reads {}",
+                r.word.code()
+            ));
+        }
+    }
+}
+
+/// The matches a run judged: every engine's rows, the pairs of a change run, and each
+/// engine's matches with its build (the first 16 hex characters of its executable's hash).
+fn match_counts(
+    played: &[Arm],
+    old: Option<(&BaseReport, &Folded)>,
+    joint: Option<&verdict::Joint>,
+    exe_sha256: &str,
+) -> Counts {
+    let n = |rows: usize| u32::try_from(rows).unwrap_or(u32::MAX);
+    let build = exe_sha256.get(..16).unwrap_or(exe_sha256).to_string();
+    let mine = n(played.iter().map(|a| a.rows.len()).sum());
+    let observations = match old {
+        Some((base, folded)) => vec![
+            Observations {
+                engine: "changed",
+                build,
+                matches: mine,
+            },
+            Observations {
+                engine: "old",
+                build: base.build_id.clone(),
+                matches: n(folded.rows.len()),
+            },
+        ],
+        None => vec![Observations {
+            engine: "this",
+            build,
+            matches: mine,
+        }],
+    };
+    Counts {
+        total_matches: observations.iter().map(|o| o.matches).sum(),
+        pairs: joint.map_or(0, |j| j.pairs),
+        observations,
+    }
+}
+
+/// Sets each verdict row's real value and distance from the band's real entry, or the note
+/// the console prints in their place. A whole-distribution band whose real sample was read
+/// reads "whole sample", its distance its value.
+fn attach_real(rows: &mut [verdict::VerdictRow], info: &real::RealInfo, bands: &Registry) {
+    for r in rows.iter_mut() {
+        let entry = info.band(&r.band);
+        let note = match entry.map(|e| e.status) {
+            Some("no_counterpart") => "no real counterpart",
+            Some("no_record") => "no real record",
+            _ => "no real data here",
+        };
+        let whole = bands.band(&r.band).is_some_and(BandDef::is_distribution);
+        if whole && entry.is_some_and(|e| e.status == "read") {
+            r.set_whole_sample();
+        } else if whole {
+            r.set_real(None, note);
+        } else {
+            r.set_real(entry.and_then(|e| e.value), note);
+        }
+    }
+}
+
+/// A run's verdict: each gating band's word, each reported band's, and a change run's joint
+/// word and power.
 struct Judged {
     verdicts: Vec<verdict::VerdictRow>,
+    reported: Vec<verdict::VerdictRow>,
     joint: Option<verdict::Joint>,
     power: Option<BTreeMap<String, PowerInfo>>,
 }
@@ -682,6 +1089,12 @@ struct RunCtx<'a> {
     run_id: String,
     /// This invocation: the ledger files its threads write carry it.
     session: String,
+    /// The real-data folder the distribution bands' samples are read from.
+    real_folder: real::RealFolder,
+    /// The old engine's own run, started by a change run: it reads no real data.
+    quiet: bool,
+    /// The distribution bands' real samples, read once, in the judge stage, on first use.
+    samples: std::sync::OnceLock<std::sync::Arc<real::Samples>>,
 }
 
 /// The suites a run plays, and the numbers of the formation pairings it plays: `--suite`
@@ -770,8 +1183,9 @@ fn pairing_number(name: &str, pairings: &[[String; 2]]) -> anyhow::Result<usize>
 }
 
 /// SHA-256, as 12 hex characters, over the inputs that decide a run's fixtures: the
-/// attributes, rules and tactics content, the generator block after the flag states, and
-/// the two default clubs. Parsed values are hashed, so a change of layout alone does not
+/// attributes, rules, tactics and trait catalogue content (a generated player's traits are
+/// drawn from the catalogue), the generator block after the flag states, and the two default
+/// clubs. Parsed values are hashed, so a change of layout alone does not
 /// change it. Tuning values outside the generator block and flag states that leave the
 /// generator alone do not change it: they are the change a baseline diff measures.
 pub fn fixtures_hash(content: &Content, teams: &[TeamFile; 2]) -> anyhow::Result<String> {
@@ -780,6 +1194,7 @@ pub fn fixtures_hash(content: &Content, teams: &[TeamFile; 2]) -> anyhow::Result
         serde_json::to_vec(&content.attributes)?,
         serde_json::to_vec(&content.rules)?,
         serde_json::to_vec(&content.tactics)?,
+        serde_json::to_vec(&content.traits)?,
         serde_json::to_vec(&content.tuning.generator)?,
         serde_json::to_vec(&teams[0])?,
         serde_json::to_vec(&teams[1])?,
@@ -799,6 +1214,10 @@ struct Arm {
     formations: Vec<PairingFigures>,
     red_card: Option<RedCardFigures>,
     checks: Vec<BandCheck>,
+    /// The checks of the bands that only report.
+    reported: Vec<BandCheck>,
+    /// The registry's figures beside an earlier build's values.
+    figure_rows: Vec<crate::report::FigureRow>,
     wall_ms: BTreeMap<String, u64>,
     pass: bool,
     change_never_applied: u32,
@@ -906,11 +1325,23 @@ impl RunCtx<'_> {
     fn keyed(&self, suite: Suite) -> Vec<Keyed> {
         fixtures::keyed(
             suite,
-            self.opts.seed,
+            self.opts.seed(),
             self.matches_for(suite),
             &self.formation_names,
             &self.selected,
         )
+    }
+
+    /// Every match `suite` plays on this engine: [`Self::keyed`], each engine seed re-derived
+    /// under `--reseed` when it is set. The old engine always plays [`Self::keyed`].
+    fn own_keyed(&self, suite: Suite) -> Vec<Keyed> {
+        let mut list = self.keyed(suite);
+        if let Some(salt) = self.opts.reseed {
+            for k in &mut list {
+                k.engine_seed = fixtures::reseeded(k.engine_seed, salt);
+            }
+        }
+        list
     }
 
     /// Matches per suite unit `suite` plays in this phase.
@@ -928,7 +1359,7 @@ impl RunCtx<'_> {
         for arm_dir in arm_dirs {
             let finished = run_folder::finished(arm_dir, None)?;
             for &suite in &self.suites {
-                for k in self.keyed(suite) {
+                for k in self.own_keyed(suite) {
                     total += 1;
                     if finished
                         .get(&k.key)
@@ -963,7 +1394,7 @@ impl RunCtx<'_> {
             source,
             data,
             content_dir: self.dir.root(),
-            seed: opts.seed,
+            seed: opts.seed(),
             minutes: opts.minutes,
             matches: &self.matches,
             jobs: self.jobs,
@@ -978,7 +1409,7 @@ impl RunCtx<'_> {
         );
         let folded = {
             let _judge = stages::enter(Stage::Judge);
-            self.fold_rows(&old.dir)?
+            self.fold_rows(&old.dir, true)?
         };
         let mut checks = folded.builder.checks(&BTreeMap::new());
         if !opts.bands.is_empty() {
@@ -1001,10 +1432,26 @@ impl RunCtx<'_> {
         Ok(Some((report, folded)))
     }
 
-    /// A builder with every selected suite planned.
+    /// The distribution bands' real samples, read on the first call and kept for the run;
+    /// none in the old engine's own run, which judges nothing shown. Every caller is in the
+    /// judge stage (folding the rows, or reading the real values), so the read is its time.
+    fn real_samples(&self) -> std::sync::Arc<real::Samples> {
+        self.samples
+            .get_or_init(|| {
+                std::sync::Arc::new(if self.quiet {
+                    real::Samples::new()
+                } else {
+                    real::samples(&self.real_folder, &self.bands)
+                })
+            })
+            .clone()
+    }
+
+    /// A builder with every selected suite planned, holding the real samples.
     fn planned_builder(&self) -> RunBuilder {
         let opts = self.opts;
         let mut builder = RunBuilder::new(self.bands.clone());
+        builder.set_real_samples(self.real_samples(), opts.seed());
         builder.minutes = opts.minutes;
         for &suite in &self.suites {
             let matches = self.matches_for(suite);
@@ -1045,8 +1492,12 @@ impl RunCtx<'_> {
     /// Folds every planned match the ledger of `dir` finished into a builder, from its
     /// compact row, in fixture order; a planned match with no ledger entry or no row is the
     /// dark path. Each match's band record is rebuilt from its row with the statistics
-    /// files' rounding, so the bands equal those folded from the statistics files.
-    fn fold_rows(&self, dir: &Path) -> anyhow::Result<Folded> {
+    /// files' rounding, so the bands equal those folded from the statistics files; its
+    /// extras (measures, players' running, clubs) come with it. `old` marks the old engine's
+    /// rows, whose measures the test seam `--inject-failure base-without-measures` drops.
+    fn fold_rows(&self, dir: &Path, old: bool) -> anyhow::Result<Folded> {
+        let drop_measures =
+            old && self.opts.inject_failure == Some(InjectFailure::BaseWithoutMeasures);
         let done = run_folder::finished(dir, None)?;
         let read = rows::read_rows(dir, &done)?;
         let mut builder = self.planned_builder();
@@ -1056,7 +1507,12 @@ impl RunCtx<'_> {
         let mut panicked = 0;
         for &suite in &self.suites {
             let mut outliers = 0;
-            for k in self.keyed(suite) {
+            let list = if old {
+                self.keyed(suite)
+            } else {
+                self.own_keyed(suite)
+            };
+            for k in list {
                 let row = done
                     .get(&k.key)
                     .filter(|d| d.seed == k.engine_seed)
@@ -1076,12 +1532,27 @@ impl RunCtx<'_> {
                 outliers += has(reason::OUTLIER);
                 keys.entry(suite).or_default().push(k.key.as_u64());
                 self.add(&mut builder, suite, &k, row.band_record());
-                planned.insert(k.key, *row);
+                let club = |c: usize| (k.fixture.league, u32::try_from(c).unwrap_or(u32::MAX));
+                let measured = row.measured.as_deref();
+                builder.set_extras(
+                    suite,
+                    Extras {
+                        measures: match measured {
+                            Some(m) if !drop_measures => m.measures,
+                            _ => rows::Measures::default(),
+                        },
+                        physical: measured.map(|m| m.physical).unwrap_or_default(),
+                        shape: measured.map_or([[0.0; SHAPE_FIELDS]; 2], |m| m.shape),
+                        clubs: k.fixture.clubs.map(club),
+                    },
+                );
+                planned.insert(k.key, row.clone());
             }
             builder.set_outliers(suite, outliers);
         }
         let rows_info = RowsInfo {
             format: ROWS_FORMAT,
+            measures: cfg!(feature = "measures"),
             files: read.files,
             rows: u32::try_from(planned.len()).unwrap_or(u32::MAX),
             recorded,
@@ -1100,7 +1571,7 @@ impl RunCtx<'_> {
         let content = self.loaded.content.with_flags(states)?;
         let [team_a, team_b] = &self.loaded.teams;
         let config = MatchConfig::new(
-            self.opts.seed,
+            self.opts.seed(),
             self.opts.minutes,
             &content,
             [team_a, team_b],
@@ -1122,7 +1593,7 @@ impl RunCtx<'_> {
         let opts = self.opts;
         let content = self.loaded.content.with_flags(states)?;
         let [team_a, team_b] = &self.loaded.teams;
-        let config = MatchConfig::new(opts.seed, opts.minutes, &content, [team_a, team_b])?;
+        let config = MatchConfig::new(opts.seed(), opts.minutes, &content, [team_a, team_b])?;
 
         let Folded {
             builder,
@@ -1134,9 +1605,12 @@ impl RunCtx<'_> {
         let figures = builder.figures();
         let formations = builder.pairing_figures();
         let mut checks = builder.checks(wall);
+        let mut reported = builder.reported_checks();
+        let figure_rows = builder.figure_rows();
         // `--band` judges only the named bands; each suite's time budget stays.
         if !opts.bands.is_empty() {
             checks.retain(|c| c.band == "wall_ms" || opts.bands.contains(&c.band));
+            reported.retain(|c| opts.bands.contains(&c.band));
         }
         let change_never_applied = builder.change_never_applied();
         let match_without_stats = builder.missing;
@@ -1149,11 +1623,16 @@ impl RunCtx<'_> {
                 tracing::warn!(signal = "calibrate.darkpath", run.id = %self.run_id, counter, value);
             }
         }
-        let pass = checks.iter().all(|c| c.pass)
+        // A band that only reports never fails the run.
+        let pass = checks
+            .iter()
+            .all(|c| c.pass || self.bands.report_only(&c.band).is_some())
             && change_never_applied == 0
             && match_without_stats == 0
             && match_panicked == 0;
         checks
+            .sort_by(|a, b| (&a.suite, &a.band, &a.pairing).cmp(&(&b.suite, &b.band, &b.pairing)));
+        reported
             .sort_by(|a, b| (&a.suite, &a.band, &a.pairing).cmp(&(&b.suite, &b.band, &b.pairing)));
         for c in checks.iter().filter(|c| !c.pass) {
             tracing::warn!(
@@ -1179,6 +1658,8 @@ impl RunCtx<'_> {
             formations,
             red_card: builder.red_card_figures(),
             checks,
+            reported,
+            figure_rows,
             wall_ms,
             pass,
             change_never_applied,
@@ -1217,7 +1698,7 @@ impl RunCtx<'_> {
             let events = count_files(&arm_dir.join("events"));
             let folded = {
                 let _judge = stages::enter(Stage::Judge);
-                self.fold_rows(arm_dir)?
+                self.fold_rows(arm_dir, false)?
             };
             played.push(self.finish_arm(
                 s,
@@ -1238,7 +1719,8 @@ impl RunCtx<'_> {
         let targets = {
             let _judge = stages::enter(Stage::Judge);
             let (sets, rows) = self.paired(first, old);
-            power_targets(&sets, rows, &opts.bands, opts.seed, pilot, opts.matches)
+            let (gating, _) = self.split_paired(rows, first, old);
+            power_targets(&sets, gating, &opts.bands, opts.seed(), pilot, opts.matches)
         };
         self.drivers.clear();
         self.no_target.clear();
@@ -1278,23 +1760,53 @@ impl RunCtx<'_> {
     ) -> Judged {
         let opts = self.opts;
         let _judge = stages::enter(Stage::Judge);
+        let why = |b: &str| self.bands.report_only(b);
         if !change {
-            let verdicts = if opts.pair.is_none() {
-                verdict::range_only(&first.checks)
+            let (verdicts, mut reported) = if opts.pair.is_none() {
+                (
+                    verdict::range_only(&first.checks),
+                    verdict::range_rows(&first.reported, None),
+                )
             } else {
-                Vec::new()
+                (Vec::new(), Vec::new())
             };
+            verdict::mark_report_only(&mut reported, None, why);
             return Judged {
                 verdicts,
+                reported,
                 joint: None,
                 power: None,
             };
         }
+        // The gating rows are judged exactly as if no band only reported: the reported
+        // rows get a bootstrap and a threshold of their own, so they never move `c`.
         let (sets, mut rows) = self.paired(first, old);
         keep_bands(&mut rows, &opts.bands);
-        let (found, c) = verdict::bootstrap(&sets, &rows, opts.seed, verdict::RESAMPLES);
-        let (rows, joint) =
-            verdict::judge(&sets, &rows, &found, c, first.guards(), &self.no_target);
+        let (gating, reported) = self.split_paired(rows, first, old);
+        let (found, c) = verdict::bootstrap(&sets, &gating, opts.seed(), verdict::RESAMPLES);
+        let (mut rows, mut joint) =
+            verdict::judge(&sets, &gating, &found, c, first.guards(), &self.no_target);
+        let (found, c) = verdict::bootstrap(&sets, &reported, opts.seed(), verdict::RESAMPLES);
+        let (mut reported, _) =
+            verdict::judge(&sets, &reported, &found, c, Vec::new(), &BTreeMap::new());
+        // The rows a paired test cannot judge: their range alone, on the changed engine.
+        if let Some(old) = old {
+            for spec in first.builder.row_specs(true) {
+                let selected = opts.bands.is_empty() || opts.bands.contains(&spec.def.band);
+                let Some(note) = self.range_reason(spec.def, spec.suite, first, old) else {
+                    continue;
+                };
+                let only = spec.def.report_only.is_some();
+                // A build without the measures judges a reported measures band nowhere.
+                if !selected || (only && note == verdict::NO_MEASURES_NOTE) {
+                    continue;
+                }
+                let row = verdict::range_rows(&[first.builder.check(&spec)], Some(note));
+                if only { &mut reported } else { &mut rows }.extend(row);
+            }
+        }
+        joint.word = verdict::joint_word(&rows, &joint.guards);
+        verdict::mark_report_only(&mut reported, None, why);
         let power: BTreeMap<String, PowerInfo> = self
             .matches
             .iter()
@@ -1317,9 +1829,53 @@ impl RunCtx<'_> {
         self.log_verdict(&rows, &joint);
         Judged {
             verdicts: rows,
+            reported,
             joint: Some(joint),
             power: Some(power),
         }
+    }
+
+    /// Why a change run judges `def` in `suite` on its range alone, on the changed engine:
+    /// a per-club spread has no paired form; a measures band needs the measures in both
+    /// engines' rows. `None` when the paired test judges it.
+    fn range_reason(
+        &self,
+        def: &BandDef,
+        suite: Suite,
+        first: &Arm,
+        old: &Folded,
+    ) -> Option<&'static str> {
+        if matches!(def.measure, Measure::ClubRange { .. }) {
+            Some(verdict::PER_CLUB)
+        } else if !def.needs_measures() {
+            None
+        } else if !first.builder.has_measures(suite) {
+            Some(verdict::NO_MEASURES_NOTE)
+        } else if !old.builder.has_measures(suite) {
+            Some(verdict::BASE_WITHOUT_MEASURES)
+        } else {
+            None
+        }
+    }
+
+    /// The paired rows the paired test judges, split into the bands that gate and those
+    /// that only report; a row judged on its range alone is in neither.
+    fn split_paired(
+        &self,
+        rows: Vec<verdict::PairedRow>,
+        first: &Arm,
+        old: Option<&Folded>,
+    ) -> (Vec<verdict::PairedRow>, Vec<verdict::PairedRow>) {
+        let Some(old) = old else {
+            return (Vec::new(), Vec::new());
+        };
+        rows.into_iter()
+            .filter(|r| {
+                self.bands
+                    .band(&r.band)
+                    .is_some_and(|d| self.range_reason(d, r.suite, first, old).is_none())
+            })
+            .partition(|r| self.bands.report_only(&r.band).is_none())
     }
 
     /// One structured event for a change run's joint word with its counts, and one for each
@@ -1504,6 +2060,14 @@ mod tests {
             "a formation"
         );
 
+        let mut traits = content.clone();
+        traits.traits.traits.pop();
+        assert_ne!(
+            base,
+            fixtures_hash(&traits, &teams).unwrap(),
+            "the trait catalogue"
+        );
+
         let mut generator = content.clone();
         generator.tuning.generator.squad_size += 1;
         assert_ne!(
@@ -1550,6 +2114,7 @@ mod tests {
             changed: [changed, vec![1.0; n], vec![1.0; n], vec![1.0; n]],
             old: [vec![old; n], vec![1.0; n], vec![1.0; n], vec![1.0; n]],
             set: 0,
+            dist: None,
         }
     }
 

@@ -19,7 +19,7 @@ use anyhow::Context;
 use sha2::{Digest, Sha256};
 
 use super::fixtures::{FIXTURE_SCHEME, FixtureKey};
-use super::rows::ROWS_FORMAT;
+use super::rows::{READ_FORMATS, ROWS_FORMAT};
 use super::run_folder;
 use crate::bisect::cache::{self, Builder, CacheKey};
 use crate::report::Suite;
@@ -305,13 +305,13 @@ fn probe(exe: &Path, content: &Path, dir: &Path) -> anyhow::Result<()> {
     refuse_rows(exe, format)
 }
 
-/// Refuses an old engine whose probe report names no row format, or another one than
-/// this program reads.
+/// Refuses an old engine whose probe report names no row format, or one this program does
+/// not read. An old engine of format 1 writes rows without the measures.
 fn refuse_rows(exe: &Path, format: Option<u64>) -> anyhow::Result<()> {
-    if format != Some(u64::from(ROWS_FORMAT)) {
+    if !format.is_some_and(|f| READ_FORMATS.iter().any(|&r| u64::from(r) == f)) {
         anyhow::bail!(
-            "the old engine {} writes {}, and this run reads compact rows of format \
-             {ROWS_FORMAT}; it was built before that row format, so its results cannot be \
+            "the old engine {} writes {}, and this run reads compact rows of formats 1 \
+             and {ROWS_FORMAT}; it writes another row format, so its results cannot be \
              cached",
             exe.display(),
             format.map_or_else(
@@ -429,10 +429,15 @@ fn calibrate(exe: &Path, content: &Path) -> Command {
     cmd
 }
 
+/// The real-team signature table in the content folder: no match reads it.
+const SIGNATURES_FILE: &str = "signatures.json";
+
 /// SHA-256, as 12 hex characters, over every file of a folder: its path inside the folder
 /// and its bytes, in path order. The band registry counts only by the strength suite's
 /// attribute boost, the one value in it a match plays with: a changed range or shift is
-/// judged again, so the old engine's results stay in the cache.
+/// judged again, so the old engine's results stay in the cache. The gate proof file and the
+/// real-team signature table (`signatures.json`, read only by the harness's own reports and
+/// fits) decide no match, so writing a proof or a new table keeps the cache too.
 pub fn folder_hash(dir: &Path) -> anyhow::Result<String> {
     fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) -> std::io::Result<()> {
         for entry in fs::read_dir(dir)? {
@@ -451,7 +456,10 @@ pub fn folder_hash(dir: &Path) -> anyhow::Result<String> {
     files.sort();
     let mut hasher = Sha256::new();
     for (name, path) in files {
-        if name == ".complete" {
+        if name == ".complete"
+            || name == crate::report::proof::PROOF_FILE
+            || name == SIGNATURES_FILE
+        {
             continue;
         }
         let mut bytes =
@@ -530,6 +538,10 @@ mod tests {
         assert!(err.contains("no compact rows"), "{err}");
         let err = refuse_rows(exe, Some(9)).unwrap_err().to_string();
         assert!(err.contains("compact rows of format 9"), "{err}");
+        assert!(err.contains("formats 1 and 3"), "{err}");
+        refuse_rows(exe, Some(1)).unwrap();
+        let err = refuse_rows(exe, Some(2)).unwrap_err().to_string();
+        assert!(err.contains("compact rows of format 2"), "{err}");
         refuse_rows(exe, Some(u64::from(ROWS_FORMAT))).unwrap();
     }
 
@@ -563,6 +575,25 @@ mod tests {
             first,
             "the marker is not content"
         );
+        fs::write(dir.join("gate-proof.json"), "{}").unwrap();
+        assert_eq!(
+            folder_hash(&dir).unwrap(),
+            first,
+            "the gate proof decides no match"
+        );
+        fs::write(dir.join("signatures.json"), "{}").unwrap();
+        assert_eq!(
+            folder_hash(&dir).unwrap(),
+            first,
+            "the signature table decides no match"
+        );
+        fs::write(dir.join("sub/gate-proof.json"), "{}").unwrap();
+        assert_ne!(
+            folder_hash(&dir).unwrap(),
+            first,
+            "only the top-level proof file is left out"
+        );
+        fs::remove_file(dir.join("sub/gate-proof.json")).unwrap();
         fs::write(dir.join("sub/b.json"), "3").unwrap();
         assert_ne!(folder_hash(&dir).unwrap(), first);
         let _ = fs::remove_dir_all(&dir);

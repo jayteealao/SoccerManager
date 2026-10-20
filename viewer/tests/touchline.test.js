@@ -10,7 +10,9 @@ import { MatchState } from '../src/lib/match-state.js';
 import {
   benchRows,
   levelCell,
+  moodCell,
   NO_PICK,
+  outOfPositionNote,
   pickDetail,
   pickKey,
   playerStateRows,
@@ -75,7 +77,10 @@ test('each pick reads as its change and its reason, and its label is the chip’
     { code: 'sub-fatigue', kind: 'substitution', off: 7, on: 18 },
     { code: 'sub-injury', kind: 'substitution', off: 3, on: 14 },
     { code: 'sub-keeper', kind: 'substitution', off: 5, on: 12 },
-    { code: 'mentality-up-trailing', kind: 'tactics', patch: { mentality: 3, instructions: [2, null, null, null, null, null] } },
+    { code: 'sub-booked', kind: 'substitution', off: 4, on: 13 },
+    { code: 'sub-form', kind: 'substitution', off: 6, on: 15 },
+    { code: 'sub-knock', kind: 'substitution', off: 8, on: 16 },
+    { code: 'mentality-up-trailing', kind: 'tactics', patch: { mentality: 3, instructions: [3, null, null, null, null, null] } },
     { code: 'mentality-down-leading', kind: 'tactics', patch: { mentality: 1, instructions: [null, null, null, null, null, 1] } },
   ];
   const rows = proposalRows(picks, SQUAD, SCHEMA, new Set([pickKey(picks[0])]));
@@ -85,10 +90,14 @@ test('each pick reads as its change and its reason, and its label is the chip’
   assert.ok(!rows[1].accepted);
   assert.equal(rows[1].reason, 'injured player');
   assert.equal(rows[2].reason, 'outfield player in goal');
-  assert.equal(rows[3].text, 'Mentality Positive, Pressing high · trailing');
-  assert.equal(rows[4].reason, 'leading');
-  assert.match(rows[4].what, /^Mentality Cautious, Time wasting /);
-  assert.deepEqual(rows.map((r) => r.n), [1, 2, 3, 4, 5]);
+  assert.equal(rows[3].reason, 'booked player at risk');
+  assert.equal(rows[4].reason, 'player off his game');
+  assert.equal(rows[5].text, 'Player8 → Player16 · player carrying a knock');
+  // The old mentality codes still read for an older replay.
+  assert.equal(rows[6].text, 'Mentality Positive, Pressing high · trailing');
+  assert.equal(rows[7].reason, 'leading');
+  assert.match(rows[7].what, /^Mentality Cautious, Time wasting /);
+  assert.deepEqual(rows.map((r) => r.n), [1, 2, 3, 4, 5, 6, 7, 8]);
 });
 
 test('accepting a pick queues exactly the change the assistant named', () => {
@@ -96,7 +105,7 @@ test('accepting a pick queues exactly the change the assistant named', () => {
   const patch = { mentality: 3 };
   assert.deepEqual(pickDetail({ kind: 'tactics', patch }), { patch });
   assert.notEqual(pickKey({ code: 'a', kind: 'substitution', off: 1, on: 2 }), pickKey({ code: 'a', kind: 'substitution', off: 1, on: 3 }));
-  assert.match(NO_PICK, /every 30 seconds/);
+  assert.match(NO_PICK, /at each stoppage/);
 });
 
 test('the strip names the ball state, the next stoppage and the counts', () => {
@@ -126,4 +135,46 @@ test('the level reads now of fresh when below, an equals sign when not, and a da
   assert.equal(levelCell(150, 150).text, '=');
   assert.equal(levelCell(146, 150).text, '=', 'the same whole number is no change');
   assert.equal(levelCell(undefined, 150).text, '—');
+});
+
+test('the mood column reads each word with its mark, only the mark coloured, and a dash when unknown', () => {
+  const expected = {
+    confident: ['Confident', '▲', '--good'],
+    lifted: ['Lifted', '▲', '--good'],
+    steady: ['Steady', '=', null],
+    low: ['Low', '▼', '--warn'],
+    rattled: ['Rattled', '▼', '--warn'],
+  };
+  for (const [key, [text, mark, token]] of Object.entries(expected)) {
+    const cell = moodCell(key);
+    assert.deepEqual([cell.key, cell.text, cell.mark, cell.token], [key, text, mark, token]);
+    assert.equal(cell.label, `Mood: ${text}`);
+    assert.ok(!/\d/.test(cell.text + cell.label));
+  }
+  const unknown = moodCell(undefined);
+  assert.deepEqual([unknown.text, unknown.mark, unknown.label], ['—', null, 'Mood not known']);
+  const rows = playerStateRows([row(0, 1, { mood: 'lifted' }), row(1, 1)], []);
+  assert.equal(rows[0].mood.text, 'Lifted');
+  assert.equal(rows[1].mood.text, '—');
+});
+
+test('the out-of-position note names a starter away from his listed position and rated lower there', () => {
+  const listed = ['GK', 'RB', 'CB', 'CB', 'LB', 'DM', 'CM', 'CM', 'RW', 'LW', 'CM'];
+  const slots = ['GK', 'RB', 'CB', 'CB', 'LB', 'DM', 'CM', 'CM', 'RW', 'LW', 'ST'];
+  const rows = listed.map((position, i) => row(i, 1, { position, squad: i }));
+  const squad = listed.map((position) => ({ 'player.positions': { [position]: 150, ST: 90 } }));
+  const note = outOfPositionNote(rows, slots, squad);
+  assert.equal(note.length, 1);
+  assert.equal(note[0].text, 'Player10 plays ST, away from his natural CM: familiarity lowers his level.');
+  assert.deepEqual([note[0].plays, note[0].natural, note[0].id], ['ST', 'CM', 'h-10']);
+  // Rated as well there: nothing to say.
+  const asGood = squad.map((p, i) => (i === 10 ? { 'player.positions': { CM: 150, ST: 160 } } : p));
+  assert.equal(outOfPositionNote(rows, slots, asGood), null);
+  // Every starter in his listed position, no ratings, or no lineup yet: no note.
+  assert.equal(outOfPositionNote(rows, listed, squad), null);
+  assert.equal(outOfPositionNote(rows, slots, []), null);
+  assert.equal(outOfPositionNote(rows, null, squad), null);
+  // A player sent off is not named.
+  const off = rows.map((r, i) => (i === 10 ? { ...r, sentOff: true } : r));
+  assert.equal(outOfPositionNote(off, slots, squad), null);
 });

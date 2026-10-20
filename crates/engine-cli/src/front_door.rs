@@ -56,6 +56,7 @@ impl SampleTeam {
             "ground": [club.ground.length, club.ground.width],
             "strength": (self.strength * 10.0).round() / 10.0,
             "converted": self.converted_from.is_some(),
+            "converted_from": self.converted_from,
         })
     }
 }
@@ -708,12 +709,14 @@ pub(crate) mod tests {
         for team in &teams {
             assert_eq!(team.converted_from, Some(1), "{}", team.name());
             assert_eq!(team.json()["converted"], true);
+            assert_eq!(team.json()["converted_from"], 1);
         }
         let current = SampleTeam {
             converted_from: None,
             ..teams[0].clone()
         };
         assert_eq!(current.json()["converted"], false);
+        assert!(current.json()["converted_from"].is_null());
     }
 
     fn view(name: &str, columns: &[&str]) -> View {
@@ -765,6 +768,7 @@ pub(crate) mod tests {
                     id: (*id).into(),
                     team: *team,
                     rating: *rating,
+                    ..RatingEntry::default()
                 })
                 .collect(),
         }

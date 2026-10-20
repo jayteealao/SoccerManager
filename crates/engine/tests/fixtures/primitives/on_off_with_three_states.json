@@ -1,0 +1,32 @@
+{
+  "refusal": "an on/off primitive has exactly two states; it has 3",
+  "primitive": {
+    "name": "planted",
+    "kind": "on_off",
+    "default": "off",
+    "inputs": [
+      {
+        "input": "patience",
+        "hook": "pass.recycle"
+      }
+    ],
+    "signature": [
+      {
+        "stat": "passes_per_possession",
+        "direction": "up"
+      }
+    ],
+    "data": {
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England"
+      ],
+      "row": "tempo"
+    },
+    "states": [
+      "off",
+      "half",
+      "on"
+    ]
+  }
+}

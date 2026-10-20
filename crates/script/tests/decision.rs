@@ -34,8 +34,11 @@ fn the_shoot_bias_pack_changes_the_seeded_match() {
         shots(&scripted),
         shots(&plain)
     );
+    // Every outfield carrier has a shot since a shot has no fixed range, so the pack's bias
+    // makes each carrier shoot at once: few decisions, each one a call (over 1,000 calls
+    // while the shot was on only in range).
     let stats = scripted.plugins().stats;
-    assert!(stats.calls > 1_000, "{stats:?}");
+    assert!(stats.calls > 200, "{stats:?}");
     assert_eq!((stats.aborts, stats.denials, stats.disabled), (0, 0, 0));
     assert!(events.iter().all(|e| e.kind != EngineEventKind::Script));
     assert!(
@@ -55,7 +58,9 @@ fn a_carrier_in_range_shoots_instead_of_passing_with_the_pack() {
         let mut config = config(90);
         config.tuning.decision.noise = 0.0;
         // The home striker 20 m from goal with a defender in the shooting lane and a
-        // team-mate open to its side; the other away outfield players far away.
+        // team-mate open to its side, short of the defender (at x 38 the defender reached him
+        // before his touch once a passer read the press his receiver would meet); the other
+        // away outfield players far away.
         let mut scene = Scene::new(config);
         for i in 13..22 {
             scene = scene.place(i, DVec2::new(-40.0, (i as f64 - 17.0) * 6.0));
@@ -63,7 +68,7 @@ fn a_carrier_in_range_shoots_instead_of_passing_with_the_pack() {
         let mut scene = scene
             .place(12, DVec2::new(35.5, 0.0))
             .place(9, DVec2::new(32.5, 0.0))
-            .place(10, DVec2::new(38.0, 14.0))
+            .place(10, DVec2::new(34.0, 14.0))
             .ball(DVec3::new(32.5, 0.0, 0.0))
             .carrier(Some(9))
             .tick(1_001);

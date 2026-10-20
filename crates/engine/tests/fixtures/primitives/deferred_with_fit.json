@@ -1,0 +1,42 @@
+{
+  "refusal": "a deferred primitive gives its reason and has no fit",
+  "primitive": {
+    "name": "planted",
+    "kind": "graded",
+    "levels": "instructions.tempo",
+    "default": "normal",
+    "inputs": [
+      {
+        "input": "patience",
+        "hook": "pass.recycle"
+      }
+    ],
+    "signature": [
+      {
+        "stat": "passes_per_possession",
+        "direction": "up"
+      }
+    ],
+    "data": {
+      "source": "wyscout_2017_18",
+      "competitions": [
+        "England"
+      ],
+      "row": "tempo",
+      "deferred": "a planted deferral"
+    },
+    "fits": [
+      {
+        "level": "slow",
+        "values": {
+          "patience": 0.125
+        },
+        "target": 1.16,
+        "achieved": 1.16,
+        "noise": 0.03,
+        "matches": 200,
+        "seed": 9
+      }
+    ]
+  }
+}

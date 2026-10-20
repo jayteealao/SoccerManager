@@ -116,6 +116,8 @@ fn the_lone_forward_holds_the_onside_line_while_his_side_has_the_ball() {
     for share in [content.tuning.engine.lone_line_hold, 1.0] {
         let mut config = live(&content, 7);
         config.tuning.lone_line_hold = share;
+        // Off-ball movement read neutral, so the scene sees the line hold alone.
+        config.tuning.contract.actions.0[engine::contract::ActionKind::OffBallRun as usize] = None;
         let mut scene = spread(Scene::new(config), -30.0, line)
             .place(carrier, DVec2::new(-20.0, 0.0))
             .ball(DVec3::new(-20.0, 0.0, 0.0))
@@ -124,7 +126,8 @@ fn the_lone_forward_holds_the_onside_line_while_his_side_has_the_ball() {
         // The striker starts well past the line, where his anchor also is.
         scene = scene.place(striker, DVec2::new(15.0, 0.0));
         let mut sim = scene.build();
-        let anchor = sim.teams()[0].anchor(STRIKER, DVec2::new(-20.0, 0.0), false, sim.tuning());
+        // His side has the ball, so his anchor is his stand in possession.
+        let anchor = sim.teams()[0].anchor(STRIKER, DVec2::new(-20.0, 0.0), true, sim.tuning());
         assert!(anchor.x > line, "the anchor {anchor} is past the line");
         sim.step();
         let target = sim.players()[striker].target;

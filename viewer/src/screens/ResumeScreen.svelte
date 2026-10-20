@@ -36,9 +36,8 @@
     if (!file) {
       return;
     }
-    const bytes = new Uint8Array(await file.arrayBuffer());
     fileInput.value = '';
-    await session.openReplay(bytes, file.name);
+    await session.openReplay(file, file.name);
   }
 </script>
 

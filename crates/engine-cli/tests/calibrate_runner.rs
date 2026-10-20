@@ -163,7 +163,7 @@ fn every_match_leaves_one_unrounded_row_and_the_statistics_files_keep_their_roun
     let rows = read_rows(&run);
     assert_eq!(rows.len(), 8);
     assert_eq!(report["calib.rows"]["rows"], 8);
-    assert_eq!(report["calib.rows"]["format"], 1);
+    assert_eq!(report["calib.rows"]["format"], 3);
     // One row per planned key: the ledger's keys.
     let row_keys: BTreeSet<String> = rows.iter().map(TestRow::key).collect();
     assert_eq!(row_keys.len(), 8);

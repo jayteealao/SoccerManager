@@ -2,8 +2,8 @@
 //! running velocity and foul cooldown), the ball, the
 //! carrier, the clock and its period, the score, the cards, energy, substitutions used, the
 //! managers, the change queue, the knockout switch, the outcomes of the next shoot-out kicks,
-//! the referee's and injury rolls' next draws, and the plugin hooks to where a test needs
-//! them.
+//! the referee's and injury rolls' next draws, the draws of the next restarts' waits, and the
+//! plugin hooks to where a test needs them.
 //! Only this crate's tests build it (the `scenario` feature), so a release build never
 //! contains it.
 
@@ -47,10 +47,19 @@ impl Scene {
         self
     }
 
-    /// Puts the ball at rest at `at`.
+    /// Puts the ball at rest at `at`. Every player's followed ball point is the ball, as
+    /// for a block that has settled around it.
     pub fn ball(mut self, at: DVec3) -> Self {
         self.sim.ball.pos = at;
         self.sim.ball.vel = DVec3::ZERO;
+        self.sim.slide_reset();
+        self
+    }
+
+    /// Every player's followed ball point at `at`, as for a block still settled around a
+    /// ball that was there: the far-player delay then follows the ball from it.
+    pub fn follow_from(mut self, at: DVec2) -> Self {
+        self.sim.slide_ball = [at; crate::modules::ROSTER];
         self
     }
 
@@ -67,11 +76,31 @@ impl Scene {
         self.sim.control_since = 0;
         if let Some(c) = c {
             self.sim.last_touch = Some(self.sim.players[c].team);
+            self.sim.possession_phase = Some(self.sim.players[c].team);
         }
         self
     }
 
+    /// The team in possession, kept through a loose ball and a pass in flight; `None`
+    /// before anyone controls the ball.
+    pub fn phase(mut self, team: Option<usize>) -> Self {
+        self.sim.possession_phase = team;
+        self
+    }
+
     /// The team that touched the ball last.
+    /// `passer`'s completed pass reached `receiver`, who keeps the ball for his side.
+    pub fn last_pass(mut self, passer: usize, receiver: usize) -> Self {
+        self.sim.last_pass = Some((passer, receiver));
+        self
+    }
+
+    /// The carrier gained the ball at `tick`.
+    pub fn control_since(mut self, tick: u32) -> Self {
+        self.sim.control_since = tick;
+        self
+    }
+
     pub fn last_touch(mut self, team: usize) -> Self {
         self.sim.last_touch = Some(team);
         self
@@ -186,28 +215,229 @@ impl Scene {
     /// Opens a penalty for `team` taken by player `taker`: the taker and the ball on the
     /// penalty mark of the goal `team` attacks, the defending side's acting keeper on his goal
     /// line, and the kick due on the next step.
-    pub fn penalty(mut self, team: usize, taker: usize) -> Self {
+    pub fn penalty(self, team: usize, taker: usize) -> Self {
         let attack_x = self.sim.teams[team].attack_x;
         let spot = self.sim.config.pitch().penalty_spot(attack_x);
         let keeper = self.sim.keeper(1 - team);
         let line_x = attack_x * (self.sim.config.pitch().half_length() - 0.5);
+        self.place(keeper, DVec2::new(line_x, 0.0)).restart(
+            StoppageKind::Penalty,
+            team,
+            taker,
+            spot,
+            true,
+        )
+    }
+
+    /// Opens a restart of `kind` for `team` taken by player `taker` at `spot` (`direct` for a
+    /// direct free kick): the taker and the ball at the spot, nobody on the ball, and the
+    /// restart due on the next step.
+    pub fn restart(
+        mut self,
+        kind: StoppageKind,
+        team: usize,
+        taker: usize,
+        spot: DVec2,
+        direct: bool,
+    ) -> Self {
         self = self
             .place(taker, spot)
-            .place(keeper, DVec2::new(line_x, 0.0))
             .ball(DVec3::new(spot.x, spot.y, 0.0))
             .carrier(None);
         let sim = &mut self.sim;
         sim.last_touch = Some(team);
-        sim.seat_phase(crate::rules::Phase::DeadBall(crate::rules::DeadBall {
-            kind: StoppageKind::Penalty,
-            team,
-            spot,
-            direct: true,
-            since: sim.tick,
-            ready_at: sim.tick,
-            taker,
-        }));
+        sim.seat_phase(crate::rules::Phase::DeadBall(
+            crate::rules::DeadBall::fixed(kind, team, spot, direct, sim.tick, 0, taker),
+        ));
         self
+    }
+
+    /// Sets player `i`'s rating of `attribute` to `value` (1.0 to 20.0, on the tenth grid) in
+    /// his squad entry and on the pitch, and derives his values again from it, as a team file
+    /// with that rating would give them at load; his side's line is laid out again, since
+    /// its organisation reads its players' values.
+    pub fn rating(mut self, i: usize, attribute: &str, value: f64) -> Self {
+        let sim = &mut self.sim;
+        let schema = &sim.config.attributes;
+        let index = schema
+            .index(attribute)
+            .unwrap_or_else(|| panic!("{attribute} is not an attribute"));
+        let (team, squad) = (sim.players[i].team, sim.players[i].squad);
+        let tenths = (value * 10.0).round().clamp(10.0, 200.0) as u8;
+        let entry = &mut sim.teams[team].squad[squad];
+        entry.attributes.values[index] = crate::rating::Rating::from_tenths(tenths);
+        let (derived, stages) = crate::player::Derived::from_blend(
+            &entry.attributes,
+            &sim.blend,
+            schema,
+            &sim.config.tuning,
+            entry.body,
+            0,
+        );
+        entry.derived = derived;
+        entry.stages = stages;
+        entry.personality = crate::contract::personality_scales(
+            &entry.attributes,
+            schema,
+            &sim.config.tuning.contract,
+        );
+        entry.kick_off_mood = crate::sim::mood::kick_off_mood(
+            &entry.condition,
+            &entry.personality,
+            &sim.config.tuning.contract.season(),
+        );
+        sim.players[i].attributes = entry.attributes;
+        let (deltas, form) = (sim.players[i].deltas, sim.players[i].form);
+        // Writes the squad entry's values when he is at his base, else blends them again.
+        sim.set_state(i, deltas, form);
+        sim.teams[team].relayout();
+        self
+    }
+
+    /// Sets player `i`'s mood (−100 to 100) and the effective values that follow from it.
+    pub fn mood(mut self, i: usize, mood: f64) -> Self {
+        self.sim.players[i].mood = mood.clamp(-crate::sim::mood::FULL, crate::sim::mood::FULL);
+        self.sim.refresh_effective();
+        self
+    }
+
+    /// Gives player `i` the season inputs a launcher match carries in his condition, his recent
+    /// form in tenths of a rating and his season-goal progress in percent of the pace, and
+    /// starts him at the kick-off mood they give, with his ambition and the match's tuning.
+    pub fn kick_off(
+        mut self,
+        i: usize,
+        recent_rating: Option<u8>,
+        goal_progress: Option<u8>,
+    ) -> Self {
+        let sim = &mut self.sim;
+        let (team, squad) = (sim.players[i].team, sim.players[i].squad);
+        let season = sim.config.tuning.contract.season();
+        let entry = &mut sim.teams[team].squad[squad];
+        entry.condition.recent_rating = recent_rating;
+        entry.condition.goal_progress = goal_progress;
+        entry.kick_off_mood =
+            crate::sim::mood::kick_off_mood(&entry.condition, &entry.personality, &season);
+        sim.players[i].mood = entry.kick_off_mood;
+        sim.refresh_effective();
+        self
+    }
+
+    /// Sets player `i`'s form offset, in tenths of a rating point, as its match part, and
+    /// rebuilds him.
+    pub fn form(mut self, i: usize, tenths: i8) -> Self {
+        let deltas = self.sim.players[i].deltas;
+        self.sim.players[i].form_match = tenths;
+        self.sim.set_state(i, deltas, tenths);
+        self
+    }
+
+    /// Sets player `i`'s rating at `position` (1.0 to 20.0, on the tenth grid) in his squad
+    /// entry, and the effective values that follow from it. His natural position is his
+    /// highest rating, so a rating above it makes `position` his natural one.
+    pub fn position_rating(
+        mut self,
+        i: usize,
+        position: crate::data::team::Position,
+        rating: f64,
+    ) -> Self {
+        let (team, squad) = (self.sim.players[i].team, self.sim.players[i].squad);
+        let k = crate::data::team::Position::ALL
+            .iter()
+            .position(|&p| p == position)
+            .expect("every position is listed");
+        let tenths = (rating * 10.0).round().clamp(10.0, 200.0) as u8;
+        self.sim.teams[team].squad[squad].positions[k] = crate::rating::Rating::from_tenths(tenths);
+        self.sim.refresh_effective();
+        self
+    }
+
+    /// Player `i` plays his formation slot's position as his natural one: his rating there is
+    /// raised to his highest.
+    /// Player `i` carries trait `name` at `strength`, or not at all with `None`.
+    pub fn with_trait(
+        mut self,
+        i: usize,
+        name: &str,
+        strength: Option<crate::data::traits::TraitStrength>,
+    ) -> Self {
+        let kind = crate::traits::TraitKind::from_name(name)
+            .unwrap_or_else(|| panic!("{name} is not a trait"));
+        let (team, squad) = (self.sim.players[i].team, self.sim.players[i].squad);
+        self.sim.teams[team].squad[squad].set_trait(kind, strength);
+        self
+    }
+
+    /// Player `i`'s strong foot is `strong` and his weaker foot `weaker` percent of it (1 to
+    /// 100), in his squad entry.
+    pub fn foot(mut self, i: usize, strong: crate::data::team::Side, weaker: u8) -> Self {
+        let (team, squad) = (self.sim.players[i].team, self.sim.players[i].squad);
+        self.sim.teams[team].squad[squad].foot = crate::data::team::Foot {
+            strong,
+            weaker: weaker.clamp(1, 100),
+        };
+        self
+    }
+
+    /// `team` holds instruction `index` (in the order of
+    /// [`crate::data::tactics::INSTRUCTIONS`]) at the level named `level`; the plan is rebuilt.
+    pub fn instruction(self, team: usize, index: usize, level: &str) -> Self {
+        let levels = self.sim.config.tactics.instructions.level_names(index);
+        let l = levels
+            .iter()
+            .position(|n| *n == level)
+            .unwrap_or_else(|| panic!("{level} is not a level of instruction {index}"));
+        self.retactic(team, |t| t.instructions[index] = l as u8)
+    }
+
+    /// The player in formation slot `slot` of `team` plays duty `duty`; the plan is rebuilt.
+    pub fn duty(self, team: usize, slot: usize, duty: &str) -> Self {
+        let d = self
+            .sim
+            .config
+            .tactics
+            .duty_index(duty)
+            .unwrap_or_else(|| panic!("{duty} is not a duty"));
+        self.retactic(team, |t| t.roles[slot].duty = d as u8)
+    }
+
+    /// `team` plays mentality `level`; the plan is rebuilt.
+    pub fn mentality(self, team: usize, level: &str) -> Self {
+        let m = self
+            .sim
+            .config
+            .tactics
+            .mentality_index(level)
+            .unwrap_or_else(|| panic!("{level} is not a mentality"));
+        self.retactic(team, |t| t.mentality = m as u8)
+    }
+
+    /// `team`'s tactics changed by `change`, with the plan and formation rebuilt.
+    fn retactic(mut self, team: usize, change: impl FnOnce(&mut crate::tactics::Tactics)) -> Self {
+        let mut tactics = self.sim.teams[team].tactics;
+        change(&mut tactics);
+        let schema = self.sim.config.tactics.clone();
+        let tuning = self.sim.config.tuning.clone();
+        self.sim.teams[team].set_tactics(tactics, &schema, &tuning);
+        self
+    }
+
+    pub fn familiar(mut self, i: usize) -> Self {
+        let played = self.sim.played_position(i);
+        let k = crate::data::team::Position::ALL
+            .iter()
+            .position(|&p| p == played)
+            .expect("every position is listed");
+        let (team, squad) = (self.sim.players[i].team, self.sim.players[i].squad);
+        let positions = &mut self.sim.teams[team].squad[squad].positions;
+        positions[k] = positions.iter().copied().max().unwrap_or_default();
+        self.sim.refresh_effective();
+        self
+    }
+
+    /// The position player `i` plays now: his formation slot's.
+    pub fn played_position(&self, i: usize) -> crate::data::team::Position {
+        self.sim.played_position(i)
     }
 
     /// The injury rolls' next draws, before the seeded stream.
@@ -305,11 +535,48 @@ impl Scene {
         self
     }
 
+    /// The next restarts take `quick` for the quick-restart draw and `wait_draw` (0 to 1) for
+    /// the drawn extra's uniform draw instead of their streams; `None` leaves that draw to its
+    /// stream.
+    pub fn pin_restart(mut self, quick: Option<bool>, wait_draw: Option<f64>) -> Self {
+        self.sim.pinned_restart = Some(crate::sim::PinnedRestart { quick, wait_draw });
+        self
+    }
+
     /// `team` has made `used` substitutions in `windows` windows.
     pub fn subs_used(mut self, team: usize, used: u8, windows: u8) -> Self {
         let ledger = &mut self.sim.ledgers[team];
         ledger.used = used;
         ledger.windows = windows;
+        self
+    }
+
+    /// Player `i` has taken a knock.
+    pub fn knock(mut self, i: usize) -> Self {
+        self.sim.players[i].knock = true;
+        self
+    }
+
+    /// Edits the match tally of player `i`.
+    pub fn player_tally(
+        mut self,
+        i: usize,
+        edit: impl FnOnce(&mut crate::sim::tally::PlayerTally),
+    ) -> Self {
+        let (team, squad) = (self.sim.players[i].team, self.sim.players[i].squad);
+        edit(&mut self.sim.tallies[team][squad]);
+        self
+    }
+
+    /// A stoppage of `kind` opens on the scene's current tick, as the step that stopped play
+    /// leaves it for the AI manager's check.
+    pub fn stoppage_opened(mut self, kind: StoppageKind) -> Self {
+        self.sim.stoppage = Some(crate::rules::Stoppage {
+            tick: self.sim.tick,
+            kind,
+            team: Some(0),
+            spot: DVec2::ZERO,
+        });
         self
     }
 

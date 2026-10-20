@@ -57,6 +57,8 @@ fn record(path: &Path, minutes: u32) -> u32 {
         knockout: false,
         ground_length: protocol::DEFAULT_GROUND_LENGTH,
         ground_width: protocol::DEFAULT_GROUND_WIDTH,
+        game_state: None,
+        styles: None,
     };
     messages
         .send(Frame::Text(
@@ -259,12 +261,12 @@ fn a_fixture_of_another_protocol_version_is_refused() {
     let path = dir.join("match.smfx");
     record(&path, 1);
     let mut bytes = std::fs::read(&path).unwrap();
-    bytes[4..6].copy_from_slice(&9u16.to_le_bytes());
+    bytes[4..6].copy_from_slice(&10u16.to_le_bytes());
     std::fs::write(&path, &bytes).unwrap();
     let err = read_fixture(&path).unwrap_err();
     assert!(
         err.to_string().contains(&format!(
-            "protocol version 9; this build speaks {PROTOCOL_VERSION}"
+            "protocol version 10; this build speaks {PROTOCOL_VERSION}"
         )),
         "{err}"
     );

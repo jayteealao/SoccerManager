@@ -205,10 +205,10 @@ test('a changed input byte and frames of another protocol are refused by name', 
   await assert.rejects(readReplay(changed), (error) => error.reason.includes('hash mismatch'));
 
   const protocol = goldenV4();
-  protocol[6] = 9;
+  protocol[6] = 10;
   await assert.rejects(
     readReplay(protocol),
-    (error) => error.reason.includes('frames protocol version 9')
+    (error) => error.reason.includes('frames protocol version 10')
   );
 
   // The same change with a matching trailer: the record's list names the file.
@@ -243,8 +243,8 @@ test('a loaded version-4 file saved the way the viewer saves it keeps its protoc
 
 test('writing refuses a protocol version that is not one this page reads', async () => {
   const read = await readReplay(golden());
-  assert.equal(PROTOCOL_VERSION, 6);
-  for (const version of [0, 2, 7, 9]) {
+  assert.equal(PROTOCOL_VERSION, 9);
+  for (const version of [0, 2, 10, 11]) {
     await assert.rejects(
       writeReplay(read.store, { matchId: read.hello['match.id'], version }),
       (error) => error.reason.includes('protocol version')

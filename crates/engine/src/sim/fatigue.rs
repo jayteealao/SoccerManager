@@ -39,6 +39,7 @@ impl Simulation {
                 0
             };
             self.tally_ticks(REFRESH_TICKS);
+            self.drift_moods();
             self.refresh_marked(changed);
         }
         // No injury roll during the shoot-out: an injury would stop a kick for a dropped ball.
@@ -110,6 +111,10 @@ impl Simulation {
     /// `changed` (his form moved), once.
     pub(crate) fn refresh_marked(&mut self, changed: u32) {
         let modifiers = self.config.modules.modifiers;
+        // No mood moves during the pass, so each side's mood is read once for all its players.
+        if self.config.tuning.contract.person().mood.team_weight != 0.0 {
+            self.team_moods = [self.team_mood(0), self.team_mood(1)];
+        }
         for i in 0..self.players.len() {
             let deltas = modifiers.effective(&self.view(), i);
             if deltas != self.players[i].deltas || changed & (1 << i) != 0 {
@@ -224,6 +229,7 @@ impl Simulation {
             form = form_match;
         }
         self.players[i].form_match = form_match;
+        self.enter_mood(i);
         self.set_state(i, p.deltas, form);
         self.tally_played(i);
         if self.trace_on() {
@@ -275,6 +281,18 @@ impl Simulation {
         self.trace_injury_roll(c, InjurySource::Tackle, chance, injured);
         if injured {
             self.injure(c, InjurySource::Tackle);
+            return;
+        }
+        // A knock: the same tackle, a multiple of the injury chance, on its own stream, so no
+        // other draw moves.
+        let knock = (chance * self.config.tuning.knock_ratio).min(1.0);
+        if knock > 0.0
+            && self
+                .streams
+                .tested(Key::player(Action::KnockTackle, p), &[knock])
+                < knock
+        {
+            self.players[c].knock = true;
         }
     }
 

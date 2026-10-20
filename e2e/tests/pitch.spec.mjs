@@ -28,7 +28,9 @@ test.beforeAll(() => {
 async function replay(page, args) {
   const engine = await startEngine({ command: 'replay', args: ['--fixture', fixture, '--web', WEB, ...args] });
   await openMatch(page, engine.url);
-  await until(page, () => window.__touchline.lastRenderedTick() > 0, { timeout: 30_000 });
+  // At 1x the walk-on before kick-off lasts up to about 30 s, and the first tick is drawn
+  // after it.
+  await until(page, () => window.__touchline.lastRenderedTick() > 0, { timeout: 60_000 });
   return engine;
 }
 
@@ -98,7 +100,9 @@ for (const [sustain, lag] of [[3, true], [8, false]]) {
       const notice = page.getByRole('status').filter({ hasText: 'LAG' });
       const effective = async () => `${(await page.evaluate(() => window.__touchline.notice())).effective_speed}x`;
       if (lag) {
-        expect((await page.evaluate(() => window.__touchline.notice())).shown).toBe(true);
+        // The stream ran on during the walk-on, so the stored ticks ahead last a few more
+        // seconds at 8x before the page runs out of them.
+        await until(page, () => window.__touchline.notice().shown || null, { timeout: 40_000 });
         await expect(notice).toContainText(/lag/i);
         await expect(notice).toContainText('3x');
         expect(await effective()).toBe('3x');

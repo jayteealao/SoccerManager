@@ -3,13 +3,19 @@
      the in-possession and out-of-possession pitches, the four cards and the Limits and Weights
      cards) and a right column that holds the squad list before kick-off, and the roles table,
      the substitution picker and the queued changes during play. Parts the engine has no model
-     for yet are LATER stubs: drawn, faded and inert. A stored match is read-only. -->
+     for yet are LATER stubs: drawn, faded and inert. A stored match is read-only.
+     The Phases, Roles and Plans & opposition tabs hold the tactics board: every team
+     instruction by phase of play, one player's own instructions, and the game plans. -->
 <script>
+  import { tick } from 'svelte';
   import AppShell from '../components/AppShell.svelte';
   import Crest from '../components/Crest.svelte';
   import InstructionsPanel from '../components/InstructionsPanel.svelte';
   import Notice from '../components/Notice.svelte';
+  import PhasesBoard from '../components/PhasesBoard.svelte';
+  import PlansBoard from '../components/PlansBoard.svelte';
   import QueuedChanges from '../components/QueuedChanges.svelte';
+  import RolesBoard from '../components/RolesBoard.svelte';
   import RolesTable from '../components/RolesTable.svelte';
   import SquadList from '../components/SquadList.svelte';
   import StubSection from '../components/StubSection.svelte';
@@ -21,19 +27,35 @@
 
   let { session } = $props();
 
-  /// The sub-navigation: Match goes back to the pitch; Shapes is the one Tactics view built;
-  /// Squad opens the Squad screen; the others are stubs until their screens are ported.
-  const TABS = [
-    { id: 'match', label: 'Match' },
-    { id: 'shapes', label: 'Shapes', active: true },
-    { id: 'squad', label: 'Squad' },
-    { id: 'roles', label: 'Roles', stub: true },
-    { id: 'instructions', label: 'Instructions', menu: true, stub: true },
-    { id: 'plans', label: 'Plans & opposition', menu: true, stub: true },
-    { id: 'set-pieces', label: 'Set pieces', menu: true, stub: true },
-    { id: 'familiarity', label: 'Familiarity', menu: true, stub: true },
-    { id: 'analysis', label: 'Analysis', menu: true, stub: true },
-  ];
+  /// The sub-navigation: Match goes back to the pitch; Shapes, Phases, Roles and Plans &
+  /// opposition are the Tactics views; Squad opens the Squad screen; the others are stubs
+  /// until their screens are ported.
+  const VIEWS = ['shapes', 'phases', 'roles', 'plans'];
+  let view = $state('shapes');
+  let tabs = $derived(
+    [
+      { id: 'match', label: 'Match' },
+      { id: 'shapes', label: 'Shapes' },
+      { id: 'phases', label: 'Phases' },
+      { id: 'roles', label: 'Roles' },
+      { id: 'plans', label: 'Plans & opposition' },
+      { id: 'squad', label: 'Squad' },
+      { id: 'set-pieces', label: 'Set pieces', menu: true, stub: true },
+      { id: 'familiarity', label: 'Familiarity', menu: true, stub: true },
+      { id: 'analysis', label: 'Analysis', menu: true, stub: true },
+    ].map((t) => (t.id === view ? { ...t, active: true } : t))
+  );
+
+  function ontab(id) {
+    if (id === 'squad') {
+      session.openSquad();
+    } else if (id === 'match') {
+      session.show('match');
+    } else if (VIEWS.includes(id)) {
+      view = id;
+      session.show('tactics');
+    }
+  }
 
   const CARDS = [
     { id: 'ball-lost', title: 'Ball lost', text: 'What the team does the moment it loses the ball.' },
@@ -61,6 +83,19 @@
   );
 
   const surname = (name) => String(name ?? '').split(' ').at(-1);
+
+  /// The player in slot `n`: before kick-off the editor's pick, during play the eleven on
+  /// the pitch.
+  function nameOf(n) {
+    version;
+    if (preMatch && editor) {
+      const row = editor.slotRows((k) => dugout.roleOf(k))[n];
+      return row?.player?.name ?? `Slot ${n + 1}`;
+    }
+    return dugout.homeRows?.[n]?.name ?? `Slot ${n + 1}`;
+  }
+
+  let stored = $derived(dugout.phase === 'stored' || !schema);
 
   /// The out-of-possession markers: before kick-off the editor's slots, during play the
   /// eleven on the pitch at the rendered tick.
@@ -136,6 +171,15 @@
   }
 
   let side = $state(null);
+  let boardview = $state(null);
+
+  /// A link from one board to another (Edit in Roles): the other board opens with focus on
+  /// its start, so a keyboard player does not land back at the top of the page.
+  async function showBoard(id) {
+    view = id;
+    await tick();
+    boardview?.querySelector('[data-focus-start]')?.focus();
+  }
 
   /// The NOT READY link: brings the squad row the reason is about into view and focuses it,
   /// or the list's first row when no one row is at fault.
@@ -162,8 +206,8 @@
   action={session.action}
   onaction={() => session.act()}
   busy={session.actionBusy}
-  tabs={TABS}
-  ontab={(id) => (id === 'squad' ? session.openSquad() : session.show(id === 'match' ? 'match' : 'tactics'))}
+  {tabs}
+  {ontab}
   menu={session.onMenu}
   menuOpen={session.menuOpen}
 >
@@ -171,6 +215,19 @@
     <Crest team={session.teams?.[0] ?? null} />
   {/snippet}
 
+  {#if view !== 'shapes'}
+    <div class="boardview" data-screen="tactics" data-phase={dugout.phase} data-view={view} bind:this={boardview}>
+      {#if stored}
+        <Notice kind="neutral" word="STORED" message="This match is stored or takes no lineup, so its tactics cannot change here." />
+      {:else if view === 'phases'}
+        <PhasesBoard {dugout} {nameOf} ontab={showBoard} />
+      {:else if view === 'roles'}
+        <RolesBoard {dugout} {nameOf} />
+      {:else}
+        <PlansBoard {dugout} />
+      {/if}
+    </div>
+  {:else}
   <div class="screen" data-screen="tactics" data-phase={dugout.phase}>
     <div class="tpanel">
       <TacticsBar
@@ -263,6 +320,7 @@
       {/if}
     </div>
   </div>
+  {/if}
 </AppShell>
 
 <style>
@@ -274,6 +332,11 @@
     grid-template-rows: minmax(0, 1fr);
     column-gap: 16px;
     height: 100%;
+    padding-top: 4px;
+  }
+
+  .boardview {
+    min-width: 0;
     padding-top: 4px;
   }
 

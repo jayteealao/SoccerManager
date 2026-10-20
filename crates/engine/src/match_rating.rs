@@ -1,11 +1,16 @@
 //! The match rating: one number per player per match, on 1.0 to 10.0 with one decimal.
 //!
-//! A rating is `base` plus a weighted sum of what the player did ([`PlayerTally`]): goals,
-//! shots, expected goals, passes, tackles, interceptions, blocks, clearances, saves, fouls and
-//! cards; goals conceded and a clean sheet by his position class (a keeper or a listed
-//! defender); and the result, weighted by the share of the match he played. It is clamped to
-//! `min` to `max` and rounded to a tenth. Every weight is in the tuning file's `match_rating`
-//! block, so the five-match rule can tune them without a build.
+//! A rating is `base` plus, for an outfield player, the threat his actions added
+//! ([`PlayerTally::value_added`]: the real threat of a place, [`crate::sim::place_threat`],
+//! that his passes and carries gained or his lost balls gave up, his shots' expected goals and
+//! his goals, and the threat his tackles, interceptions, blocks and clearances took from the
+//! other side), or, for a keeper, the goals he prevented (the post-shot expected goals he
+//! faced less the goals from shots he conceded); then his fouls and cards; goals conceded and
+//! a clean sheet by his position class (a keeper or a listed defender); and the result,
+//! weighted by the share of the match he played. No term counts how many passes, shots or
+//! tackles he made. It is clamped to `min` to `max` and rounded to a tenth. Every weight is in
+//! the tuning file's `match_rating` block, so the five-match rule can tune them without a
+//! build.
 
 use garde::Validate;
 use serde::{Deserialize, Serialize};
@@ -15,7 +20,7 @@ use crate::rules::clock::TICKS_PER_MINUTE;
 use crate::sim::tally::PlayerTally;
 
 /// The match-rating block of the tuning file (`match_rating`). Weights are rating points per
-/// count; `xg` is per expected goal.
+/// count; `value_added` and `goals_prevented` are per expected goal.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct MatchRatingTuning {
@@ -25,28 +30,14 @@ pub struct MatchRatingTuning {
     pub min: f64,
     #[garde(range(min = self.min, max = 10.0))]
     pub max: f64,
+    /// Per expected goal of threat an outfield player's actions added
+    /// ([`PlayerTally::value_added`]).
+    #[garde(range(min = 0.0, max = 20.0))]
+    pub value_added: f64,
+    /// Per goal a keeper prevented: the post-shot expected goals he faced less the goals from
+    /// shots he conceded.
     #[garde(range(min = -5.0, max = 5.0))]
-    pub goal: f64,
-    #[garde(range(min = -5.0, max = 5.0))]
-    pub shot_on_target: f64,
-    #[garde(range(min = -5.0, max = 5.0))]
-    pub shot_off_target: f64,
-    #[garde(range(min = -5.0, max = 5.0))]
-    pub xg: f64,
-    #[garde(range(min = -5.0, max = 5.0))]
-    pub pass_completed: f64,
-    #[garde(range(min = -5.0, max = 5.0))]
-    pub pass_failed: f64,
-    #[garde(range(min = -5.0, max = 5.0))]
-    pub tackle_won: f64,
-    #[garde(range(min = -5.0, max = 5.0))]
-    pub interception: f64,
-    #[garde(range(min = -5.0, max = 5.0))]
-    pub block: f64,
-    #[garde(range(min = -5.0, max = 5.0))]
-    pub clearance: f64,
-    #[garde(range(min = -5.0, max = 5.0))]
-    pub save: f64,
+    pub goals_prevented: f64,
     #[garde(range(min = -5.0, max = 5.0))]
     pub foul: f64,
     #[garde(range(min = -5.0, max = 5.0))]
@@ -115,24 +106,16 @@ pub fn rating(
     m: &MatchRatingTuning,
 ) -> u8 {
     let n = |c: u32| f64::from(c);
-    let off_target = t.shots.saturating_sub(t.shots_on_target);
-    let failed = t.passes.saturating_sub(t.passes_completed);
-    let mut r = m.base
-        + m.goal * n(t.goals)
-        + m.shot_on_target * n(t.shots_on_target)
-        + m.shot_off_target * n(off_target)
-        + m.xg * t.xg
-        + m.pass_completed * n(t.passes_completed)
-        + m.pass_failed * n(failed)
-        + m.tackle_won * n(t.tackles_won)
-        + m.interception * n(t.interceptions)
-        + m.block * n(t.blocks)
-        + m.clearance * n(t.clearances)
-        + m.save * n(t.saves)
-        + m.foul * n(t.fouls)
-        + m.yellow * n(t.yellow)
-        + m.red * n(t.red);
-    let class = if position == Position::GK {
+    let keeper = position == Position::GK;
+    // A keeper is rated by the goals he prevented; an outfield player by the threat his
+    // actions added. Neither takes points for how many passes, shots or tackles he made.
+    let value = if keeper {
+        m.goals_prevented * (t.psxg_faced - n(t.shot_goals_conceded))
+    } else {
+        m.value_added * t.value_added
+    };
+    let mut r = m.base + value + m.foul * n(t.fouls) + m.yellow * n(t.yellow) + m.red * n(t.red);
+    let class = if keeper {
         Some((m.conceded.keeper, m.clean_sheet.keeper))
     } else if m.defenders.contains(&position) {
         Some((m.conceded.defender, m.clean_sheet.defender))
@@ -183,44 +166,80 @@ mod tests {
     #[test]
     fn a_quiet_full_draw_rates_the_base() {
         let m = tuning();
-        assert_eq!(rating(&played(), Position::CM, Outcome::Draw, FULL, &m), 60);
+        // 6.66, rounded to a tenth.
+        assert_eq!(rating(&played(), Position::CM, Outcome::Draw, FULL, &m), 67);
     }
 
     #[test]
-    fn two_goals_from_four_shots_on_target_in_a_draw() {
+    fn the_threat_a_player_added_sets_his_rating() {
         let m = tuning();
         let t = PlayerTally {
-            goals: 2,
-            shots: 4,
-            shots_on_target: 4,
+            value_added: 0.5,
             ..played()
         };
-        // 6.0 + 2 · 1.0 + 4 · 0.15 = 8.6
-        assert_eq!(rating(&t, Position::ST, Outcome::Draw, FULL, &m), 86);
+        // 6.66 + 0.5 · 5.1 = 9.21
+        assert_eq!(rating(&t, Position::ST, Outcome::Draw, FULL, &m), 92);
+        let lost = PlayerTally {
+            value_added: -0.2,
+            ..played()
+        };
+        // 6.66 − 0.2 · 5.1 = 5.64
+        assert_eq!(rating(&lost, Position::CM, Outcome::Draw, FULL, &m), 56);
     }
 
     #[test]
-    fn a_keeper_with_five_saves_and_a_clean_sheet_in_a_win() {
+    fn a_keeper_who_prevents_goals_and_keeps_a_clean_sheet_in_a_win() {
         let m = tuning();
         let t = PlayerTally {
             saves: 5,
+            psxg_faced: 1.5,
             ..played()
         };
-        // 6.0 + 5 · 0.3 + 0.5 + 0.3 = 8.3
-        assert_eq!(rating(&t, Position::GK, Outcome::Win, FULL, &m), 83);
+        // 6.66 + 1.5 · 1.0 + 0.5 + 0.3 = 8.96; the saves add nothing of their own.
+        assert_eq!(rating(&t, Position::GK, Outcome::Win, FULL, &m), 90);
+        let beaten = PlayerTally {
+            psxg_faced: 1.0,
+            shot_goals_conceded: 2,
+            conceded: 2,
+            ..played()
+        };
+        // 6.66 + (1.0 − 2) · 1.0 − 2 · 0.3 − 0.3 = 4.76
+        assert_eq!(rating(&beaten, Position::GK, Outcome::Loss, FULL, &m), 48);
     }
 
     #[test]
-    fn a_red_card_and_forty_failed_passes_clamp_at_the_floor() {
+    fn no_player_takes_points_for_how_many_passes_shots_or_tackles_he_made() {
         let m = tuning();
-        let t = PlayerTally {
-            red: 1,
-            passes: 40,
+        let busy = PlayerTally {
+            passes: 60,
+            passes_completed: 50,
+            shots: 6,
+            shots_on_target: 2,
+            goals: 1,
+            xg: 0.4,
+            tackles_won: 5,
+            interceptions: 4,
+            blocks: 2,
+            clearances: 10,
             ..played()
         };
-        // 6.0 − 1.5 − 40 · 0.04 − 0.3 = 2.6; add more failures to cross the floor.
-        assert_eq!(rating(&t, Position::CM, Outcome::Loss, FULL, &m), 26);
-        let worse = PlayerTally { passes: 200, ..t };
+        // Only the clean sheet adds: 6.66 + 0.5 for a keeper, + 0.3 for a defender; the counts
+        // add nothing, and a midfielder rates the base.
+        assert_eq!(rating(&busy, Position::GK, Outcome::Draw, FULL, &m), 72);
+        assert_eq!(rating(&busy, Position::CB, Outcome::Draw, FULL, &m), 70);
+        assert_eq!(rating(&busy, Position::CM, Outcome::Draw, FULL, &m), 67);
+    }
+
+    #[test]
+    fn a_red_card_and_a_heavy_loss_of_threat_clamp_at_the_floor() {
+        let m = tuning();
+        let t = PlayerTally { red: 1, ..played() };
+        // 6.66 − 1.5 − 0.3 = 4.86; lose more threat to cross the floor.
+        assert_eq!(rating(&t, Position::CM, Outcome::Loss, FULL, &m), 49);
+        let worse = PlayerTally {
+            value_added: -2.0,
+            ..t
+        };
         assert_eq!(rating(&worse, Position::CM, Outcome::Loss, FULL, &m), 10);
     }
 
@@ -232,14 +251,14 @@ mod tests {
             ..PlayerTally::default()
         };
         // A third of a draw: no clean sheet, no result weight.
-        assert_eq!(rating(&short, Position::CB, Outcome::Draw, FULL, &m), 60);
+        assert_eq!(rating(&short, Position::CB, Outcome::Draw, FULL, &m), 67);
         let beaten = PlayerTally {
             conceded: 2,
             ..played()
         };
-        // 6.0 − 2 · 0.15 − 0.3 = 5.4
-        assert_eq!(rating(&beaten, Position::CB, Outcome::Loss, FULL, &m), 54);
-        // A midfielder takes no conceded weight.
-        assert_eq!(rating(&beaten, Position::CM, Outcome::Loss, FULL, &m), 57);
+        // 6.66 − 2 · 0.15 − 0.3 = 6.06
+        assert_eq!(rating(&beaten, Position::CB, Outcome::Loss, FULL, &m), 61);
+        // A midfielder takes no conceded weight: 6.66 − 0.3 = 6.36.
+        assert_eq!(rating(&beaten, Position::CM, Outcome::Loss, FULL, &m), 64);
     }
 }

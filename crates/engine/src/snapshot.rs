@@ -46,6 +46,40 @@
 //!   summary every player's tally by side and squad index (whether he took the pitch, fifteen
 //!   counts, and his expected goals), so a resumed match rates its players as the unbroken
 //!   match does.
+//!   Version 14 adds the pace selector: each player stores his pace after his form bytes (the
+//!   chosen speed as f64 bits, then his job, grade and level codes, his sprint draw as a byte,
+//!   and the tick his job started as u32), so a resumed match keeps every held sprint.
+//!   Version 15 adds mood: each player stores his mood (f64, percent of a full mood) after
+//!   his pace, and after the players each side's bench mood (f64), so a resumed match moves
+//!   every mood as the unbroken match does. The shot in flight and the last completed pass,
+//!   which mood also reads, are cleared at every stoppage, so no snapshot holds them.
+//!   Version 15 also stores the trait overrides in force, after the bench moods: for each
+//!   player in roster order the trait (u8, 255 for none), how its action ends (u8: at a tick,
+//!   with the carrier, with possession, with the loose ball) and the end's value (u32); then
+//!   the roster bits of the carriers whose carry is under way and of the keepers who met the
+//!   loose ball's moment (u32 each). A stoppage ends every override but an anchor's, so a
+//!   resumed match plays its anchors as the unbroken match does. Version 15 also ends each
+//!   player's tally with his assists (u32) and whether he started (u8), so a resumed match's
+//!   record counts them as the unbroken match's does.
+//!   Version 16 adds the restart wait: a dead ball stores, after its taker, where the ball
+//!   left play (two f64), the tick the ball appears at the spot (u32), the drawn extra in
+//!   ticks (u32), the quick restart as a byte, and the hard limit (u32), so a match resumed
+//!   while the ball waits where it left play resumes the same wait.
+//!   Version 17 adds the tactical settings: each team's tactics end with the level or choice
+//!   of each primitive that owns its levels or choices (16 bytes, in the tactics file's
+//!   order, 0 past the last), so a resumed match keeps every setting. Version 18 stores 32
+//!   such bytes, room for the out-of-possession primitives; the layout is otherwise version
+//!   17's. Version 19 adds the game state: each team, after its manager's memory, stores its
+//!   base tactics, its rules, its player instructions, the rules active, and the change being
+//!   taken up; the body ends with the shots the run of play reads. Version 20 drops the AI
+//!   manager's score memory: each team stores only whether a check is due (a byte) before its
+//!   game state; and each player stores, after his yellow cards, whether he took a knock (a
+//!   byte). Version 21 adds the goals with no shot to the summary, after the restart kicks, and to each
+//!   player's tally, after whether he started, the post-shot expected goals he faced as keeper
+//!   (f64) and the goals from shots he conceded (u32). Version 22 adds the match rating's value
+//!   added: after the restart taker, the open spell on the ball (the player's index, then where
+//!   it began as two f64), and to each player's tally, after the shot goals he conceded, the
+//!   threat his actions added (f64).
 //! - Trailer, 40 bytes: magic `SMSE`, the body length (u32), and the SHA-256 of the header
 //!   and the body.
 //!
@@ -61,8 +95,10 @@ use sha2::{Digest, Sha256};
 use crate::ai::{AiState, Manager};
 use crate::canon::{self, NONE, Writer};
 use crate::data::rules::StoppageKind;
+use crate::data::tactics::TacticsSchema;
 use crate::error::EngineError;
 use crate::math::{DVec2, DVec3};
+use crate::pace::{Grade, Job, Level, Pace};
 use crate::player::Status;
 use crate::record::TickSink;
 use crate::rules::clock::Tally;
@@ -72,10 +108,11 @@ use crate::sim::{DecidedBy, MatchConfig, Simulation, Summary};
 use crate::streams::{KEY_COUNT, STREAM_SCHEME, Scheme, Streams};
 use crate::tactics::change::{Change, ChangeId, QueuedChange, SubLedger};
 use crate::tactics::{RoleDuty, Tactics, TacticsPatch};
-use crate::team::PLAYERS_PER_TEAM;
+use crate::team::{PLAYERS_PER_TEAM, Team};
+use crate::tuning::Tuning;
 
 /// Layout version this build reads and writes.
-pub const VERSION: u16 = 13;
+pub const VERSION: u16 = 22;
 /// The earliest layout version the strict reader still reads: version 8 has no matchday mark.
 const FIRST_READ: u16 = 8;
 /// The released builds from before the snapshot recorded its engine version: the full commit
@@ -562,6 +599,8 @@ impl Simulation {
         let mut sim = Simulation::blank(config)?;
         let mut r = Reader::new(&snapshot.body);
         decode(&mut sim, &mut r).map_err(refuse)?;
+        // A snapshot is written only at a dead ball, where every followed point is the ball.
+        sim.slide_reset();
         sim.timeline = vec![(sim.tick, sim.teams.clone())];
         Ok(sim)
     }
@@ -791,11 +830,16 @@ impl<'a> Reader<'a> {
                 duty: self.u8()?,
             };
         }
+        let mut settings = [0u8; crate::data::primitives::SETTINGS_MAX];
+        for s in &mut settings {
+            *s = self.u8()?;
+        }
         Ok(Tactics {
             formation,
             mentality,
             instructions,
             roles,
+            settings,
         })
     }
     /// A player's state deltas, one byte per attribute group.
@@ -828,6 +872,11 @@ fn encode(sim: &Simulation, w: &mut Writer) {
     w.index(sim.last_touch);
     w.u8(u8::from(sim.keeper_beaten));
     w.index(sim.restart_taker);
+    w.index(sim.value_from.map(|(player, _)| player));
+    w.v2_at(
+        &String::new,
+        sim.value_from.map_or(DVec2::ZERO, |(_, at)| at),
+    );
     w.summary(&sim.summary);
     w.tallies(&sim.tallies);
     for (t, team) in sim.teams.iter().enumerate() {
@@ -839,9 +888,8 @@ fn encode(sim: &Simulation, w: &mut Writer) {
         w.u32(ledger.window_at.unwrap_or(0));
         w.u8(canon::manager_code(sim.managers[t]));
         let ai = &sim.ai[t];
-        w.opt_pair(ai.trailing_acted);
-        w.opt_pair(ai.leading_acted);
         w.u8(u8::from(ai.due));
+        w.game_state(&String::new, team);
     }
     for p in &sim.players {
         w.v2_at(&String::new, p.pos);
@@ -850,6 +898,7 @@ fn encode(sim: &Simulation, w: &mut Writer) {
         w.v2_at(&String::new, p.facing);
         w.u8(canon::status_code(p.status));
         w.u8(p.yellow);
+        w.u8(u8::from(p.knock));
         w.u32(p.foul_ready);
         w.u32(p.lapse_until);
         w.u8(p.squad as u8);
@@ -859,11 +908,36 @@ fn encode(sim: &Simulation, w: &mut Writer) {
         }
         w.u8(p.form as u8);
         w.u8(p.form_match as u8);
+        w.f64_at(String::new, p.pace.speed);
+        w.u8(p.pace.job.code());
+        w.u8(p.pace.grade.code());
+        w.u8(p.pace.level.code());
+        w.u8(u8::from(p.pace.sprint));
+        w.u32(p.pace.since);
+        w.f64_at(String::new, p.mood);
     }
+    for mood in sim.bench_mood {
+        w.f64_at(String::new, mood);
+    }
+    for act in sim.trait_acts {
+        let (kind, end, value) = crate::traits::TraitAct::encode(act);
+        w.u8(kind);
+        w.u8(end);
+        w.u32(value);
+    }
+    w.u32(sim.carrying);
+    w.u32(sim.chase_seen);
     w.u32(sim.queue.next);
-    // A queue holds far fewer than 4 billion changes.
-    w.u32(sim.queue.pending.len() as u32);
-    for q in &sim.queue.pending {
+    // A queue holds far fewer than 4 billion changes. A level or game-state change applies
+    // when it is queued and never waits, so none is written.
+    let waiting: Vec<_> = sim
+        .queue
+        .pending
+        .iter()
+        .filter(|q| !q.change.at_once())
+        .collect();
+    w.u32(waiting.len() as u32);
+    for q in waiting {
         w.u8(q.team as u8);
         w.u32(q.id.tick);
         w.u32(q.id.n);
@@ -887,6 +961,11 @@ fn encode(sim: &Simulation, w: &mut Writer) {
                     w.u8(rd.duty);
                 }
             }
+            Change::Rule { active } => {
+                w.u8(2);
+                w.u8(*active);
+            }
+            Change::Instructions(_) | Change::GameState(_) => {}
         }
     }
     for at in sim.queue.admitted {
@@ -906,6 +985,11 @@ fn encode(sim: &Simulation, w: &mut Writer) {
             w.u32(d.since);
             w.u32(d.ready_at);
             w.index(Some(d.taker));
+            w.v2_at(&String::new, d.exit);
+            w.u32(d.appear_at);
+            w.u32(d.extra);
+            w.u8(u8::from(d.quick));
+            w.u32(d.hard_at);
         }
         Phase::FullTime => w.u8(2),
     }
@@ -963,6 +1047,122 @@ fn encode(sim: &Simulation, w: &mut Writer) {
             w.u32(s.live_since.unwrap_or(0));
         }
     }
+    w.count(sim.chances.len());
+    for &(at, side, xg) in &sim.chances {
+        w.u32(at);
+        w.index(Some(side));
+        w.f64_at(String::new, xg);
+    }
+}
+
+/// A side's game state after its manager's memory ([`canon::Writer::game_state`]), put back
+/// on a team whose tactics in force are already set.
+fn decode_game_state(
+    r: &mut Reader<'_>,
+    team: &mut Team,
+    schema: &TacticsSchema,
+    tuning: &Tuning,
+) -> Result<(), String> {
+    use crate::tactics::rules::{Action, Condition, GameState, PlayerInstruction, Rule, Score};
+    let range = "malformed body: the game state names an index the tactics file lacks";
+    let base = r.tactics()?;
+    if !tactics_in_range(&base, schema) {
+        return Err(range.into());
+    }
+    let mut state = GameState::default();
+    let rules = r.u8()?;
+    if usize::from(rules) > crate::tactics::rules::MAX_RULES {
+        return Err("malformed body: more rules than a side holds".into());
+    }
+    for _ in 0..rules {
+        let mut rule = Rule {
+            when: Vec::new(),
+            set: Vec::new(),
+        };
+        for _ in 0..r.u8()? {
+            rule.when.push(match r.u8()? {
+                0 => {
+                    let (kind, n) = (r.u8()?, r.u8()?);
+                    Condition::Score(match kind {
+                        0 => Score::Leading(n),
+                        1 => Score::Level,
+                        2 => Score::Trailing(n),
+                        _ => return Err("malformed body: an unknown score condition".into()),
+                    })
+                }
+                1 => Condition::TimeLeft { minutes: r.f64()? },
+                2 => Condition::RedCardsOurs { at_least: r.u8()? },
+                3 => Condition::RedCardsTheirs { at_least: r.u8()? },
+                4 => Condition::RunOfPlay {
+                    above: r.bool()?,
+                    value: r.f64()?,
+                },
+                5 => Condition::TeamEnergy { below: r.f64()? },
+                _ => return Err("malformed body: an unknown rule condition".into()),
+            });
+        }
+        for _ in 0..r.u8()? {
+            let (kind, a, b) = (r.u8()?, r.u8()?, r.u8()?);
+            rule.set.push(match kind {
+                0 if usize::from(a) < schema.primitives.len() => Action::Level {
+                    primitive: a,
+                    level: b,
+                },
+                1 if usize::from(a) < schema.formations.len() => Action::Formation(a),
+                0 | 1 => return Err(range.into()),
+                _ => return Err("malformed body: an unknown rule action".into()),
+            });
+        }
+        state.rules.push(rule);
+    }
+    for _ in 0..r.u8()? {
+        let (slot, primitive, level) = (r.u8()?, r.u8()?, r.u8()?);
+        if usize::from(slot) >= PLAYERS_PER_TEAM
+            || usize::from(primitive) >= schema.primitives.len()
+        {
+            return Err(range.into());
+        }
+        state.instructions.push(PlayerInstruction {
+            slot,
+            primitive,
+            level,
+        });
+    }
+    let active = r.u8()?;
+    team.game_state = state;
+    team.rules_active = active;
+    team.base = base;
+    team.own = crate::team::own_plans(&team.plan, &team.tactics, &team.game_state, schema, tuning);
+    team.take_up = None;
+    match r.u8()? {
+        0 => {}
+        1 => {
+            let mut prior = [base; PLAYERS_PER_TEAM];
+            for t in &mut prior {
+                *t = r.tactics()?;
+                if !tactics_in_range(t, schema) {
+                    return Err(range.into());
+                }
+            }
+            let prior_side = r.tactics()?;
+            if !tactics_in_range(&prior_side, schema) {
+                return Err(range.into());
+            }
+            let mut at = [0; PLAYERS_PER_TEAM];
+            for a in &mut at {
+                *a = r.u32()?;
+            }
+            let mut taken = [false; PLAYERS_PER_TEAM];
+            for k in &mut taken {
+                *k = r.bool()?;
+            }
+            let switched = r.bool()?;
+            let next = crate::tactics::TeamPlan::from(&team.tactics, schema, tuning);
+            team.restore_take_up(prior, prior_side, next, at, taken, switched, schema, tuning);
+        }
+        _ => return Err("malformed body: an unknown take-up flag".into()),
+    }
+    Ok(())
 }
 
 /// The random streams after the restart flag, checked against the match seed.
@@ -1019,6 +1219,9 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
     sim.last_touch = r.index(2)?;
     sim.keeper_beaten = r.bool()?;
     sim.restart_taker = r.index(PLAYERS)?;
+    let spell = r.index(PLAYERS)?;
+    let at = r.v2()?;
+    sim.value_from = spell.map(|player| (player, at));
     sim.summary = decode_summary(r)?;
     for t in 0..2 {
         let n = r.u32()? as usize;
@@ -1070,11 +1273,8 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
             1 => Manager::Human,
             _ => return Err("malformed body: an unknown manager".into()),
         };
-        sim.ai[t] = AiState {
-            trailing_acted: r.opt_pair()?,
-            leading_acted: r.opt_pair()?,
-            due: r.bool()?,
-        };
+        sim.ai[t] = AiState { due: r.bool()? };
+        decode_game_state(r, &mut sim.teams[t], &schema, &tuning)?;
     }
     let mut deltas = Vec::with_capacity(sim.players.len());
     for p in &mut sim.players {
@@ -1089,6 +1289,7 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
             _ => return Err("malformed body: an unknown player status".into()),
         };
         p.yellow = r.u8()?;
+        p.knock = r.bool()?;
         p.foul_ready = r.u32()?;
         p.lapse_until = r.u32()?;
         let team = &sim.teams[p.team];
@@ -1103,8 +1304,33 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
         let d = r.deltas()?;
         let form = r.u8()? as i8;
         p.form_match = r.u8()? as i8;
+        let speed = r.f64()?;
+        let unknown = "malformed body: an unknown pace";
+        let job = Job::from_code(r.u8()?).ok_or(unknown)?;
+        let grade = Grade::from_code(r.u8()?).ok_or(unknown)?;
+        let level = Level::from_code(r.u8()?).ok_or(unknown)?;
+        let sprint = r.bool()?;
+        let since = r.u32()?;
+        p.pace = Pace {
+            job,
+            grade,
+            level,
+            speed,
+            since,
+            sprint,
+        };
+        p.mood = r.f64()?;
         deltas.push((d, form));
     }
+    for team in 0..2 {
+        sim.bench_mood[team] = r.f64()?;
+    }
+    for i in 0..sim.trait_acts.len() {
+        let (kind, end, value) = (r.u8()?, r.u8()?, r.u32()?);
+        sim.trait_acts[i] = crate::traits::TraitAct::decode(kind, end, value)?;
+    }
+    sim.carrying = r.u32()?;
+    sim.chase_seen = r.u32()?;
     for (i, (d, form)) in deltas.into_iter().enumerate() {
         sim.set_state(i, d, form);
     }
@@ -1145,6 +1371,7 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
                 }
                 Change::Tactics(patch)
             }
+            2 => Change::Rule { active: r.u8()? },
             _ => return Err("malformed body: an unknown change kind".into()),
         };
         sim.queue.pending.push(QueuedChange { id, team, change });
@@ -1168,6 +1395,11 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
                 since: r.u32()?,
                 ready_at: r.u32()?,
                 taker: r.some_index(PLAYERS)?,
+                exit: r.v2()?,
+                appear_at: r.u32()?,
+                extra: r.u32()?,
+                quick: r.bool()?,
+                hard_at: r.u32()?,
             })
         }
         2 => Phase::FullTime,
@@ -1235,6 +1467,14 @@ fn decode(sim: &mut Simulation, r: &mut Reader<'_>) -> Result<(), String> {
     };
     // The phase machine's name is derived state: it follows from the phase and the shoot-out.
     referee.named = crate::rules::phases::derive(referee.phase, referee.shootout.is_some());
+    let chances = r.u32()?;
+    sim.chances = Vec::new();
+    for _ in 0..chances {
+        let at = r.u32()?;
+        let side = r.some_index(2)?;
+        let xg = r.f64()?;
+        sim.chances.push((at, side, xg));
+    }
     if r.at != r.buf.len() {
         return Err("malformed body: bytes left over".into());
     }
@@ -1261,6 +1501,11 @@ fn decode_tally(r: &mut Reader<'_>) -> Decoded<crate::sim::tally::PlayerTally> {
         red: r.u32()?,
         conceded: r.u32()?,
         xg: r.f64()?,
+        assists: r.u32()?,
+        started: r.bool()?,
+        psxg_faced: r.f64()?,
+        shot_goals_conceded: r.u32()?,
+        value_added: r.f64()?,
     })
 }
 
@@ -1296,6 +1541,7 @@ fn decode_summary(r: &mut Reader<'_>) -> Decoded<Summary> {
         passes_completed: r.pair()?,
         clearances: r.pair()?,
         restart_kicks: r.pair()?,
+        goals_no_shot: r.pair()?,
         live_ticks: r.u32()?,
         possession_ticks: r.pair()?,
         extra_added_s: r.pair()?,
@@ -1324,6 +1570,7 @@ fn tactics_in_range(t: &Tactics, schema: &crate::data::tactics::TacticsSchema) -
         && t.roles.iter().all(|rd| {
             usize::from(rd.role) < schema.roles.len() && usize::from(rd.duty) < schema.duties.len()
         })
+        && crate::tactics::settings_in_range(&t.settings, schema)
 }
 
 #[cfg(test)]
@@ -1362,7 +1609,7 @@ mod tests {
         let err = Snapshot::from_bytes(&bytes, "s.smsn").unwrap_err();
         assert!(
             err.to_string()
-                .contains("unknown version 1; this build reads 13"),
+                .contains("unknown version 1; this build reads 22"),
             "{err}"
         );
     }

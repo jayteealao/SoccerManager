@@ -6,7 +6,7 @@
 
 mod common;
 
-use common::{full_match, scoring_match};
+use common::{content, default_teams, full_match, scoring_match};
 use engine::record::RECORD_BYTES;
 use engine::rules::clock::TICKS_PER_MINUTE;
 use engine::snapshot::{MarkFixture, MatchdayMark};
@@ -16,9 +16,31 @@ use engine::{
 };
 use sha2::{Digest, Sha256};
 
-/// The continuation test resumes the seed-9 match from the first stoppage at or after this
+/// The continuation test resumes the scoring match from the first stoppage at or after this
 /// tick, early in the second half, before the AI manager's substitutions and tactics changes.
 const FROM_TICK: u32 = 50 * TICKS_PER_MINUTE;
+
+/// The home side's game-state rule: with half an hour left it plays more attacking and
+/// faster, an applied tactics change after `FROM_TICK`.
+const LATE_RULE: &str = r#"{
+  "rules": [
+    { "when": [{ "kind": "time_left", "minutes": 30 }], "set": [{ "primitive": "mentality", "level": "attacking" }, { "primitive": "tempo", "level": "fast" }] }
+  ]
+}"#;
+
+/// The seed-3, 90-minute match on the shipped content and default teams, the home side
+/// playing [`LATE_RULE`]: after `FROM_TICK` it brings substitutions and an applied tactics
+/// change. (Until the AI manager stopped making tactics changes of its own, its trailing and
+/// leading changes gave the tactics change and no rule was needed.)
+fn resume_match() -> engine::MatchConfig {
+    let content = content();
+    let [a, b] = default_teams(&content);
+    let config = engine::MatchConfig::new(3, 90, &content, [&a, &b]).unwrap();
+    let file = engine::data::game_state::parse(LATE_RULE.as_bytes()).unwrap();
+    let formation = config.teams[0].tactics.formation;
+    let state = engine::data::game_state::resolve(&file, &config.tactics, &[formation]).unwrap();
+    config.with_game_state(0, state)
+}
 const OWNER: [u8; 16] = [7; 16];
 
 /// Keeps every record and captures the snapshot at one stoppage.
@@ -56,7 +78,7 @@ fn bytes(records: &[TickRecord]) -> Vec<u8> {
 
 fn whole_match() -> (Capture, Simulation) {
     let mut capture = Capture::default();
-    let mut sim = Simulation::new(scoring_match()).unwrap();
+    let mut sim = Simulation::new(resume_match()).unwrap();
     sim.run(&mut capture).unwrap();
     (capture, sim)
 }
@@ -102,7 +124,7 @@ fn a_resumed_match_continues_tick_for_tick() {
 
     // Through the file format, as a resume reads it.
     let read = Snapshot::from_bytes(&snapshot.to_bytes(), "snapshot.smsn").unwrap();
-    let mut resumed = Simulation::from_snapshot(scoring_match(), &read).unwrap();
+    let mut resumed = Simulation::from_snapshot(resume_match(), &read).unwrap();
     assert_eq!(resumed.tick(), from);
     let mut sink = VecSink::default();
     resumed.run(&mut sink).unwrap();
@@ -132,7 +154,7 @@ fn a_snapshot_written_read_and_written_again_is_the_same_bytes() {
     let (whole, _) = whole_match();
     let first = whole.snapshot.unwrap().to_bytes();
     let read = Snapshot::from_bytes(&first, "snapshot.smsn").unwrap();
-    let rebuilt = Simulation::from_snapshot(scoring_match(), &read).unwrap();
+    let rebuilt = Simulation::from_snapshot(resume_match(), &read).unwrap();
     let second = Snapshot::capture(&rebuilt, OWNER, 1_700_000_000_000).to_bytes();
     assert!(first == second, "a field does not round-trip");
 }
@@ -167,7 +189,7 @@ fn a_damaged_or_foreign_snapshot_is_refused_by_name() {
     first_format[4] = 1;
     let reason = refusal(Snapshot::from_bytes(&first_format, "s"));
     assert!(
-        reason.starts_with("unknown version 1; this build reads 13"),
+        reason.starts_with("unknown version 1; this build reads 22"),
         "{reason}"
     );
 
@@ -292,16 +314,26 @@ fn a_version_three_snapshot_is_refused_by_name() {
     bytes[4..6].copy_from_slice(&3u16.to_le_bytes());
     let reason = refusal(Snapshot::from_bytes(&bytes, "s"));
     assert!(
-        reason.starts_with("unknown version 3; this build reads 13"),
+        reason.starts_with("unknown version 3; this build reads 22"),
         "{reason}"
     );
 }
 
 /// A snapshot taken while a player who just fouled still waits out the foul cooldown keeps
-/// that cooldown: the resumed match plays on tick for tick through the cooldown's end.
+/// that cooldown: the resumed match plays on tick for tick through the cooldown's end. It
+/// plays seed 2, the lowest whose first foul to stop play leaves its offender cooling down
+/// (seed 0 until every option was charged its chance of losing the ball; the scoring match
+/// until a kick stayed on its way from its kicker along the line he sent it): in the seed-42 match since the player record came in,
+/// the manager takes off the first offender whose foul stops play at that same stoppage, so
+/// nobody is left cooling down.
 #[test]
 fn a_resumed_match_keeps_a_foul_cooldown_running() {
-    let mut sim = Simulation::new(full_match()).unwrap();
+    let cooldown_match = || {
+        let content = content();
+        let [a, b] = default_teams(&content);
+        engine::MatchConfig::new(2, 90, &content, [&a, &b]).unwrap()
+    };
+    let mut sim = Simulation::new(cooldown_match()).unwrap();
     let mut waiting = None;
     for _ in 0..(90 * TICKS_PER_MINUTE) {
         sim.step();
@@ -319,7 +351,7 @@ fn a_resumed_match_keeps_a_foul_cooldown_running() {
     let ready = sim.players()[player].foul_ready;
     let read =
         Snapshot::from_bytes(&Snapshot::capture(&sim, OWNER, 1).to_bytes(), "s.smsn").unwrap();
-    let mut resumed = Simulation::from_snapshot(full_match(), &read).unwrap();
+    let mut resumed = Simulation::from_snapshot(cooldown_match(), &read).unwrap();
     assert_eq!(resumed.players()[player].foul_ready, ready);
     let span = ready - sim.tick() + 100;
     for _ in 0..span {
@@ -344,7 +376,7 @@ fn a_version_six_snapshot_is_refused_by_name() {
     bytes[4..6].copy_from_slice(&6u16.to_le_bytes());
     let reason = refusal(Snapshot::from_bytes(&bytes, "s"));
     assert!(
-        reason.starts_with("unknown version 6; this build reads 13"),
+        reason.starts_with("unknown version 6; this build reads 22"),
         "{reason}"
     );
 }
@@ -451,7 +483,7 @@ fn a_snapshot_records_the_engine_version_and_a_display_summary() {
     assert_eq!(read, snapshot);
     let id = Snapshot::identify(&bytes).unwrap();
     assert_eq!(id.format, engine::snapshot::VERSION);
-    assert_eq!(id.format, 13);
+    assert_eq!(id.format, 22);
     assert_eq!(id.engine_version.as_deref(), Some(engine::version()));
     assert_eq!(id.build_hash, engine::build_hash());
     assert_eq!(id.tick, Some(sim.tick()));
@@ -490,7 +522,7 @@ fn the_identity_offsets_are_fixed() {
     assert_eq!(header_len, 192 + EMPTY_MARK_BYTES);
     let body_len = bytes.len() - header_len - 40;
     let mut later = bytes[..header_len].to_vec();
-    later[4..6].copy_from_slice(&14u16.to_le_bytes());
+    later[4..6].copy_from_slice(&23u16.to_le_bytes());
     later[6..8].copy_from_slice(&((header_len + 16) as u16).to_le_bytes());
     later.extend_from_slice(&[0u8; 16]);
     later.extend_from_slice(&bytes[header_len..header_len + body_len]);
@@ -499,12 +531,12 @@ fn the_identity_offsets_are_fixed() {
     later.extend_from_slice(&(body_len as u32).to_le_bytes());
     later.extend_from_slice(&digest);
     let id = Snapshot::identify(&later).unwrap();
-    assert_eq!(id.format, 14);
+    assert_eq!(id.format, 23);
     assert_eq!(id.engine_version.as_deref(), Some("0.3.0"));
     assert_eq!(id.tick, Some(300));
     let reason = refusal(Snapshot::from_bytes(&later, "s"));
     assert!(
-        reason.starts_with("unknown version 14; this build reads 13 (written by Touchline 0.3.0"),
+        reason.starts_with("unknown version 23; this build reads 22 (written by Touchline 0.3.0"),
         "{reason}"
     );
 }
@@ -576,7 +608,7 @@ fn a_snapshot_with_no_round_writes_an_empty_mark() {
 /// Versions 9 and 10 only append: the engine version, the tick, the score and the names stay where
 /// version 8 put them, so the version resolver reads both alike.
 #[test]
-fn the_version_8_offsets_hold_in_version_13() {
+fn the_version_8_offsets_hold_in_version_22() {
     use engine::snapshot::{AWAY_AT, ENGINE_VERSION_AT, HOME_AT, SCORE_AT, TICK_AT};
     assert_eq!(
         (ENGINE_VERSION_AT, TICK_AT, SCORE_AT, HOME_AT, AWAY_AT),
@@ -589,11 +621,11 @@ fn the_version_8_offsets_hold_in_version_13() {
     let bytes = stamped(&sim, "0.3.0", "abcdef0")
         .with_matchday(mark())
         .to_bytes();
-    assert_eq!(u16::from_le_bytes([bytes[4], bytes[5]]), 13);
+    assert_eq!(u16::from_le_bytes([bytes[4], bytes[5]]), 22);
     assert_eq!(&bytes[ENGINE_VERSION_AT..ENGINE_VERSION_AT + 5], b"0.3.0");
     assert_eq!(&bytes[TICK_AT..TICK_AT + 4], &300u32.to_le_bytes());
     let id = Snapshot::identify(&bytes).unwrap();
-    assert_eq!(id.format, 13);
+    assert_eq!(id.format, 22);
     assert_eq!(id.engine_version.as_deref(), Some("0.3.0"));
     assert_eq!(id.tick, Some(300));
     assert_eq!(id.seed, Some(sim.seed()));
@@ -692,7 +724,7 @@ fn older_files_are_named_through_the_released_builds() {
     let reason = refusal(Snapshot::from_bytes(&old_layout(7, "669f68b", &body), "s"));
     assert_eq!(
         reason,
-        "unknown version 7; this build reads 13 (written by Touchline 0.2.0-beta.1 (build 669f68b))"
+        "unknown version 7; this build reads 22 (written by Touchline 0.2.0-beta.1 (build 669f68b))"
     );
 
     // A damaged or too old file is not identified.

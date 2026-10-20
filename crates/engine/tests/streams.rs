@@ -92,8 +92,10 @@ fn sequences(keys: &[Key], skip: Option<Key>, extra: usize) -> Vec<Vec<u64>> {
 #[test]
 fn extra_draws_on_one_key_leave_every_other_key_unchanged() {
     let keys = sample_keys();
-    // 5 match rows and 35 player rows.
-    assert_eq!(keys.len(), 5 + 2 * 35);
+    // 5 match rows and 44 player rows (the restart wait and the quick restart added two, the
+    // trait override one, the pass cut and the pass weight two, the take-on one, the knock
+    // one, the read of an option's score one).
+    assert_eq!(keys.len(), 5 + 2 * 44);
     let control = sequences(&keys, None, 0);
     for (x, &key) in keys.iter().enumerate() {
         let disturbed = sequences(&keys, Some(key), 100);
@@ -266,13 +268,23 @@ fn the_golden_file_records_the_scheme_this_build_plays() {
 }
 
 /// The fixtures that reach every subsystem: seed 42, and a knockout match without a script
-/// pack that goes to extra time and a shoot-out (seed 11).
+/// pack that goes to extra time and a shoot-out (seed 19, the lowest that does; seed 11 until
+/// clearances, shots and misreads were scored by their cost; seed 2 until
+/// the styles became presets of primitives; seed 5 until a
+/// player going for a loose ball stopped being pushed off it; seed 12 until the
+/// AI manager's substitutions followed the situation and the styles carried rules; seed 43 until a kick stayed on
+/// its way from its kicker along the line he sent it; seed 4 until a passer read the press his receiver would meet; seed 1 until
+/// the running pace lifted on a counter rather than with the press, seed 4 until opponents
+/// walked round the restart spot, seed 2 until tempo became patience and the mentality an
+/// appetite for risk, seed 8 until the AI sides started in the style their staff picks, seed 9
+/// until defenders could cut out passes, seed 4 until a defender's read of a take-on counted, seed 1
+/// until a pressed carrier weighed his options by the pressure he feels).
 fn counter_fixtures() -> [Fixture; 2] {
     [
         Fixture::seed(42),
         Fixture {
             pack: None,
-            ..Fixture::knockout(11)
+            ..Fixture::knockout(19)
         },
     ]
 }
@@ -311,8 +323,10 @@ fn no_draw_bypasses_the_registry() {
     // Offline generation, a maths test's input sampler, the fast model and its events, which
     // play no match stream, and the sensitivity rules' design and bootstrap, which choose
     // matches and resample results outside any match, keep their own generator.
-    const ALLOWED: [&str; 8] = [
+    const ALLOWED: [&str; 9] = [
         "streams/",
+        // The staff advice before a match: its own seeded generator, no match stream.
+        "advice.rs",
         "sensitivity/",
         "rng.rs",
         "data/generator.rs",

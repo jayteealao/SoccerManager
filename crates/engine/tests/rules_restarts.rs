@@ -1,6 +1,7 @@
 //! AC-d: a ball over a touchline gives a throw-in, over the goal line off an attacker a goal
-//! kick, and off a defender a corner, each with the ball placed at the law's spot. At a
-//! free kick, every opponent is at least 9.15 m from the ball when it is taken.
+//! kick, and off a defender a corner, each with the ball placed at the law's spot once it has
+//! waited where it left play for the drawn extra. At a free kick, every opponent is at least
+//! 9.15 m from the ball when it is taken.
 
 mod common;
 
@@ -36,43 +37,56 @@ fn ball(sim: &Simulation) -> DVec2 {
     DVec2::new(f64::from(record.ball[0]), f64::from(record.ball[1]))
 }
 
-fn assert_placed(sim: &Simulation, event: &EngineEvent, spot: DVec2) {
+/// The restart names `spot`; the ball waits where it left play until the drawn extra has
+/// passed, then appears at the spot on a tick marked as a restart.
+fn assert_placed(sim: &mut Simulation, event: &EngineEvent, spot: DVec2) {
     let placed = event.spot.expect("a restart names its spot");
     assert!((placed - spot).length() <= 0.5, "{placed} against {spot}");
+    let dead = sim.dead_ball().expect("the ball is dead");
+    let waited = ball(sim);
+    while !sim.record().restart {
+        assert_eq!(ball(sim), waited, "the ball waits where it left play");
+        assert!(sim.tick() < dead.appear_at, "the ball appears on time");
+        sim.step();
+    }
+    assert_eq!(
+        sim.tick(),
+        dead.appear_at,
+        "the tick is marked as a restart"
+    );
     assert!(
         (ball(sim) - placed).length() <= 0.5,
         "the ball waits at the spot"
     );
-    assert!(sim.record().restart, "the tick is marked as a restart");
 }
 
 #[test]
 fn a_ball_over_the_touchline_gives_a_throw_in_where_it_crossed() {
-    let (sim, event) = roll_out(DVec2::new(10.0, 33.8), DVec2::new(0.0, 4.0), 1);
+    let (mut sim, event) = roll_out(DVec2::new(10.0, 33.8), DVec2::new(0.0, 4.0), 1);
     assert_eq!(event.kind, EngineEventKind::ThrowIn);
     assert_eq!(event.team, Some(0), "against the team that touched it last");
     let crossed = DVec2::new(10.0, Pitch::DEFAULT.half_width());
-    assert_placed(&sim, &event, Pitch::DEFAULT.throw_in_spot(crossed, 1.0));
+    assert_placed(&mut sim, &event, Pitch::DEFAULT.throw_in_spot(crossed, 1.0));
     assert!((event.spot.unwrap() - crossed).length() <= 0.5);
 }
 
 #[test]
 fn a_ball_over_the_goal_line_off_an_attacker_gives_a_goal_kick() {
     // The home side attacks positive `x` and touched the ball last.
-    let (sim, event) = roll_out(DVec2::new(52.0, 20.0), DVec2::new(4.0, 0.0), 0);
+    let (mut sim, event) = roll_out(DVec2::new(52.0, 20.0), DVec2::new(4.0, 0.0), 0);
     assert_eq!(event.kind, EngineEventKind::GoalKick);
     assert_eq!(event.team, Some(1));
-    assert_placed(&sim, &event, Pitch::DEFAULT.goal_kick_spot(1.0, 20.0));
+    assert_placed(&mut sim, &event, Pitch::DEFAULT.goal_kick_spot(1.0, 20.0));
     assert_eq!(sim.dead_ball().unwrap().kind, StoppageKind::GoalKick);
 }
 
 #[test]
 fn a_ball_over_the_goal_line_off_a_defender_gives_a_corner() {
-    let (sim, event) = roll_out(DVec2::new(52.0, 20.0), DVec2::new(4.0, 0.0), 1);
+    let (mut sim, event) = roll_out(DVec2::new(52.0, 20.0), DVec2::new(4.0, 0.0), 1);
     assert_eq!(event.kind, EngineEventKind::Corner);
     assert_eq!(event.team, Some(0));
     let spot = Pitch::DEFAULT.corner_spot(1.0, 20.0);
-    assert_placed(&sim, &event, spot);
+    assert_placed(&mut sim, &event, spot);
     assert!(
         spot.x > 51.0 && spot.y > 32.0,
         "the corner on the side it crossed: {spot}"

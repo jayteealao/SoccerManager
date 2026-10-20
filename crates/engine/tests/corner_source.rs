@@ -17,8 +17,9 @@ const AWAY_KEEPER: usize = 11;
 
 /// A calm match on `seed` with every pass in the away penalty area cleared, a `wide` chance
 /// that the clearance goes wide, and a cleared ball that keeps `speed` of its speed. The
-/// home striker passes from `(30, 0)` along the x axis at 20 m/s; the away centre-back
-/// clears it at `(40, 0.5)`. The home side attacks `x = 52.5` in the first half.
+/// home striker passes from `(30, 4.5)` along the x axis at 20 m/s, wide of the post, so the
+/// pass is not a shot (an open-play kick that would go in is one); the away centre-back
+/// clears it at `(40, 5)`. The home side attacks `x = 52.5` in the first half.
 fn cleared_pass(seed: u64, wide: f64, speed: f64) -> Simulation {
     let mut config = calm_match(90);
     config.seed = seed;
@@ -26,11 +27,11 @@ fn cleared_pass(seed: u64, wide: f64, speed: f64) -> Simulation {
     config.tuning.clearances.wide_chance = wide;
     config.tuning.clearances.cross_speed = speed;
     spread(Scene::new(config), -30.0, -30.0)
-        .place(index(0, 9), DVec2::new(30.0, 0.0))
-        .place(DEFENDER, DVec2::new(40.0, 0.5))
+        .place(index(0, 9), DVec2::new(30.0, 4.5))
+        .place(DEFENDER, DVec2::new(40.0, 5.0))
         // The keeper stands off every line the cleared ball can take.
         .place(AWAY_KEEPER, DVec2::new(30.0, -25.0))
-        .ball(DVec3::new(30.0, 0.0, 0.0))
+        .ball(DVec3::new(30.0, 4.5, 0.0))
         .carrier(Some(index(0, 9)))
         .tick(1_001)
         .kick(DVec2::X, 20.0, 0.0)
@@ -53,8 +54,8 @@ fn after_clearance(sim: &mut Simulation) -> Option<(StoppageKind, Option<usize>)
     None
 }
 
-/// A ball that stops on the line stays in play, so not every seed gives a corner: 154 of
-/// the 200 seeds give one, with the shared random stream and with the keyed streams alike.
+/// A ball that stops on the line stays in play, so not every seed gives a corner: 158 of
+/// the 200 seeds give one (154 when the pass ran at the goal centre).
 #[test]
 fn a_wide_clearance_of_a_pass_goes_behind_for_a_corner() {
     let mut corners = 0;

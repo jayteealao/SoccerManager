@@ -11,6 +11,7 @@ import {
   bandOf,
   HIDDEN_KEYS,
   LEVELS_PROTOCOL,
+  PERSON_PROTOCOL,
   liftHello,
   ratingBand,
   ratingText,
@@ -111,4 +112,15 @@ test('the bands and the match-rating chips follow the sketch thresholds', () => 
 test('a protocol 6 hello is returned as it is', () => {
   const hello = { 'protocol.version': 6, teams: [{ squad: [{ 'player.attributes': { pace: 145 }, 'player.level': 150 }] }] };
   assert.equal(liftHello(hello), hello);
+});
+
+test('a protocol 6 hello stays without the person fields of protocol 7', () => {
+  assert.equal(PERSON_PROTOCOL, 7);
+  const hello = { 'protocol.version': 6, teams: [{ squad: [{ 'player.id': 'p1', 'player.level': 150 }] }] };
+  const lifted = liftHello(hello);
+  assert.equal(lifted, hello);
+  const entry = lifted.teams[0].squad[0];
+  for (const key of ['player.positions', 'player.strong_foot', 'player.weaker_foot', 'player.traits', 'player.personality']) {
+    assert.equal(entry[key], undefined, key);
+  }
 });

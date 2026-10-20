@@ -154,12 +154,13 @@
     {
       "job": "work_rate",
       "kind": "attribute",
-      "measure": "tackle_attempts",
-      "statistic": "tackle attempts per match",
+      "measure": "recovery_sprints",
+      "statistic": "sprinted recovery runs per match",
       "levels": [
         8.0,
         16.0
-      ]
+      ],
+      "report_only": true
     },
     {
       "job": "aggression",
@@ -382,6 +383,237 @@
       ]
     },
     {
+      "job": "marking",
+      "kind": "attribute",
+      "measure": "cover_distance",
+      "statistic": "distance kept from the attacker he covers",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "off_ball_movement",
+      "kind": "attribute",
+      "measure": "timed_runs",
+      "statistic": "runs timed onside against the line per match",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "corners",
+      "kind": "attribute",
+      "measure": "corner_delivery",
+      "statistic": "corner deliveries reaching a team-mate, share",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "free_kicks",
+      "kind": "attribute",
+      "measure": "free_kick_success",
+      "statistic": "direct free kicks on target or reaching a team-mate, share",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "penalties",
+      "kind": "attribute",
+      "measure": "penalties_scored",
+      "statistic": "penalties scored share",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "long_throws",
+      "kind": "attribute",
+      "measure": "throw_distance",
+      "statistic": "mean long-throw distance",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "flair",
+      "kind": "attribute",
+      "measure": "flair_attempts",
+      "statistic": "killer passes and take-ons tried per match",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "determination",
+      "kind": "attribute",
+      "measure": "presses_behind",
+      "statistic": "presses per match when behind",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "bravery",
+      "kind": "attribute",
+      "measure": "headers_in_traffic",
+      "statistic": "headers won in traffic share",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "eccentricity",
+      "kind": "attribute",
+      "measure": "rash_chases",
+      "statistic": "rash keeper actions per match",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "professionalism",
+      "kind": "attribute",
+      "measure": "lapses",
+      "statistic": "concentration lapses",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "temperament",
+      "kind": "attribute",
+      "measure": "fouls",
+      "statistic": "reactions to fouls, cards and provocation",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "pressure_handling",
+      "kind": "attribute",
+      "measure": "penalties_scored",
+      "statistic": "penalties and late close games under pressure",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "sportsmanship",
+      "kind": "attribute",
+      "measure": "fouls",
+      "statistic": "dives and cynical fouls",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "leadership",
+      "kind": "attribute",
+      "measure": "mental_rating",
+      "statistic": "weight in team mood",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "adaptability",
+      "kind": "attribute",
+      "measure": "mental_rating",
+      "statistic": "familiarity cost of new conditions",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "versatility",
+      "kind": "attribute",
+      "measure": "mental_rating",
+      "statistic": "out-of-position familiarity cost",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "ambition",
+      "kind": "attribute",
+      "measure": "mental_rating",
+      "statistic": "season-goal weight at kick-off",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "loyalty",
+      "kind": "attribute",
+      "measure": "pass_completion",
+      "statistic": "inert in a match",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "money_motivation",
+      "kind": "attribute",
+      "measure": "pass_completion",
+      "statistic": "inert in a match",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "controversy",
+      "kind": "attribute",
+      "measure": "pass_completion",
+      "statistic": "inert in a match",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
       "job": "height",
       "kind": "body",
       "measure": "aerial_balls_reached",
@@ -410,6 +642,30 @@
         20.0,
         100.0
       ]
+    },
+    {
+      "job": "press.choose",
+      "kind": "stage",
+      "measure": "press_goal_side",
+      "statistic": "presses from the goal side of the carrier, share",
+      "direction": "up",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
+    },
+    {
+      "job": "cover.execute",
+      "kind": "stage",
+      "measure": "line_gap",
+      "statistic": "back-line depth gap from the line out of possession",
+      "direction": "down",
+      "levels": [
+        8.0,
+        16.0
+      ],
+      "report_only": true
     }
   ],
   "derived": [

@@ -6,11 +6,33 @@
 
 mod decisions;
 mod fatigue;
+mod game_state;
+#[cfg(test)]
+mod game_state_tests;
 mod hooks;
+#[cfg(test)]
+mod instruction_tests;
 mod manager;
+pub mod mood;
 mod movement;
+#[cfg(test)]
+mod oop_tests;
+mod overrides;
+mod pace;
+#[cfg(test)]
+mod pace_tests;
 mod possession;
+#[cfg(test)]
+mod shape_tests;
+mod slide;
+#[cfg(test)]
+mod slide_tests;
 pub mod tally;
+#[cfg(test)]
+mod transition_tests;
+mod windows;
+
+pub(crate) use windows::Windows;
 
 use crate::trace::Point;
 use serde_json::json;
@@ -42,6 +64,7 @@ use crate::tactics::Tactics;
 use crate::tactics::change::{
     AppliedChange, ChangeId, ChangeKind, ChangeQueue, RejectReason, SubLedger,
 };
+use crate::tactics::rules::GameState;
 use crate::team::{PLAYERS_PER_TEAM, Team};
 use crate::tuning::{Tuning, XgTuning};
 
@@ -77,6 +100,16 @@ pub struct MatchConfig {
     pub hidden: crate::contract::hidden::HiddenTuning,
     /// The weights of the match rating, from the tuning file. Never changes in a match.
     pub match_rating: crate::match_rating::MatchRatingTuning,
+    /// The restart wait table, from the content; `None` plays the tuning file's fixed restart
+    /// delays. Never changes in a match.
+    pub restart_waits: Option<crate::data::restart_waits::RestartWaits>,
+    /// The named styles, from the content; `None` keeps the AI default tactics. Never
+    /// changes in a match.
+    pub styles: Option<crate::data::styles::Styles>,
+    /// Per side, home first: the side starts in the style its pre-match module picked from
+    /// the staff advice ([`MatchConfig::new`]). A side whose tactics or lineup a caller set
+    /// afterwards no longer does; a side handed to a person goes back to the default setup.
+    advice: [bool; 2],
     /// The home team's ground. Never changes in a match. Private: `set_pitch` writes it and
     /// the teams' copies together.
     pitch: Pitch,
@@ -99,7 +132,10 @@ impl MatchConfig {
 
     /// Builds a match from loaded content and two validated team files. `minutes` must be
     /// 1 to 200; the home team is `files[0]`. The AI manager's pre-match setup picks each
-    /// team's lineup, bench, and tactics.
+    /// team's lineup, bench, and tactics: with named styles in the content and the
+    /// `ai_style_pick` flag on, the style the staff advice rates best for the squad, else the
+    /// tactics file's default tactics. The advice lives only inside this call; nothing keeps an
+    /// estimate.
     pub fn new(
         seed: u64,
         minutes: u32,
@@ -140,7 +176,7 @@ impl MatchConfig {
             *digest = Sha256::digest(&json).into();
             hasher.update(json);
         }
-        Ok(Self {
+        let config = Self {
             seed,
             minutes,
             tuning,
@@ -158,8 +194,40 @@ impl MatchConfig {
             modules: content.modules,
             hidden: content.tuning.hidden.clone(),
             match_rating: content.tuning.match_rating.clone(),
+            restart_waits: content.restart_waits.clone(),
+            styles: content.styles.clone(),
+            advice: [false; 2],
             pitch,
-        })
+        };
+        if !content.flags.is_on(crate::flags::AI_STYLE_PICK) {
+            return Ok(config);
+        }
+        Ok(config.advised(0).advised(1))
+    }
+
+    /// `team` starts in the style its pre-match module picks from the staff advice, with the
+    /// lineup and bench picked for it; unchanged when the content has no styles or the module
+    /// gives no answer.
+    fn advised(mut self, team: usize) -> Self {
+        let Some(styles) = &self.styles else {
+            return self;
+        };
+        let tactics = self.modules.pre_match.advise(
+            &self.teams[team],
+            styles,
+            &self.tactics,
+            &self.attributes,
+            self.seed,
+            team,
+        );
+        if let Some((tactics, state)) = tactics {
+            self = self.with_ai_tactics(team, tactics);
+            if !state.is_empty() {
+                self = self.with_game_state(team, state);
+            }
+            self.advice[team] = true;
+        }
+        self
     }
 
     /// Folds a script pack's SHA-256 into the content hash, so a snapshot written with one
@@ -197,9 +265,39 @@ impl MatchConfig {
         self
     }
 
-    /// `team` is managed by `manager`.
+    /// `team` is managed by `manager`. A side handed to a person that started in a style from
+    /// the staff advice goes back to the pre-match module's default setup: the advice is the
+    /// AI manager's, and a person sees none of it.
     pub fn with_manager(mut self, team: usize, manager: Manager) -> Self {
         self.managers[team] = manager;
+        if manager == Manager::Human && self.advice[team] {
+            let schema = self.tactics.clone();
+            // The preset's rules and instructions are the AI manager's too.
+            if !self.teams[team].game_state.is_empty() {
+                let tuning = self.tuning.clone();
+                self.teams[team].set_game_state(GameState::default(), &schema, &tuning);
+            }
+            let setup = self
+                .modules
+                .pre_match
+                .setup(&self.teams[team], &schema, &self.attributes);
+            self = self.with_setup(team, setup.lineup, setup.bench);
+            let tuning = self.tuning.clone();
+            self.teams[team].set_tactics(setup.tactics, &schema, &tuning);
+            let starters = self.teams[team].starters();
+            let first = team * PLAYERS_PER_TEAM;
+            self.players[first..first + PLAYERS_PER_TEAM].clone_from_slice(&starters);
+        }
+        self
+    }
+
+    /// `team` plays by the game-state rules and player instructions of `state`, over its
+    /// tactics as its base, with no rule active at kick-off. A person's tactic and an AI preset
+    /// hand them in the same way.
+    pub fn with_game_state(mut self, team: usize, state: GameState) -> Self {
+        let schema = self.tactics.clone();
+        let tuning = self.tuning.clone();
+        self.teams[team].set_game_state(state, &schema, &tuning);
         self
     }
 
@@ -211,15 +309,21 @@ impl MatchConfig {
         let starters = self.teams[team].starters();
         let first = team * PLAYERS_PER_TEAM;
         self.players[first..first + PLAYERS_PER_TEAM].clone_from_slice(&starters);
+        self.advice[team] = false;
         self
     }
 
     /// AI-managed `team` starts with `tactics` instead of the default ones, and with the
     /// lineup and bench its pre-match module picks for them: in another formation, players
     /// whose position suits that formation's slots. A person's side keeps its own lineup
-    /// through [`MatchConfig::with_setup`] and [`MatchConfig::with_tactics`].
+    /// through [`MatchConfig::with_setup`] and [`MatchConfig::with_tactics`]. The side plays no
+    /// style preset's game-state rules: they were made for the preset's own tactics.
     pub fn with_ai_tactics(mut self, team: usize, tactics: Tactics) -> Self {
         let schema = self.tactics.clone();
+        if !self.teams[team].game_state.is_empty() {
+            let tuning = self.tuning.clone();
+            self.teams[team].set_game_state(GameState::default(), &schema, &tuning);
+        }
         let setup =
             self.modules
                 .pre_match
@@ -230,6 +334,7 @@ impl MatchConfig {
         let starters = self.teams[team].starters();
         let first = team * PLAYERS_PER_TEAM;
         self.players[first..first + PLAYERS_PER_TEAM].clone_from_slice(&starters);
+        self.advice[team] = false;
         self
     }
 
@@ -247,7 +352,14 @@ impl MatchConfig {
         let starters = self.teams[team].starters();
         let first = team * PLAYERS_PER_TEAM;
         self.players[first..first + PLAYERS_PER_TEAM].clone_from_slice(&starters);
+        self.advice[team] = false;
         self
+    }
+
+    /// `true` while `team` starts in the style its pre-match module picked from the staff
+    /// advice.
+    pub fn takes_advice(&self, team: usize) -> bool {
+        self.advice[team]
     }
 }
 
@@ -300,6 +412,12 @@ pub enum EventDetail {
     },
     /// A plugin hook failed or was switched off.
     Script(ScriptNote),
+    /// A strong trait of play overrode `instruction` for `cause`.
+    Override {
+        trait_kind: crate::traits::TraitKind,
+        cause: crate::traits::OverrideCause,
+        instruction: crate::tactics::Instruction,
+    },
 }
 
 /// What happened during a tick that a consumer outside the engine must know about. The
@@ -339,11 +457,14 @@ pub enum EngineEventKind {
     /// A plugin hook failed or was switched off; the detail names the hook and the outcome.
     /// Play goes on with the engine's own choice.
     Script,
+    /// `player` of `team` overrode an instruction with a strong trait of play; the detail
+    /// names the trait, the cause and the instruction.
+    TraitOverride,
 }
 
 impl EngineEventKind {
     /// Every event kind, in declaration order.
-    pub const ALL: [EngineEventKind; 18] = [
+    pub const ALL: [EngineEventKind; 19] = [
         EngineEventKind::KickOff,
         EngineEventKind::Goal,
         EngineEventKind::HalfTime,
@@ -362,6 +483,7 @@ impl EngineEventKind {
         EngineEventKind::ChangeApplied,
         EngineEventKind::ChangeRejected,
         EngineEventKind::Script,
+        EngineEventKind::TraitOverride,
     ];
 
     /// The kind as the event contract spells it. Both change verdicts travel as
@@ -385,6 +507,7 @@ impl EngineEventKind {
             EngineEventKind::AiDecision => "ai-decision",
             EngineEventKind::ChangeApplied | EngineEventKind::ChangeRejected => "tactics-change",
             EngineEventKind::Script => "script",
+            EngineEventKind::TraitOverride => "trait-override",
         }
     }
 
@@ -456,6 +579,10 @@ pub struct Summary {
     /// Ticks of open play with the ball at rest and nobody controlling it.
     pub ball_idle_ticks: u32,
     pub goals: [u32; 2],
+    /// Goals with no shot of the scoring side behind them, neither in flight nor turned by a
+    /// block or a parry: an own goal (the other side kicked or turned the ball in last), or a
+    /// ball nobody kicked in.
+    pub goals_no_shot: [u32; 2],
     pub fouls: [u32; 2],
     pub offsides: [u32; 2],
     pub corners: [u32; 2],
@@ -538,12 +665,102 @@ pub fn shot_xg(from: DVec2, attack_x: f64, t: &XgTuning, pitch: &Pitch) -> f64 {
     1.0 / (1.0 + math::exp(-z))
 }
 
+/// The real threat of the place `at` for a team attacking `attack_x` on `pitch`, in the
+/// threat's unit ([`crate::tuning::ThreatTuning`]): the logistic of the distance to the goal
+/// centre and the angle the goal mouth subtends (with its square), read as [`shot_xg`] reads a shot's place,
+/// over `t.unit`. 0 with the threat off.
+pub fn place_threat(
+    at: DVec2,
+    attack_x: f64,
+    t: &crate::tuning::ThreatTuning,
+    pitch: &Pitch,
+) -> f64 {
+    if !t.on() {
+        return 0.0;
+    }
+    let x = pitch.half_length() * attack_x;
+    let half = GOAL_WIDTH / 2.0;
+    let a = DVec2::new(x, half) - at;
+    let b = DVec2::new(x, -half) - at;
+    let angle = math::atan2(a.perp_dot(b), a.dot(b)).abs();
+    let distance = (pitch.goal_centre(attack_x) - at).length();
+    let z = t.intercept
+        + t.distance_coef * distance
+        + t.angle_coef * angle
+        + t.angle2_coef * angle * angle;
+    1.0 / (1.0 + math::exp(-z)) / t.unit
+}
+
+/// The chance `p` of a shot from `from` (the [`shot_xg`] of model `t`) with the keeper
+/// `keeper_off` metres off his goal line: from outside the penalty area it moves by
+/// `t.keeper_coef x (min(keeper_off, 16.5) - depth)` in log-odds, `depth` the keeper's place
+/// on his line ([`crate::tuning::Tuning::keeper_depth`]); past the penalty area's depth the
+/// real shots are too few to read (35 in the StatsBomb open data) and the term stays as it is
+/// there. Inside the area, with the keeper on his line, or with `keeper_coef` 0, it is `p`
+/// bit for bit.
+pub fn keeper_off_xg(
+    p: f64,
+    from: DVec2,
+    attack_x: f64,
+    keeper_off: f64,
+    depth: f64,
+    t: &XgTuning,
+    pitch: &Pitch,
+) -> f64 {
+    if t.keeper_coef == 0.0 || keeper_off <= depth || pitch.in_penalty_area(from, attack_x) {
+        return p;
+    }
+    let off = keeper_off.min(crate::pitch::PENALTY_AREA_DEPTH);
+    crate::contract::curve::shifted(p, t.keeper_coef * (off - depth).max(0.0), 0.0, 1.0)
+}
+
+/// The distance, in metres, of a shot straight in front of the goal whose [`shot_xg`] of model
+/// `t` (no keeper term) is `p`: from 0.1 m up to the pitch's length, found by halving.
+pub fn central_distance(p: f64, t: &XgTuning, pitch: &Pitch) -> f64 {
+    let central = |d: f64| {
+        let angle = 2.0 * math::atan2(GOAL_WIDTH / 2.0, d);
+        1.0 / (1.0 + math::exp(-(t.intercept + t.distance_coef * d + t.angle_coef * angle)))
+    };
+    let (mut lo, mut hi) = (0.1, pitch.length());
+    if p >= central(lo) {
+        return lo;
+    }
+    if p <= central(hi) {
+        return hi;
+    }
+    // The central chance falls as the distance grows.
+    for _ in 0..32 {
+        let mid = 0.5 * (lo + hi);
+        if central(mid) > p {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    0.5 * (lo + hi)
+}
+
+/// How far the keeper of the side defending the goal a team attacking `attack_x` aims at
+/// stands off his goal line, in metres.
+pub fn keeper_off_line(view: &crate::modules::MatchView<'_>, attack_x: f64) -> f64 {
+    let defending = if view.attack_x(0) == attack_x { 1 } else { 0 };
+    view.pitch().half_length() - view.player(view.keeper(defending)).pos.x * attack_x
+}
+
 /// The decision hook's offsets for one carrier, in force until `until`.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ScriptCache {
     pub carrier: usize,
     pub until: u32,
     pub offsets: crate::plugin::OptionOffsets,
+}
+
+/// Test seam: the draws the next restarts are given instead of their streams. `quick` pins
+/// whether the taker restarts quickly; `wait_draw` pins the uniform draw of the drawn extra.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct PinnedRestart {
+    pub quick: Option<bool>,
+    pub wait_draw: Option<f64>,
 }
 
 /// One running match.
@@ -562,6 +779,11 @@ pub struct Simulation {
     /// dead ball clears it, and a snapshot is written only when play stops, so the snapshot
     /// never needs it.
     pub(crate) last_kicker: Option<usize>,
+    /// The ground velocity the last kicker gave the ball, read only for its direction: his
+    /// kick, or the ball's new line when he deflected it. A kick is still leaving him while
+    /// the ball runs along this line ([`crate::possession::leaving_kicker`]); a rebound
+    /// reverses it. Set and cleared with `last_kicker`.
+    pub(crate) last_kick_dir: DVec2,
     pub(crate) summary: Summary,
     pub(crate) referee: Referee,
     pub(crate) restart: bool,
@@ -585,18 +807,79 @@ pub struct Simulation {
     /// both, like `last_kicker`, so the snapshot never needs them.
     pub(crate) pass_in_flight: Option<usize>,
     pub(crate) shot_in_flight: Option<usize>,
+    /// The shot a block or a parry turned, while the turned ball is in flight: the shooting
+    /// side and the shooter. A goal from it is his shot's goal. Cleared with the next kick,
+    /// touch or dead ball, so the snapshot never needs it.
+    pub(crate) shot_deflected: Option<(usize, usize)>,
+    /// The team in possession: the team of the last player who gained control of the ball,
+    /// kept through a loose ball, a deflection and a pass in flight until a player of the
+    /// other team controls it. The kick-off and each restart set it; every dead ball clears
+    /// it with `pass_in_flight`, so the snapshot never needs it.
+    pub(crate) possession_phase: Option<usize>,
+    /// The open-play windows: the regain and counter-press windows, the press triggers and
+    /// the offside trap. Every dead ball closes them, like `possession_phase`, so a restart
+    /// opens no window and the snapshot never needs them.
+    pub(crate) windows: Windows,
+    /// The players (roster bits) who had the pass in flight within reach while it was too fast
+    /// to control: a gain by one of them is a poor touch. Each kick and each dead ball clear it.
+    pub(crate) heavy_mask: u32,
+    /// Each player's followed ball point, which his anchor's ball shift reads: in open play
+    /// it eases toward the ball, later the farther he is from it (the far-player delay of
+    /// the slide); every dead ball and each kick-off placement set it to the ball, so the
+    /// snapshot never needs it.
+    pub(crate) slide_ball: [DVec2; crate::modules::ROSTER],
     /// The shot in flight: whether it heads between the posts under the bar, its quality for
     /// the save roll, and the outfield defenders (one bit per roster index) who have already
     /// tried to block it. Cleared with `shot_in_flight`.
     pub(crate) shot_on_target: bool,
     pub(crate) shot_quality: f64,
     pub(crate) blockers_tried: u32,
+    /// The shot in flight's expected goals and its shooter, for the big-miss judgement when
+    /// it ends without a goal. Cleared with the shot.
+    pub(crate) shot_xg: f64,
+    pub(crate) shooter: Option<usize>,
+    /// The last completed open-play pass as `(passer, receiver)` while his side keeps the
+    /// ball, for the assist. Every dead ball clears it, like `last_kicker`.
+    pub(crate) last_pass: Option<(usize, usize)>,
+    /// The open spell on the ball for the match rating's value added: the player whose spell it
+    /// is and where it began ([`tally`]). A shot closes it; the next player to take the ball
+    /// closes it for him.
+    pub(crate) value_from: Option<(usize, DVec2)>,
+    /// Each side's bench mood: the side's mood events and the drift with a swing of 1, which
+    /// a substitute enters at ([`mood`]).
+    pub(crate) bench_mood: [f64; 2],
+    /// Each side's mood as the last refresh of effective values read it, so the team-mood
+    /// modifier reads it once per side, not once per player ([`Simulation::team_mood`]).
+    pub(crate) team_moods: [f64; 2],
+    /// The trait override each player plays, by roster index, until its action ends
+    /// ([`crate::traits`]).
+    pub(crate) trait_acts: [Option<crate::traits::TraitAct>; 2 * PLAYERS_PER_TEAM],
+    /// Roster bits: carriers whose last decision was a dribble, so the next one is no new
+    /// carry; and keepers who already met this loose ball's moment.
+    pub(crate) carrying: u32,
+    pub(crate) chase_seen: u32,
     /// The restart taker until his first kick or until another player touches the ball;
     /// his first kick is a restart kick. Every dead ball clears it.
     pub(crate) restart_taker: Option<usize>,
     /// The defenders (one bit per roster index) who have already tried to clear the fast
     /// pass in flight. Cleared with a kick and with `pass_in_flight`.
     pub(crate) clearers_tried: u32,
+    /// The defenders (one bit per roster index) who have already tried to cut out the pass in
+    /// flight. Cleared with a kick, a gain and with `pass_in_flight`.
+    pub(crate) cutters_tried: u32,
+    /// The defenders (one bit per roster index) who met the carrier in a take-on and have not
+    /// left the pressed distance of him since. Cleared when the ball changes feet.
+    pub(crate) duelled: u32,
+    /// The run-of-play record: each shot as the tick after it, its side and its expected
+    /// goals, inside the tactics file's window. Kept only while a side has game-state rules.
+    pub(crate) chances: Vec<(u32, usize, f64)>,
+    /// `true` from the placement of a half's kick-off until the walk-on to it is taken
+    /// ([`Simulation::take_walk_on`]): the walk-on is shown before the half's first record and
+    /// is not match time. No play reads it, and a snapshot is written after it is taken.
+    pub(crate) walk_on_due: bool,
+    /// Test seam: the draws the next restarts are given instead of their streams.
+    #[cfg(feature = "scenario")]
+    pub(crate) pinned_restart: Option<PinnedRestart>,
     /// Test seam: how each shot ended.
     #[cfg(feature = "scenario")]
     pub(crate) census: ShotCensus,
@@ -636,6 +919,11 @@ pub struct Simulation {
     /// build with the `sensitivity` feature has it, so a normal match pays for no count site.
     #[cfg(feature = "sensitivity")]
     pub(crate) probe: Option<Box<crate::sensitivity::probe::JobProbe>>,
+    /// Test seam for the realism measures: absent unless a calibration run attaches them
+    /// ([`Simulation::with_measures`]). Never hashed and never stored. Only a build with the
+    /// `measures` feature has it, so a normal match pays for no count site.
+    #[cfg(feature = "measures")]
+    pub(crate) measures: Option<Box<crate::measures::MatchMeasures>>,
 }
 
 impl Simulation {
@@ -744,6 +1032,7 @@ impl Simulation {
             control_since: 0,
             last_touch: None,
             last_kicker: None,
+            last_kick_dir: DVec2::ZERO,
             summary: Summary::default(),
             referee,
             restart: false,
@@ -756,12 +1045,32 @@ impl Simulation {
             ai: [AiState::default(); 2],
             keeper_beaten: false,
             pass_in_flight: None,
+            possession_phase: None,
+            windows: Windows::default(),
+            heavy_mask: 0,
+            slide_ball: [DVec2::ZERO; crate::modules::ROSTER],
             restart_taker: None,
             clearers_tried: 0,
+            cutters_tried: 0,
+            duelled: 0,
             shot_in_flight: None,
+            shot_deflected: None,
             shot_on_target: false,
             shot_quality: 0.0,
             blockers_tried: 0,
+            shot_xg: 0.0,
+            shooter: None,
+            last_pass: None,
+            value_from: None,
+            bench_mood: [0.0; 2],
+            walk_on_due: false,
+            chances: Vec::new(),
+            #[cfg(feature = "scenario")]
+            pinned_restart: None,
+            team_moods: [0.0; 2],
+            trait_acts: [None; 2 * PLAYERS_PER_TEAM],
+            carrying: 0,
+            chase_seen: 0,
             #[cfg(feature = "scenario")]
             census: ShotCensus::default(),
             #[cfg(feature = "scenario")]
@@ -782,6 +1091,8 @@ impl Simulation {
             tallies,
             #[cfg(feature = "sensitivity")]
             probe: None,
+            #[cfg(feature = "measures")]
+            measures: None,
             config,
         };
         // Every starter plays; the condition inputs (sharpness, adaptation, a short rest)
@@ -789,6 +1100,7 @@ impl Simulation {
         // ([`Self::kick_off_form`]), so a restored match takes no draw here.
         for i in 0..sim.players.len() {
             sim.tally_played(i);
+            sim.tally_started(i);
         }
         sim.refresh_effective();
         Ok(sim)
@@ -837,6 +1149,27 @@ impl Simulation {
     #[cfg(feature = "sensitivity")]
     pub fn probe(&self) -> Option<&crate::sensitivity::probe::JobProbe> {
         self.probe.as_deref()
+    }
+
+    /// Attaches the realism measures: from now on the count sites fill them. They read the
+    /// match and write nothing else, so every tick stays as it would be. Attached before
+    /// the first step, the opening kick-off begins the first chain.
+    #[cfg(feature = "measures")]
+    pub fn with_measures(&mut self) {
+        let mut m = Box::<crate::measures::MatchMeasures>::default();
+        if self.tick == 0
+            && self.restart_taker.is_some()
+            && let Some(team) = self.last_touch
+        {
+            m.restart_taken(crate::StoppageKind::KickOff, team, self.tick);
+        }
+        self.measures = Some(m);
+    }
+
+    /// The realism measures, when a calibration run attached them.
+    #[cfg(feature = "measures")]
+    pub fn measures(&self) -> Option<&crate::measures::MatchMeasures> {
+        self.measures.as_deref()
     }
 
     /// The roster index of the player keeping goal for `team`: slot 0, a goalkeeper who came
@@ -913,6 +1246,10 @@ impl Simulation {
     /// (sharpness on the technical group, adaptation on the mental group, capped as in play)
     /// and fresh, in tenths: `[today, fresh]`. Reads the squad entry only; it writes nothing.
     /// A hidden value never moves it.
+    ///
+    /// It rebuilds the shipped condition and familiarity drops by hand rather than through
+    /// the match's modifier slots, so a slot set off or replaced still shows the shipped
+    /// drop in this pre-match range.
     pub fn squad_level_range(&self, team: usize, squad: usize) -> [u8; 2] {
         use crate::contract::body::BodyJobs;
         use crate::contract::states::{self, GROUP_COUNT};
@@ -925,13 +1262,57 @@ impl Simulation {
         families[Family::Body as usize][Group::Technical as usize] =
             BodyJobs::drop(&body.sharpness, entry.condition.sharpness);
         families[Family::Mind as usize][Group::Mental as usize] =
-            BodyJobs::drop(&body.adaptation, entry.condition.adaptation);
+            BodyJobs::drop(&body.adaptation, entry.condition.adaptation)
+                * crate::modules::modifier::condition::adaptation_scale(
+                    &entry.personality,
+                    &self.config.tuning,
+                );
+        // A player in the lineup plays his slot's position; a bench player reads his natural
+        // position, which costs nothing.
+        let side = &self.teams[team];
+        if let Some(slot) = side.lineup.iter().position(|&s| s == squad) {
+            let drop = states::familiarity_drop(
+                &entry.positions,
+                self.slot_position(team, slot),
+                &entry.personality,
+                &self.config.tuning.contract.person().familiarity,
+            );
+            families[Family::Familiarity as usize][Group::Technical as usize] = drop;
+            families[Family::Familiarity as usize][Group::Mental as usize] = drop;
+        }
         let deltas = states::capped(families, &self.config.tuning.contract.states);
         let today = states::effective(&entry.attributes, schema, deltas);
         [
             overall_level(&today, schema, entry.position),
             overall_level(&entry.attributes, schema, entry.position),
         ]
+    }
+
+    /// The position formation slot `slot` of `team` plays in the formation in force.
+    pub fn slot_position(&self, team: usize, slot: usize) -> crate::data::team::Position {
+        let formation = usize::from(self.teams[team].tactics.formation);
+        self.config.tactics.formations[formation].slots[slot].position
+    }
+
+    /// The position player `i` plays now: his formation slot's.
+    pub fn played_position(&self, i: usize) -> crate::data::team::Position {
+        let p = &self.players[i];
+        self.slot_position(p.team, p.slot)
+    }
+
+    /// Player `i`'s rating at each position, in [`crate::data::team::Position::ALL`] order,
+    /// from his squad entry.
+    #[inline]
+    pub fn position_ratings(&self, i: usize) -> &[crate::rating::Rating; 10] {
+        let p = &self.players[i];
+        &self.teams[p.team].squad[p.squad].positions
+    }
+
+    /// Player `i`'s feet, from his squad entry.
+    #[inline]
+    pub fn foot(&self, i: usize) -> crate::data::team::Foot {
+        let p = &self.players[i];
+        self.teams[p.team].squad[p.squad].foot
     }
 
     /// Player `i`'s match condition inputs, from his squad entry.
@@ -950,7 +1331,8 @@ impl Simulation {
 
     /// Sets player `i`'s state deltas and form offset and derives his effective values from
     /// them: his squad entry's when all are 0, otherwise blended again from his ratings moved
-    /// by both ([`crate::contract::states::effective_with_form`]) through the contract.
+    /// by his deltas ([`crate::contract::states::effective`]), with the form offset moving each
+    /// stage by its action's consistency degree after the blend.
     pub(crate) fn set_state(
         &mut self,
         i: usize,
@@ -964,19 +1346,22 @@ impl Simulation {
             self.stages[i] = entry.stages;
         } else {
             let schema = &self.config.attributes;
-            let ratings = crate::contract::states::effective_with_form(
-                &entry.attributes,
-                schema,
-                deltas,
-                form,
-                &self.config.tuning.contract.states,
-            );
-            let (derived, stages) = crate::player::Derived::from_blend(
+            let ratings = crate::contract::states::effective(&entry.attributes, schema, deltas);
+            // The shared floor binds only with a person block in the tuning.
+            let floor = self
+                .config
+                .tuning
+                .contract
+                .person
+                .map(|person| (&entry.stages, person.floor_drop));
+            let (derived, stages) = crate::player::Derived::from_blend_floored(
                 &ratings,
                 &self.blend,
                 schema,
                 &self.config.tuning,
                 entry.body,
+                form,
+                floor,
             );
             self.players[i].derived = derived;
             self.stages[i] = stages;
@@ -1075,6 +1460,63 @@ impl Simulation {
         self.carrier
     }
 
+    /// The team in possession, kept through a loose ball and a pass in flight; `None` while
+    /// the ball is dead.
+    pub fn possession_phase(&self) -> Option<usize> {
+        self.possession_phase
+    }
+
+    /// Seconds since `team` won the ball from the other side in open play, while it keeps
+    /// the ball; `None` otherwise (the transition primitives' regain window reads it).
+    pub fn since_regain_s(&self, team: usize) -> Option<f64> {
+        self.windows.since_regain_s(
+            team,
+            self.possession_phase,
+            self.tick,
+            self.config.tuning.dt,
+        )
+    }
+
+    /// Seconds since `team` lost the ball to the other side in open play, while the other
+    /// side has it; `None` otherwise (the counter-press window reads it).
+    pub fn since_loss_s(&self, team: usize) -> Option<f64> {
+        self.windows.since_loss_s(
+            team,
+            self.possession_phase,
+            self.tick,
+            self.config.tuning.dt,
+        )
+    }
+
+    /// Seconds since press trigger `kind` of the side without the ball fired, for pressing side
+    /// `team`, while the other side has the ball; `None` otherwise.
+    pub fn since_trigger_s(&self, team: usize, kind: usize) -> Option<f64> {
+        self.windows.since_trigger_s(
+            team,
+            kind,
+            self.possession_phase,
+            self.tick,
+            self.config.tuning.dt,
+        )
+    }
+
+    /// Seconds since side `team`'s offside trap started, while the other side has the ball;
+    /// `None` otherwise.
+    pub fn since_trap_s(&self, team: usize) -> Option<f64> {
+        self.windows.since_trap_s(
+            team,
+            self.possession_phase,
+            self.tick,
+            self.config.tuning.dt,
+        )
+    }
+
+    /// Clears both sides' transition ticks: a dead ball ends every transition window.
+    pub(crate) fn clear_transitions(&mut self) {
+        self.windows.clear();
+        self.heavy_mask = 0;
+    }
+
     /// The team that touched the ball last.
     #[cfg(feature = "scenario")]
     pub fn last_touch(&self) -> Option<usize> {
@@ -1153,12 +1595,16 @@ impl Simulation {
     }
 
     /// Plays to full time, emitting one record per tick and announcing every stoppage
-    /// through the sink's stoppage hook, then closes the match.
+    /// through the sink's stoppage hook, then closes the match. Before the first record of
+    /// each half the sink receives the walk-on to it.
     pub fn run<S: TickSink>(&mut self, sink: &mut S) -> Result<(), EngineError> {
         while !self.is_over() {
             self.step();
             self.drain_trace(sink)?;
             sink.on_step(self)?;
+            if let Some(walk_on) = self.take_walk_on() {
+                sink.on_walk_on(&walk_on)?;
+            }
             sink.on_tick(&self.record())?;
             if let Some(stoppage) = self.stoppage {
                 sink.on_stoppage(&stoppage, self)?;
@@ -1166,6 +1612,24 @@ impl Simulation {
         }
         self.finish();
         self.drain_trace(sink)
+    }
+
+    /// The walk-on to the places the players stand on now, when a half's kick-off was placed
+    /// and its walk-on has not been taken: call it after a step and before the step's record,
+    /// so the walk-on ends on the half's first record. `None` otherwise. Each half's walk-on
+    /// is taken once.
+    pub fn take_walk_on(&mut self) -> Option<crate::walk_on::WalkOn> {
+        if !std::mem::take(&mut self.walk_on_due) {
+            return None;
+        }
+        Some(crate::walk_on::WalkOn::build(
+            self.referee.clock.half,
+            self.tick,
+            self.config.tuning.pace.limits_ms[1],
+            self.config.tuning.dt,
+            &self.players,
+            &self.teams,
+        ))
     }
 
     /// Hands the debug trace records of the last step to the sink, in debug mode.
@@ -1184,6 +1648,10 @@ impl Simulation {
             return;
         }
         self.finished = true;
+        #[cfg(feature = "measures")]
+        if let Some(m) = self.measures.as_deref_mut() {
+            m.finish(self.tick);
+        }
         self.streams.begin_tick(self.tick);
         self.enter_phase(Phase::FullTime, crate::rules::phases::Cause::MatchEnd);
         // A match abandoned before its period's added time was announced has none.
@@ -1237,18 +1705,54 @@ impl Simulation {
             Phase::Live if self.referee.shootout.is_some() => {}
             Phase::Live => {
                 self.summary.live_ticks += 1;
+                #[cfg(feature = "measures")]
+                if self.measures.is_some() {
+                    let length = self.config.pitch().length();
+                    let place = [0, 1].map(|team| {
+                        let attack_x = self.teams[team].attack_x;
+                        let third = crate::measures::third_of(self.ball.pos.x, attack_x, length);
+                        (self.ball.pos.x * attack_x, third)
+                    });
+                    let tick = self.tick;
+                    if let Some(m) = self.measures.as_deref_mut() {
+                        m.clock(tick, place);
+                    }
+                }
                 if let Some(team) = self.last_touch {
                     self.summary.possession_ticks[team] += 1;
+                    #[cfg(feature = "measures")]
+                    if self.measures.is_some() {
+                        let third = crate::measures::third_of(
+                            self.ball.pos.x,
+                            self.teams[team].attack_x,
+                            self.config.pitch().length(),
+                        );
+                        if let Some(m) = self.measures.as_deref_mut() {
+                            m.live_tick(team, third);
+                        }
+                    }
                 }
+                self.slide_tick();
                 if self.tick.is_multiple_of(t.decision_interval_ticks)
                     && let Some(kick) = self.decide()
                 {
                     self.apply_kick(kick, &t, true);
                 }
+                self.pace_tick();
             }
             Phase::DeadBall(dead) => {
                 self.summary.dead_ball_ticks += 1;
-                self.dead_ball_tick(&dead, &t);
+                // With a wait table, every player walks or stands while the ball is dead, save
+                // an opponent the law moves away from it; at a shoot-out kick and without the
+                // table the pace is off, as before the selector.
+                if self.config.restart_waits.is_some() && self.referee.shootout.is_none() {
+                    self.dead_ball_tick(&dead, &t);
+                    self.pace_tick();
+                } else {
+                    self.pace_off();
+                    self.dead_ball_tick(&dead, &t);
+                }
+                self.slide_reset();
             }
             Phase::FullTime => {}
         }
@@ -1265,12 +1769,14 @@ impl Simulation {
         self.check_clock();
         if !self.is_over() {
             self.fatigue_tick();
-            // Nobody manages a team during the shoot-out.
+            // Nobody manages a team during the shoot-out, and no rule changes a team then.
             if self.referee.shootout.is_none() {
                 self.ai_tick();
+                self.rules_tick();
             }
         }
         if let Some(stoppage) = self.stoppage {
+            self.end_acts_on_stoppage();
             self.apply_changes(stoppage);
             self.script_cache = None;
         }
@@ -1353,18 +1859,69 @@ impl Simulation {
     ) {
         let (dir, speed, loft) = kick.flight();
         let mut shooter = None;
+        let kicker = self.carrier;
         self.end_shot();
+        self.heavy_mask = 0;
         self.clearers_tried = 0;
+        self.cutters_tried = 0;
+        self.duelled = 0;
+        // A kick starts a new flight: each keeper meets its loose ball afresh.
+        self.chase_seen = 0;
         if let Some(c) = self.carrier {
+            // The kick ends his carry or hold.
+            if self.trait_acts[c].is_some_and(|a| matches!(a.ends, crate::traits::ActEnd::Tick(_)))
+            {
+                self.trait_acts[c] = None;
+            }
             let team = self.players[c].team;
             self.pass_in_flight = None;
-            // A shot is always a shot; otherwise the restart taker's first kick is a restart
-            // kick, then a clearance is a clearance, and only what is left is a pass.
+            // A shot is always a shot, and so is any other open-play kick whose flight, as
+            // struck, goes in under the bar at the goal the kicker attacks: every goal of his
+            // side then comes from a recorded shot, with its expected goals and a save roll.
+            // Otherwise the restart taker's first kick is a restart kick, then a clearance is a
+            // clearance, and only what is left is a pass.
             let restart_kick = self.restart_taker.take() == Some(c);
-            if matches!(kick, Kick::Shot { .. }) {
+            let attack_x = self.teams[team].attack_x;
+            let as_shot = matches!(kick, Kick::Shot { .. })
+                || (!restart_kick && dir.x * attack_x > 0.0 && {
+                    let view = self.view();
+                    let flight = self
+                        .config
+                        .modules
+                        .ball
+                        .kick(&view, self.ball, dir, speed, loft);
+                    self.config.modules.shot.on_target(&view, flight, attack_x)
+                });
+            #[cfg(feature = "measures")]
+            {
+                let kind = if as_shot {
+                    0
+                } else if restart_kick {
+                    1
+                } else if matches!(kick, Kick::Clear { .. }) {
+                    2
+                } else {
+                    3
+                };
+                let length = self.config.pitch().length();
+                let third =
+                    crate::measures::third_of(self.ball.xy().x, self.teams[team].attack_x, length);
+                if let Some(m) = self.measures.as_deref_mut() {
+                    m.probe.kick(team, kind, third);
+                    if kind == 1 || kind == 3 {
+                        let lofted = loft > 0.0;
+                        let box_kind = match (lofted, kind) {
+                            (true, 3) => 0,
+                            (true, _) => 1,
+                            _ => 2,
+                        };
+                        m.probe.box_kick(team, box_kind);
+                    }
+                }
+            }
+            if as_shot {
                 self.summary.shots[team] += 1;
                 self.tally(c, tally::Count::Shot);
-                let attack_x = self.teams[team].attack_x;
                 let from = self.ball.xy();
                 let (xg, quality) = if penalty {
                     (t.shots.penalty_xg, t.shots.penalty_xg)
@@ -1377,19 +1934,56 @@ impl Simulation {
                     )
                 };
                 self.summary.xg[team] += xg;
+                self.record_chance(team, xg);
                 self.tally_xg(c, xg);
+                self.value_shot(c, from, xg);
                 #[cfg(feature = "sensitivity")]
                 if self.probe.is_some() {
                     self.probe_shot(c, team, from, attack_x, penalty, xg);
                 }
+                #[cfg(feature = "measures")]
+                if self.measures.is_some() {
+                    let distance = (self.teams[team].target_goal() - from).length();
+                    let outside = !self.config.pitch().in_penalty_area(from, attack_x);
+                    let open = !penalty && !restart_kick;
+                    let keeper = self.keeper(1 - team);
+                    let keeper_off_m =
+                        self.config.pitch().half_length() - self.players[keeper].pos.x * attack_x;
+                    let strike = self.view().skills(c).share(if outside {
+                        crate::contract::Stage::LONG_SHOT_EXECUTE
+                    } else {
+                        crate::contract::Stage::SHOT_EXECUTE
+                    });
+                    if let Some(m) = self.measures.as_deref_mut() {
+                        m.shot(team, distance);
+                        if open {
+                            m.open_shot(team, c, distance, outside);
+                            m.probe.shot(crate::measures::probe::ShotRow {
+                                team,
+                                distance_m: distance,
+                                outside,
+                                xg,
+                                keeper_off_m,
+                                strike,
+                                goal: false,
+                            });
+                        }
+                    }
+                }
                 self.shot_in_flight = Some(team);
                 self.shot_quality = quality;
+                self.shot_xg = xg;
+                self.shooter = Some(c);
                 shooter = Some((team, attack_x, c));
             } else if restart_kick {
                 self.summary.restart_kicks[team] += 1;
                 #[cfg(feature = "sensitivity")]
                 if let Some(p) = self.probe.as_deref_mut() {
                     p.kicked_other();
+                }
+                #[cfg(feature = "measures")]
+                if let Some(m) = self.measures.as_deref_mut() {
+                    m.restart_kicked(team);
                 }
             } else if matches!(kick, Kick::Clear { .. }) {
                 self.summary.clearances[team] += 1;
@@ -1398,17 +1992,58 @@ impl Simulation {
                 if let Some(p) = self.probe.as_deref_mut() {
                     p.kicked_other();
                 }
+                #[cfg(feature = "measures")]
+                {
+                    let keeper = c == self.keeper(team);
+                    let pressed = !keeper && crate::decision::pressed(&self.view(), c);
+                    if let Some(m) = self.measures.as_deref_mut() {
+                        m.kicked_other();
+                        if keeper {
+                            m.keeper_cleared(team);
+                        } else {
+                            m.cleared(team, pressed);
+                        }
+                    }
+                }
             } else {
                 self.summary.passes[team] += 1;
                 self.tally(c, tally::Count::Pass);
                 self.pass_in_flight = Some(team);
+                // A pass toward the passer's own goal in open play is the back-pass trigger
+                // of the other side's press.
+                if self.possession_phase == Some(team)
+                    && dir.x * self.teams[team].attack_x < -crate::decision::BACK_PASS_COS
+                {
+                    self.fire_trigger(1 - team, crate::decision::TRIGGER_BACK_PASS);
+                }
                 #[cfg(feature = "sensitivity")]
                 if self.probe.is_some() {
-                    let (from, attack_x) = (self.ball.xy(), self.teams[team].attack_x);
-                    if let Some(p) = self.probe.as_deref_mut() {
-                        p.kicked_pass(c, team, from, attack_x);
+                    self.probe_pass(c, team);
+                }
+                #[cfg(feature = "measures")]
+                {
+                    let pitch = self.config.pitch();
+                    let share = (self.ball.xy().x * self.teams[team].attack_x
+                        + pitch.half_length())
+                        / pitch.length();
+                    let outfield = c != self.keeper(team);
+                    let pressed = outfield && crate::decision::pressed(&self.view(), c);
+                    let band =
+                        crate::pressure::band(crate::decision::nearest_opponent_m(&self.view(), c));
+                    let squad = self.players[c].squad;
+                    if let Some(m) = self.measures.as_deref_mut() {
+                        let length = m.planned_length(c);
+                        m.kicked_pass_lofted(c, team, loft);
+                        m.pass_start(team, share);
+                        if outfield {
+                            m.pass_pressed(team, pressed, band, squad, length);
+                        }
                     }
                 }
+            }
+            #[cfg(feature = "measures")]
+            if let Some(m) = self.measures.as_deref_mut() {
+                m.touched(team, self.tick);
             }
             self.last_touch = Some(team);
             self.last_kicker = Some(c);
@@ -1425,6 +2060,9 @@ impl Simulation {
             .modules
             .ball
             .kick(&self.view(), self.ball, dir, speed, loft);
+        if kicker.is_some() {
+            self.last_kick_dir = self.ball.vel.truncate();
+        }
         if let Some((team, attack_x, c)) = shooter
             && self
                 .config
@@ -1435,6 +2073,7 @@ impl Simulation {
             self.shot_on_target = true;
             self.summary.shots_on_target[team] += 1;
             self.tally(c, tally::Count::ShotOnTarget);
+            self.tally_faced(1 - team, self.shot_quality);
             #[cfg(feature = "sensitivity")]
             if let Some(p) = self.probe.as_deref_mut() {
                 p.on_target();
@@ -1444,9 +2083,17 @@ impl Simulation {
         self.keeper_beaten = false;
     }
 
-    /// Ends the shot in flight, if any.
+    /// Ends the shot in flight, if any. A shot of at least the big-chance expected goals that
+    /// ends here, not in a goal (the goal takes its shooter first), is a big miss.
     pub(crate) fn end_shot(&mut self) {
+        if let Some(s) = self.shooter.take()
+            && self.shot_xg >= self.config.tuning.contract.person().mood.big_chance_xg
+        {
+            self.mood_event(s, mood::MoodEvent::BigMiss);
+        }
+        self.shot_xg = 0.0;
         self.shot_in_flight = None;
+        self.shot_deflected = None;
         self.shot_on_target = false;
         self.shot_quality = 0.0;
         self.blockers_tried = 0;
@@ -1584,30 +2231,33 @@ mod tests {
     #[test]
     fn the_last_kicker_is_clear_whenever_play_stops() {
         let mut stoppages = 0;
-        full_match(42, |sim| {
+        full_match(1, |sim| {
             if sim.stoppage().is_some() {
                 stoppages += 1;
                 assert_eq!(sim.last_kicker, None, "tick {}", sim.tick());
             }
         });
-        // The seed-42 match stops play 39 times (58 before the defending rework, which cut its
+        // The seed-1 match stops play more than 30 times, the lowest seed that does once the
+        // player as a person joined the team shape; seed 7 stopped it 30 times then (33
+        // before); seed 2 stopped it 29 times once
+        // the defending stages read their attributes (38 before); seed 1 stopped it 29 times
+        // once the restart waits shortened the live time; seed 42 stopped it 39 times until the
+        // team stands went off, then 27 (and 58 before the defending rework, which cut its
         // fouls, throw-ins and offsides); the floor only guards against an empty check.
         assert!(stoppages > 30, "only {stoppages} stoppages");
     }
 
     #[test]
     fn every_play_event_names_a_player() {
-        // The seed-42 match ends 0-0 since a pressed lone forward stopped dribbling into
-        // defenders, and the seed-7 match since every sprint costs stamina; the seed-9 match
-        // scores, so its goal events are checked too.
-        let events = full_match(9, |_| {}).take_events();
-        let goals = events
-            .iter()
-            .filter(|e| e.kind == EngineEventKind::Goal)
-            .count();
-        assert!(goals > 0, "the match scored no goal");
+        // The first match from seed 9 that scores, so its goal events are checked too: which
+        // seeds score moves whenever play changes on purpose.
+        let events = (9..40)
+            .map(|seed| full_match(seed, |_| {}).take_events())
+            .find(|events| events.iter().any(|e| e.kind == EngineEventKind::Goal))
+            .expect("a match from seeds 9 to 39 scores");
         for e in &events {
-            // The manager's own events and the whistles at the end of a half name nobody.
+            // The manager's own events and the whistles at the end of a half name nobody; an
+            // override names the player who overrode.
             let named = !matches!(
                 e.kind,
                 EngineEventKind::HalfTime

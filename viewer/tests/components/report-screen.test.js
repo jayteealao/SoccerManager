@@ -333,3 +333,24 @@ test('with no start screen the report keeps CONTINUE and offers no Next list', a
   assert.equal(button('Replay the whole match').classList.contains('cy'), true);
   assert.equal(button('Save replay').classList.contains('gh'), false, 'Save replay keeps its fill');
 });
+
+test('two cards to one side at one tick are two moments, and the report still draws', async () => {
+  const run = await opened();
+  const score = { 'home.score': 0, 'away.score': 0 };
+  for (const message of [
+    eventMessage(600, 'card', { 'team.id': 'b', 'player.id': 'p-1-3', 'card.kind': 'yellow', ...score }),
+    eventMessage(600, 'card', { 'team.id': 'b', 'player.id': 'p-1-4', 'card.kind': 'yellow', ...score }),
+    eventMessage(800, 'full-time', score),
+  ]) {
+    run.socket.deliver(message);
+  }
+  await tick();
+  run.s.streamEnded = true;
+  run.s.openReport('full-time', 800);
+  await tick();
+  const moments = [...page().querySelectorAll('.moments li')].map((li) => li.textContent.replace(/\s+/g, ' ').trim());
+  assert.equal(moments.length, 2);
+  for (const moment of moments) {
+    assert.match(moment, /Yellow card/);
+  }
+});

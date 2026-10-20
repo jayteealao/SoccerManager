@@ -87,29 +87,35 @@ fn a_targeted_pairing_and_suite_play_only_their_selection_and_agree_with_a_full_
     );
 
     let pair_dir = data.join("pairing");
-    let pair = finished(
-        &calibrate(
-            &data,
-            &pair_dir,
-            &[
-                "--seed",
-                "5",
-                "--matches",
-                "2",
-                "--suite",
-                "formations",
-                "--pairing",
-                PAIRING,
-            ],
-        ),
+    let pair_out = calibrate(
+        &data,
         &pair_dir,
+        &[
+            "--seed",
+            "5",
+            "--matches",
+            "2",
+            "--suite",
+            "formations",
+            "--pairing",
+            PAIRING,
+        ],
     );
+    let pair = finished(&pair_out, &pair_dir);
     // That pairing only, and 2 matches played.
     assert_eq!(pair["calib.rows"]["rows"], 2);
     let entries = pair["calib.formations"].as_array().unwrap();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0]["pairing"], json!(["4-4-2", "4-4-1-1"]));
     assert_eq!(pair["calib.suites"]["formations"]["matches"], 2);
+    // One pairing is not the field: no formation field rating, and the console says why.
+    assert!(pair.get("calib.nash").is_none(), "{pair}");
+    assert!(
+        stderr(&pair_out).contains("formation field rating: needs every pairing (1 of 55 played)"),
+        "{}",
+        stderr(&pair_out)
+    );
+    assert!(full["calib.nash"]["formations"].is_array(), "{full}");
     assert_eq!(
         pair["calib.selection"],
         json!({"suites": ["formations"], "pairings": [STORED], "bands": []})

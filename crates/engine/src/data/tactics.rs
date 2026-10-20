@@ -13,8 +13,31 @@ use crate::data::attributes::AttributeSchema;
 use crate::data::team::Position;
 use crate::team::PLAYERS_PER_TEAM;
 
-/// Schema version this build reads and writes. Version 1 files convert on load.
-pub const TACTICS_VERSION: u32 = 2;
+/// Schema version this build reads and writes. Version 1 and 2 files convert on load.
+/// Version 3 makes tempo the patience of the circulation (five levels from very direct to
+/// very patient), makes the mentality a risk appetite (a loss weight in place of the flat
+/// shoot, progress and hold offsets), and adds the tactical primitives (`primitives`); a
+/// version 2 file takes them from a copy compiled into the build
+/// ([`crate::data::convert::tactics_v2_to_v3`]). Version 4 adds the primitives that own their
+/// levels (`levels: "own"` with their `steps`) or their choices, whose level or choice the
+/// tactics store as settings, and gives width and passing directness five levels; a version 3
+/// file takes them from a copy compiled into the build
+/// ([`crate::data::convert::tactics_v3_to_v4`]). Version 5 names the tempo levels by speed,
+/// very fast to very slow, with the same values; a version 4 file takes the names
+/// ([`crate::data::convert::tactics_v4_to_v5`]). Version 6 gives pressing and line height five
+/// levels (an outer level each side of the three they had) and adds the out-of-possession
+/// primitives, on/off primitives among them; a version 5 file takes them from a copy compiled
+/// into the build ([`crate::data::convert::tactics_v5_to_v6`]). Version 7 adds the
+/// game-state block (`game_state`: the rule limits, the condition kinds, the take-up time and
+/// the player override list); a version 6 file takes it from a copy compiled into the build
+/// ([`crate::data::convert::tactics_v6_to_v7`]). Version 8 drops the AI manager's fixed-minute
+/// fields (the trailing and leading minutes of its own tactics changes, its check interval and
+/// its fatigue minutes and energy): an AI side's in-match tactics are its style preset's
+/// game-state rules, and it weighs a substitution by the situation (`ai.substitutions`). A
+/// version 7 file loses the six fields and takes the substitution block from a copy compiled
+/// into the build ([`crate::data::convert::tactics_v7_to_v8`]); a version 8 file that names one
+/// of them is refused.
+pub const TACTICS_VERSION: u32 = 8;
 
 /// The six team instructions, in the order a [`crate::tactics::Tactics`] stores their levels.
 pub const INSTRUCTIONS: [&str; 6] = [
@@ -53,6 +76,189 @@ pub struct TacticsSchema {
     pub duties: Vec<Duty>,
     #[garde(dive)]
     pub ai: AiTuning,
+    /// Where each position stands in and out of possession, as an offset from its formation
+    /// slot. A file without it stands every position on its slot.
+    #[serde(default)]
+    #[garde(dive)]
+    pub stands: Stands,
+    /// The sizes of the stand options. A file without it takes no stand option.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub stand_options: Option<StandOptionSizes>,
+    /// How the rest-defence guard holds players back. A file without it holds nobody back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub rest_defence: Option<RestDefence>,
+    /// The tactical primitives: each setting of the tactics board, the plan inputs it sets,
+    /// the hook that reads each, its signature statistics and its fit to real teams. A file
+    /// without it declares none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[garde(dive)]
+    pub primitives: Vec<crate::data::primitives::Primitive>,
+    /// The game-state rules and player instructions a tactic may hold. A file without it
+    /// takes none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub game_state: Option<crate::data::game_state::GameStateSchema>,
+}
+
+/// Each position's stand per phase, as an offset from its formation slot: metres up the
+/// pitch (`x`) and away from the centre line on the slot's side (`y`). The stand is never an
+/// offset from the ball; the ball shift moves the whole block after it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields, default)]
+pub struct Stands {
+    #[garde(dive)]
+    pub gk: PhaseStand,
+    #[garde(dive)]
+    pub cb: PhaseStand,
+    #[garde(dive)]
+    pub lb: PhaseStand,
+    #[garde(dive)]
+    pub rb: PhaseStand,
+    #[garde(dive)]
+    pub dm: PhaseStand,
+    #[garde(dive)]
+    pub cm: PhaseStand,
+    #[garde(dive)]
+    pub am: PhaseStand,
+    #[garde(dive)]
+    pub lw: PhaseStand,
+    #[garde(dive)]
+    pub rw: PhaseStand,
+    #[garde(dive)]
+    pub st: PhaseStand,
+}
+
+impl Stands {
+    /// The stand of `position`.
+    pub fn of(&self, position: Position) -> PhaseStand {
+        match position {
+            Position::GK => self.gk,
+            Position::CB => self.cb,
+            Position::LB => self.lb,
+            Position::RB => self.rb,
+            Position::DM => self.dm,
+            Position::CM => self.cm,
+            Position::AM => self.am,
+            Position::LW => self.lw,
+            Position::RW => self.rw,
+            Position::ST => self.st,
+        }
+    }
+}
+
+/// One position's stand while its team has the ball and while the other team has it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields, default)]
+pub struct PhaseStand {
+    #[garde(dive)]
+    pub in_possession: StandOffset,
+    #[garde(dive)]
+    pub out_of_possession: StandOffset,
+}
+
+/// A stand offset in metres, each part from -40 to 40.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct StandOffset {
+    #[garde(range(min = -40.0, max = 40.0))]
+    pub x: f64,
+    #[garde(range(min = -40.0, max = 40.0))]
+    pub y: f64,
+}
+
+/// A stand option a role may take from its menu. None names a partner: a pairing such as a
+/// full-back overlapping a winger follows from where the team-mates stand, whoever they are.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StandOption {
+    /// Come short toward the ball, to give the carrier a passing option.
+    Drop,
+    /// Move further from the centre line.
+    Widen,
+    /// Move into the channel between the centre and the wing.
+    HalfSpace,
+    /// Run round the outside of a team-mate ahead on the same side.
+    Overlap,
+    /// Run inside a team-mate ahead on the same side who holds the touchline.
+    Underlap,
+}
+
+impl StandOption {
+    pub fn name(self) -> &'static str {
+        match self {
+            StandOption::Drop => "drop",
+            StandOption::Widen => "widen",
+            StandOption::HalfSpace => "half_space",
+            StandOption::Overlap => "overlap",
+            StandOption::Underlap => "underlap",
+        }
+    }
+}
+
+/// The most options a menu may list for one phase.
+pub const MENU_MAX: usize = 5;
+
+/// A role's stand options per phase, in preference order.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields, default)]
+pub struct OptionMenu {
+    #[garde(length(max = MENU_MAX))]
+    pub in_possession: Vec<StandOption>,
+    #[garde(length(max = MENU_MAX))]
+    pub out_of_possession: Vec<StandOption>,
+}
+
+/// The sizes the stand options read, in metres.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct StandOptionSizes {
+    /// How far a dropping player comes short of his stand.
+    #[garde(range(min = 0.0, max = 30.0))]
+    pub drop_m: f64,
+    /// How far behind a player the carrier must be for him to drop.
+    #[garde(range(min = 0.0, max = 60.0))]
+    pub drop_gap_m: f64,
+    /// How far a widening player moves out.
+    #[garde(range(min = 0.0, max = 20.0))]
+    pub widen_m: f64,
+    /// The distance of the half-space line from the centre line, drawn for a 68 m width.
+    #[garde(range(min = 0.0, max = 40.0))]
+    pub half_space_y: f64,
+    /// How far ahead of the team-mate an overlapping player runs, and how far outside him.
+    #[garde(range(min = 0.0, max = 30.0))]
+    pub overlap_ahead_m: f64,
+    #[garde(range(min = 0.0, max = 20.0))]
+    pub overlap_out_m: f64,
+    /// How far ahead of the team-mate an underlapping player runs, and how far inside him.
+    #[garde(range(min = 0.0, max = 30.0))]
+    pub underlap_ahead_m: f64,
+    #[garde(range(min = 0.0, max = 20.0))]
+    pub underlap_in_m: f64,
+    /// The space a team-mate takes up: another player this close to a spot fills it.
+    #[garde(range(min = 0.0, max = 20.0))]
+    pub space_m: f64,
+    /// How near the ball a team-mate must be for a player to overlap or underlap him.
+    #[garde(range(min = 0.0, max = 40.0))]
+    pub near_ball_m: f64,
+}
+
+/// How the rest-defence guard holds players back while the team has the ball.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct RestDefence {
+    /// Metres goal-side of the ball a held player stands at the least.
+    #[garde(range(min = 0.0, max = 20.0))]
+    pub hold_margin_m: f64,
+    /// Above the minimum, a support or defend duty goes forward only with a team-mate
+    /// goal-side within this many metres across.
+    #[garde(range(min = 0.0, max = 100.0))]
+    pub lane_m: f64,
+    /// The familiarity, in rating points, a team-mate needs to stay and cover a full-back
+    /// who went forward.
+    #[garde(range(min = -12.7, max = 12.7))]
+    pub cover_familiarity_min: f64,
 }
 
 /// Eleven slots in attack coordinates: `x` metres from the own goal line, `y` across.
@@ -76,21 +282,23 @@ pub struct FormationSlot {
     pub position: Position,
 }
 
-/// A mentality: how far the whole block moves up (metres, negative drops it) and the offsets
-/// it adds to the carrier's shoot, forward-pass, and hold scores.
+/// A mentality: the team's appetite for risk and nothing else. It sets how much a lost
+/// ball's danger counts against an option's gain (the loss weight, -5 to 5; below 0 the side
+/// seeks risk) and the rest-defence minimum. Where the block stands belongs to the line
+/// height, not to the mentality.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct Mentality {
     #[garde(length(min = 1, max = 32))]
     pub name: String,
-    #[garde(range(min = -20.0, max = 20.0))]
-    pub block_depth: f64,
-    #[garde(range(min = -2.0, max = 2.0))]
-    pub shoot: f64,
-    #[garde(range(min = -2.0, max = 2.0))]
-    pub progress: f64,
-    #[garde(range(min = -2.0, max = 2.0))]
-    pub hold: f64,
+    /// Each option of the carrier loses `loss_weight x failure chance x danger`; the danger
+    /// of losing the ball at a place is read in `decision.rs` (hook `option.loss_danger`).
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub loss_weight: f64,
+    /// The fewest outfield players who stay goal-side of the ball while the team has it.
+    #[serde(default)]
+    #[garde(range(min = 0, max = 10))]
+    pub rest_defence: u8,
 }
 
 /// The six instructions. Each has a default level and two to five levels.
@@ -100,10 +308,13 @@ pub struct Instructions {
     /// Opponents who press the carrier, and a scale on the tuned press distance.
     #[garde(dive)]
     pub pressing: Instruction<PressLevel>,
-    /// A scale on each slot's distance from the centre line of the pitch.
+    /// A scale on each slot's distance from the centre line of the pitch while the side has
+    /// the ball, and the carrier's preference for a team-mate in a wide channel.
     #[garde(dive)]
-    pub width: Instruction<Level>,
-    /// Added to every pass score and taken from the dribble and hold scores.
+    pub width: Instruction<WidthLevel>,
+    /// The patience of the circulation: added to the score of a short pass that does not go
+    /// forward, so a patient side recycles the ball before it plays forward and a direct side
+    /// plays forward sooner.
     #[garde(dive)]
     pub tempo: Instruction<Level>,
     /// Metres the whole block moves up (negative drops it).
@@ -112,7 +323,8 @@ pub struct Instructions {
     /// Added to a pass score in proportion to its length.
     #[garde(dive)]
     pub passing_directness: Instruction<Level>,
-    /// A factor on the team's restart delay while it leads.
+    /// A factor on the team's drawn restart extra while it leads (on its fixed restart delay
+    /// when the content has no restart wait table).
     #[garde(dive)]
     pub time_wasting: Instruction<Level>,
 }
@@ -195,6 +407,31 @@ impl Named for Level {
     }
 }
 
+/// A width level: the scale on each slot's distance from the centre line while the side has
+/// the ball (`value`), and the weight the carrier gives a pass to a team-mate in a wide channel
+/// of the middle or final third (`wide_target`, 0 by default).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct WidthLevel {
+    #[garde(length(min = 1, max = 32))]
+    pub name: String,
+    #[garde(range(min = -20.0, max = 20.0))]
+    pub value: f64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    #[garde(range(min = -2.0, max = 2.0))]
+    pub wide_target: f64,
+}
+
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
+}
+
+impl Named for WidthLevel {
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
 /// A pressing level.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
@@ -205,6 +442,11 @@ pub struct PressLevel {
     pub press_count: u8,
     #[garde(range(min = 0.1, max = 3.0))]
     pub press_distance_scale: f64,
+    /// The willingness a presser of this level adds to his tackle decision (hook
+    /// `tackle.decide`, its second input); 0 when absent.
+    #[serde(default)]
+    #[garde(range(min = -2.0, max = 2.0))]
+    pub press_willingness: f64,
 }
 
 impl Named for PressLevel {
@@ -237,6 +479,10 @@ pub struct Role {
     pub preferred_actions: PreferredActions,
     #[garde(dive)]
     pub teammates: Teammates,
+    /// The stand options the player may take, per phase, in preference order.
+    #[serde(default)]
+    #[garde(dive)]
+    pub options: OptionMenu,
 }
 
 /// An anchor offset in metres, each part from -15 to 15.
@@ -298,26 +544,60 @@ pub struct AiTuning {
     pub mentality: String,
     #[garde(length(min = 1, max = 32))]
     pub duty: String,
-    /// From this minute a trailing team raises its mentality one step.
-    #[garde(range(min = 0, max = 200))]
-    pub trailing_minute: u32,
-    /// From this minute a leading team lowers its mentality one step and wastes time.
-    #[garde(range(min = 0, max = 200))]
-    pub leading_minute: u32,
-    /// Simulated seconds between two checks; an injury triggers a check at once.
-    #[garde(range(min = 1, max = 600))]
-    pub check_interval_s: u32,
-    /// A player below this energy is substituted for fatigue from `fatigue_from_minute`.
-    #[garde(range(min = 0.0, max = 1.0))]
-    pub fatigue_energy: f64,
-    #[garde(range(min = 0, max = 200))]
-    pub fatigue_from_minute: u32,
-    /// Until this minute one substitution is kept back for an injury.
-    #[garde(range(min = 0, max = 200))]
-    pub keep_for_injury_until_minute: u32,
+    /// How the AI manager weighs a substitution it is not forced to make.
+    #[garde(dive)]
+    pub substitutions: AiSubstitutions,
     /// Substitutes named before kick-off; one is a goalkeeper when the squad has one.
     #[garde(range(min = 0, max = 12))]
     pub bench_size: u8,
+    /// The rating points a player listed at a slot's position gets over another player when
+    /// the lineup is picked: another player starts there only when his rating at the position
+    /// is higher by more than this. 0 when the file gives none.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub out_of_position_margin: f64,
+}
+
+/// The AI manager's substitutions it is not forced to make. At each stoppage that admits a
+/// substitution, each outfield player's need to come off is
+/// `w_energy * (1 - energy) + w_card * card_risk + w_rating * max(0, rating_ref - rating) +
+/// w_knock * knock`, where the card risk is `yellow * (1 + card_tackles * his tackles) *
+/// (1 + card_match * the cards shown in the match)` and the rating is his match rating so
+/// far. The gain of replacing him is the need plus `w_quality` times the best bench option's
+/// slot value over his. The highest gain is made while it is above
+/// `threshold * (1 + rise * (used / limit + windows_used / windows))`, where `used` counts the
+/// substitutions made and queued and the window share counts only for a change that would open
+/// a window (none at a stoppage that uses no window or whose window the team already opened),
+/// so each later change needs more and changes come together. A change that joins one made at
+/// the same stoppage while more substitutions are left than windows after it meets that bar
+/// times the windows left after it over the substitutions left (the window rule). Nothing reads
+/// the match clock.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct AiSubstitutions {
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub threshold: f64,
+    #[garde(range(min = 0.0, max = 20.0))]
+    pub rise: f64,
+    /// The match rating (1 to 10) under which a player's form adds to his need.
+    #[garde(range(min = 1.0, max = 10.0))]
+    pub rating_ref: f64,
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub w_energy: f64,
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub w_card: f64,
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub w_rating: f64,
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub w_knock: f64,
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub w_quality: f64,
+    /// What each tackle a booked player made (won or fouled) adds to his card risk.
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub card_tackles: f64,
+    /// What each card shown in the match adds to a booked player's card risk.
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub card_match: f64,
 }
 
 fn weights_in_range(weights: &BTreeMap<String, f64>, _ctx: &()) -> garde::Result {
@@ -391,6 +671,17 @@ impl TacticsSchema {
             }
         }
         for role in &self.roles {
+            for (phase, menu) in [
+                ("in_possession", &role.options.in_possession),
+                ("out_of_possession", &role.options.out_of_possession),
+            ] {
+                if let Some(k) = (1..menu.len()).find(|&k| menu[..k].contains(&menu[k])) {
+                    return Err((
+                        format!("roles.{}.options.{phase}", role.name),
+                        format!("{} appears twice", menu[k].name()),
+                    ));
+                }
+            }
             for name in role.attributes.keys() {
                 let Some(idx) = attributes.index(name) else {
                     return Err((
@@ -428,7 +719,11 @@ impl TacticsSchema {
         if self.duty_index(&self.ai.duty).is_none() {
             return Err(("ai.duty".into(), format!("{} is not a duty", self.ai.duty)));
         }
-        Ok(())
+        crate::data::primitives::check(self)?;
+        match &self.game_state {
+            Some(block) => block.check(self),
+            None => Ok(()),
+        }
     }
 
     pub fn formation_index(&self, name: &str) -> Option<usize> {
@@ -503,7 +798,9 @@ mod tests {
             ]
         );
         assert_eq!(t.mentalities.len(), 5);
-        assert_eq!(t.instructions.defaults(), [1, 1, 1, 1, 1, 0]);
+        // Pressing, width, tempo, line height and passing directness have five levels, so their
+        // middle level is 2.
+        assert_eq!(t.instructions.defaults(), [2, 2, 2, 2, 2, 0]);
         assert_eq!(t.slots(0), crate::team::FORMATION_442);
         assert_eq!(t.duties.len(), 3);
     }
@@ -519,6 +816,7 @@ mod tests {
             crate::data::ATTRIBUTES_FILE,
             crate::data::TUNING_FILE,
             crate::data::RULES_FILE,
+            crate::data::TRAITS_FILE,
         ] {
             let to = dir.join(rel);
             std::fs::create_dir_all(to.parent().unwrap()).unwrap();
@@ -561,6 +859,62 @@ mod tests {
             "content refused: tactics tactics.json: roles.central_defender.attributes: \
              role central_defender names attribute injury_proneness, which is hidden; a role may \
              name only visible attributes"
+        );
+    }
+
+    /// In the content: every role's menu holds only the five stand options, and no
+    /// option names a partner; a menu entry that names one, or an option listed twice, is
+    /// refused.
+    #[test]
+    fn menus_hold_only_stand_options_and_no_partner() {
+        use super::StandOption;
+        let content = shipped_content();
+        let t = &content.tactics;
+        let kinds = [
+            StandOption::Drop,
+            StandOption::Widen,
+            StandOption::HalfSpace,
+            StandOption::Overlap,
+            StandOption::Underlap,
+        ];
+        let mut listed = 0;
+        for role in &t.roles {
+            for o in role
+                .options
+                .in_possession
+                .iter()
+                .chain(&role.options.out_of_possession)
+            {
+                assert!(kinds.contains(o), "role {}", role.name);
+                listed += 1;
+            }
+        }
+        assert!(listed > 0);
+        assert_eq!(
+            t.mentalities
+                .iter()
+                .map(|m| m.rest_defence)
+                .collect::<Vec<_>>(),
+            [6, 5, 4, 3, 2]
+        );
+        assert!(t.stand_options.is_some() && t.rest_defence.is_some());
+        // A menu entry naming a partner does not load.
+        let err = with_tactics(|v| {
+            v["roles"][3]["options"]["in_possession"][0] = serde_json::json!({"overlap": "winger"});
+        });
+        assert!(err.to_string().contains("tactics"), "{err}");
+        let err = with_tactics(|v| {
+            v["roles"][3]["options"]["partner"] = "winger".into();
+        });
+        assert!(err.to_string().contains("tactics"), "{err}");
+        // An option listed twice is refused by role and phase.
+        let err = with_tactics(|v| {
+            v["roles"][3]["options"]["in_possession"] = serde_json::json!(["widen", "widen"]);
+        });
+        assert_eq!(
+            err.to_string(),
+            "content refused: tactics tactics.json: roles.full_back.options.in_possession: \
+             widen appears twice"
         );
     }
 

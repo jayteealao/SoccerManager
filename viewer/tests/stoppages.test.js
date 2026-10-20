@@ -22,6 +22,40 @@ test('a restart with no event of its own stands alone', () => {
   assert.equal(stoppages.next(1000), 1026);
 });
 
+test('a restart tag seconds after the stop event closes it and adds no mark', () => {
+  const stoppages = new Stoppages();
+  stoppages.stop(1000);
+  stoppages.restart(1600);
+  assert.equal(stoppages.length, 1);
+  assert.equal(stoppages.next(0), 1000);
+  assert.equal(stoppages.next(1000), null);
+});
+
+test('a lone restart tag with no stoppage open still marks', () => {
+  const stoppages = new Stoppages();
+  stoppages.restart(1);
+  stoppages.stop(5000);
+  stoppages.restart(5600);
+  stoppages.restart(9000);
+  assert.deepEqual(stoppages.ticks, [1, 5000, 9000]);
+});
+
+test('a quick restart tagged before its event is one mark', () => {
+  // The tick frame reaches the page before that tick's events.
+  const stoppages = new Stoppages();
+  stoppages.restart(3000);
+  stoppages.stop(3000);
+  assert.deepEqual(stoppages.ticks, [3000]);
+});
+
+test('a resumed match forgets the open stoppage', () => {
+  const stoppages = new Stoppages();
+  stoppages.stop(1000);
+  stoppages.truncate(900);
+  stoppages.restart(1500);
+  assert.deepEqual(stoppages.ticks, [1500]);
+});
+
 test('the next stoppage past the last one is null', () => {
   const stoppages = new Stoppages();
   stoppages.add(1);

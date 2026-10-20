@@ -1,0 +1,103 @@
+{
+  "tables": {
+    "press": {
+      "choose": {
+        "main": {
+          "attribute": "positioning",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "anticipation",
+            "weight": 0.3
+          },
+          {
+            "attribute": "decisions",
+            "weight": 0.2
+          }
+        ],
+        "minor": [
+          {
+            "attribute": "vision",
+            "weight": 0.1
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "shape": {
+      "execute": {
+        "main": {
+          "attribute": "teamwork",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "concentration",
+            "weight": 0.3
+          },
+          {
+            "attribute": "consistency",
+            "weight": 0.15
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "cover": {
+      "execute": {
+        "main": {
+          "attribute": "positioning",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "anticipation",
+            "weight": 0.3
+          },
+          {
+            "attribute": "concentration",
+            "weight": 0.2
+          }
+        ],
+        "source": "design"
+      }
+    },
+    "recovery_run": {
+      "execute": {
+        "main": {
+          "attribute": "work_rate",
+          "weight": 1.0
+        },
+        "supports": [
+          {
+            "attribute": "pace",
+            "weight": 0.25
+          },
+          {
+            "attribute": "acceleration",
+            "weight": 0.2
+          }
+        ],
+        "source": "design"
+      }
+    }
+  },
+  "jobs": {
+    "work_rate": {
+      "action": "recovery_run",
+      "stage": "execute",
+      "statistic": "sprinted recovery runs per match",
+      "direction": "up"
+    },
+    "determination": {
+      "stage": "occasion",
+      "statistic": "presses per match when behind",
+      "direction": "up"
+    }
+  },
+  "consistency_degrees": {
+    "cover": 0.8,
+    "recovery_run": 0.6
+  }
+}

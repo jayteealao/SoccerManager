@@ -103,8 +103,58 @@ export function freeName(views) {
   return `View ${n}`;
 }
 
-/// One club's stored part as the page reads it: `{ active, views, ratings }`, cleaned. A club
-/// with no views gets the default view, active.
+/// The season goal kinds the launcher's season record gives a player.
+export const GOAL_KINDS = Object.freeze([
+  'goals',
+  'assists',
+  'clean_sheets',
+  'starts',
+  'average_rating',
+  'no_own_fault_absence',
+]);
+
+/// A count of the season record: a non-negative integer, else 0.
+const count = (v) => (Number.isInteger(v) && v >= 0 ? v : 0);
+
+/// The launcher's season part of one club (`{ matches, players }`) as the page reads it: the
+/// match ids, and per player his counts, his ratings, his goal (`{ kind, target }`), his form
+/// (1.0 to 10.0, or null) and his goal progress (0 to 200, or null). A player whose goal is not
+/// one of the six kinds is dropped. Null when the answer carries no season.
+export function readSeason(season) {
+  if (!season || typeof season !== 'object' || Array.isArray(season)) {
+    return null;
+  }
+  const matches = (Array.isArray(season.matches) ? season.matches : []).filter((m) => typeof m === 'string');
+  const players = {};
+  for (const [id, p] of Object.entries(season.players ?? {})) {
+    if (!p || typeof p !== 'object' || !GOAL_KINDS.includes(p.goal?.kind) || !Number.isFinite(Number(p.goal?.target))) {
+      continue;
+    }
+    const form = Number(p.form);
+    const progress = Number(p.progress);
+    players[id] = {
+      starts: count(p.starts),
+      minutes: count(p.minutes),
+      goals: count(p.goals),
+      assists: count(p.assists),
+      clean_sheets: count(p.clean_sheets),
+      red_cards: count(p.red_cards),
+      ratings: (Array.isArray(p.ratings) ? p.ratings : [])
+        .filter((r) => r && typeof r.match === 'string' && Number.isFinite(Number(r.rating)))
+        .map((r) => ({ match: r.match, rating: Number(r.rating) })),
+      goal: { kind: p.goal.kind, target: Number(p.goal.target) },
+      form: p.form === null || p.form === undefined || !Number.isFinite(form) ? null : form,
+      progress:
+        p.progress === null || p.progress === undefined || !Number.isFinite(progress)
+          ? null
+          : Math.max(0, Math.min(200, progress)),
+    };
+  }
+  return { matches, players };
+}
+
+/// One club's stored part as the page reads it: `{ active, views, ratings, season }`, cleaned.
+/// A club with no views gets the default view, active; `season` is null without one.
 export function readPart(part) {
   const views = (Array.isArray(part?.views) ? part.views : []).slice(0, MAX_VIEWS).map(cleanView);
   const unique = views.filter((v, i) => views.findIndex((w) => w.name === v.name) === i);
@@ -118,7 +168,7 @@ export function readPart(part) {
         .map((r) => ({ match: r.match, rating: Number(r.rating) }));
     }
   }
-  return { active, views: list, ratings };
+  return { active, views: list, ratings, season: readSeason(part?.season) };
 }
 
 /// The stored ratings merged with one match's ratings as they arrived at full time

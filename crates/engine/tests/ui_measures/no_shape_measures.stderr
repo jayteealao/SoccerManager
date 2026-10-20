@@ -1,0 +1,13 @@
+error[E0433]: failed to resolve: could not find `measures` in `engine`
+ --> tests/ui_measures/no_shape_measures.rs:2:13
+  |
+2 | use engine::measures::shape::ShapeSink;
+  |             ^^^^^^^^ could not find `measures` in `engine`
+  |
+note: found an item that was configured out
+ --> src/lib.rs
+  |
+  | #[cfg(feature = "measures")]
+  |       -------------------- the item is gated behind the `measures` feature
+  | pub mod measures;
+  |         ^^^^^^^^

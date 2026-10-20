@@ -4,10 +4,17 @@
 //! suite is also folded per formation pairing, and the red-card suite per arm. Every band
 //! check carries its sampling error.
 
+pub mod accepted;
 pub mod bands;
 pub mod baseline;
 pub mod compare;
+pub mod distribution;
 pub mod measures;
+pub mod nash;
+pub mod proof;
+pub mod real;
+pub mod styles;
+pub mod substitutions;
 pub mod verdict;
 
 use std::collections::BTreeMap;
@@ -16,14 +23,19 @@ use engine::observe::{MatchStats, Record, round_to};
 use serde::{Deserialize, Serialize};
 
 use bands::{BandDef, Registry};
-use measures::{Obs, Scope};
+use measures::{Extras, Obs, Scope};
 
 /// Matches slower than this, in milliseconds, are outliers (the contract's slow threshold).
 pub const SLOW_MATCH_MS: u64 = 2000;
 
 /// The version of the measure definitions: how a match's figures are counted. A change to a
 /// measure raises it, so a run folder made under the old definitions is not resumed.
-pub const MEASURES_VERSION: u32 = 1;
+/// Version 2 adds the realism measures of a `measures` build to the rows: shot distance,
+/// pass kind and length, goal phase, possession by third, possession chains, and each
+/// player's running. Version 3 adds the team-shape sums: each outfield group's depth, width,
+/// pace and sprints, and each team's slide, far-player response, dead-ball calm, stoppages by
+/// kind and completed links.
+pub const MEASURES_VERSION: u32 = 3;
 
 /// One suite of a calibration run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -146,6 +158,10 @@ pub struct SuiteFigures {
     pub stronger: Option<StrongerRecord>,
 }
 
+/// The formations of the formations suite, the share of the matches between each two that
+/// the first won, and the fewest finished matches of a pairing.
+pub type WinTable = (Vec<String>, Vec<Vec<f64>>, u32);
+
 /// The figures of one formation pairing of the formations suite. `pairing` names the two
 /// formations; `goals_for_mean` is the goals each one scored per match, in the same order.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -189,6 +205,20 @@ pub struct BandCheck {
     /// sets no power target and does not enter the joint verdict. Absent in a plain run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub informational: Option<bool>,
+    /// Why the row has no value, when it has none; its word is then not sure. Shown in the
+    /// verdict row's note, never in `calib.bands`.
+    #[serde(skip)]
+    pub why_none: Option<String>,
+    /// The band reads measures this run's matches do not carry: its word is not sure.
+    #[serde(skip)]
+    pub unjudged: bool,
+    /// A whole-distribution band's row: its word comes from its bounds, never from `pass`.
+    #[serde(skip)]
+    pub whole: bool,
+    /// A whole-distribution band with a value: its distance from the real sample with its
+    /// bounds and word.
+    #[serde(skip)]
+    pub dist: Option<distribution::DistCheck>,
 }
 
 /// One arm of the red-card suite: mean goals per match of the full (home) side and the
@@ -234,6 +264,10 @@ struct SuiteAcc {
     pairings: Vec<Option<(usize, usize)>>,
     /// For each record of the red-card suite: the arm's number in [`RED_CARD_ARMS`].
     arms: Vec<Option<usize>>,
+    /// For each record: its extras, kept only in a suite that judges a band reading them.
+    extras: Vec<Option<Box<Extras>>>,
+    /// A record of the suite carries the realism measures.
+    measures: bool,
     outliers: u32,
 }
 
@@ -248,6 +282,10 @@ pub struct RunBuilder {
     pub missing: u32,
     /// The length of every match, in minutes.
     pub minutes: u32,
+    /// The real samples of the distribution bands, read once per judgement, and the run
+    /// seed their range tests draw from.
+    real: std::sync::Arc<real::Samples>,
+    seed: u64,
 }
 
 impl RunBuilder {
@@ -258,7 +296,16 @@ impl RunBuilder {
             pairing_names: Vec::new(),
             missing: 0,
             minutes: 90,
+            real: std::sync::Arc::default(),
+            seed: 0,
         }
+    }
+
+    /// Gives the builder the real samples its distribution bands are judged against, and
+    /// the run seed of their range tests.
+    pub fn set_real_samples(&mut self, samples: std::sync::Arc<real::Samples>, seed: u64) {
+        self.real = samples;
+        self.seed = seed;
     }
 
     /// The formations suite plays `names.len()` pairings of `matches` matches each.
@@ -312,7 +359,32 @@ impl RunBuilder {
         acc.boosted.push(boosted);
         acc.pairings.push(pairing);
         acc.arms.push(arm);
+        acc.extras.push(None);
         outlier
+    }
+
+    /// Gives the record of `suite` folded in last its extras: its measures, its players'
+    /// running and its clubs. They are kept only when a band the suite judges reads them.
+    pub fn set_extras(&mut self, suite: Suite, extras: Extras) {
+        let keep = self
+            .bands
+            .bands
+            .iter()
+            .any(|b| b.judged_in(suite) && b.needs_extras());
+        let Some(acc) = self.suites.get_mut(&suite) else {
+            return;
+        };
+        acc.measures |= extras.measures.present;
+        if keep {
+            if let Some(last) = acc.extras.last_mut() {
+                *last = Some(Box::new(extras));
+            }
+        }
+    }
+
+    /// `true` when a record of `suite` carries the realism measures.
+    pub fn has_measures(&self, suite: Suite) -> bool {
+        self.suites.get(&suite).is_some_and(|a| a.measures)
     }
 
     /// A planned record that never appeared.
@@ -496,6 +568,63 @@ impl RunBuilder {
             .collect()
     }
 
+    /// The win-share table of the formations suite: the formations in the tactics file's
+    /// order (the order `pairings` gives), `W[i][j]` the share of the finished matches
+    /// between `i` and `j` that `i` won (a draw is not a win; a mirror pairing counts the
+    /// wins of either side over twice its matches), and the fewest finished matches of a
+    /// pairing. `Err((played, total))` when a pairing has no finished match or is missing.
+    pub fn formation_table(&self) -> Result<WinTable, (usize, usize)> {
+        let mut names: Vec<String> = Vec::new();
+        for name in self.pairing_names.iter().flatten() {
+            if !names.contains(name) {
+                names.push(name.clone());
+            }
+        }
+        let n = names.len();
+        let total = n * (n + 1) / 2;
+        let at = |name: &String| names.iter().position(|x| x == name).unwrap_or(0);
+        let mut wins = vec![vec![0.0; n]; n];
+        let mut seen = vec![vec![false; n]; n];
+        let mut fewest = u32::MAX;
+        let acc = self.suites.get(&Suite::Formations);
+        for (k, pair) in self.pairing_names.iter().enumerate() {
+            let played = acc.map(|acc| pairing_records(acc, k)).unwrap_or_default();
+            if played.is_empty() {
+                continue;
+            }
+            let (a, b) = (at(&pair[0]), at(&pair[1]));
+            let won = |first: bool| {
+                played
+                    .iter()
+                    .filter(|(r, side)| {
+                        let (us, them) = if first {
+                            (*side, 1 - side)
+                        } else {
+                            (1 - side, *side)
+                        };
+                        r.goals[us] > r.goals[them]
+                    })
+                    .count() as f64
+            };
+            let m = played.len() as f64;
+            if a == b {
+                wins[a][a] = (won(true) + won(false)) / (2.0 * m);
+            } else {
+                wins[a][b] = won(true) / m;
+                wins[b][a] = won(false) / m;
+            }
+            seen[a][b] = true;
+            seen[b][a] = true;
+            // A pairing holds at most 100 000 matches.
+            fewest = fewest.min(played.len() as u32);
+        }
+        let played = (0..n).map(|a| (a..n).filter(|&b| seen[a][b]).count()).sum();
+        if n == 0 || played < total {
+            return Err((played, total.max(self.pairing_names.len())));
+        }
+        Ok((names, wins, fewest))
+    }
+
     /// The finished records of each red-card arm, as goals per match, home then away.
     fn red_card_goals(&self) -> Option<[Vec<[f64; 2]>; 4]> {
         let acc = self.suites.get(&Suite::RedCard)?;
@@ -559,6 +688,7 @@ impl RunBuilder {
                 boosted: acc.boosted[i],
                 pairing: acc.pairings[i].map(|(p, _)| p),
                 arm: acc.arms[i],
+                extras: acc.extras[i].as_deref(),
             })
             .collect()
     }
@@ -607,14 +737,19 @@ impl RunBuilder {
     }
 
     /// One band row judged by its range: its value, rounded as the figures are, and its
-    /// sampling error.
+    /// sampling error. A band that reads measures the suite's matches do not carry is
+    /// unjudged: it does not pass.
     pub fn check(&self, spec: &RowSpec<'_>) -> BandCheck {
         let obs = self.observations(spec.suite);
+        if spec.def.is_distribution() {
+            return self.distribution_check(spec, &obs);
+        }
         let terms = measures::terms(spec.def, &obs, spec.scope);
         let value = round_to(
             terms.value().unwrap_or(0.0),
             measures::places(&spec.def.measure),
         );
+        let unjudged = spec.def.needs_measures() && !self.has_measures(spec.suite);
         BandCheck {
             band: spec.def.band.clone(),
             suite: spec.suite.code().to_string(),
@@ -622,18 +757,132 @@ impl RunBuilder {
             value,
             lo: spec.def.lo,
             hi: spec.def.hi,
-            pass: measures::passes(spec.def, value, &terms),
+            pass: !unjudged && measures::passes(spec.def, value, &terms),
             se: round_to(terms.se(), 5),
             informational: None,
+            why_none: terms.why_none().map(str::to_string),
+            unjudged,
+            whole: false,
+            dist: None,
         }
+    }
+
+    /// A distribution band's row over the matches `obs`: its distance from the real sample,
+    /// rounded to 5 places, in the range 0 to its margin, with its bootstrap error, bounds,
+    /// noise floor and word. Without a real sample, or with fewer than two matches, it has
+    /// no value and says why.
+    pub fn distribution_check(&self, spec: &RowSpec<'_>, obs: &[Obs<'_>]) -> BandCheck {
+        let def = spec.def;
+        let unjudged = def.needs_measures() && !self.has_measures(spec.suite);
+        let mut c = BandCheck {
+            band: def.band.clone(),
+            suite: spec.suite.code().to_string(),
+            pairing: spec.label.clone(),
+            value: 0.0,
+            lo: def.lo,
+            hi: def.hi,
+            pass: false,
+            se: 0.0,
+            informational: None,
+            why_none: None,
+            unjudged,
+            whole: true,
+            dist: None,
+        };
+        if unjudged {
+            return c;
+        }
+        let real = match self.real.get(&def.band) {
+            Some(Ok(sample)) => sample,
+            Some(Err(why)) => {
+                c.why_none = Some(format!("no real data here: {why}"));
+                return c;
+            }
+            None => {
+                c.why_none = Some("no real data here: the real sample was not read".into());
+                return c;
+            }
+        };
+        let Some((width, bins)) = measures::hist_bins(&def.measure) else {
+            return c;
+        };
+        let engine = distribution::Sample {
+            per_match: measures::histograms(def, obs, spec.scope)
+                .into_iter()
+                .flatten()
+                .collect(),
+            bins,
+            width,
+        };
+        let seed = distribution::stream(self.seed, &def.band);
+        match distribution::judge_to_real(
+            &engine,
+            real,
+            measures::metric(&def.measure),
+            def.hi,
+            seed,
+            verdict::RESAMPLES,
+        ) {
+            Ok(d) => {
+                c.value = round_to(d.distance, 5);
+                c.pass = def.range().contains(c.value);
+                c.se = round_to(d.se, 5);
+                c.dist = Some(d);
+            }
+            Err(why) => c.why_none = Some(why),
+        }
+        c
+    }
+
+    /// The figures of the registry, each over every planned suite that reports it: its value
+    /// beside the value an earlier build gave. A figure that reads measures the suite's
+    /// matches do not carry has no value.
+    pub fn figure_rows(&self) -> Vec<FigureRow> {
+        let mut out = Vec::new();
+        for f in &self.bands.figures {
+            let def = f.as_band();
+            for &suite in self.suites.keys().filter(|s| def.judged_in(**s)) {
+                let measured = !def.needs_measures() || self.has_measures(suite);
+                let terms =
+                    measured.then(|| measures::terms(&def, &self.observations(suite), Scope::All));
+                let value = terms
+                    .as_ref()
+                    .and_then(measures::Terms::value)
+                    .map(|v| round_to(v, 4));
+                out.push(FigureRow {
+                    figure: f.figure.clone(),
+                    suite: suite.code().to_string(),
+                    value,
+                    se: terms.as_ref().map_or(0.0, |t| round_to(t.se(), 5)),
+                    today: f.today.value,
+                    build: f.today.build.clone(),
+                    change: value.map(|v| round_to(v - f.today.value, 4)),
+                });
+            }
+        }
+        out
+    }
+
+    /// The checks of the bands that only report: every row of a band with a reason in
+    /// `report_only`, in report order. A band that reads measures the suite's matches do not
+    /// carry is left out: a build without the measures judges the bands of the file only.
+    pub fn reported_checks(&self) -> Vec<BandCheck> {
+        self.row_specs(false)
+            .iter()
+            .filter(|s| s.def.report_only.is_some())
+            .filter(|s| !s.def.needs_measures() || self.has_measures(s.suite))
+            .map(|s| self.check(s))
+            .collect()
     }
 
     /// The band checks of the planned suites, from the registry, given each suite's wall
     /// time: the equal suite's bands, each suite's time budget, then the other suites'.
+    /// Only the bands that gate: a band that only reports is in [`Self::reported_checks`].
     pub fn checks(&self, wall_ms: &BTreeMap<Suite, u64>) -> Vec<BandCheck> {
         let (equal, rest): (Vec<_>, Vec<_>) = self
             .row_specs(false)
             .into_iter()
+            .filter(|s| s.def.report_only.is_none())
             .partition(|s| s.suite == Suite::Equal);
         let mut out: Vec<BandCheck> = equal.iter().map(|s| self.check(s)).collect();
         for (&suite, &ms) in wall_ms {
@@ -649,6 +898,10 @@ impl RunBuilder {
                 pass: (ms as f64) < budget,
                 se: 0.0,
                 informational: None,
+                why_none: None,
+                unjudged: false,
+                whole: false,
+                dist: None,
             });
         }
         out.extend(rest.iter().map(|s| self.check(s)));
@@ -790,6 +1043,11 @@ pub struct CalibrationReport {
     /// The figures of every formation pairing; absent when the formations suite did not run.
     #[serde(rename = "calib.formations", skip_serializing_if = "Vec::is_empty")]
     pub formations: Vec<PairingFigures>,
+    /// Each formation's field rating against the maximum-entropy Nash equilibrium beside
+    /// its win rate, and the flag; report only. Absent unless every pairing of the
+    /// formations suite finished a match.
+    #[serde(rename = "calib.nash", skip_serializing_if = "Option::is_none")]
+    pub nash: Option<nash::NashReport>,
     /// The suites, pairings, and bands the run selected.
     #[serde(rename = "calib.selection")]
     pub selection: Selection,
@@ -883,15 +1141,96 @@ pub struct CalibrationReport {
     /// the suite reached its power.
     #[serde(rename = "calib.power", skip_serializing_if = "Option::is_none")]
     pub power: Option<BTreeMap<String, PowerInfo>>,
+    /// The bands that only report: each row's word, judged as a gating band's is, but never
+    /// in the joint word, `calib.pass` or `calib.bands`. Absent when no band only reports.
+    #[serde(rename = "calib.reported", skip_serializing_if = "Vec::is_empty")]
+    pub reported: Vec<verdict::VerdictRow>,
+    /// The registry's figures, each beside the value an earlier build gave; never judged.
+    /// Absent when the registry has none.
+    #[serde(
+        rename = "calib.figures",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub figures: Vec<FigureRow>,
+    /// The developer's acceptances of not-sure bands in the run folder; absent without an
+    /// `accepted.json`.
+    #[serde(rename = "calib.accepted", skip_serializing_if = "Option::is_none")]
+    pub accepted: Option<accepted::AcceptedInfo>,
+    /// The matches the run judged: in total, in pairs, and per engine.
+    #[serde(rename = "calib.counts")]
+    pub counts: Counts,
     /// The band registry the run was judged with.
     #[serde(rename = "calib.registry")]
     pub registry: RegistryInfo,
+    /// The real-data folder, the bands without a real value, and every band's real value
+    /// and record; absent in the old engine's own quiet run.
+    #[serde(rename = "calib.real", skip_serializing_if = "Option::is_none")]
+    pub real: Option<real::RealInfo>,
+    /// The realism claim, from validation bands with a real counterpart only.
+    #[serde(rename = "calib.realism", skip_serializing_if = "Option::is_none")]
+    pub realism: Option<real::Realism>,
     /// The time and memory of each stage, and the run's total.
     #[serde(rename = "calib.stages")]
     pub stages: BTreeMap<String, StageCost>,
     /// A change run's rules stage.
     #[serde(rename = "calib.rules", skip_serializing_if = "Option::is_none")]
     pub rules: Option<RulesReport>,
+    /// A change run's sample of the styles suite, one match per ordered pairing of styles on
+    /// the changed engine; report only. Absent in other runs and without a styles file.
+    #[serde(rename = "calib.styles", skip_serializing_if = "Option::is_none")]
+    pub styles: Option<styles::StylesReport>,
+    /// The substitutions of the first arm's matches against the real era of the rule pack's
+    /// limit; absent in the old engine's own quiet run and when no row holds a match.
+    #[serde(
+        rename = "calib.substitutions",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub substitutions: Option<substitutions::SubstitutionReport>,
+}
+
+/// One figure's row: its value over a suite beside the value an earlier build gave.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FigureRow {
+    pub figure: String,
+    pub suite: String,
+    /// `None` when the suite's matches do not carry the measures the figure reads.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<f64>,
+    pub se: f64,
+    /// The earlier build's value, and the build.
+    pub today: f64,
+    pub build: String,
+    /// The value minus the earlier build's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub change: Option<f64>,
+}
+
+/// The figures as a table: each one's value beside the earlier build's; empty when there
+/// are none.
+pub fn render_figures(rows: &[FigureRow]) -> String {
+    if rows.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from("figures (beside an earlier build; never judged):\n");
+    out.push_str(&format!(
+        "{:<28} {:<10} {:>10} {:>9} {:>10} {:>10}  {}\n",
+        "figure", "suite", "value", "se", "today", "change", "build"
+    ));
+    for r in rows {
+        let num = |v: Option<f64>| v.map_or_else(|| "no measures".to_string(), |v| format!("{v}"));
+        out.push_str(&format!(
+            "{:<28} {:<10} {:>10} {:>9} {:>10} {:>10}  {}\n",
+            r.figure,
+            r.suite,
+            num(r.value),
+            r.se,
+            r.today,
+            num(r.change),
+            r.build
+        ));
+    }
+    out
 }
 
 /// One stage's cost in a report.
@@ -950,6 +1289,10 @@ pub struct RuleRow {
     pub roles: Option<BTreeMap<String, f64>>,
     /// `pass`, `fail` or `not_sure`.
     pub word: &'static str,
+    /// The rule runs and reports: its word is information, and a full sensitivity run does
+    /// not fail on it. Written only when set.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub report_only: bool,
 }
 
 /// An estimate and its 95 percent interval.
@@ -961,8 +1304,50 @@ pub struct RuleInterval {
 }
 
 /// The schema version of the calibrate run report: 2 since the registry, the verdicts and
-/// the stage costs; 3 since the rules stage's rows. Every key of an older version stays.
-pub const REPORT_SCHEMA_VERSION: &str = "3";
+/// the stage costs; 3 since the rules stage's rows; 4 since the real values of the bands
+/// (`calib.real`, `calib.realism`, and the real columns of each verdict); 5 since the bands
+/// that only report (`calib.reported`), the developer's acceptances (`calib.accepted`), the
+/// match counts (`calib.counts`), and how each verdict row was judged (`judged`, `note`,
+/// `accepted`); 6 since the whole-distribution bands (`upper` and `noise_floor` on a
+/// verdict row); 7 since the formation field rating (`calib.nash`); 8 since the registry's
+/// figures (`calib.figures`); 9 since a change run's styles sample (`calib.styles`). Every
+/// key of an older version stays.
+pub const REPORT_SCHEMA_VERSION: &str = "9";
+
+/// The matches a run judged: every engine's rows, the fixtures both engines of a change run
+/// played, and the matches of each engine.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct Counts {
+    pub total_matches: u32,
+    pub pairs: u32,
+    pub observations: Vec<Observations>,
+}
+
+/// One engine's matches in a run: `changed` and `old` in a change run, `this` otherwise.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Observations {
+    pub engine: &'static str,
+    /// The engine's build: the first 16 hex characters of its executable's SHA-256.
+    pub build: String,
+    pub matches: u32,
+}
+
+impl Counts {
+    /// The console line: `matches: T in total; P pairs; observations: ...`.
+    pub fn line(&self) -> String {
+        let per: Vec<String> = self
+            .observations
+            .iter()
+            .map(|o| format!("{} engine {}", o.engine, o.matches))
+            .collect();
+        format!(
+            "matches: {} in total; {} pairs; observations: {}\n",
+            self.total_matches,
+            self.pairs,
+            per.join(", ")
+        )
+    }
+}
 
 /// One suite's run length in a change run.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1001,6 +1386,8 @@ pub struct RegistryInfo {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 pub struct RowsInfo {
     pub format: u32,
+    /// `true` when this build records the realism measures (the `measures` feature).
+    pub measures: bool,
     pub files: u32,
     pub rows: u32,
     pub recorded: Recorded,
@@ -1305,6 +1692,49 @@ mod tests {
         assert_eq!(f.goals_per_xg, 0.0);
         let json = serde_json::to_string(f).unwrap();
         assert!(!json.contains("null"), "{json}");
+    }
+
+    #[test]
+    fn the_win_share_table_counts_wins_by_formation_and_a_mirror_from_both_sides() {
+        let mut b = RunBuilder::new(bands());
+        let names = vec![
+            ["4-4-2".to_string(), "4-4-2".to_string()],
+            ["4-4-2".to_string(), "4-3-3".to_string()],
+            ["4-3-3".to_string(), "4-3-3".to_string()],
+        ];
+        b.plan_pairings(2, names);
+        // The 4-4-2 mirror: one side wins, then a draw.
+        b.add_pairing(record([3, 0], [12, 10], [50.0, 50.0]), 0, 0);
+        b.add_pairing(record([1, 1], [12, 10], [50.0, 50.0]), 0, 1);
+        // 4-4-2 v 4-3-3: the 4-4-2 wins at home, then the 4-3-3 wins at home (the 4-4-2
+        // away on side 1), then a draw.
+        b.add_pairing(record([2, 1], [12, 10], [50.0, 50.0]), 1, 0);
+        b.add_pairing(record([3, 0], [12, 10], [50.0, 50.0]), 1, 1);
+        b.add_pairing(record([0, 0], [12, 10], [50.0, 50.0]), 1, 0);
+        // The 4-3-3 mirror: two decisive matches.
+        b.add_pairing(record([1, 0], [12, 10], [50.0, 50.0]), 2, 0);
+        b.add_pairing(record([0, 2], [12, 10], [50.0, 50.0]), 2, 1);
+        let (names, w, fewest) = b.formation_table().unwrap();
+        assert_eq!(names, ["4-4-2", "4-3-3"]);
+        assert_eq!(w[0][0], 0.25);
+        assert_eq!(w[0][1], 1.0 / 3.0);
+        assert_eq!(w[1][0], 1.0 / 3.0);
+        assert_eq!(w[1][1], 0.5);
+        assert_eq!(fewest, 2);
+
+        // A pairing with no finished match: no table.
+        let mut partial = RunBuilder::new(bands());
+        partial.plan_pairings(
+            1,
+            vec![
+                ["4-4-2".to_string(), "4-4-2".to_string()],
+                ["4-4-2".to_string(), "4-3-3".to_string()],
+                ["4-3-3".to_string(), "4-3-3".to_string()],
+            ],
+        );
+        partial.add_pairing(record([1, 0], [12, 10], [50.0, 50.0]), 0, 0);
+        partial.add_pairing(record([1, 0], [12, 10], [50.0, 50.0]), 2, 0);
+        assert_eq!(partial.formation_table(), Err((2, 3)));
     }
 
     #[test]

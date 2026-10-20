@@ -40,26 +40,36 @@ To see the effect over many matches, run a calibration run:
 target/release/engine-cli calibrate --seed 2026 --matches 200 --content-dir my-content
 ```
 
-The run report compares every realism band, and the goal bands of every formation pairing, against `realism-bands.json`. Standard error names each band that fails, and the exit code is 2 when a band fails. Add `--suite equal` to skip the formations suite, which plays 55 pairings. A `realism-bands.json` of version 2 still loads; one of version 1 is refused: copy the shipped file of version 3.
+The run report compares every realism band, and the goal bands of every formation pairing, against `realism-bands.json`. Standard error names each band that fails, and the exit code is 2 when a band fails. Add `--suite equal` to skip the formations suite, which plays 55 pairings. A `realism-bands.json` of version 4, 3 or 2 still loads; one of version 1 is refused: copy the shipped file of version 5.
 
 To judge the change against the engine before it, add `--base main` from your git checkout: each band then reads `pass`, `fail`, or `not sure`. See [Measure a tuning change](calibration.md).
 
 ## Add a realism band
 
-Every band is an entry of `bands` in `realism-bands.json`, so a new band needs no code. To check the fouls of each team in the equal suite, add:
+Every band is an entry of `bands` in `realism-bands.json`, so a new band needs no code. The file is at version 5: each band has its design range and its record. To check the substitutions of each team in the equal suite, add:
 
 ```json
 {
-  "band": "fouls_per_team",
+  "band": "substitutions_per_team",
   "suites": ["equal"],
-  "measure": { "kind": "mean", "per": "team", "of": ["fouls.{side}"] },
-  "lo": 8.0,
-  "hi": 14.0,
-  "smallest_shift": 1.5
+  "measure": { "kind": "mean", "per": "team", "of": ["substitutions.{side}"] },
+  "design": { "lo": 2.0, "hi": 5.0, "smallest_shift": 0.75 },
+  "real": {
+    "source": { "none": "the measured results hold no substitution counts" },
+    "sample": 0,
+    "date": "2026-10-10"
+  },
+  "evidence": "calibration",
+  "confidence": {
+    "measurement": { "count": 0 },
+    "generalisation": { "competitions": 0, "seasons": 0, "clubs": 0 }
+  },
+  "condition": "dry",
+  "gates": false
 }
 ```
 
-The next calibration run judges it. The measure's fields come from a closed list, and a mistake is refused with the band and the field named; see [`realism-bands.json`](../reference/data-files.md#realism-bandsjson) for the list and the four kinds of measure. Set `smallest_shift` to the smallest change that should matter: a change run sizes itself to see it.
+The next calibration run judges it in the table of reported bands; with `gates: false` it never changes the verdict. The measure's fields come from a closed list, and a mistake is refused with the band and the field named; see [`realism-bands.json`](../reference/data-files.md#realism-bandsjson) for the list, the record's fields, the ten kinds of measure and how a `real.source` pointer reads a measured value. Set `design.smallest_shift` to the smallest change that should matter: a change run sizes itself to see it. Promote the band to `gates: true` only once its real value is measured and its range is set from it.
 
 ## Add a rule pack
 
@@ -91,17 +101,23 @@ The rule pack decides how long each half lasts, how many substitutions each team
    target/release/engine-cli simulate --seed 1 --ticks-out check.ticks --team-a my-teams/club-00000007-00.json
    ```
 
-Each player must have every attribute of the attribute schema, and no other attribute. A version 2 file, which `generate` writes, holds each attribute as a rating from 1.0 to 20.0 with at most one decimal, for example `12.4`, and each player's `height` in centimetres (150 to 215), `age` in years (15 to 45), and `nationality` as three upper-case letters:
+Each player must have every attribute of the attribute schema, and no other attribute. A version 3 file, which `generate` writes, holds each attribute as a rating from 1.0 to 20.0 with at most one decimal, for example `12.4`, and each player's `height` in centimetres (150 to 215), `age` in years (15 to 45), and `nationality` as three upper-case letters. It also holds the player as a person: a rating at each of the ten positions in `positions` (his listed position is his natural one, and no other is above it), his feet in `foot` (the strong side, and the weaker foot as a whole percent of the strong one), and his traits of play in `traits`, which you can leave out when he has none:
 
 ```json
 { "id": "p-club-00000007-00-04", "name": "Jon Ashby", "shirt": 4, "position": "CB",
   "attributes": { "acceleration": 12.4, "pace": 11.0, "...": 1.0 },
+  "positions": { "CB": 14.2, "LB": 11.0, "RB": 11.5, "DM": 10.4, "GK": 1.0, "CM": 8.3,
+                 "AM": 5.1, "LW": 3.2, "RW": 3.0, "ST": 4.4 },
+  "foot": { "strong": "right", "weaker": 40 },
+  "traits": { "stays_back": "strong" },
   "height": 187, "age": 26, "nationality": "ENG" }
 ```
 
+The eleven personality values, such as `temperament` and `leadership`, are attributes like the others in `attributes`. The data-file reference lists every field and its bounds.
+
 The screens show each rating as its whole number, so 12.4 shows as 12 and 12.5 as 13.
 
-Every player of a version 2 file also holds the two hidden values, `consistency` and `injury_proneness`, as ratings like the others. Consistency sets how much his form moves from match to match and through a match: at 20.0 he plays to his ratings every time, at 1.0 his form swings most. Injury proneness sets how often he is injured: 10.0 is the average, higher is more often. No screen shows them as numbers. A player shows a word for each, such as "steady" or "rarely injured", once he has played matches for the club (`matches_at_club` in his condition block); before that both read as not yet known.
+Every player also holds the two hidden values, `consistency` and `injury_proneness`, as ratings like the others. Consistency sets how much his form moves from match to match and through a match: at 20.0 he plays to his ratings every time, at 1.0 his form swings most. Injury proneness sets how often he is injured: 10.0 is the average, higher is more often. No screen shows them as numbers. A player shows a word for each, such as "steady" or "rarely injured", once he has played matches for the club (`matches_at_club` in his condition block); before that both read as not yet known.
 
 ### Give a player his match condition
 
@@ -129,6 +145,8 @@ A version 1 file (`"schema_version": 1`) holds whole numbers from 1 to 100 and n
 3. Replace `injury_resistance` with `injury_proneness`: 21.0 less the converted resistance, so a resistance of 62 (12.4) becomes `8.6`. The engine converts it the same way.
 4. Add `"consistency": 10.0` to every player, as the engine does, or the value you want.
 5. Add `height`, `age`, and `nationality` to every player.
+
+The result is a version 2 file. It loads, and converts again as it loads: new attributes from related ones, every personality value at the middle of the scale, a weaker foot of 50, only his listed position rated, and no traits. The setup screen then says that the club uses an older team file. To write version 3, set `"schema_version": 3` and add the fields that the data-file reference lists in its table for version 2 files.
 
 A version 1 tactics file converts on load in the same way; the data-file reference lists its version 2 fields.
 
@@ -171,6 +189,24 @@ To remove an attribute that the engine does not require, remove it from `attribu
 
 The schema holds 30 to 50 attributes. The engine requires 4 attributes by name, because play reads them directly: `pace`, `technique`, `agility`, and `consistency`. It refuses a schema without one of them. The sensitivity rules refuse a job that has no rule: add a rule for the new job to `sensitivity.json` before you run them.
 
+## Make or change a style preset
+
+A style in `styles.json` is a preset of tactical primitives. To change one, or to add one, work in your own content folder:
+
+1. Open `styles.json` and find the style, or copy one as a starting point and give it a new name.
+2. Edit its `primitives` list. Each entry is `{ "primitive": <name>, "level": <name> }`: a primitive of `tactics.json` and one of its levels, choices or states (`on` or `off`). Include one `mentality` entry. A primitive you leave out stays at its default. Set only what the style's football definition names; a preset that sets everything hides which settings make the style.
+3. Edit its `duties` (a duty hint by position), `formations` (one or more formations of `tactics.json`), `identity` (two or three statistics, each with the direction the style should move it) and `rules` (one to six game-state rules, in the form a person writes; see [the data-file reference](../reference/data-files.md#stylesjson)).
+4. Load the content to check the file. A primitive, level, formation, duty or rule condition the engine does not know, a primitive set twice, a preset without a mentality, and a preset with no rules or more than six are refused by name:
+
+   ```bash
+   engine-cli --content-dir my-content calibrate --suite styles --seed 9 --matches 1 --out runs/styles-check
+   ```
+
+5. Play the styles gate on your folder, as in [Run the styles gate](calibration.md#run-the-styles-gate), and read whether your style shows its identity and whether any style now dominates.
+
+No engine code names a style, so a new style needs no build. The computer manager picks among every style in the file by its staff advice; to keep a style out of its pick, remove it from the file.
+
+Every style in the file also shows in the style picker of the Tactics screen's Phases tab, in the file's order. Picking it sets each primitive to the style's level (and the default for one it leaves out) and replaces the game plans with its rules; the player's own instructions, the formation and the duties stay. The picker shows the style's name in words: a name the page has no words for reads as the name with its underscores as spaces, so give a new style a plain name such as `quick_wings`. A row whose level differs from the picked style shows a mark.
 ## Compare two models with a flag
 
 Use a feature flag to decide between the current model and a candidate on the realism bands.
@@ -212,8 +248,8 @@ error: content refused: tuning tuning.json: engine.keeper_catch_chance: greater 
 error: content refused: team teams/x.json: players: player p-club-00000001-00-04: attribute pace is 20.5; allowed 1.0 to 20.0
 error: content refused: team teams/x.json: players: player p-club-00000001-00-04: attribute pace is 12.34; not on a tenth
 error: content refused: team teams/x.json: players: player p-club-00000001-00-04: body field height is missing
-error: content refused: team teams/x.json: schema_version 3; this build reads 2
-error: content refused: rules rules/default.json: schema_version 7; this build reads 3
+error: content refused: team teams/x.json: schema_version 4; this build reads 3
+error: content refused: rules rules/default.json: schema_version 7; this build reads 4
 ```
 
 To correct the error:

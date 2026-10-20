@@ -115,14 +115,33 @@ pub struct MatchStats {
     pub ratings: Vec<RatingEntry>,
 }
 
-/// One player's match rating as the match record lists it: 1.0 to 10.0 with one decimal.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// One player's match rating as the match record lists it: 1.0 to 10.0 with one decimal,
+/// and the figures the launcher's season record adds up. Each figure reads 0 (or `false`)
+/// from a record written before it.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct RatingEntry {
     #[serde(rename = "player.id")]
     pub id: String,
     /// His side: 0 home, 1 away.
     pub team: usize,
     pub rating: f64,
+    /// `true` when he was on the pitch at kick-off.
+    #[serde(default)]
+    pub started: bool,
+    /// Whole minutes on the pitch.
+    #[serde(default)]
+    pub minutes: u32,
+    #[serde(default)]
+    pub goals: u32,
+    #[serde(default)]
+    pub assists: u32,
+    /// None conceded while he was on the pitch, over at least the match rating's clean-sheet
+    /// minutes.
+    #[serde(default)]
+    pub clean_sheet: bool,
+    /// Sent off: 1, or 0.
+    #[serde(default)]
+    pub red: u32,
 }
 
 impl RatingEntry {
@@ -130,12 +149,23 @@ impl RatingEntry {
     /// final once the match is over.
     pub fn of_match(sim: &crate::sim::Simulation) -> Vec<Self> {
         let teams = sim.teams();
+        let min_minutes = sim.config().match_rating.clean_sheet.min_minutes;
         sim.match_ratings()
             .into_iter()
-            .map(|r| Self {
-                id: teams[r.team].player_ids[r.squad].clone(),
-                team: r.team,
-                rating: r.rating(),
+            .map(|r| {
+                let t = &sim.tallies()[r.team][r.squad];
+                let minutes = t.ticks_played / crate::rules::clock::TICKS_PER_MINUTE;
+                Self {
+                    id: teams[r.team].player_ids[r.squad].clone(),
+                    team: r.team,
+                    rating: r.rating(),
+                    started: t.started,
+                    minutes,
+                    goals: t.goals,
+                    assists: t.assists,
+                    clean_sheet: t.conceded == 0 && minutes >= min_minutes,
+                    red: t.red,
+                }
             })
             .collect()
     }
@@ -209,6 +239,10 @@ pub struct MatchFigures {
     pub clearances: [u32; 2],
     #[serde(rename = "stats.restart_kicks")]
     pub restart_kicks: [u32; 2],
+    /// Goals with no shot of the scoring side behind them: own goals and balls nobody kicked
+    /// in.
+    #[serde(rename = "stats.goals_no_shot")]
+    pub goals_no_shot: [u32; 2],
     /// Whole seconds with the ball in play over the whole match, the shoot-out excluded.
     #[serde(rename = "stats.ball_in_play_s")]
     pub ball_in_play_s: u32,
@@ -239,6 +273,7 @@ impl MatchFigures {
             pass_accuracy_pct: [0, 1].map(|t| share_pct(s.passes_completed[t], s.passes[t])),
             clearances: s.clearances,
             restart_kicks: s.restart_kicks,
+            goals_no_shot: s.goals_no_shot,
             ball_in_play_s: ball_in_play_s(s.live_ticks),
             possession_pct: [0, 1].map(|t| share_pct(s.possession_ticks[t], possession)),
             manager_kind: managers.map(|m| {
@@ -650,6 +685,35 @@ pub fn read_stats(path: &Path) -> Result<MatchStats, EngineError> {
 mod tests {
     use super::*;
 
+    /// A rating entry with the season figures reads back equal; one written before them
+    /// reads every figure as 0 or false.
+    #[test]
+    fn a_rating_entry_round_trips_its_figures_and_an_older_one_reads_zero() {
+        let full = RatingEntry {
+            id: "a-1".into(),
+            team: 1,
+            rating: 7.3,
+            started: true,
+            minutes: 88,
+            goals: 2,
+            assists: 1,
+            clean_sheet: true,
+            red: 0,
+        };
+        let text = serde_json::to_string(&full).unwrap();
+        assert_eq!(serde_json::from_str::<RatingEntry>(&text).unwrap(), full);
+        let old: RatingEntry =
+            serde_json::from_str(r#"{"player.id":"a-1","team":0,"rating":6.5}"#).unwrap();
+        assert_eq!(
+            old,
+            RatingEntry {
+                id: "a-1".into(),
+                rating: 6.5,
+                ..RatingEntry::default()
+            }
+        );
+    }
+
     fn stats() -> MatchStats {
         MatchStats {
             owner_id: "0123456789abcdef0123456789abcdef".into(),
@@ -747,6 +811,7 @@ mod tests {
             "\"stats.pass_accuracy_pct\"",
             "\"stats.clearances\"",
             "\"stats.restart_kicks\"",
+            "\"stats.goals_no_shot\"",
             "\"stats.ball_in_play_s\"",
             "\"stats.possession_pct\":[54.2,45.8]",
             "\"manager.kind\":[\"ai\",\"ai\"]",

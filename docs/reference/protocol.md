@@ -1,8 +1,8 @@
-# Match stream protocol, version 6
+# Match stream protocol, version 9
 
 The engine serves one viewer over a WebSocket on `127.0.0.1`. The port is chosen by the
 operating system at every run and written to `engine.port` inside the runtime data folder.
-A page connects to `ws://127.0.0.1:<port>/?v=6`.
+A page connects to `ws://127.0.0.1:<port>/?v=9`.
 
 Version 2 changed the meaning of `ticks_expected` from the exact tick count to the most ticks
 the match can last, because the time added at the end of each half is known only when the
@@ -68,15 +68,50 @@ each slot's overall level now and fresh. No field was removed and none changed m
 value is still never a number, and no number under a hidden attribute's name is ever sent.
 The tick frames are unchanged.
 
+Version 7 carries the player as a person. A `squad` entry gains six optional fields:
+`player.positions` (his rating at each of the ten positions, in tenths, by position code),
+`player.strong_foot`, `player.weaker_foot` (the weaker foot as a whole percent of the strong
+one), `player.traits` (his traits of play, each a `name` and a `strength`) and
+`player.personality` (each personality value as a word and a confidence, never a number) and
+`player.mood` (his mood at kick-off as a word, never a number). The event message gains one event type, `trait-override`, and three optional fields
+(`trait.name`, `trait.cause` and `trait.instruction`): a player's strong trait of play broke
+one of his team's instructions. The `condition` message gains `mood`, each wire slot's mood now
+as a word, never a number. No field was removed and none changed meaning, and the tick
+frames are unchanged, so a protocol 6 message still reads; a reader shows the fields it lacks
+as unknown.
+
+Version 8 adds the `walk-on` message: before the first tick of each half (the match start, the
+second half and each half of extra time) the engine sends the players' walk from the tunnel to
+the places that tick starts from. The walk is not match time: no tick carries it, and the clock
+and the ball-in-play figure leave it out. The restart keyframe (`0x03`) now marks the tick the
+ball appears at its restart spot, which can come seconds after the restart event while the ball
+is fetched. No field was removed and the tick frames are unchanged, so a protocol 7 replay still
+reads; it has no walk-on.
+
+Version 8 also carries game-state rules and player instructions without a new version. The
+`hello` gained one optional field, `game_state`, written only when a side has a rule or an
+instruction, so every hello of a match without them is unchanged. A replay record's `settings`
+gained the same optional field, and its change log the `rule` source and change. No field was
+removed and none changed meaning, and the tick frames are unchanged.
+
 A test in `crates/protocol/tests/document.rs` holds this document to the code: every message
 the implementation names must appear below with every one of its fields.
+
+Version 9 carries the tactics board. Every addition is optional and left out when empty, so a
+protocol 8 client and file read as before. queue-change gained two kinds, instructions
+(primitives set to levels by name) and game-state (a side's game plans and player
+instructions, replaced whole); both apply on the tick the engine reads them, with no wait for
+a stoppage, except a formation a game plan sets, which still waits. set-lineup gained
+levels and game_state for the same choices before kick-off. The hello gained styles,
+the style presets, and each hello team's setup gained levels, the level of every
+primitive.
 
 ## Connecting
 
 | Step | Rule |
 |---|---|
 | Address | `ws://127.0.0.1:<port>/?v=<protocol version>` |
-| Version | `v` must equal `6`. Any other value, or no value, is refused with both versions named. |
+| Version | `v` must equal `9`. Any other value, or no value, is refused with both versions named. |
 | Origin | Any port of `http://localhost` or `http://127.0.0.1`, or no `Origin` header at all. Any other origin is refused, including `null` (a sandboxed frame or a `data:` document) and a `file://` page. |
 | Clients | One viewer per match. |
 | First message | `hello`, always before the first tick frame. |
@@ -93,7 +128,7 @@ Control messages are JSON text frames tagged by `type`. Tick positions are binar
 |---|---|---|
 | `0x01` keyframe | 99 | the kind tag, then 98 payload bytes: tick (4), ball (6), 22 players (88) |
 | `0x02` delta | 48 | the kind tag, then 47 payload bytes: ball (3), 22 players (44) |
-| `0x03` restart keyframe | 99 | the same payload as `0x01`, on the tick the ball is placed for a kick-off, a throw-in, a corner, a goal kick, a free kick, or a penalty |
+| `0x03` restart keyframe | 99 | the same payload as `0x01`, on the tick the ball is placed at the spot of a kick-off, a throw-in, a corner, a goal kick, a free kick, a penalty, or a dropped ball |
 
 Every position is a signed 16-bit count of centimetres, little-endian. A delta carries one
 signed byte per component, which covers 1.27 m of movement in one tick against a ball cap of
@@ -106,7 +141,7 @@ keyframe. A delta carries no tick number: it is the tick after the frame before 
 
 | Field | Type | Meaning |
 |---|---|---|
-| `protocol.version` | integer | always 6 in this build |
+| `protocol.version` | integer | always 7 in this build |
 | `engine.version` | string | the engine crate version |
 | `build.hash` | string | the git hash the engine was built from |
 | `owner.id` | string | 32 hex characters, created once per machine |
@@ -121,6 +156,7 @@ keyframe. A delta carries no tick number: it is the tick after the frame before 
 | `knockout` | boolean | `true` for a knockout match: level after regulation time, it plays extra time and then a penalty shoot-out. Left out when `false`; a hello without it reads as `false` |
 | `ground.length` | number | the length of the home team's ground, where the match is played, in metres (90 to 120). Left out when it is 105; a hello without it reads as 105 |
 | `ground.width` | number | the width of the home team's ground in metres (45 to 90). Left out when it is 68; a hello without it reads as 68 |
+| `game_state` | array | each side's game-state rules and player instructions, home first: `{ "rules", "instructions" }` in the form of the tactics file's game-state section (see the data files reference), by name, or null for a side with neither. Left out when neither side has any; a hello without it reads as none on either side |
 
 `substitutions`:
 
@@ -180,6 +216,19 @@ Each entry of `squad` carries `player.id`, `player.name`, `player.shirt`, and
 | `player.matches_at_club` | integer | the matches he has played for the club, which set the hidden values' confidence; absent when the team file gives none |
 | `player.level` | integer | his overall level fresh, in tenths: the mean of the visible attributes of the groups his position plays (a keeper's goalkeeping, mental and physical; anyone else's technical, mental and physical) |
 | `player.plays_between` | array of two integers | the range his level runs today, in tenths: with his sharpness and his adaptation to the country taken off, then fresh. Equal when nothing takes off. A hidden value never moves it |
+| `player.positions` | object | his rating at each of the ten positions, by position code, in tenths of 1 to 20 (10 to 200); his natural position is the highest. A player converted from an older team file is rated at his listed position only, every other position 10. Absent before version 7 |
+| `player.strong_foot` | string | `left` or `right`; the strong foot is always 100. Absent before version 7 |
+| `player.weaker_foot` | integer | the weaker foot as a whole percent of the strong one, 1 to 100 (50 for a converted player). Absent before version 7 |
+| `player.traits` | array of objects | his traits of play, each a `name` from the trait catalogue (`traits.json`) and a `strength`; absent when he has none and before version 7 |
+| `player.personality` | object | each personality value, by name, as a word and a confidence like the hidden values below; never a number. Absent before version 7 |
+| `player.mood` | string | his mood at kick-off as a word key: `confident`, `lifted`, `steady`, `low` or `rattled`, from his recent form and his progress toward his season goal; never a number. Absent before version 7 |
+
+Each trait is an object:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `name` | string | the trait's name in the trait catalogue, such as `cuts_inside` |
+| `strength` | string | `moderate` or `strong` |
 
 Each hidden value is an object:
 
@@ -205,6 +254,19 @@ file's `hidden.words`. No number for a hidden value is ever sent, in this messag
 | `roles` | array of 11 objects | one `{ role, duty }` per slot, in slot order |
 | `role` | integer | an index into `tactics.roles` |
 | `duty` | integer | an index into `tactics.duties` |
+| `levels` | array of integers | one level index per entry of `tactics.primitives`, in that order: the level, choice or state the side starts on. Absent before version 9 and when the engine has no primitives |
+
+From version 9 the `hello` also carries `styles` when the content folder has a styles file.
+It is absent otherwise. Each entry is one preset, by name:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `styles` | array | the presets, one object each |
+| `name` | string | the style's name in the styles file; the page owns its display text |
+| `primitives` | array | `{ "primitive", "level" }` pairs by name: the levels the preset sets; every other primitive stays at its default |
+| `formations` | array of strings | the formations the style suits, by name |
+| `rules` | array | the preset's game plans, in the written form of a `game-state` change |
+| `player_instructions` | array | the preset's player instructions, in the same written form |
 
 A viewer draws its markers from the two kit colours. It must not use either colour as it
 arrives: a team file may hold pure black or pure white, so a viewer pulls the lightness of
@@ -232,18 +294,18 @@ One `match-event` row. The same object is written to
 | `match.id` | string | the match |
 | `tick` | integer | the tick the event happened on |
 | `minute` | integer | the minute of play the match clock shows, counted from 0; it stays at the end of the half during added time |
-| `event.type` | enumeration | `kick-off`, `goal`, `half-time`, `full-time`, `tactics-change`, `offside`, `foul`, `card`, `throw-in`, `corner`, `goal-kick`, `free-kick`, `penalty`, `injury`, `substitution`, `ai-decision`, or `script` |
-| `team.id` | string | the club the event belongs to: the offender's club on `offside`, `foul`, and `card`, the club that restarts play on a restart, the injured player's club on `injury`, the club that changes on `substitution`, `ai-decision`, and `tactics-change`; absent at half-time and full time |
+| `event.type` | enumeration | `kick-off`, `goal`, `half-time`, `full-time`, `tactics-change`, `offside`, `foul`, `card`, `throw-in`, `corner`, `goal-kick`, `free-kick`, `penalty`, `injury`, `substitution`, `ai-decision`, `script`, or `trait-override` |
+| `team.id` | string | the club the event belongs to: the offender's club on `offside`, `foul`, and `card`, the club that restarts play on a restart, the injured player's club on `injury`, the club that changes on `substitution`, `ai-decision`, and `tactics-change`, the player's club on `trait-override`; absent at half-time and full time |
 | `home.score` | integer | the score after the event |
 | `away.score` | integer | the score after the event |
-| `change.kind` | enumeration | `tactics` or `substitution`; change events only |
+| `change.kind` | enumeration | `tactics` or `substitution`; change events only. An `instructions` or `game-state` change reports as `tactics` |
 | `change.queued_tick` | integer | the tick the change was queued on |
 | `change.queue_id` | string | the identifier the acknowledgement returned |
 | `change.rejected_reason` | string | present only on a refused change |
 | `change.state` | enumeration | `queued`, `applies-now`, `applied`, or `rejected` |
 | `change.applied_tick` | integer | on an applied change: the tick it took effect on, which is the tick of the stoppage that admitted it |
-| `ai.decision` | string | on `ai-decision`: `mentality-up-trailing`, `mentality-down-leading`, `sub-injury`, `sub-fatigue`, or `sub-keeper` (the bench keeper replaces an outfield player keeping goal) |
-| `player.id` | string | the player the event names: the offender on `offside` and `foul`, the booked player on `card`, the injured player on `injury`, the player leaving on `substitution`, the taker on `kick-off` and on every restart, and on `goal` the player who kicked the ball last (a player of the other club on an own goal) |
+| `ai.decision` | string | on `ai-decision`: `sub-injury`, `sub-keeper` (the bench keeper replaces an outfield player keeping goal), `sub-fatigue`, `sub-booked`, `sub-form`, or `sub-knock`, the largest part of the player's need. A replay of an earlier engine may also hold `mentality-up-trailing` or `mentality-down-leading` |
+| `player.id` | string | the player the event names: the offender on `offside` and `foul`, the booked player on `card`, the injured player on `injury`, the player leaving on `substitution`, the taker on `kick-off` and on every restart, the player whose trait overrode an instruction on `trait-override`, and on `goal` the player who kicked the ball last (a player of the other club on an own goal) |
 | `player.secondary_id` | string | the fouled player, on `foul`; the player coming on, on `substitution` |
 | `card.kind` | enumeration | `yellow`, `second-yellow`, or `red`, on `card`; a second yellow sends the player off |
 | `foul.advantage` | boolean | on `foul`: `true` when play continued because the fouled team kept the ball; a card for that foul follows at the next stoppage |
@@ -254,11 +316,20 @@ One `match-event` row. The same object is written to
 | `shootout.scored` | boolean | on the second `penalty` event of a shoot-out kick, its outcome: `true` when the kick scored |
 | `shootout.scores` | array of two | on the outcome event of a shoot-out kick and on `full-time` after a shoot-out: the shoot-out score, home first; `home.score` and `away.score` keep the score of play |
 | `result.decided_by` | enumeration | knockout matches only, on `full-time`: `regulation`, `extra-time`, or `shoot-out` |
-| `commentary` | string | one English commentary line, on every event except `tactics-change` and `script`; the lines come from `content/commentary/en.json` and name the player and the club, and a script pack's commentary hook can rewrite them |
+| `commentary` | string | one English commentary line, on every event except `tactics-change`, `script` and `trait-override`; the lines come from `content/commentary/en.json` and name the player and the club, and a script pack's commentary hook can rewrite them |
 | `script.pack` | string | on the first `kick-off` of a match that runs a script pack: the pack identity, `id@version+hash`, where the hash is the first 12 hex characters of the SHA-256 of `pack.json` followed by the script file |
 | `script.hook` | enumeration | on `script`: the hook that failed, `decision`, `rule`, or `commentary` |
 | `script.outcome` | enumeration | on `script`: `aborted` (the call ran out of its operation budget, or failed; a call past the 2 ms wall-clock limit is not aborted and only marks the match invalid in `match-stats`), `denied` (the call tried an import or a function the sandbox does not allow), or `disabled` (the hook failed three times in a row and is off for the rest of the match) |
 | `script.detail` | string | on `script`: why, such as `operation budget of 10000 exhausted` or `function http_get is not available` |
+| `trait.name` | string | on `trait-override`: the trait of play that overrode the instruction, its name in the trait catalogue, such as `holds_up_ball` |
+| `trait.cause` | enumeration | on `trait-override`: `pressure` (an opponent was within 2.5 m of the player) or `low-mood` (his mood was at or below the tuning's `traits.low_mood`) |
+| `trait.instruction` | string | on `trait-override`: the instruction the trait went against, as `<instruction>:<level>` (such as `tempo:fast`), `duty:<duty>` or `mentality:<mentality>` |
+
+A `trait-override` event names the player and his club and carries no `commentary`: a page
+builds its line from the three trait fields. For example,
+`{"event.type":"trait-override","player.id":"…","trait.name":"holds_up_ball","trait.cause":"pressure","trait.instruction":"tempo:fast",...}`.
+The page's match feed builds its line from these three fields, and the player panel counts
+the player's overrides after full time.
 
 A `script` event names no team or player and carries no `commentary`. Play goes on with the
 engine's own choice: zero option offsets, the referee's card, or the commentator's line. For
@@ -277,8 +348,13 @@ stays at the last minute of play (120 after extra time) for the whole shoot-out,
 `full-time` carries `result.decided_by`.
 
 A restart event (`kick-off`, `throw-in`, `corner`, `goal-kick`, `free-kick`, `penalty`)
-arrives on the same tick as the restart keyframe that places the ball. Play resumes when the
-taker plays the ball, a few seconds later. An `injury` in open play stops play for a dropped
+arrives on the tick play stops and names the restart spot. While the content's restart wait
+table is loaded, the ball first waits where it left play for the drawn part of the wait (the
+unseen part, such as fetching it), and the restart keyframe marks the later tick it appears at
+the spot; a quick restart, and content without the table, place it on the event's tick. Play
+resumes when the taker plays the ball: once he is at the ball and every player the law moves
+has moved, and the drawn part has passed again. A kick-off at the start of a half is placed on
+the half's first tick, after its `walk-on`. An `injury` in open play stops play for a dropped
 ball at the ball; an injury on a tick that already stopped play rides that stoppage.
 
 The engine applies queued changes (the page's and the AI manager's) on the tick that opens a
@@ -336,6 +412,7 @@ Sent right after each periodic `stats` message, not at full time.
 | `windows_used` | array of two integers | substitution windows each team has used, home first; `[0, 0]` when an earlier build sent none |
 | `level` | array of 22 integers | each wire slot's overall level now, in tenths of 1 to 20, with his tiredness and the other states taken in; absent before version 6 |
 | `base` | array of 22 integers | each wire slot's overall level fresh, in tenths, beside `level`; the Touchline's Level column reads `13 of 15` when the shown whole number of `level` is below that of `base` |
+| `mood` | array of 22 strings | each wire slot's mood now as a word key: `confident`, `lifted`, `steady`, `low` or `rattled`. It starts at the hello's `player.mood` and moves with goals, misses, cards and the score; never a number. Absent before version 7 |
 
 ### change-state
 
@@ -352,8 +429,8 @@ or replay keeps it, and it never changes the match.
 ### advice
 
 Sent on `serve` to a page that manages the home team, after a check of the computer manager
-finds picks that differ from the last ones sent. The check runs for the page's team every
-`tactics.ai.check_interval_s` of match time (30 seconds with the shipped tactics file) and on
+finds picks that differ from the last ones sent. The check runs for the page's team on the tick
+a stoppage that admits a substitution opens, and on
 a tick that holds a goal, an injury to the home team, or a sending-off of a home player; it
 does not run in a penalty shoot-out or after full time. The check is advice only: it reads the
 match, works on a copy of the change queue, draws no random number, and writes nothing, so the
@@ -371,8 +448,8 @@ Each entry of `picks`:
 
 | Field | Type | Meaning |
 |---|---|---|
-| `code` | string | the reason, as `ai.decision` names it: `sub-injury`, `sub-keeper`, `sub-fatigue`, `mentality-up-trailing`, or `mentality-down-leading`. A mentality pick is offered once per score |
-| `kind` | enumeration | `substitution` or `tactics`, as `change.kind` names it |
+| `code` | string | the reason, as `ai.decision` names it: `sub-injury`, `sub-keeper`, `sub-fatigue`, `sub-booked`, `sub-form`, or `sub-knock` |
+| `kind` | enumeration | `substitution`; `tactics` stays readable, but the assistant offers no tactical pick until the tactics board can make one |
 | `off` | integer | on a substitution: the squad index of the player coming off |
 | `on` | integer | on a substitution: the squad index of the player coming on |
 | `patch` | object | on a tactics pick: the change as `queue-change` writes it (`mentality`, `instructions`) |
@@ -451,7 +528,32 @@ Each entry of `ratings`:
 | Field | Type | Meaning |
 |---|---|---|
 | `player.id` | string | the player |
-| `rating` | float | his match rating, 1.0 to 10.0 with one decimal: 6.0 plus what he did, weighted by the `match_rating` tuning |
+| `rating` | float | his match rating, 1.0 to 10.0 with one decimal: the base plus the threat his actions added (for a keeper, the goals he prevented), his cards, his side's goals conceded and the result, weighted by the `match_rating` tuning |
+
+### walk-on
+
+Sent once before the first tick of each half: before tick 1, and before the first tick after
+each `half-time` event. It is not match time. A page may draw it before that tick at its
+playback speed, or skip it; a seek or a skip that passes the tick passes the walk too. A match
+resumed from a snapshot and a protocol 7 replay have none.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `period` | integer | the half it opens: 0 the first, 1 the second, 2 and 3 the halves of extra time |
+| `first_tick` | integer | the tick of the half's first frame, which the walk ends on |
+| `speed` | float | the walking speed, in metres per second: the pace tuning's walk limit |
+| `ticks` | integer | how long the walk lasts, in ticks: the longest walk at `speed` |
+| `paths` | array | one entry for every player on the pitch, in roster order |
+
+Each entry of `paths`, in metres on the tick frame's axes:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `player` | integer | the player's slot in the tick frame, 0 to 21 |
+| `from` | two floats | where he comes out of the tunnel: on the near touchline at the halfway line, each team in a file on its own side |
+| `to` | two floats | his place on `first_tick` |
+
+A player walks in a straight line from `from` to `to` at `speed` and stands once he arrives.
 
 ### ack
 
@@ -495,8 +597,8 @@ the manager has not yet watched.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `change.kind` | string | `tactics` or `substitution`; any other value is refused by name |
-| `detail` | object | `{ "patch": … }` for `tactics`, `{ "off": …, "on": … }` for `substitution`; see below |
+| `change.kind` | string | `tactics`, `substitution`, `instructions` or `game-state`; any other value is refused by name |
+| `detail` | object | `{ "patch": … }` for `tactics`, `{ "off": …, "on": … }` for `substitution`, `{ "levels": […] }` for `instructions`, `{ "game_state": { … } }` for `game-state`; see below |
 
 `detail` for a substitution:
 
@@ -527,6 +629,31 @@ while the engine is paused is queued on the first tick after `start`, so it neve
 the resume tick. The football rules (the limit, the windows, a player not on the pitch)
 are the engine's and arrive as a `rejected` verdict with the reasons listed under **event**.
 
+`detail` for an `instructions` change (version 9) is `{ "levels": [ … ] }`, at least one
+entry, each by the names of the hello's `tactics`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `primitive` | string | the name of an entry of `tactics.primitives` |
+| `level` | string | the name of one of its levels, choices or states |
+
+`detail` for a `game-state` change (version 9) is `{ "game_state": { "rules": [ … ],
+"instructions": [ … ] } }`, in the same written form as a tactics file's game state: each
+rule is `{ "when": [conditions], "set": [actions] }`, and each player instruction is `{
+"slot", "primitive", "level" }`. It replaces the side's game plans and player instructions
+whole.
+
+Both kinds apply on the tick the engine reads them: the verdict is a `tactics-change` event
+with `change.state` `applied` and `change.applied_tick` that tick, and players take the new
+level up over the tactics file's take-up time. A formation a game plan sets waits for the next
+stoppage, as a tactics change does. A detail the socket cannot read is refused at once: an
+unknown primitive or level, an empty level list (`a level change names at least one
+primitive`), or a game state that does not read (a reason that starts `cannot read the game
+state`). The engine then refuses, as a `rejected` verdict, a level out of range, more rules
+than `game_state.max_rules`, a player instruction off the override list or given twice, and
+one for a slot whose position it does not reach in the side's formation or in a formation a
+rule sets (`the player instruction does not reach the position of slot <n>`).
+
 ### set-lineup
 
 Sent before the first `start`, once or more; the last lineup accepted before kick-off
@@ -537,12 +664,15 @@ stands. The same object shape as the hello's `setup`, as indices:
 | `lineup` | array of 11 integers | squad indices in slot order; slot 0 is the goalkeeper |
 | `bench` | array of integers | squad indices of the named substitutes, at most `tactics.ai.bench_size` |
 | `patch` | object | optional pre-match tactics, the same shape as a tactics change's patch; applied before kick-off |
+| `levels` | array | optional, version 9: `{ "primitive", "level" }` pairs by name, as an `instructions` change writes them; applied before kick-off, after the patch |
+| `game_state` | object | optional, version 9: the side's game plans and player instructions, as a `game-state` change writes them; applied before kick-off |
 
 It is acknowledged, or refused with the first fault in this order: `<n> starters; a match
 needs 11`, `squad index <i> is not in the squad of <n>`, `squad index <i> is placed twice`,
 `<n> substitutes; the bench holds <size>`, `slot 0 needs a goalkeeper`, a patch index the
 tactics file does not hold, or `squad index <i> has a pre-match role and is not in the
-lineup`. After kick-off it is refused with `the match has started; a lineup can be set only
+lineup`. A bad `levels` or `game_state` is refused with the same reasons as the change kinds.
+After kick-off it is refused with `the match has started; a lineup can be set only
 before kick-off`.
 
 ### seen
@@ -650,7 +780,7 @@ guess the WebSocket port on another and the operating system chooses both at eve
 |---|---|---|
 | `engine.state` | string | `idle` (the start screen, no match running), `starting`, `running`, `finished`, `crashed`, `refused`, `abandoned`, `not-found`, or `closed` (the player quit; launcher only) |
 | `socket.port` | int or null | the WebSocket port; present only while `running` |
-| `protocol.version` | int | the protocol version the engine speaks, `6` |
+| `protocol.version` | int | the protocol version the engine speaks, `7` |
 | `engine.pid` | int or null | the process identifier of the engine serving the match |
 | `engine.path` | string or null | the engine program the launcher runs; null when the engine serves the page itself |
 | `engine.reason` | string or null | the engine's own words when `refused`, for example `snapshot refused: <path>: checksum mismatch: the file is corrupt` |
@@ -688,7 +818,7 @@ A body is at most 32 KiB; a longer one is `413`, and one that is not UTF-8 text 
 
 `GET /engine/round?home=<club id>&away=<club id>` answers the other fixtures of the round that match would meet, as `{"fixtures": [{"home": <team>, "away": <team>}]}` with each team as in `teams`; an unknown club or the same club twice is `400` with the reason. It is `404` when the launch did not open on the start screen.
 
-`GET /engine/views?club=<club id>` answers that club's squad views and stored match ratings, as `{"active": <name or null>, "views": [...], "ratings": {<player id>: [{"match", "rating"}]}}`, with each player's newest 10 ratings, oldest first. Before it answers, it adds the ratings of the last match the launcher ran, read from that match's `stats.json`, once per match. A club with nothing stored answers empty lists; no club is `400`. Served by `serve --web` or `replay --web` it is `405`, and the page keeps its views for the session only.
+`GET /engine/views?club=<club id>` answers that club's squad views and stored match ratings, as `{"active": <name or null>, "views": [...], "ratings": {<player id>: [{"match", "rating"}]}}`, with each player's newest 10 ratings, oldest first. Before it answers, it adds the ratings of the last match the launcher ran, read from that match's `stats.json`, once per match. It also carries `season`, the club's part of the season record (see [the season file](data-files.md#the-season-file)): `{"matches": [<match id>], "players": {<player id>: {"starts", "minutes", "goals", "assists", "clean_sheets", "red_cards", "ratings", "goal": {"kind", "target"}, "form", "progress"}}}`, where `form` is his recent form (the mean of his newest five ratings, 1.0 to 10.0) and `progress` his percent of the pace toward his goal, each null before he has one. With the start screen every squad player is listed, one with no match yet at nothing played and with the goal he will be given. A club with nothing stored answers empty lists; no club is `400`. Served by `serve --web` or `replay --web` it is `405`, and the page keeps its views for the session only.
 
 Each action requires an `Origin` header equal to the page's own origin,
 `http://127.0.0.1:<page port>`; any other origin, or none, is `403`, so a page on another
@@ -756,17 +886,19 @@ All numbers are little-endian. The frame count counts tick and text frames only.
 offset 4 was the protocol version, which is also 3, so every older file reads as format 3; a
 format-3 file still says 3 there, and its `hello` names the protocol of its frames.
 
-A reader reads frames of protocol 3, 4, 5 and 6: the tick frames are the same. Protocol 3 and 4
+A reader reads frames of protocol 3, 4, 5, 6, 7, 8 and 9: the tick frames are the same. Protocol 3 and 4
 differ only in the scale of the `hello`'s ratings. A page doubles a protocol 3 `hello`'s
 ratings into tenths before any screen shows them, and keeps the stored frame as it is, so the
 file writes back byte for byte. A protocol 3 or 4 `hello` carries `player.injury_resistance`
 and no hidden value. A page drops that figure and shows both hidden values as not yet known:
-no old figure is ever turned into a word. A protocol 5 `hello` carries the hidden values as words but none of the squad entry's attributes, body fields or condition, so a page shows its hidden values and leaves the Squad screen's other columns empty.
+no old figure is ever turned into a word. A protocol 5 `hello` carries the hidden values as words but none of the squad entry's attributes, body fields or condition, so a page shows its hidden values and leaves the Squad screen's other columns empty. A protocol 6 `hello` carries no position ratings, feet, traits or personality; a page shows those as unknown. A protocol 7 file has no `walk-on`, and its restart keyframe falls on the restart event's tick.
 
 ### Inputs
 
-Format 4 stores these files, in this order. The two pack files are present only when the match
-ran a script pack.
+Format 4 stores these files, in this order. The slot file and the trait catalogue follow the
+team files; a file recorded before either existed lacks it, and plays with the built-in default
+selection and the trait catalogue as it first shipped. The two pack files are present only when
+the match ran a script pack.
 
 | Role | File |
 |---|---|
@@ -777,6 +909,9 @@ ran a script pack.
 | `commentary` | `commentary/en.json`: the script commentary hook runs on every event, so the lines are a match input |
 | `team_a` | the home team file |
 | `team_b` | the away team file |
+| `slots` | `slots.json` |
+| `traits` | `traits.json`: the trait catalogue the team files' traits are checked against |
+| `restart_waits` | `restart-waits.json`: the restart wait table, when the content has one; a file without it plays the fixed restart delays |
 | `pack_manifest` | `pack.json` of the script pack |
 | `pack_script` | the pack's entry script |
 
@@ -789,24 +924,29 @@ The inputs are never cut to save space.
 | Field | Contents |
 |---|---|
 | `engine` | `commit` (the full git commit, or `unknown`), `dirty` (the working tree held changes at build time), `crate_version`, `scheme` (the random-stream scheme), `maths` (the maths library and its version), `executable_sha256` (the SHA-256 of the executable file), and `build` (the short build hash the hello names) |
-| `settings` | `seed` (a decimal string), `minutes`, `knockout`, and `managers` (`ai` or `human`, home first) |
+| `settings` | `seed` (a decimal string), `minutes`, `knockout`, `managers` (`ai` or `human`, home first), and `game_state` (each side's rules and instructions as the hello carries them; optional, left out when neither side has any) |
 | `inputs` | one entry per input entry, in file order: `role`, `name`, `bytes`, and `sha256` |
 | `inputs_bytes` | the total size of the input files |
 | `changes` | the applied-change log |
 | `watchdog` | `slow_calls` (script calls past the wall-clock limit) and `invalid` (`slow script`, or null) |
 
 Each entry of the change log holds `order` (from 0), `team`, `source` (`manager` for a team
-managed by hand, `ai` for the computer manager), `queued_tick` and `queue_number` (the change's
-queue identifier), `tick` (the tick it applied on), `stoppage` (the stoppage it applied at), and
-`change`: `{ "substitution": { "off", "on" } }` with squad indexes, or `{ "tactics": {
-"formation", "mentality", "instructions", "roles": [{ "squad", "role", "duty" }] } }`, where a
-null leaves that setting as it is. Only applied changes are in the log. A rejected change's
+managed by hand, `ai` for the computer manager, `rule` for a side's game-state rules),
+`queued_tick` and `queue_number` (the change's queue identifier), `tick` (the tick it applied
+on), `stoppage` (the stoppage it applied at, or `none` for a rule change that applied whole on
+its own tick and for an `instructions` or `game-state` change), and `change`: `{ "substitution": { "off", "on" } }` with squad indexes, `{
+"tactics": { "formation", "mentality", "instructions", "roles": [{ "squad", "role", "duty" }] }
+}`, where a null leaves that setting as it is, `{ "rule": { "active" } }`, the rules that
+hold after the change (bit `k` for the side's rule `k`), `{ "instructions": { "levels": [{
+"primitive", "level" }] } }`, primitives set by name, or `{ "game_state": { "game_state": {
+"rules", "instructions" } } }`, a side's game plans and player instructions replaced whole. Only applied changes are in the log. A rejected change's
 verdict stays in the text frames.
 
 ### Re-simulation
 
-Re-simulation builds the match from the stored inputs, queues each `manager` entry of the log
-again at its `queued_tick`, and lets the computer manager make its own changes again. It
+Re-simulation builds the match from the stored inputs, gives each side the rules and
+instructions of `settings.game_state`, queues each `manager` entry of the log again at its
+`queued_tick`, and lets the computer manager and the rules make their own changes again. It
 compares every regenerated tick frame with the stored one, byte for byte, and after full time
 it compares the applied changes with the log, entry by entry. Text frames are not re-simulated:
 they carry the recording's match stamp and owner, and the verdict rows of rejected changes,
@@ -814,7 +954,7 @@ which the log does not keep. The script runs with no wall-clock limit, so the re
 mark is reported, not made again.
 
 A reader refuses a file with the wrong magic, a format newer than the reader knows or older
-than 3, frames of a protocol version other than 3, 4, 5 and 6, a count mismatch, a truncated entry, an input or
+than 3, frames of a protocol version other than 3, 4, 5, 6, 7, 8 and 9, a count mismatch, a truncated entry, an input or
 record entry in a format-3 file, an input entry after the frames, an entry after the record, a
 format-4 file with no record or with two, a record without one of its fields or with a field
 it does not define, a field of the wrong type or outside its values, a header tick count that
@@ -822,7 +962,8 @@ the frames do not match, a header seed that differs from the record's, input ent
 names, sizes, or SHA-256 values differ from the record's list, a total of input sizes that
 differs from the record's, an unknown entry kind, or a hash that does not match the bytes. Each refusal names its check. A missing record field is
 never filled with a default: a field that may be null, such as `watchdog.invalid`, must still
-be present.
+be present. The one exception is `settings.game_state`, which a record of a match without rules
+leaves out.
 
 ### Migration
 

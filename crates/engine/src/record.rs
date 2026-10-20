@@ -18,6 +18,7 @@ use crate::rules::Stoppage;
 use crate::sim::Simulation;
 use crate::team::PLAYERS_PER_TEAM;
 use crate::trace::TraceRecord;
+use crate::walk_on::WalkOn;
 
 /// Players per record.
 pub const PLAYER_COUNT: usize = 2 * PLAYERS_PER_TEAM;
@@ -49,8 +50,10 @@ pub struct TickRecord {
     pub ball: [f32; 3],
     pub players: [[f32; 2]; PLAYER_COUNT],
     /// True on a tick that places the ball for a restart (a kick-off, a throw-in, a corner, a
-    /// goal kick, a free kick, or a penalty). The ball jumps to the restart spot, so the
-    /// validator must not read the jump as a kick.
+    /// goal kick, a free kick, or a penalty): the tick the ball appears at the restart spot,
+    /// which is the tick play stopped on unless the ball first waited where it left play for
+    /// the restart's drawn extra. The ball jumps to the spot, so the validator must not read
+    /// the jump as a kick.
     #[serde(default)]
     pub restart: bool,
 }
@@ -178,6 +181,13 @@ pub trait TickSink {
         Ok(())
     }
 
+    /// The walk-on hook: called once before the first record of each half with the walk-on to
+    /// the places that record holds ([`crate::walk_on`]). The walk-on is not match time. The
+    /// default does nothing.
+    fn on_walk_on(&mut self, _walk_on: &WalkOn) -> Result<(), EngineError> {
+        Ok(())
+    }
+
     /// The hold hook: called now and then while the driver waits before the tick after `tick`
     /// (a pause, or a viewer too far behind), so a sink can finish work that waited on another
     /// thread without a further tick. The default does nothing.
@@ -245,6 +255,11 @@ impl<A: TickSink, B: TickSink> TickSink for FanoutSink<A, B> {
         self.b.on_trace(records)
     }
 
+    fn on_walk_on(&mut self, walk_on: &WalkOn) -> Result<(), EngineError> {
+        self.a.on_walk_on(walk_on)?;
+        self.b.on_walk_on(walk_on)
+    }
+
     fn on_hold(&mut self, tick: u32) {
         self.a.on_hold(tick);
         self.b.on_hold(tick);
@@ -278,6 +293,13 @@ impl<S: TickSink> TickSink for Option<S> {
     fn on_trace(&mut self, records: &[TraceRecord]) -> Result<(), EngineError> {
         match self {
             Some(sink) => sink.on_trace(records),
+            None => Ok(()),
+        }
+    }
+
+    fn on_walk_on(&mut self, walk_on: &WalkOn) -> Result<(), EngineError> {
+        match self {
+            Some(sink) => sink.on_walk_on(walk_on),
             None => Ok(()),
         }
     }

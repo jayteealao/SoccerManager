@@ -76,6 +76,32 @@ test('the computer manager reasoning stays out of the feed, its outcome does not
   assert.deepEqual(view.substitutions, [{ tick: 10, team: 't', off: 'a', on: 'b' }]);
 });
 
+test('a trait override is a feed entry: the feed has its row', () => {
+  const state = new MatchState();
+  assert.ok(!HIDDEN_KINDS.has(KIND.traitOverride));
+  state.add(eventMessage(1, KIND.kickOff));
+  state.add(
+    eventMessage(30, KIND.traitOverride, {
+      'player.id': 'p',
+      'team.id': 't',
+      'trait.name': 'tries_killer_balls',
+      'trait.cause': 'pressure',
+      'trait.instruction': 'passing_directness:short',
+    }),
+  );
+  const view = state.at(30);
+  assert.deepEqual(view.entries.map((e) => e['event.type']), [KIND.kickOff, KIND.traitOverride]);
+});
+
+test('the condition view carries each slot’s mood word, and none before the first message', () => {
+  const state = new MatchState();
+  assert.equal(state.at(0).mood, null);
+  state.add({ type: 'condition', tick: 50, energy: [1, 0.9], mood: ['lifted', 'rattled'] });
+  state.add({ type: 'condition', tick: 100, energy: [1, 0.9] });
+  assert.deepEqual(state.at(60).mood, ['lifted', 'rattled']);
+  assert.equal(state.at(120).mood, null, 'an engine that sends no mood reads none');
+});
+
 test('a second yellow is a red and sends the player off; an injury is remembered', () => {
   const state = new MatchState();
   state.add(eventMessage(5, KIND.card, { 'player.id': 'p', 'card.kind': 'yellow' }));

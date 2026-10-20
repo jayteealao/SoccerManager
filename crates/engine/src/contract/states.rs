@@ -113,6 +113,11 @@ impl FamilyGroups {
 }
 
 fn check_groups(groups: &[Group], _ctx: &()) -> garde::Result {
+    if groups.contains(&Group::Personality) {
+        return Err(garde::Error::new(
+            "Personality is not a state group; no state family acts on it",
+        ));
+    }
     for (i, g) in groups.iter().enumerate() {
         if groups[..i].contains(g) {
             return Err(garde::Error::new(format!("{g:?} appears twice")));
@@ -177,7 +182,8 @@ pub fn capped(
 }
 
 /// The effective ratings of `base`: each visible rating plus the delta of its group, in
-/// tenths, kept inside 1.0 to 20.0. A hidden value keeps its base: no state moves it.
+/// tenths, kept inside 1.0 to 20.0. A hidden value, personality included, keeps its base: no
+/// state moves it, and personality has no delta to read.
 pub fn effective(
     base: &Attributes,
     schema: &AttributeSchema,
@@ -185,12 +191,61 @@ pub fn effective(
 ) -> Attributes {
     let mut out = *base;
     for (slot, def) in out.values.iter_mut().zip(&schema.attributes) {
-        let d = i16::from(deltas[def.group as usize]);
-        if d != 0 && !def.hidden {
+        // Before the delta index: a personality value has no state group.
+        let Some(g) = def.group.state_index().filter(|_| !def.hidden) else {
+            continue;
+        };
+        let d = i16::from(deltas[g]);
+        if d != 0 {
             *slot = moved(*slot, d);
         }
     }
     out
+}
+
+/// The shared floor: the curve value `f` of a stage whose base value is `base_f`, kept at or
+/// above `base_f · e^(−drop / width)`. Since `F(r − d) = F(r) · e^(−d / width)`, no
+/// combination of states and form takes the stage more than `drop` rating points below its
+/// base: with a drop of 7, an 18 never plays below 11.
+#[inline]
+pub fn floored(f: f64, base_f: f64, drop: f64, width: f64) -> f64 {
+    f.max(base_f * crate::math::exp(-drop / width))
+}
+
+/// The rating points left between the curve value `f` of a stage and its floor
+/// ([`floored`]): `drop` at the base, 0 at the floor, more than `drop` above the base. A
+/// further cost (the weaker foot) shrinks to it so the floor holds.
+#[inline]
+pub fn headroom(f: f64, base_f: f64, drop: f64, width: f64) -> f64 {
+    (drop - width * crate::math::ln(base_f / f)).max(0.0)
+}
+
+/// The familiarity drop, in rating points (0 or below), of a player with a rating at each
+/// position `positions` (in [`Position::ALL`] order) who plays `played`: the gap between his
+/// natural rating (his highest) and his rating at `played`, times `cost_per_point`, narrowed
+/// by his versatility and adaptability. 0 at his natural position. The family cap applies
+/// after.
+///
+/// [`Position::ALL`]: crate::data::team::Position::ALL
+pub fn familiarity_drop(
+    positions: &[Rating; 10],
+    played: crate::data::team::Position,
+    p: &super::PersonalityScales,
+    t: &super::params::FamiliarityTuning,
+) -> f64 {
+    let natural = positions.iter().map(|r| r.tenths()).max().unwrap_or(0);
+    let at = crate::data::team::Position::ALL
+        .iter()
+        .position(|&q| q == played)
+        .map_or(natural, |k| positions[k].tenths());
+    let gap = f64::from(natural.saturating_sub(at)) / 10.0;
+    if gap == 0.0 || t.cost_per_point == 0.0 {
+        return 0.0;
+    }
+    -t.cost_per_point
+        * gap
+        * (1.0 - t.versatility_weight * p.versatility)
+        * (1.0 - t.adaptability_weight * p.adaptability)
 }
 
 /// `r` moved by `d` tenths, kept inside 1.0 to 20.0.
@@ -198,43 +253,6 @@ fn moved(r: Rating, d: i16) -> Rating {
     let t = (i16::from(r.tenths()) + d).clamp(i16::from(MIN_TENTHS), i16::from(MAX_TENTHS));
     // Inside 10..=200 after the clamp.
     Rating::from_tenths(t as u8)
-}
-
-/// The ratings play reads for a player with state `deltas` and form offset `form`, both in
-/// tenths: every rating a stage table reads takes its group's delta plus the form offset, that
-/// sum kept inside the total cap, then the rating inside 1.0 to 20.0. Pace, which only the
-/// speed map reads, takes its group's delta alone, and a hidden value keeps its base. With
-/// `form` 0 it equals [`effective`].
-pub fn effective_with_form(
-    base: &Attributes,
-    schema: &AttributeSchema,
-    deltas: [i8; GROUP_COUNT],
-    form: i8,
-    t: &StatesTuning,
-) -> Attributes {
-    if form == 0 {
-        return effective(base, schema, deltas);
-    }
-    let [lo, hi] = t.caps.total;
-    // Inside ±19 points by the cap checks, so inside ±190 tenths.
-    let (lo, hi) = ((lo * 10.0).round() as i16, (hi * 10.0).round() as i16);
-    let pace = schema.index("pace");
-    let mut out = *base;
-    for (i, (slot, def)) in out.values.iter_mut().zip(&schema.attributes).enumerate() {
-        if def.hidden {
-            continue;
-        }
-        let state = i16::from(deltas[def.group as usize]);
-        let d = if Some(i) == pace {
-            state
-        } else {
-            (state + i16::from(form)).clamp(lo, hi)
-        };
-        if d != 0 {
-            *slot = moved(*slot, d);
-        }
-    }
-    out
 }
 
 #[cfg(test)]
@@ -345,32 +363,68 @@ mod tests {
     }
 
     #[test]
-    fn hidden_values_keep_their_base_and_form_moves_every_stage_rating_but_pace() {
+    fn hidden_values_keep_their_base_under_every_state() {
         let content = shipped_content();
         let schema = &content.attributes;
-        let t = StatesTuning::default();
         let base = Attributes {
             values: [Rating::from_tenths(100); crate::data::attributes::MAX_ATTRIBUTES],
             len: schema.len() as u8,
         };
         let idx = |n: &str| schema.index(n).unwrap();
-        let tired = effective(&base, schema, [0, 0, -20, 0]);
+        let tired = effective(&base, schema, [0, -10, -20, 0]);
         assert_eq!(tired.get(idx("injury_proneness")).tenths(), 100);
+        assert_eq!(tired.get(idx("consistency")).tenths(), 100);
         assert_eq!(tired.get(idx("strength")).tenths(), 80);
-        let same = effective_with_form(&base, schema, [0, -10, 0, 0], 0, &t);
-        assert_eq!(same.values, effective(&base, schema, [0, -10, 0, 0]).values);
-        let off = effective_with_form(&base, schema, [0, -10, 0, 0], -7, &t);
-        assert_eq!(off.get(idx("passing")).tenths(), 93);
-        assert_eq!(
-            off.get(idx("decisions")).tenths(),
-            83,
-            "mental: state and form"
-        );
-        assert_eq!(off.get(idx("pace")).tenths(), 100, "pace takes no form");
-        assert_eq!(off.get(idx("consistency")).tenths(), 100);
-        assert_eq!(off.get(idx("injury_proneness")).tenths(), 100);
-        // The sum stays inside the total cap.
-        let floor = effective_with_form(&base, schema, [0, -50, 0, 0], -18, &t);
-        assert_eq!(floor.get(idx("decisions")).tenths(), 50, "10.0 − 5.0");
+        assert_eq!(tired.get(idx("decisions")).tenths(), 90);
+    }
+
+    #[test]
+    fn the_floor_holds_seven_points_and_headroom_counts_down_to_it() {
+        let width = 8.0;
+        let f = |r: f64| 8.0 * crate::math::exp((r - 10.0) / width);
+        // An 18 pushed 10 points down reads 11.
+        let held = floored(f(8.0), f(18.0), 7.0, width);
+        assert!((held - f(11.0)).abs() < 1e-9, "{held}");
+        // A drop within the limit is untouched.
+        assert_eq!(floored(f(13.0), f(18.0), 7.0, width), f(13.0));
+        assert!((headroom(f(18.0), f(18.0), 7.0, width) - 7.0).abs() < 1e-9);
+        assert!(headroom(f(11.0), f(18.0), 7.0, width).abs() < 1e-9);
+        assert!((headroom(f(15.0), f(18.0), 7.0, width) - 4.0).abs() < 1e-9);
+        assert_eq!(headroom(f(9.0), f(18.0), 7.0, width), 0.0);
+    }
+
+    #[test]
+    fn the_familiarity_drop_reads_the_gap_and_narrows_with_versatility() {
+        use crate::contract::PersonalityScales;
+        use crate::data::team::Position;
+        let t = crate::contract::ContractTuning::default()
+            .person()
+            .familiarity;
+        let mut positions = [Rating::from_tenths(10); 10];
+        positions[Position::ALL
+            .iter()
+            .position(|&p| p == Position::ST)
+            .unwrap()] = Rating::from_tenths(160);
+        positions[Position::ALL
+            .iter()
+            .position(|&p| p == Position::LW)
+            .unwrap()] = Rating::from_tenths(80);
+        let n = PersonalityScales::NEUTRAL;
+        assert_eq!(familiarity_drop(&positions, Position::ST, &n, &t), 0.0);
+        let away = familiarity_drop(&positions, Position::LW, &n, &t);
+        assert!((away + 0.15 * 8.0).abs() < 1e-12, "{away}");
+        let versatile = PersonalityScales {
+            versatility: 0.5,
+            ..n
+        };
+        assert!(familiarity_drop(&positions, Position::LW, &versatile, &t) > away);
+    }
+
+    #[test]
+    fn a_family_acting_on_personality_is_refused() {
+        let mut t = StatesTuning::default();
+        t.family_groups.mind.push(Group::Personality);
+        let text = t.validate().unwrap_err().to_string();
+        assert!(text.contains("Personality is not a state group"), "{text}");
     }
 }

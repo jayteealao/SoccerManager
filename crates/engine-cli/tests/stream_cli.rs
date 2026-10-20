@@ -32,7 +32,7 @@ fn record_writes_a_fixture_and_prints_its_counts() {
     let dir = temp("record");
     let fixture = dir.join("match.smfx");
     let out = bin(&dir)
-        .args(["record", "--seed", "9", "--minutes", "1", "--out"])
+        .args(["record", "--seed", "1", "--minutes", "1", "--out"])
         .arg(&fixture)
         .output()
         .unwrap();
@@ -43,17 +43,39 @@ fn record_writes_a_fixture_and_prints_its_counts() {
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("\"ticks\":3000"), "stdout: {stdout}");
-    // The hello, 3,000 tick frames, four events (the two kick-offs, half-time and full
-    // time), 60 running statistics and 60 condition messages
-    // (one of each every simulated second), the closing statistics, and the full-time
-    // ratings. The hello is stored so a replay forwards the recorded match rather than
-    // describing the replaying build.
-    assert!(stdout.contains("\"frames\":3127"), "stdout: {stdout}");
     assert!(stdout.contains("\"hash\":\""), "stdout: {stdout}");
 
     let read = stream::read_fixture(&fixture).unwrap();
-    assert_eq!(read.seed, 9);
+    assert_eq!(read.seed, 1);
     assert_eq!(read.ticks, 3_000);
+    // The hello, 3,000 tick frames, the events (at least the two kick-offs, half-time and
+    // full time; how many more depends on how the minute plays), a walk-on before each half,
+    // 60 running statistics and 60 condition messages (one of each every simulated second),
+    // the closing statistics, and the full-time ratings. The hello is stored so a replay
+    // forwards the recorded match rather than describing the replaying build.
+    let events = read
+        .frames
+        .iter()
+        .filter(
+            |f| matches!(&f.frame, protocol::Frame::Text(t) if t.contains("\"type\":\"event\"")),
+        )
+        .count();
+    assert!(events >= 4, "{events} events");
+    let walk_ons = read
+        .frames
+        .iter()
+        .filter(
+            |f| matches!(&f.frame, protocol::Frame::Text(t) if t.contains("\"type\":\"walk-on\"")),
+        )
+        .count();
+    assert_eq!(walk_ons, 2, "one walk-on before each half");
+    assert!(
+        stdout.contains(&format!(
+            "\"frames\":{}",
+            1 + 3_000 + events + walk_ons + 120 + 2
+        )),
+        "stdout: {stdout}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -145,13 +167,13 @@ fn a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on() {
         .args([
             "serve",
             "--seed",
-            "41",
+            "6",
             "--minutes",
             "2",
             "--reconnect-wait",
             "30",
             "--drop-client-at",
-            "3000",
+            "4500",
         ])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -185,8 +207,8 @@ fn a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on() {
         }
     }
     assert!(
-        last_tick >= 3_000,
-        "the drop comes at tick 3,000; read {last_tick}"
+        last_tick >= 4_500,
+        "the drop comes at tick 4,500; read {last_tick}"
     );
 
     // The same port, the same hello, and play from a stoppage the viewer already holds.
@@ -214,10 +236,14 @@ fn a_dropped_viewer_reconnects_on_the_same_port_and_the_match_goes_on() {
         }
     }
     let first_tick = first_tick.expect("the match goes on after the reconnect");
-    // Seed 41 stops play at ticks 2,292 and 3,000 (half-time of a two-minute match), so the
-    // match goes back to a stoppage the viewer held, never to kick-off and never past it.
+    // Seed 6 stops play after half-time (tick 3,000 of a two-minute match) with a corner at
+    // tick 3,985, before the drop at tick 4,500, so the match goes back to a stoppage the
+    // viewer held, never to kick-off or half-time and never past it. Since the AI side starts
+    // in a named style, no seed of 1 to 40 stops play in the first half before half-time, and
+    // a drop flushed at exactly tick 3,000 could go back to kick-off; so the drop moved into
+    // the second half (it was at tick 3,000 with a throw-in at tick 2,443 before).
     assert!(
-        first_tick > 2_000 && first_tick <= last_tick + 1,
+        first_tick > 3_000 && first_tick <= last_tick + 1,
         "resumed at {first_tick}; the viewer held up to {last_tick}"
     );
     assert!(ticks > 0);
@@ -237,7 +263,7 @@ fn a_drop_before_the_first_stoppage_goes_back_to_kick_off() {
         .args([
             "serve",
             "--seed",
-            "42",
+            "2",
             "--minutes",
             "2",
             "--reconnect-wait",
@@ -269,7 +295,13 @@ fn a_drop_before_the_first_stoppage_goes_back_to_kick_off() {
             Incoming::Closed => panic!("the match closed before it resumed"),
         }
     };
-    // The capture taken at kick-off, with the same seed and lineup, is the restart point.
+    // Seed 2, the lowest that does, first stops play after the drop (seed 0 until every option was
+    // valued by the real threat of its place; seed 1 until clearances,
+    // shots and misreads were scored by their cost; seed 2 until the styles
+    // became presets of primitives; seed 0 until a kick stayed on its way from its kicker along
+    // the line he sent it; seed 20 until the running pace lifted on a counter rather than with
+    // the press), so the capture taken at
+    // kick-off, with the same seed and lineup, is the restart point.
     assert_eq!(first, 1);
     drop(client);
     let _ = child.kill();

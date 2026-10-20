@@ -188,13 +188,15 @@ fn every_action_and_event_kind_maps_to_a_point() {
     for kind in EngineEventKind::ALL {
         assert!(!trace::points_of_event(kind).is_empty(), "{kind:?}");
     }
-    assert_eq!(Point::ALL.len(), 38);
+    assert_eq!(Point::ALL.len(), 41);
     assert_eq!(Point::ALL.iter().filter(|p| p.is_decision()).count(), 10);
     let names: std::collections::BTreeSet<_> = Point::ALL.iter().map(|p| p.name()).collect();
-    assert_eq!(names.len(), 38, "every point has its own name");
+    assert_eq!(names.len(), 41, "every point has its own name");
     assert_eq!(
         Action::ALL.iter().filter(|a| trace::is_chance(**a)).count(),
-        20
+        // The quick restart, the trait override, the pass cut, the take-on and the tackle knock
+        // are chances; the restart wait and the pass weight are drawn values, not chances.
+        26
     );
 }
 
@@ -348,10 +350,11 @@ fn a_cleared_cross_records_the_defender_and_the_clearance() {
     config.tuning.clearances.wide_chance = 0.5;
     let mut sim = common::spread(Scene::new(config), -30.0, -30.0)
         .traced()
-        .place(common::index(0, 9), DVec2::new(30.0, 0.0))
-        .place(DEFENDER, DVec2::new(40.0, 0.5))
+        // Wide of the post, so the pass stays a pass.
+        .place(common::index(0, 9), DVec2::new(30.0, 4.5))
+        .place(DEFENDER, DVec2::new(40.0, 5.0))
         .place(AWAY_KEEPER, DVec2::new(30.0, -25.0))
-        .ball(DVec3::new(30.0, 0.0, 0.0))
+        .ball(DVec3::new(30.0, 4.5, 0.0))
         .carrier(Some(common::index(0, 9)))
         .tick(1_001)
         .kick(DVec2::X, 20.0, 0.0)
@@ -407,4 +410,115 @@ fn an_attacker_beyond_the_defenders_records_the_offside() {
         .expect("an offside record");
     assert_eq!(offside.detail["player"], ATTACKER);
     assert_eq!(offside.detail["team"], 0);
+}
+
+/// Scene-only point `change_rejected` (since the AI sides start in the style their staff
+/// picks, no gate match has a change the rule pack refuses): with five substitutions used, a
+/// sixth queued for the home side is refused at the next stoppage, and the record names the
+/// team, the stoppage and the limit.
+#[test]
+fn a_sixth_substitution_records_the_refused_change() {
+    use engine::math::DVec3;
+    use engine::{Change, Manager};
+    let config = common::calm_match(90);
+    let (off, on) = {
+        let sim = Simulation::new(config.clone()).unwrap();
+        let team = &sim.teams()[0];
+        (team.lineup[5], team.bench[0])
+    };
+    let mut sim = common::spread(Scene::new(config), -30.0, 30.0)
+        .manager(0, Manager::Human)
+        .manager(1, Manager::Human)
+        .carrier(None)
+        .ball(DVec3::new(-10.0, 32.0, 0.0))
+        .ball_velocity(DVec3::new(0.0, 5.0, 0.0))
+        .last_touch(1)
+        .tick(1_001)
+        .subs_used(0, 5, 3)
+        .queue(0, Change::Substitution { off, on })
+        .traced()
+        .build();
+    let mut all = Vec::new();
+    for _ in 0..200 {
+        sim.step();
+        let records = sim.take_trace();
+        let events = sim.take_events();
+        trace::check_tick(&records, &events).unwrap();
+        all.extend(records);
+        if events
+            .iter()
+            .any(|e| e.kind == EngineEventKind::ChangeRejected)
+        {
+            break;
+        }
+    }
+    let rejected = points(&all)
+        .into_iter()
+        .find(|p| p.point == Point::ChangeRejected)
+        .expect("a change_rejected record");
+    assert_eq!(rejected.detail["team"], 0);
+    assert_eq!(rejected.detail["stoppage"], "throw_in");
+    assert_eq!(
+        rejected.detail["reason"],
+        "substitution limit reached (5 of 5)"
+    );
+}
+
+/// Scene-only point `trait_override` (the shipped teams carry no traits, so no gate match
+/// meets an override's moment): a midfielder who releases the ball early, at mood -50 and with
+/// his side playing at a slower tempo, has just gained the ball with no opponent near, and the
+/// chance planted at 1 records the draw and the override with its trait, instruction and
+/// cause.
+#[test]
+fn a_strong_trait_against_its_instruction_records_the_override() {
+    use engine::data::tactics::TEMPO;
+    use engine::data::traits::TraitStrength;
+    use engine::math::{DVec2, DVec3};
+    use engine::traits::TraitKind;
+    const ME: usize = 6;
+    let mut config = common::steady(common::short_match(10));
+    config.managers = [engine::Manager::Human; 2];
+    *config
+        .tuning
+        .contract
+        .traits
+        .as_mut()
+        .unwrap()
+        .override_chance
+        .of_mut(TraitKind::ReleasesBallEarly)
+        .unwrap() = 1.0;
+    let mut sim = common::spread(Scene::new(config), -30.0, 30.0)
+        .traced()
+        .tick(1_001)
+        // On the halfway line his first choice is to carry the ball, the moment the trait's
+        // early release breaks (at -15 m he has passed at once since clearances, shots and
+        // misreads were scored by their cost).
+        .place(ME, DVec2::new(0.0, 0.0))
+        .ball(DVec3::new(0.0, 0.0, 0.0))
+        .carrier(Some(ME))
+        .control_since(1_000)
+        .with_trait(ME, "releases_ball_early", Some(TraitStrength::Strong))
+        .instruction(0, TEMPO, "slow")
+        .mood(ME, -50.0)
+        .build();
+    let mut found = None;
+    for _ in 0..100 {
+        sim.step();
+        let records = sim.take_trace();
+        let events = sim.take_events();
+        trace::check_tick(&records, &events).unwrap();
+        if let Some(p) = points(&records)
+            .into_iter()
+            .find(|p| p.point == Point::TraitOverride)
+        {
+            found = Some(p.detail.clone());
+            break;
+        }
+    }
+    let detail = found.expect("a trait_override record");
+    assert_eq!(detail["player"], ME);
+    assert_eq!(detail["trait"], "releases_ball_early");
+    assert_eq!(detail["instruction"], "tempo:slower");
+    assert_eq!(detail["cause"], "low-mood");
+    assert_eq!(detail["won"], true);
 }

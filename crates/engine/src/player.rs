@@ -14,10 +14,13 @@ use crate::contract::states::GROUP_COUNT;
 use crate::contract::{self, Gates, Stage, StageValues, stages::Blend};
 use crate::data::attributes::{AttributeSchema, MAX_ATTRIBUTES};
 use crate::math::DVec2;
+use crate::pace::Pace;
 use crate::rating::{MIN_TENTHS, Rating};
 use crate::tuning::Tuning;
 
-/// Attribute ratings in tenths of the 1 to 20 scale, in schema order.
+/// Attribute ratings in tenths of the 1 to 20 scale, in schema order: one array of 64 slots
+/// for the visible and hidden attributes (at most 50 by the schema rule) and the personality
+/// values (at most 14).
 #[derive(Debug, Clone, Copy)]
 pub struct Attributes {
     pub values: [Rating; MAX_ATTRIBUTES],
@@ -37,7 +40,7 @@ impl Attributes {
         }
         Self {
             values,
-            // The schema holds at most MAX_ATTRIBUTES (50) entries.
+            // The schema holds at most MAX_ATTRIBUTES (64) entries.
             len: schema.len() as u8,
         }
     }
@@ -61,6 +64,9 @@ pub struct Derived {
     pub max_speed: f64,
     /// Maximum acceleration in metres per second squared, from the sprint stage.
     pub max_accel: f64,
+    /// Maximum braking in metres per second squared: the braking anchor times the turn factor
+    /// (agility leading), or his acceleration when the tuning has no hooks.
+    pub max_decel: f64,
     /// The factor on the sideways part of a change of velocity, from the turn stage, less
     /// the cost of his height: 1 at rating 10 and the reference height.
     pub turn: f64,
@@ -71,6 +77,17 @@ pub struct Derived {
     pub knobs: Knobs,
     /// The skill gates.
     pub gates: Gates,
+    /// His work rate as a share from 0 to 1: how often an URGENT job of his gets a sprint.
+    pub work_share: f64,
+    /// The mean share of his determination and professionalism: how a tired player saves
+    /// energy ([`crate::pace`]).
+    pub tired_mix: f64,
+    /// The mean share of his decisions and flair: how often he restarts quickly when the rule
+    /// allows it ([`crate::rules::restart::quick_chance`]).
+    pub quick_share: f64,
+    /// The skills that act on an occasion without leading a stage: flair, determination,
+    /// eccentricity.
+    pub occasion: contract::OccasionSkills,
 }
 
 /// The per-player factors on values every player had alike before the contract, each
@@ -82,10 +99,18 @@ pub struct Knobs {
     pub receive: f64,
     /// His reach to a loose ball and how far ahead he reads a run (intercept see).
     pub intercept: f64,
-    /// How far he presses from (press choose).
+    /// How far he presses from: his work rate alone, on the press strength and spread
+    /// ([`Blend::press_effort_share`]). How well he presses (his aim) is the press choose
+    /// stage, which positioning leads.
     pub press: f64,
-    /// How closely he keeps his place out of possession (shape execute).
+    /// How closely he keeps his place, in and out of possession (shape execute).
     pub shape: f64,
+    /// How far the cover defender leads a carrier's run, and how closely a back-line player
+    /// steps up or drops with his line (cover execute).
+    pub cover: f64,
+    /// Who takes a recovery run first when goal-side cover is missing (recovery run execute);
+    /// the stage's share sets how often the run is a sprint.
+    pub recovery_run: f64,
     /// His reach to block a shot (block execute).
     pub block: f64,
     /// How high he reaches in the air (aerial reach execute).
@@ -107,6 +132,8 @@ impl Knobs {
         intercept: 1.0,
         press: 1.0,
         shape: 1.0,
+        cover: 1.0,
+        recovery_run: 1.0,
         block: 1.0,
         aerial_reach: 1.0,
         claim_reach: 1.0,
@@ -124,20 +151,40 @@ impl Derived {
         schema: &AttributeSchema,
         t: &Tuning,
     ) -> (Self, StageValues) {
-        Self::from_blend(a, &Blend::of(schema), schema, t, Body::default())
+        Self::from_blend(a, &Blend::of(schema), schema, t, Body::default(), 0)
     }
 
-    /// [`Derived::from_attributes`] with the schema's blend resolved once, for a squad, and
-    /// the player's body.
+    /// [`Derived::from_attributes`] with the schema's blend resolved once, for a squad, the
+    /// player's body, and his form offset in tenths, which moves each stage by its action's
+    /// consistency degree ([`Blend::values_with_form`]). The gates and top speed read his
+    /// ratings directly and take no form.
     pub fn from_blend(
         a: &Attributes,
         blend: &Blend,
         schema: &AttributeSchema,
         t: &Tuning,
         body: Body,
+        form: i8,
+    ) -> (Self, StageValues) {
+        Self::from_blend_floored(a, blend, schema, t, body, form, None)
+    }
+
+    /// [`Derived::from_blend`] with the shared floor on every stage: given `(base, drop)`, no
+    /// stage reads more than `drop` rating points below his base stage values `base`
+    /// ([`Blend::values_floored`]).
+    pub fn from_blend_floored(
+        a: &Attributes,
+        blend: &Blend,
+        schema: &AttributeSchema,
+        t: &Tuning,
+        body: Body,
+        form: i8,
+        floor: Option<(&StageValues, f64)>,
     ) -> (Self, StageValues) {
         let c = &t.contract;
-        let stages = blend.values(a, c);
+        let hooks = c.hooks();
+        let stages = blend.values_floored(a, c, form, floor);
+        let occasion = contract::occasion_skills(a, schema, c);
         let [pace, technique, agility, _] = contract::direct_ratings(a, schema);
         let knob = |action: contract::ActionKind, s: Stage| {
             contract::factor(c.actions.of(action).spread(), stages.share(s))
@@ -152,16 +199,34 @@ impl Derived {
             }
         };
         let aerial_reach = knob(A::AerialReach, Stage::AERIAL_REACH_EXECUTE);
+        let (work_share, tired_mix) = blend.pace_shares(a);
+        let quick_share = blend.quick_share(a);
+        let max_accel = c.accel.anchor * knob(A::Sprint, Stage::SPRINT_EXECUTE);
+        // Agility owns stopping: the turn factor scales the braking anchor. With no hooks a
+        // player brakes with his acceleration, as before.
+        let max_decel = if hooks.decel_anchor > 0.0 {
+            hooks.decel_anchor * knob(A::Turn, Stage::TURN_EXECUTE)
+        } else {
+            max_accel
+        };
+        // Flair lowers the technique a player needs to try a gated skill.
+        let gate_drop = hooks.flair_gate * occasion.flair;
         let derived = Self {
             max_speed: c.speed.top_speed(pace),
-            max_accel: c.accel.anchor * knob(A::Sprint, Stage::SPRINT_EXECUTE),
+            max_accel,
+            max_decel,
             turn: c.body.turn_factor(knob(A::Turn, Stage::TURN_EXECUTE), body),
             reach_m: c.body.reach_m(t.reach_height, aerial_reach, body),
             knobs: Knobs {
                 receive: knob(A::Receive, Stage::RECEIVE_EXECUTE),
                 intercept: knob(A::Intercept, Stage::INTERCEPT_SEE),
-                press: knob(A::Press, Stage::PRESS_CHOOSE),
+                press: contract::factor(
+                    c.actions.of(A::Press).spread(),
+                    blend.press_effort_share(a, c),
+                ),
                 shape: knob(A::Shape, Stage::SHAPE_EXECUTE),
+                cover: knob(A::Cover, Stage::COVER_EXECUTE),
+                recovery_run: knob(A::RecoveryRun, Stage::RECOVERY_RUN_EXECUTE),
                 block: knob(A::Block, Stage::BLOCK_EXECUTE),
                 aerial_reach,
                 claim_reach: knob(A::Claim, Stage::CLAIM_EXECUTE),
@@ -170,11 +235,16 @@ impl Derived {
                 organise: knob(A::Organise, Stage::ORGANISE_EXECUTE),
             },
             gates: Gates {
-                chip_try: technique >= g.chip.technique_try,
+                chip_try: technique >= g.chip.technique_try - gate_drop,
                 chip_penalty: penalty(&g.chip),
-                take_on_try: technique >= g.take_on.technique_try,
+                take_on_try: technique >= g.take_on.technique_try - gate_drop,
                 take_on_penalty: penalty(&g.take_on),
+                take_on_short: (g.take_on.technique_try - gate_drop - technique).max(0.0),
             },
+            work_share,
+            tired_mix,
+            quick_share,
+            occasion,
         };
         (derived, stages)
     }
@@ -217,6 +287,9 @@ pub struct Player {
     pub form: i8,
     /// The match part of his form offset, kept for the period redraws.
     pub form_match: i8,
+    /// His mood, from -100 (a full low) to 100 (a full high), 0 at kick-off
+    /// ([`crate::sim::mood`]).
+    pub mood: f64,
     /// Energy from 1.0 (fresh) down to 0.0.
     pub energy: f64,
     pub pos: DVec2,
@@ -228,11 +301,16 @@ pub struct Player {
     pub status: Status,
     /// Yellow cards shown to the player in this match.
     pub yellow: u8,
+    /// He took a knock in a tackle in this match: it changes nothing in play; the AI manager
+    /// reads it when it weighs a substitution.
+    pub knock: bool,
     /// The first tick the player may attempt a tackle again after a foul.
     pub foul_ready: u32,
     /// The first tick after a concentration lapse; until then the player holds where he
     /// stands.
     pub lapse_until: u32,
+    /// His job, its grade, and the pace steering arrives at ([`crate::pace`]).
+    pub pace: Pace,
 }
 
 impl Player {
@@ -249,6 +327,11 @@ impl Player {
     /// Maximum acceleration in metres per second squared.
     pub fn max_accel(&self) -> f64 {
         self.derived.max_accel
+    }
+
+    /// Maximum braking in metres per second squared.
+    pub fn max_decel(&self) -> f64 {
+        self.derived.max_decel
     }
 }
 
@@ -287,6 +370,7 @@ pub(crate) mod test_support {
             deltas: [0; GROUP_COUNT],
             form: 0,
             form_match: 0,
+            mood: 0.0,
             energy: 1.0,
             pos: DVec2::ZERO,
             vel: DVec2::ZERO,
@@ -294,8 +378,10 @@ pub(crate) mod test_support {
             facing: DVec2::X,
             status: Status::OnPitch,
             yellow: 0,
+            knock: false,
             foul_ready: 0,
             lapse_until: 0,
+            pace: Pace::OFF,
         }
     }
 }
@@ -321,6 +407,8 @@ mod tests {
             Derived::from_attributes(&Attributes::from_entry(&entry_at(s, 100), s), s, t);
         assert_eq!(d.max_speed, t.contract.speed.anchor_ms);
         assert_eq!(d.max_accel, t.contract.accel.anchor);
+        assert_eq!(d.max_decel, t.contract.hooks().decel_anchor);
+        assert_eq!(d.occasion, contract::OccasionSkills::NEUTRAL);
         assert_eq!(d.turn, 1.0);
         assert_eq!(d.knobs, Knobs::NEUTRAL);
         for i in 0..contract::STAGE_COUNT {

@@ -37,7 +37,7 @@ pub enum Command {
     Generate(GenerateOpts),
     /// Stream one match live over the local socket to one viewer.
     Serve(ServeOpts),
-    /// Serve the viewer page and run the engine; restart it after a crash.
+    /// Serve the viewer and run the engine; restart it after a crash.
     Launch(LaunchOpts),
     /// Record one whole match stream to a fixture file.
     Record(RecordOpts),
@@ -45,21 +45,195 @@ pub enum Command {
     Replay(ReplayOpts),
     /// Play a recorded match again from its replay file alone.
     Resimulate(ResimulateOpts),
-    /// Find the first tick where two engine versions differ on a replay.
+    /// Find the first tick where two engines differ on a replay.
     Bisect(BisectOpts),
     /// Continue a match from its latest snapshot to full time.
     Resume(ResumeOpts),
     /// Play many AI-managed matches and check the realism bands.
     Calibrate(CalibrateOpts),
-    /// Replay the 22 gate matches and compare them with the golden file.
+    /// Replay the 22 gate matches and compare with the golden file.
     Gate(GateOpts),
     /// Check each commit's golden-file change against the ledger rules.
     Guard(GuardOpts),
     /// Fit the fast model, check it, or refuse a stale fit.
     FastModel(FastModelOpts),
+    /// Write the wait table: real waits less the visible steps.
+    RestartWaits(RestartWaitsOpts),
+    /// Write the real-team signature table of the tactical primitives.
+    Signatures(SignaturesOpts),
+    /// Check or fit a tactical primitive from played matches.
+    #[cfg(feature = "measures")]
+    Primitives(PrimitivesOpts),
     /// Time a whole matchday on a limited number of cores; a test seam.
     #[command(hide = true)]
     MatchdayTiming(TimingOpts),
+}
+
+/// The restart wait table command.
+#[derive(Debug, Args)]
+pub struct RestartWaitsOpts {
+    /// The measured real data holding idsse_dead.csv.
+    #[arg(
+        long = "real-data",
+        value_name = "DIR",
+        long_help = "The folder of measured real data holding idsse_dead.csv, the\n\
+                     real dead spells; default the main checkout's .scratch/out,\n\
+                     as calibrate --real-data. Only the typ, dur, minute and\n\
+                     margin columns are read."
+    )]
+    pub real_data: Option<PathBuf>,
+    /// Seeds of the matches that measure the visible steps: N or A-B.
+    #[arg(long, default_value = "1-8", value_name = "SEEDS")]
+    pub seeds: String,
+    /// Minutes of play of each measuring match.
+    #[arg(long, default_value_t = 90)]
+    pub minutes: u32,
+    /// Where the table goes, usually content/restart-waits.json.
+    #[arg(long, value_name = "FILE")]
+    pub out: PathBuf,
+}
+
+/// The real-team signature table command.
+#[derive(Debug, Args)]
+pub struct SignaturesOpts {
+    /// The measured real data holding the Wyscout files.
+    #[arg(
+        long = "real-data",
+        value_name = "DIR",
+        long_help = "The folder of measured real data holding wy2_matches.csv,\n\
+                     wy2_team_matches.csv, wy2_events.csv.gz and wy2_subs.csv\n\
+                     (and sb2_events.csv.gz for the StatsBomb rows, the\n\
+                     five-substitution era among them); default the main\n\
+                     checkout's .scratch/out, as calibrate --real-data."
+    )]
+    pub real_data: Option<PathBuf>,
+    /// Where the table goes; default signatures.json in the content folder.
+    #[arg(long, value_name = "FILE")]
+    pub out: Option<PathBuf>,
+    /// The competitions to read, comma separated.
+    #[arg(
+        long,
+        value_name = "LIST",
+        long_help = "The competitions to read, comma separated; default\n\
+                     England,France,Italy,Spain. A held-out set (Germany,\n\
+                     World_Cup, European_Championship) is refused."
+    )]
+    pub competitions: Option<String>,
+}
+
+/// The primitives harness.
+#[cfg(feature = "measures")]
+#[derive(Debug, Args)]
+pub struct PrimitivesOpts {
+    #[command(subcommand)]
+    pub action: PrimitivesAction,
+}
+
+/// What the primitives harness does.
+#[cfg(feature = "measures")]
+#[derive(Debug, Subcommand)]
+pub enum PrimitivesAction {
+    /// Step a primitive one level up, or each choice against its default.
+    Check {
+        /// The primitive's name in the tactics file.
+        #[arg(long)]
+        primitive: String,
+        /// The level to step up from; default every step.
+        #[arg(long)]
+        step: Option<String>,
+        /// Another primitive's level, `<primitive>=<level>`, set in the upper arm of each
+        /// step beside it: a combined step, read against both primitives at their lower
+        /// level. May be given more than once.
+        #[arg(long = "with", value_name = "PRIMITIVE=LEVEL")]
+        with: Vec<String>,
+        /// Another primitive's level, `<primitive>=<level>`, held in both arms of each step,
+        /// so the step is read with that primitive at that level on both sides of it. May be
+        /// given more than once.
+        #[arg(long = "hold", value_name = "PRIMITIVE=LEVEL")]
+        hold: Vec<String>,
+        /// Check a player instruction instead: the tested side's player in this formation slot
+        /// (0 to 10) takes the primitive one level up from its default (each choice of a
+        /// choice primitive), against no instruction. His own statistic must move beyond the
+        /// paired noise and his ten team-mates' pooled statistic must stay inside it.
+        #[arg(long, value_name = "SLOT", conflicts_with_all = ["step", "with", "hold"])]
+        player: Option<usize>,
+        /// Pairs of matches per step.
+        #[arg(long, default_value_t = 40)]
+        pairs: u32,
+        /// Seed of the equal suite whose clubs and fixtures the pairs use.
+        #[arg(long, default_value_t = 9)]
+        seed: u64,
+        /// Matches played at once; default the number of logical cores.
+        #[arg(long)]
+        jobs: Option<u32>,
+        /// Minutes of play per match.
+        #[arg(long, default_value_t = 90)]
+        minutes: u32,
+        /// Where the JSON result goes; default standard output only.
+        #[arg(long, value_name = "FILE")]
+        out: Option<PathBuf>,
+    },
+    /// Fit one level's first plan input to its real quintile median.
+    Fit {
+        #[arg(long)]
+        primitive: String,
+        /// The level to fit.
+        #[arg(long)]
+        level: String,
+        /// Matches per evaluation.
+        #[arg(long, default_value_t = 40)]
+        matches: u32,
+        #[arg(long, default_value_t = 9)]
+        seed: u64,
+        #[arg(long)]
+        jobs: Option<u32>,
+        #[arg(long, default_value_t = 90)]
+        minutes: u32,
+        /// The most evaluations of the search.
+        #[arg(long, default_value_t = 12)]
+        evals: usize,
+        /// Search only between the values of the level's neighbours (an end level: between
+        /// its neighbour and the end of the input's range), so the fitted levels keep their
+        /// order where the statistic does not move one way across the whole range.
+        #[arg(long)]
+        between_neighbours: bool,
+        /// The signature table; default signatures.json in the content folder.
+        #[arg(long, value_name = "FILE")]
+        table: Option<PathBuf>,
+        #[arg(long, value_name = "FILE")]
+        out: Option<PathBuf>,
+    },
+    /// Measure each signature statistic at both ends of the first input's range.
+    Reach {
+        #[arg(long)]
+        primitive: String,
+        #[arg(long, default_value_t = 40)]
+        matches: u32,
+        #[arg(long, default_value_t = 9)]
+        seed: u64,
+        #[arg(long)]
+        jobs: Option<u32>,
+        #[arg(long, default_value_t = 90)]
+        minutes: u32,
+        #[arg(long, value_name = "FILE")]
+        out: Option<PathBuf>,
+    },
+    /// Measure the spread of pressure resistance across the engine's players: pressed-against-
+    /// free pass completion, pressed-minus-free touch loss and the ball kept against tackles
+    /// while running, per player, at the default tactics.
+    Spread {
+        /// Matches to play (each club against its copy).
+        #[arg(long, default_value_t = 200)]
+        matches: u32,
+        #[arg(long, default_value_t = 9)]
+        seed: u64,
+        #[arg(long)]
+        jobs: Option<u32>,
+        #[arg(long, default_value_t = 90)]
+        minutes: u32,
+        #[arg(long, value_name = "FILE")]
+        out: Option<PathBuf>,
+    },
 }
 
 /// The hidden timing run of a matchday.
@@ -618,6 +792,11 @@ pub struct RecordOpts {
                      is managed by hand. See docs/reference/cli.md."
     )]
     pub changes: Option<PathBuf>,
+    /// A measures build: write the match's team-shape sums to this JSON file, for the
+    /// cross-check against the movement scripts.
+    #[cfg(feature = "measures")]
+    #[arg(long, hide = true, value_name = "FILE")]
+    pub shape_out: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -790,13 +969,20 @@ pub struct BenchOpts {
 }
 
 #[derive(Debug, Args)]
+#[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
 pub struct CalibrateOpts {
+    /// Another action on a run folder instead of a run.
+    #[command(subcommand)]
+    pub action: Option<CalibrateAction>,
     /// Seed of the run and of every match.
     #[arg(
-        long,
-        long_help = "Seed of the run: the leagues, the fixtures, and every match seed."
+        long = "seed",
+        value_name = "SEED",
+        required = true,
+        long_help = "Seed of the run: the leagues, the fixtures, and every match seed.\n\n\
+                     Required for a run; not taken by calibrate accept."
     )]
-    pub seed: u64,
+    pub seed_arg: Option<u64>,
     /// Matches per suite or pairing.
     #[arg(
         long,
@@ -824,10 +1010,15 @@ pub struct CalibrateOpts {
         default_value = "all",
         hide_possible_values = true,
         long_help = "Suites to run: equal strength, a stronger club, every formation\n\
-                     pairing, all three, or the sending-off experiment.\n\n\
-                     Values: all, equal, strength, formations, red-card.\n\
+                     pairing, all three, the sending-off experiment, or the named\n\
+                     styles.\n\n\
+                     Values: all, equal, strength, formations, red-card, styles.\n\
                      red-card is not part of all: it plays the default clubs\n\
-                     with cards off and an away player sent off at kick-off."
+                     with cards off and an away player sent off at kick-off.\n\
+                     styles is not part of all: it plays --matches matches for\n\
+                     each of the 56 ordered pairings of the eight styles, with\n\
+                     identical squads, and reports points, the dominance check\n\
+                     and the identity flags; it judges no band."
     )]
     pub suite: SuiteArg,
     /// Play only this formation pairing; repeatable.
@@ -840,6 +1031,18 @@ pub struct CalibrateOpts {
                      same matches as in a full run."
     )]
     pub pairings: Vec<String>,
+    /// Play only this styles pairing; repeatable.
+    #[arg(
+        long = "style-pairing",
+        value_name = "PAIRING",
+        long_help = "Play only this ordered pairing of the styles suite (--suite\n\
+                     styles); repeatable.\n\n\
+                     Name it as the home style and the away style joined by v,\n\
+                     for example \"counter_attack v gegenpress\". A style may meet\n\
+                     itself. Each pairing plays the same matches as in a full run;\n\
+                     a measures build adds each pairing's probe to the report."
+    )]
+    pub style_pairings: Vec<String>,
     /// Judge only this band; repeatable.
     #[arg(
         long = "band",
@@ -932,21 +1135,119 @@ pub struct CalibrateOpts {
                      --matches, and its diff uses the matches this run played."
     )]
     pub base: Option<String>,
+    /// The measured real data the bands read.
+    #[arg(
+        long = "real-data",
+        value_name = "DIR",
+        long_help = "The folder of measured real data that each band's real record\n\
+                     points into; default the main checkout's .scratch/out, found\n\
+                     through the git folder of the content folder's checkout.\n\n\
+                     Each band's real value is read in place at each judgement and\n\
+                     reported beside its verdict with its distance from the run's\n\
+                     value; it never changes a verdict. When the folder, a file or\n\
+                     a key is not there, the band reads \"no real data here\", the\n\
+                     run goes on, and the headline states how many bands have no\n\
+                     real value."
+    )]
+    pub real_data: Option<PathBuf>,
     /// A change run's pilot, in matches per suite unit; a test seam (default 200).
     #[arg(long, hide = true, value_name = "N", default_value_t = 200)]
     pub pilot: u32,
     /// The old engine of a change run: a ready executable, played on the run's content.
     #[arg(long, hide = true, value_name = "EXE", conflicts_with = "pair")]
     pub base_binary: Option<PathBuf>,
+    /// The changed engine plays every match on a new engine seed derived with SALT; the old
+    /// engine keeps the planned seeds. A test seam of the gate proof's self runs.
+    #[arg(long, hide = true, value_name = "SALT")]
+    pub reseed: Option<u64>,
+    /// A rule pack file to play every match under.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "A rule pack file (the shape of content/rules/default.json) that\n\
+                     every match plays under instead of the content folder's rule\n\
+                     file; the content hash follows it. The substitution report reads\n\
+                     the real era of its substitution limit."
+    )]
+    pub rules: Option<PathBuf>,
+}
+
+impl CalibrateOpts {
+    /// The run's seed; clap requires it whenever no subcommand runs.
+    pub fn seed(&self) -> u64 {
+        self.seed_arg.unwrap_or_default()
+    }
+}
+
+/// What `calibrate` does with a run folder instead of a run.
+#[derive(Debug, Subcommand)]
+pub enum CalibrateAction {
+    /// Accept a not-sure band of a run folder: accepted, not shown equivalent.
+    #[command(
+        long_about = "Accept a band that reads not sure in a run folder's last judgement.\n\n\
+                      The acceptance is written to accepted.json in the folder. Run the\n\
+                      same calibrate command again: the band's row then reads not sure\n\
+                      (accepted, not shown equivalent). It never counts as a pass and\n\
+                      never changes the verdict. A band that reads pass or fail is\n\
+                      refused."
+    )]
+    Accept {
+        /// The band to accept, as the run's verdict rows name it.
+        #[arg(value_name = "BAND")]
+        band: String,
+        /// The run folder whose report.json holds the band's row.
+        #[arg(long, value_name = "DIR")]
+        run: PathBuf,
+    },
+    /// Measure the gate: the engine against itself and four broken copies.
+    #[command(
+        long_about = "Measure the gate's pass and fail rates and write them to gate-proof.json.
+
+                      Plays about 30 change runs of this build against itself: 10 with new
+                      match seeds on the changed side, and 5 of each broken copy that
+                      gate-proof.json declares (a content flag turned on). It takes hours
+                      on a full machine; run the same command again to resume. Needs a
+                      build with the measures feature. Then writes the pass rate of the
+                      self runs, each copy's fail rate, the bands each copy moved, whether
+                      any copy moved each whole-distribution band, and the gate it measured."
+    )]
+    Proof {
+        /// The first run seed: self run i plays SEED+i, copy run j plays SEED+j.
+        #[arg(long, value_name = "SEED")]
+        seed: u64,
+        /// The cap of each change run, as calibrate --matches.
+        #[arg(long, default_value_t = 1000)]
+        matches: u32,
+        /// Folder of the proof's runs; default SM_DATA_DIR/proofs/<registry>-<verdict code>.
+        #[arg(long, value_name = "DIR")]
+        out: Option<PathBuf>,
+        /// The proof file to write; default gate-proof.json in the content folder.
+        #[arg(long, value_name = "FILE")]
+        write: Option<PathBuf>,
+        /// The measured real data every run reads, as calibrate --real-data.
+        #[arg(long = "real-data", value_name = "DIR")]
+        real_data: Option<PathBuf>,
+        /// Self runs; a test seam (default 10).
+        #[arg(long, hide = true, default_value_t = 10)]
+        self_runs: u32,
+        /// Runs of each copy; a test seam (default 5).
+        #[arg(long, hide = true, default_value_t = 5)]
+        copy_runs: u32,
+        /// Minutes of each match; a test seam (default 90).
+        #[arg(long, hide = true, default_value_t = 90)]
+        minutes: u32,
+    },
 }
 
 /// The failure `calibrate --inject-failure` makes: an error in the first match of the work
-/// list, a panic in it, or the build of the old engine (`--base`).
+/// list, a panic in it, the build of the old engine (`--base`), or an old engine whose rows
+/// carry no measures (its folded rows lose them, as rows of a build without the feature).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum InjectFailure {
     Match,
     Panic,
     BaseBuild,
+    BaseWithoutMeasures,
 }
 
 /// The suites a calibration run plays.
@@ -957,6 +1258,7 @@ pub enum SuiteArg {
     Strength,
     Formations,
     RedCard,
+    Styles,
 }
 
 /// Which event files a calibration run keeps.
@@ -983,4 +1285,75 @@ pub struct GenerateOpts {
     /// Overwrite team files that already exist.
     #[arg(long)]
     pub force: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(args: &[&str]) -> Result<Cli, clap::Error> {
+        Cli::try_parse_from(std::iter::once("engine-cli").chain(args.iter().copied()))
+    }
+
+    fn calibrate(args: &[&str]) -> Result<CalibrateOpts, clap::Error> {
+        parse(args).map(|cli| match cli.command {
+            Command::Calibrate(opts) => opts,
+            other => panic!("{other:?}"),
+        })
+    }
+
+    #[test]
+    fn a_run_needs_its_seed_and_accept_takes_none() {
+        let run = calibrate(&["calibrate", "--seed", "1"]).unwrap();
+        assert_eq!((run.seed(), run.action.is_none()), (1, true));
+        let accept = calibrate(&["calibrate", "accept", "b", "--run", "d"]).unwrap();
+        match accept.action {
+            Some(CalibrateAction::Accept { band, run }) => {
+                assert_eq!((band.as_str(), run), ("b", PathBuf::from("d")));
+            }
+            other => panic!("{other:?}"),
+        }
+        let err = calibrate(&["calibrate"]).unwrap_err();
+        assert!(err.to_string().contains("--seed"), "{err}");
+        assert!(calibrate(&["calibrate", "accept", "b", "--run", "d", "--seed", "1"]).is_err());
+        assert!(calibrate(&["calibrate", "--seed", "1", "accept", "b", "--run", "d"]).is_err());
+        assert!(
+            calibrate(&["calibrate", "accept", "b"]).is_err(),
+            "--run is required"
+        );
+    }
+
+    #[test]
+    fn proof_takes_its_seed_and_defaults_and_reseed_stays_hidden() {
+        let proof = calibrate(&["calibrate", "proof", "--seed", "2027"]).unwrap();
+        match proof.action {
+            Some(CalibrateAction::Proof {
+                seed,
+                matches,
+                out,
+                write,
+                real_data,
+                self_runs,
+                copy_runs,
+                minutes,
+            }) => {
+                assert_eq!(
+                    (seed, matches, self_runs, copy_runs, minutes),
+                    (2027, 1000, 10, 5, 90)
+                );
+                assert_eq!((out, write, real_data), (None, None, None));
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(
+            calibrate(&["calibrate", "proof"]).is_err(),
+            "--seed is required"
+        );
+        let run = calibrate(&["calibrate", "--seed", "1", "--reseed", "3"]).unwrap();
+        assert_eq!(run.reseed, Some(3));
+        assert_eq!(
+            calibrate(&["calibrate", "--seed", "1"]).unwrap().reseed,
+            None
+        );
+    }
 }

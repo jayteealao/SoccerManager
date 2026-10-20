@@ -1,0 +1,25 @@
+{
+  "refusal": "hook shape.defensive_width reads defensive_width, not target_gap_m",
+  "primitive": {
+    "name": "planted",
+    "kind": "graded",
+    "levels": "own",
+    "steps": [
+      { "name": "very_compact", "values": { "target_gap_m": 8.0 } },
+      { "name": "compact", "values": { "target_gap_m": 9.0 } },
+      { "name": "normal", "values": { "target_gap_m": 10.0 } },
+      { "name": "wide", "values": { "target_gap_m": 11.0 } },
+      { "name": "very_wide", "values": { "target_gap_m": 12.0 } }
+    ],
+    "default": "normal",
+    "inputs": [
+      { "input": "target_gap_m", "hook": "shape.defensive_width" }
+    ],
+    "signature": [
+      { "stat": "oop_width_m", "direction": "up" }
+    ],
+    "data": {
+      "none": "a planted entry"
+    }
+  }
+}

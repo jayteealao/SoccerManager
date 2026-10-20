@@ -162,6 +162,16 @@
       "minItems": 2,
       "maxItems": 2
     },
+    "stats.goals_no_shot": {
+      "description": "Goals with no shot of the scoring side behind them, home first: own goals and balls nobody kicked in. A goal from a shot in flight, or from a shot a block or a parry turned in, is a shot's goal.",
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
     "stats.ball_in_play_s": {
       "description": "Whole seconds with the ball in play over the whole match, the shoot-out excluded.",
       "type": "integer",
@@ -362,6 +372,34 @@
             "type": "number",
             "minimum": 1.0,
             "maximum": 10.0
+          },
+          "started": {
+            "description": "On the pitch at kick-off. Absent from a record written before it: read as false.",
+            "type": "boolean"
+          },
+          "minutes": {
+            "description": "Whole minutes on the pitch.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 200
+          },
+          "goals": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "assists": {
+            "description": "Goals scored from his completed pass.",
+            "type": "integer",
+            "minimum": 0
+          },
+          "clean_sheet": {
+            "description": "None conceded while he was on the pitch, over at least the match rating's clean-sheet minutes.",
+            "type": "boolean"
+          },
+          "red": {
+            "description": "1 when he was sent off.",
+            "type": "integer",
+            "minimum": 0
           }
         },
         "additionalProperties": false

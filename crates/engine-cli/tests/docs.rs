@@ -218,6 +218,43 @@ fn the_module_reference_names_every_slot() {
     );
 }
 
+/// The action-key column of the slot table lists the keys of each slot's default module, as
+/// its card declares them, so the ownership the reference shows is the program's.
+#[test]
+fn the_module_reference_gives_each_default_modules_keys() {
+    let doc = read("docs/reference/engine-modules.md");
+    let table = section(&doc, "Slots").expect("a Slots section");
+    let documented: Vec<(String, String)> = table
+        .lines()
+        .filter(|line| line.starts_with("| `"))
+        .map(|line| {
+            let cells: Vec<&str> = line.trim_matches('|').split('|').collect();
+            (
+                cells[0].trim().trim_matches('`').to_owned(),
+                cells[5].trim().to_owned(),
+            )
+        })
+        .collect();
+    for decl in engine::modules::REGISTRY {
+        let keys: Vec<String> = decl.registrations[0]
+            .card
+            .keys
+            .iter()
+            .map(|k| format!("{k:?}"))
+            .collect();
+        let expected = if keys.is_empty() {
+            "none".to_owned()
+        } else {
+            keys.join(", ")
+        };
+        let row = documented
+            .iter()
+            .find(|(slot, _)| slot == decl.slot.id)
+            .unwrap_or_else(|| panic!("no row for {}", decl.slot.id));
+        assert_eq!(row.1, expected, "the keys of {}", decl.slot.id);
+    }
+}
+
 #[test]
 fn the_module_how_to_runs_real_commands() {
     let doc = read("docs/how-to/engine-modules.md");
@@ -261,4 +298,67 @@ fn the_module_how_to_runs_real_commands() {
         weather.registrations[0].module,
         engine::modules::ModuleRef::Modifier(_)
     ));
+}
+
+/// Each row of the data files reference's file table gives the `schema_version` the shipped
+/// file carries, so a modder who copies the documented number is not refused.
+#[test]
+fn the_file_table_gives_each_shipped_files_version() {
+    let doc = read("docs/reference/data-files.md");
+    let table = section(&doc, "Files").expect("a Files section");
+    let mut checked = 0;
+    for line in table.lines() {
+        let cells: Vec<&str> = line.split('|').map(str::trim).collect();
+        // `| `name` | version | holds |`: one file per row; a row naming two files is skipped.
+        let (Some(name), Some(version)) = (cells.get(1), cells.get(2)) else {
+            continue;
+        };
+        let Some(name) = name.strip_prefix('`').and_then(|n| n.strip_suffix('`')) else {
+            continue;
+        };
+        if name.contains('`') {
+            continue;
+        }
+        let Ok(version) = version.parse::<u64>() else {
+            continue;
+        };
+        let text = read(&format!("content/{name}"));
+        let value: serde_json::Value =
+            serde_json::from_str(&text).unwrap_or_else(|e| panic!("content/{name}: {e}"));
+        assert_eq!(
+            value["schema_version"].as_u64(),
+            Some(version),
+            "data-files.md gives {name} version {version}"
+        );
+        checked += 1;
+    }
+    assert!(checked >= 10, "only {checked} rows checked");
+}
+
+/// The content folder's guide gives the band file's version and its counts of bands, of
+/// bands that gate and of bands that only report as the shipped file holds them, and every
+/// version the modding guide tells a modder to copy is the shipped one.
+#[test]
+fn the_band_counts_of_the_guides_are_the_shipped_files() {
+    let bands: serde_json::Value =
+        serde_json::from_str(&read("content/realism-bands.json")).unwrap();
+    let version = bands["schema_version"].as_u64().unwrap();
+    let list = bands["bands"].as_array().unwrap();
+    let gating = list.iter().filter(|b| b["gates"] == true).count();
+    let reporting = list.len() - gating;
+    let guide = read("content/README.md");
+    let text = section(&guide, "Realism bands").expect("a Realism bands section");
+    for phrase in [
+        format!("It is at version {version} and holds {} bands", list.len()),
+        format!("`true` for the {gating} bands that change the verdict"),
+        format!("`false` for the {reporting} that only report"),
+        format!("The {reporting} bands that only report"),
+    ] {
+        assert!(text.contains(&phrase), "content/README.md lacks: {phrase}");
+    }
+    let modding = read("docs/how-to/modding.md");
+    assert!(
+        modding.contains(&format!("copy the shipped file of version {version}")),
+        "modding.md names another band file version to copy"
+    );
 }

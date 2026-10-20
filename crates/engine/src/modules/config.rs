@@ -26,8 +26,9 @@ use super::{
 use crate::error::EngineError;
 
 /// The slot file version this build reads. Version 2 adds the sharpness and adaptation
-/// modifier slots; a version 1 file converts ([`crate::data::convert::slots_v1_to_v2`]).
-pub const SLOTS_VERSION: u32 = 2;
+/// modifier slots, version 3 the familiarity modifier slot; an older file converts
+/// ([`crate::data::convert::slots_v1_to_v2`], [`crate::data::convert::slots_v2_to_v3`]).
+pub const SLOTS_VERSION: u32 = 3;
 
 /// The value `module` takes to switch an optional slot off.
 pub const OFF: &str = "off";

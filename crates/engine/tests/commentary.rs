@@ -117,11 +117,12 @@ fn every_event_kind_gets_a_line_naming_its_player_and_club() {
         names_its_player_and_club(&line, &event, &names, &names.roster);
     }
     for code in [
-        AiCode::MentalityUpTrailing,
-        AiCode::MentalityDownLeading,
         AiCode::SubInjury,
         AiCode::SubFatigue,
         AiCode::SubKeeper,
+        AiCode::SubBooked,
+        AiCode::SubForm,
+        AiCode::SubKnock,
     ] {
         let mut c = Commentator::new(&commentary, names.clone(), NINETY, common::SEED);
         let mut event = scripted(EngineEventKind::AiDecision, 75);
@@ -254,11 +255,12 @@ fn a_full_seeded_match_fills_every_placeholder_and_names_every_player() {
             roster[slot] = names.squads[team][on].clone();
         }
     }
-    // The seed-9 match gives more than 70 lines (the seed-7 match gave 75, and scores no goal
-    // since every sprint costs stamina; the seed-42 match gave 90 before a pressed lone
-    // forward stopped dribbling into defenders, and now scores no goal); the floor only
-    // guards against an empty check.
-    assert!(lines > 70, "only {lines} lines");
+    // The scoring match gives more than 50 lines (the seed-9 match gave more than 70 until
+    // the version 4 attributes changed play and it stopped scoring; the seed-7 match gave 75,
+    // and scores no goal since every sprint costs stamina; the seed-42 match gave 90 before a
+    // pressed lone forward stopped dribbling into defenders); the floor only guards against
+    // an empty check.
+    assert!(lines > 50, "only {lines} lines");
     assert!(
         events.iter().any(|e| e.kind == EngineEventKind::Goal),
         "the match scored no goal"

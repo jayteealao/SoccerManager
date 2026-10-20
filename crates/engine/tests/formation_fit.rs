@@ -103,7 +103,9 @@ fn the_default_tactics_give_the_same_setup_as_the_default_pick() {
 
 #[test]
 fn an_ai_side_started_in_the_default_tactics_plays_the_same_match_tick_for_tick() {
-    let content = common::content();
+    // With the style pick off, a side starts in the default tactics; starting it there by hand
+    // plays the same match.
+    let content = common::content_without_style_pick();
     let [a, b] = common::default_teams(&content);
     let plain = MatchConfig::new(common::SEED, 90, &content, [&a, &b]).unwrap();
     let started = MatchConfig::new(common::SEED, 90, &content, [&a, &b])

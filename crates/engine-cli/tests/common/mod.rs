@@ -202,7 +202,7 @@ pub fn read_rows(dir: &Path) -> Vec<TestRow> {
         };
         let u32_of = |b: Vec<u8>| u32::from_le_bytes(b.try_into().unwrap());
         assert_eq!(cur.take(6).unwrap(), b"SMROWS", "{name}");
-        assert_eq!(u32_of(cur.take(4).unwrap()), 1, "{name}: format version");
+        assert_eq!(u32_of(cur.take(4).unwrap()), 3, "{name}: format version");
         let _measures = u32_of(cur.take(4).unwrap());
         let count = u32_of(cur.take(4).unwrap());
         let mut columns = Vec::new();

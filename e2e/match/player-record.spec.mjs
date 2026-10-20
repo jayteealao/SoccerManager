@@ -9,8 +9,9 @@
 //    shows a tired player's level below his fresh level ("N of M"); after full time the panel
 //    shows his match rating.
 // 2. A version 2 home team whose first three players have 0, 9 and 31 matches at the club:
-//    setup shows no notice; the panel shows height, age and nationality, and reads not yet
-//    known, tentative and firm.
+//    setup names it as converted (a version 2 file is older than the current version 3 and
+//    converts on load); the panel shows height, age and nationality, and reads not yet known,
+//    tentative and firm. A version 3 home team shows no notice.
 // 3. The committed old replay (release 0.1.0, a protocol 3 hello), streamed by `replay`: no
 //    notice and no value off the 1 to 20 scale on the match, Tactics and Squad screens.
 //
@@ -22,6 +23,7 @@ import { expect, test } from '@playwright/test';
 
 import { CONTENT, REPO, VIEWER, frontDoor, startEngine, tempDir } from '../support/engine.mjs';
 import { kickOffFromStart, open, pastSplash, rewindTo, settled, toFullTime } from '../support/front.mjs';
+import { contentWithPersonHome, removeDir } from '../support/person.mjs';
 
 const SEED = 7;
 /// Past the end of any match: the engine sends the whole match at once.
@@ -119,7 +121,12 @@ function contentWithV2Home() {
     team.players[i].condition = { ...(team.players[i].condition ?? {}), matches_at_club: matches };
   }
   fs.writeFileSync(path.join(dir, 'teams', 'default-a.json'), `${JSON.stringify(team, null, 2)}\n`);
-  return { dir, names: team.players.slice(0, 3).map((p) => p.name), nations: team.players.slice(0, 3).map((p) => p.nationality) };
+  return {
+    dir,
+    club: team.club.name,
+    names: team.players.slice(0, 3).map((p) => p.name),
+    nations: team.players.slice(0, 3).map((p) => p.nationality),
+  };
 }
 
 test('the scenario on the shipped teams: notice, squad columns, panel, a tired player at 67:00 and the match rating', async ({
@@ -268,7 +275,7 @@ test('the scenario on the shipped teams: notice, squad columns, panel, a tired p
   }
 });
 
-test('a version 2 home team: no notice, and the words read not yet known, tentative and firm', async ({ page }, info) => {
+test('a version 2 home team: the converted notice, and the words read not yet known, tentative and firm', async ({ page }, info) => {
   test.setTimeout(4 * 60_000);
   const content = contentWithV2Home();
   const engine = await frontDoor({ env: { SM_CONTENT_DIR: content.dir } });
@@ -278,8 +285,13 @@ test('a version 2 home team: no notice, and the words read not yet known, tentat
     await page.locator('[data-choice="new"]').click();
     await until(page, () => window.__touchline.frontDoor().round !== null, undefined, 10_000);
     await settled(page);
-    await noNotice(page);
-    await page.screenshot({ path: evidence(info, 'v2-setup-no-notice.png') });
+    // A version 2 file is older than the current team file version 3: it converts on load,
+    // and setup names it.
+    const notice = page.locator('[data-converted]');
+    await expect(notice).toHaveCount(1);
+    await expect(notice).toHaveAttribute('data-converted', content.club);
+    await expect(notice).toContainText(`${content.club} uses an older team file`);
+    await page.screenshot({ path: evidence(info, 'v2-setup-notice.png') });
     await page.locator('[data-kickoff]').click();
     await until(page, () => window.__touchline.view() === 'tactics', undefined, 30_000);
     await openSquad(page);
@@ -356,5 +368,23 @@ test('the committed old replay: no notice, and no value off the 1 to 20 scale on
     await page.screenshot({ path: evidence(info, 'old-replay-squad.png') });
   } finally {
     engine.cleanUp();
+  }
+});
+
+test('a version 3 home team: no converted notice', async ({ page }, info) => {
+  test.setTimeout(2 * 60_000);
+  const { dir } = contentWithPersonHome();
+  const engine = await frontDoor({ env: { SM_CONTENT_DIR: dir } });
+  try {
+    await open(page, engine.url);
+    await pastSplash(page);
+    await page.locator('[data-choice="new"]').click();
+    await until(page, () => window.__touchline.frontDoor().round !== null, undefined, 10_000);
+    await settled(page);
+    await noNotice(page);
+    await page.screenshot({ path: evidence(info, 'v3-setup-no-notice.png') });
+  } finally {
+    engine.cleanUp();
+    removeDir(dir);
   }
 });

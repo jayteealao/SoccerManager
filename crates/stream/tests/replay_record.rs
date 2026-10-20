@@ -47,6 +47,7 @@ fn record(dir: &Path) -> PathBuf {
         minutes: 1,
         knockout: false,
         managers: [ManagerKind::Human, ManagerKind::Human],
+        game_state: None,
     };
     let recorder = SharedRecorder::new(
         Recorder::create_record(
@@ -219,10 +220,10 @@ fn every_damaged_or_inconsistent_file_is_refused_by_name() {
 
     // Frames of another protocol version.
     let mut protocol = bytes.clone();
-    protocol[6..8].copy_from_slice(&9u16.to_le_bytes());
+    protocol[6..8].copy_from_slice(&10u16.to_le_bytes());
     let err = refused(&dir, "protocol.smfx", &protocol);
     assert!(
-        err.contains("frames protocol version 9; this build reads 3, 4, 5 and 6"),
+        err.contains("frames protocol version 10; this build reads 3, 4, 5, 6, 7, 8 and 9"),
         "{err}"
     );
 
@@ -237,5 +238,77 @@ fn every_damaged_or_inconsistent_file_is_refused_by_name() {
 
     // Control: the unchanged file reads.
     assert_eq!(read_fixture(&path).unwrap(), good);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A replay of protocol 6 still plays back: its frames decode, and its hello, whose squad
+/// entries lack the protocol 7 person fields, reads as a current hello with those fields empty.
+#[test]
+fn a_protocol_6_replay_reads_and_its_hello_lacks_only_the_person_fields() {
+    let dir = common::temp_dir("replay-file-protocol-6");
+    let path = record(&dir);
+    let bytes = std::fs::read(&path).unwrap();
+    let mut raw = stream::RawReplay::parse(&bytes).unwrap();
+    assert_eq!(raw.protocol, PROTOCOL_VERSION);
+    raw.protocol = 6;
+    let squad_entry = serde_json::json!({
+        "player.id": "a-1",
+        "player.name": "Keeper One",
+        "player.shirt": 1,
+        "player.position": "GK",
+        "player.natural_fitness": 142,
+        "player.consistency": { "confidence": "not_yet_known" },
+        "player.injury_proneness": { "confidence": "not_yet_known" },
+        "role_fit": [160],
+        "player.attributes": { "pace": 142 },
+        "player.level": 130,
+        "player.plays_between": [124, 130]
+    });
+    let hello = serde_json::json!({
+        "type": "hello",
+        "protocol.version": 6,
+        "engine.version": "0.2.0-beta.4",
+        "build.hash": "abc1234",
+        "owner.id": "0123456789abcdef0123456789abcdef",
+        "match.id": "000000000000002a-1700000000000",
+        "seed": 42,
+        "dt_ms": 20.0,
+        "ticks_expected": 3000,
+        "keyframe_interval": 50,
+        "teams": [
+            { "team.id": "a", "team.name": "A", "team.kit.primary": "#c8102e",
+              "team.kit.secondary": "#000000", "squad": [squad_entry] },
+            { "team.id": "b", "team.name": "B", "team.kit.primary": "#6a0dad",
+              "team.kit.secondary": "#ff6a13" }
+        ],
+        "tactics": null
+    });
+    let at = raw
+        .entries
+        .iter()
+        .position(|e| e.payload.starts_with(b"{\"type\":\"hello\""))
+        .expect("the recorded file holds a hello");
+    raw.entries[at].payload = serde_json::to_vec(&hello).unwrap();
+    let old = dir.join("protocol-6.smfx");
+    std::fs::write(&old, raw.to_bytes()).unwrap();
+
+    let fixture = read_fixture(&old).unwrap();
+    assert_eq!(fixture.protocol_version, 6);
+    let Frame::Text(text) = &fixture.frames[0].frame else {
+        panic!("the first frame is the hello");
+    };
+    let protocol::ServerMessage::Hello(read) = serde_json::from_str(text).unwrap() else {
+        panic!("the first frame reads as a hello");
+    };
+    assert_eq!(read.protocol_version, 6);
+    let entry = &read.teams[0].squad[0];
+    assert_eq!(entry.level, Some(130));
+    assert!(entry.positions.is_empty());
+    assert_eq!(
+        (entry.strong_foot.as_deref(), entry.weaker_foot),
+        (None, None)
+    );
+    assert!(entry.traits.is_empty());
+    assert!(entry.personality.is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -40,14 +40,23 @@ pub struct Factor {
 }
 
 impl Factor {
-    /// The factor of `rule` under the content's attribute schema.
+    /// The factor of `rule` under the content's attribute schema. A stage rule's factor is
+    /// its stage's main attribute: the same target as that attribute's own rule, which a run
+    /// varies once for both ([`crate::sensitivity::run_rules`]).
     pub fn of(rule: &RuleDef, content: &Content) -> Self {
-        let target = match rule.kind {
-            JobKind::Attribute => Target::Attribute(
+        let attribute = |name: &str| {
+            Target::Attribute(
                 content
                     .attributes
-                    .index(&rule.job)
+                    .index(name)
                     .expect("a checked rules file names schema attributes"),
+            )
+        };
+        let target = match rule.kind {
+            JobKind::Attribute => attribute(&rule.job),
+            JobKind::Stage => attribute(
+                crate::sensitivity::rules::stage_main(&rule.job, &content.attributes)
+                    .expect("a checked rules file names stages play reads"),
             ),
             JobKind::Body => match rule.job.as_str() {
                 "height" => Target::Height,
@@ -272,6 +281,7 @@ fn read(sim: &Simulation, side: usize, w: &Watch, high: Vec<bool>) -> MatchRow {
         }
     }
     let blocks: u32 = sim.tallies[side].iter().map(|t| t.blocks).sum();
+    let match_ticks = f64::from(90 * crate::rules::clock::TICKS_PER_MINUTE);
     let top: f64 = w.top_speed.iter().sum::<f64>() / 11.0;
     let parts = Measure::ALL
         .iter()
@@ -290,7 +300,6 @@ fn read(sim: &Simulation, side: usize, w: &Watch, high: Vec<bool>) -> MatchRow {
             Measure::XgPerShot => [s.xg, s.shots],
             Measure::PressedCompletion => [s.pressed_completed, s.pressed_passes],
             Measure::LooseBallShare => [s.loose_won, s.loose_won + o.loose_won],
-            Measure::TackleAttempts => [s.tackles, 1.0],
             Measure::Fouls => [f64::from(summary.fouls[side]), 1.0],
             Measure::Lapses => [w.lapses, 1.0],
             Measure::AnchorDistance => [w.anchor_m, w.anchor_n],
@@ -315,6 +324,20 @@ fn read(sim: &Simulation, side: usize, w: &Watch, high: Vec<bool>) -> MatchRow {
             Measure::RatingSpread => [0.0, 0.0],
             Measure::LateEnergyLoss => [late.0, late.1],
             Measure::MentalRating => [w.mental, w.mental_n],
+            Measure::CoverDistance => [s.cover_m, s.cover_n],
+            Measure::TimedRuns => [s.timed_runs, 1.0],
+            Measure::CornerDelivery => [s.corners_reached, s.corners],
+            Measure::FreeKickSuccess => [s.free_kicks_success, s.free_kicks],
+            Measure::PenaltiesScored => [s.penalties_scored, s.penalties],
+            Measure::ThrowDistance => [s.throw_m, s.throws_in],
+            Measure::FlairAttempts => [s.take_ons + s.flair_passes, 1.0],
+            Measure::RashChases => [s.rash_chases, 1.0],
+            // Presses started while behind, per 90 minutes of trailing out of possession.
+            Measure::PressesBehind => [s.presses_behind, s.behind_ticks / match_ticks],
+            Measure::HeadersInTraffic => [s.headers_traffic_won, s.headers_traffic],
+            Measure::PressGoalSide => [s.press_goal_side, s.press_ticks],
+            Measure::LineGap => [s.line_gap_m, s.line_gap_n],
+            Measure::RecoverySprints => [s.recovery_sprints, 1.0],
         })
         .collect();
     let hour = 60 * crate::rules::clock::TICKS_PER_MINUTE;

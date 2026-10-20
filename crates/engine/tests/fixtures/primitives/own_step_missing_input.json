@@ -1,0 +1,54 @@
+{
+  "refusal": "step mid gives no value to build_up",
+  "primitive": {
+    "name": "planted",
+    "kind": "graded",
+    "levels": "own",
+    "steps": [
+      {
+        "name": "very_low",
+        "values": {
+          "build_up": 0.0
+        }
+      },
+      {
+        "name": "low",
+        "values": {
+          "build_up": 0.1
+        }
+      },
+      {
+        "name": "mid",
+        "values": {}
+      },
+      {
+        "name": "high",
+        "values": {
+          "build_up": 0.30000000000000004
+        }
+      },
+      {
+        "name": "very_high",
+        "values": {
+          "build_up": 0.4
+        }
+      }
+    ],
+    "default": "mid",
+    "inputs": [
+      {
+        "input": "build_up",
+        "hook": "pass.build_up"
+      }
+    ],
+    "signature": [
+      {
+        "stat": "passes_per_possession",
+        "direction": "up"
+      }
+    ],
+    "data": {
+      "none": "a planted entry"
+    }
+  }
+}

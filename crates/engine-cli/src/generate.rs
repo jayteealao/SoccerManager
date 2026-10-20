@@ -18,11 +18,17 @@ pub fn run(content_dir: Option<&Path>, opts: &GenerateOpts) -> anyhow::Result<i3
     let mut teams = generate_league(opts.seed, opts.clubs, &content);
     if content.tuning.generator.body.is_none() {
         anyhow::bail!(
-            "the tuning file has no generator.body block; a version 2 team file needs \
+            "the tuning file has no generator.body block; a version 3 team file needs \
              height, age, and nationality for every player"
         );
     }
-    // A version 2 file holds 1.0 to 20.0; the few values drawn under 1.0 are lifted.
+    if content.tuning.generator.person.is_none() {
+        anyhow::bail!(
+            "the tuning file has no generator.person block; a version 3 team file needs \
+             position ratings, a foot and traits for every player"
+        );
+    }
+    // A version 3 file holds 1.0 to 20.0; the few values drawn under 1.0 are lifted.
     let lifted: usize = teams.iter_mut().map(lift_to_floor).sum();
     std::fs::create_dir_all(&opts.out)
         .with_context(|| format!("cannot create {}", opts.out.display()))?;

@@ -1,8 +1,9 @@
 //! The attribute contract: the one place play reads a player's attributes.
 //!
 //! Every action the engine has runs in stages (see, choose, execute, under pressure). Each
-//! stage blends one main attribute and up to three supporting ones, with weights from the
-//! attribute file ([`stages`]). Each rating passes through the exponential curve
+//! stage blends one main attribute, up to three shown supporting ones, and up to four small
+//! weights lighter than every shown support, with weights from the attribute file
+//! ([`stages`]). Each rating passes through the exponential curve
 //! `F(r) = 8 · e^((r − 10) / 8)` before the blend ([`curve`]), and the stage value is the
 //! weighted mean of those `F` values, which is `F` of the stage's blended rating, so the curve
 //! acts on the stage result as well.
@@ -22,14 +23,19 @@
 pub mod body;
 pub mod consistency;
 pub mod curve;
+pub mod foot;
 pub mod hidden;
 pub mod level;
+pub mod mood;
 pub mod params;
 pub mod stages;
 pub mod states;
 
 pub use curve::{contest, factor, logistic, logit, share};
-pub use params::{ActionMap, ActionParams, ContractTuning, CurveTuning, LapseTuning, SpeedTuning};
+pub use params::{
+    ActionMap, ActionParams, ContractTuning, CurveTuning, FootTuning, HookTuning, LapseTuning,
+    OverrideChances, PersonTuning, SeasonTuning, SpeedTuning, TraitTuning, TraitWeights,
+};
 pub use stages::{GateDef, GateDefs, StageTable, Weighted, stage_values};
 
 use serde::{Deserialize, Serialize};
@@ -70,10 +76,28 @@ pub enum ActionKind {
     KeeperThrow,
     Organise,
     Rush,
+    /// Staying tight to the attacker a defender covers: how close goal-side cover tracks a
+    /// carrier.
+    Mark,
+    /// An attacker's run against the offside line: how far an attacker beyond the line comes
+    /// back onside, and the space he makes at his anchor.
+    OffBallRun,
+    /// The delivery of a corner: how far it turns from its aim.
+    Corner,
+    /// The strike or delivery of a direct free kick, and the delivery of an indirect one.
+    FreeKick,
+    /// A throw-in: how far the thrower looks for a team-mate.
+    LongThrow,
+    /// Covering a team-mate and stepping up or dropping with the line: how far the cover
+    /// defender leads a carrier's run, and how late a back-line player moves with his line.
+    Cover,
+    /// A recovery run: who takes one first when goal-side cover is missing (how often), and
+    /// how likely it is a sprint (how hard).
+    RecoveryRun,
 }
 
 /// The number of action kinds.
-pub const ACTION_COUNT: usize = 30;
+pub const ACTION_COUNT: usize = 37;
 
 impl ActionKind {
     /// Every action, in declaration order.
@@ -108,6 +132,13 @@ impl ActionKind {
         ActionKind::KeeperThrow,
         ActionKind::Organise,
         ActionKind::Rush,
+        ActionKind::Mark,
+        ActionKind::OffBallRun,
+        ActionKind::Corner,
+        ActionKind::FreeKick,
+        ActionKind::LongThrow,
+        ActionKind::Cover,
+        ActionKind::RecoveryRun,
     ];
 
     /// The action's name in the content files.
@@ -143,6 +174,13 @@ impl ActionKind {
             ActionKind::KeeperThrow => "keeper_throw",
             ActionKind::Organise => "organise",
             ActionKind::Rush => "rush",
+            ActionKind::Mark => "mark",
+            ActionKind::OffBallRun => "off_ball_run",
+            ActionKind::Corner => "corner",
+            ActionKind::FreeKick => "free_kick",
+            ActionKind::LongThrow => "long_throw",
+            ActionKind::Cover => "cover",
+            ActionKind::RecoveryRun => "recovery_run",
         }
     }
 
@@ -272,11 +310,18 @@ pub const STAGES: [(ActionKind, StageKind); STAGE_COUNT] = {
         (A::KeeperThrow, S::Execute),
         (A::Organise, S::Execute),
         (A::Rush, S::Choose),
+        (A::Mark, S::Execute),
+        (A::OffBallRun, S::Execute),
+        (A::Corner, S::Execute),
+        (A::FreeKick, S::Execute),
+        (A::LongThrow, S::Execute),
+        (A::Cover, S::Execute),
+        (A::RecoveryRun, S::Execute),
     ]
 };
 
 /// The number of stages play reads.
-pub const STAGE_COUNT: usize = 47;
+pub const STAGE_COUNT: usize = 54;
 
 /// One stage play reads: an index into [`STAGES`] and into [`StageValues`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -367,6 +412,13 @@ impl Stage {
     pub const KEEPER_THROW_EXECUTE: Stage = Stage::of(ActionKind::KeeperThrow, StageKind::Execute);
     pub const ORGANISE_EXECUTE: Stage = Stage::of(ActionKind::Organise, StageKind::Execute);
     pub const RUSH_CHOOSE: Stage = Stage::of(ActionKind::Rush, StageKind::Choose);
+    pub const MARK_EXECUTE: Stage = Stage::of(ActionKind::Mark, StageKind::Execute);
+    pub const OFF_BALL_RUN_EXECUTE: Stage = Stage::of(ActionKind::OffBallRun, StageKind::Execute);
+    pub const CORNER_EXECUTE: Stage = Stage::of(ActionKind::Corner, StageKind::Execute);
+    pub const FREE_KICK_EXECUTE: Stage = Stage::of(ActionKind::FreeKick, StageKind::Execute);
+    pub const LONG_THROW_EXECUTE: Stage = Stage::of(ActionKind::LongThrow, StageKind::Execute);
+    pub const COVER_EXECUTE: Stage = Stage::of(ActionKind::Cover, StageKind::Execute);
+    pub const RECOVERY_RUN_EXECUTE: Stage = Stage::of(ActionKind::RecoveryRun, StageKind::Execute);
 }
 
 /// One player's stage values: each stage's value on the curve (`F` of the blended rating)
@@ -467,6 +519,9 @@ pub struct Gates {
     pub take_on_try: bool,
     /// Log-odds his take-on loses in a tackle; 0 when he pulls it off.
     pub take_on_penalty: f64,
+    /// Rating points of technique he lacks to try a take-on; 0 when he tries one. A trait
+    /// of play that tries tricks reads it.
+    pub take_on_short: f64,
 }
 
 impl Gates {
@@ -476,6 +531,7 @@ impl Gates {
         chip_penalty: 0.0,
         take_on_try: true,
         take_on_penalty: 0.0,
+        take_on_short: 0.0,
     };
 }
 
@@ -487,6 +543,109 @@ pub fn direct_ratings(
     schema: &crate::data::attributes::AttributeSchema,
 ) -> [f64; 4] {
     schema.required_indices().map(|i| a.get(i).decimal())
+}
+
+/// The skills of the attributes that act on an occasion without leading a stage of their
+/// own, each from −1 to 1 and 0 at rating 10: flair (a forward pass's score, the take-on and
+/// chip gates), determination (press reach while his side trails) and eccentricity (a
+/// keeper's chase range).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OccasionSkills {
+    pub flair: f64,
+    pub determination: f64,
+    pub eccentricity: f64,
+}
+
+impl OccasionSkills {
+    /// Every skill 0: the average player.
+    pub const NEUTRAL: OccasionSkills = OccasionSkills {
+        flair: 0.0,
+        determination: 0.0,
+        eccentricity: 0.0,
+    };
+}
+
+/// The occasion skills of a player with ratings `a`: `2 · share(k, F(r)) − 1` of each rating,
+/// with the strength `k` of the action whose choice it shapes (pass for flair, press for
+/// determination, rush for eccentricity). An attribute the schema lacks reads 0.
+pub fn occasion_skills(
+    a: &crate::player::Attributes,
+    schema: &crate::data::attributes::AttributeSchema,
+    c: &ContractTuning,
+) -> OccasionSkills {
+    let skill = |name: &str, action: ActionKind| {
+        schema.index(name).map_or(0.0, |i| {
+            let v = curve::f(a.get(i).decimal(), &c.curve);
+            2.0 * curve::share(c.actions.of(action).k(), v, &c.curve) - 1.0
+        })
+    };
+    OccasionSkills {
+        flair: skill("flair", ActionKind::Pass),
+        determination: skill("determination", ActionKind::Press),
+        eccentricity: skill("eccentricity", ActionKind::Rush),
+    }
+}
+
+/// The personality values play reads on an occasion, each a skill from −1 to 1 and 0 at
+/// rating 10: temperament (the mood swing and foul aggression after a setback),
+/// sportsmanship (cynical fouls and going down), pressure handling (the mood swing, late
+/// close games and penalties), professionalism (concentration lapses), leadership (his
+/// weight in his side's mood), adaptability (the familiarity and adaptation drops),
+/// versatility (the familiarity drop) and ambition (the season goal's weight in his kick-off
+/// mood).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PersonalityScales {
+    pub temperament: f64,
+    pub sportsmanship: f64,
+    pub pressure_handling: f64,
+    pub professionalism: f64,
+    pub leadership: f64,
+    pub adaptability: f64,
+    pub versatility: f64,
+    pub ambition: f64,
+}
+
+impl PersonalityScales {
+    /// Every value 0: the average person.
+    pub const NEUTRAL: PersonalityScales = PersonalityScales {
+        temperament: 0.0,
+        sportsmanship: 0.0,
+        pressure_handling: 0.0,
+        professionalism: 0.0,
+        leadership: 0.0,
+        adaptability: 0.0,
+        versatility: 0.0,
+        ambition: 0.0,
+    };
+}
+
+/// The personality scales of a player with ratings `a`: `2 · share(k, F(r)) − 1` of each
+/// value, with the strength `k` of the action whose occasion it shapes (tackle for
+/// temperament and sportsmanship, penalty for pressure handling, shape for professionalism,
+/// organise for leadership, receive for adaptability and versatility, shape for ambition). A
+/// value the schema
+/// lacks reads 0. No state moves a personality value, so a squad entry computes them once.
+pub fn personality_scales(
+    a: &crate::player::Attributes,
+    schema: &crate::data::attributes::AttributeSchema,
+    c: &ContractTuning,
+) -> PersonalityScales {
+    let skill = |name: &str, action: ActionKind| {
+        schema.index(name).map_or(0.0, |i| {
+            let v = curve::f(a.get(i).decimal(), &c.curve);
+            2.0 * curve::share(c.actions.of(action).k(), v, &c.curve) - 1.0
+        })
+    };
+    PersonalityScales {
+        temperament: skill("temperament", ActionKind::Tackle),
+        sportsmanship: skill("sportsmanship", ActionKind::Tackle),
+        pressure_handling: skill("pressure_handling", ActionKind::Penalty),
+        professionalism: skill("professionalism", ActionKind::Shape),
+        leadership: skill("leadership", ActionKind::Organise),
+        adaptability: skill("adaptability", ActionKind::Receive),
+        versatility: skill("versatility", ActionKind::Receive),
+        ambition: skill("ambition", ActionKind::Shape),
+    }
 }
 
 /// A rating as a share from 0 to 1, `tenths / 200`: the value a plugin hook sees for a
@@ -529,5 +688,7 @@ mod tests {
             assert!(a.stages().count() > 0, "{} has no stage", a.name());
         }
         assert_eq!(Stage::RUSH_CHOOSE.name(), "rush.choose");
+        assert_eq!(Stage::COVER_EXECUTE.name(), "cover.execute");
+        assert_eq!(Stage::RECOVERY_RUN_EXECUTE.name(), "recovery_run.execute");
     }
 }

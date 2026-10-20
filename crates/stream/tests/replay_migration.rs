@@ -11,7 +11,6 @@ mod common;
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -212,13 +211,17 @@ fn test_chain() -> Chain<'static> {
     }
 }
 
-/// A log writer the test can read back.
-#[derive(Clone, Default)]
-struct Log(Arc<Mutex<Vec<u8>>>);
+thread_local! {
+    /// The log lines written on this test thread.
+    static THREAD_LOG: std::cell::RefCell<Vec<u8>> = const { std::cell::RefCell::new(Vec::new()) };
+}
 
-impl Write for Log {
+/// A log writer that keeps each test thread's lines apart.
+struct ThreadLog;
+
+impl Write for ThreadLog {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.0.lock().unwrap().extend_from_slice(buf);
+        THREAD_LOG.with(|log| log.borrow_mut().extend_from_slice(buf));
         Ok(buf.len())
     }
     fn flush(&mut self) -> std::io::Result<()> {
@@ -228,15 +231,23 @@ impl Write for Log {
 
 /// Runs `f` on this thread with the log captured, and returns its value and the lines that
 /// carry the `replay.migrated` signal.
+///
+/// One process-wide log writes each thread's lines to that thread's buffer. A log set for one
+/// thread only raced the other test threads: a call site first reached on a thread with no log
+/// could stay cached as unwanted, and the capture then read no line.
 fn with_log<T>(f: impl FnOnce() -> T) -> (T, Vec<String>) {
-    let log = Log::default();
-    let writer = log.clone();
-    let subscriber = tracing_subscriber::fmt()
-        .with_writer(move || writer.clone())
-        .with_ansi(false)
-        .finish();
-    let value = tracing::subscriber::with_default(subscriber, f);
-    let text = String::from_utf8_lossy(&log.0.lock().unwrap()).into_owned();
+    static INSTALL: std::sync::Once = std::sync::Once::new();
+    INSTALL.call_once(|| {
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(|| ThreadLog)
+            .with_ansi(false)
+            .finish();
+        tracing::subscriber::set_global_default(subscriber)
+            .expect("no other log is installed in this test binary");
+    });
+    THREAD_LOG.with(|log| log.borrow_mut().clear());
+    let value = f();
+    let text = THREAD_LOG.with(|log| String::from_utf8_lossy(&log.borrow()).into_owned());
     let lines = text
         .lines()
         .filter(|l| l.contains("replay.migrated"))

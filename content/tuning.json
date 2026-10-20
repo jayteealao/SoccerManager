@@ -1,5 +1,5 @@
 {
-  "schema_version": 5,
+  "schema_version": 8,
   "engine": {
     "dt": 0.02,
     "decision_interval_ticks": 1,
@@ -30,6 +30,7 @@
     "aim_noise": 0.06,
     "compactness_x": 0.3,
     "compactness_y": 0.3,
+    "far_delay_s_per_m": 0.01,
     "cover_distance": 3.0,
     "cover_channel": 12.0,
     "back_line_gap": 12.0,
@@ -72,7 +73,14 @@
       "shot_distance": 1.0,
       "dribble_base": -0.4,
       "dribble_space": 0.55,
-      "pressure": -0.8,
+      "shot_under_pressure": -0.8,
+      "takeon_under_pressure": -0.8,
+      "pass_under_pressure": 48.0,
+      "touch_under_pressure": 0.88,
+      "pressure_choice": 9.0,
+      "pass_weight_under_pressure": 1.0,
+      "pass_cut": 0.6,
+      "take_on_contest": 2.5,
       "first_touch": 0.6,
       "clear": -1.0,
       "clear_pressure": 1.2,
@@ -85,14 +93,31 @@
       "lone_dribble": -0.5,
       "carry_s": 0.0,
       "carry_cost": 0.0,
-      "teamwork_bonus": 0.1
+      "teamwork_bonus": 0.1,
+      "attack_danger": 1.963,
+      "clear_loss": 0.686,
+      "shot_loss": 0.724,
+      "perceive": 0.1,
+      "clear_worth": 2.0,
+      "shot_skill": 0.37,
+      "keeper_read": 0.4,
+      "threat": {
+        "intercept": -3.161,
+        "distance_coef": -0.04525,
+        "angle_coef": 2.633,
+        "angle2_coef": -0.787,
+        "unit": 0.0159,
+        "weight": 0.5
+      }
     },
     "injury_per_tackle": 0.004,
     "injury_per_minute": 0.0002,
+    "knock_ratio": 3.0,
     "xg": {
       "intercept": -4.191,
       "distance_coef": -0.0441,
-      "angle_coef": 6.3836
+      "angle_coef": 6.3836,
+      "keeper_coef": 0.139
     },
     "shots": {
       "loft_max": 7.0,
@@ -101,7 +126,8 @@
       "quality": {
         "intercept": -1.0,
         "distance_coef": -0.1,
-        "angle_coef": 1.0
+        "angle_coef": 1.0,
+        "keeper_coef": 0.139
       },
       "save_hold": 0.333,
       "parry_speed": 0.8,
@@ -245,6 +271,32 @@
         "rush": {
           "k": 0.054,
           "spread": 0.2
+        },
+        "mark": {
+          "k": 0.054,
+          "spread": 0.4
+        },
+        "off_ball_run": {
+          "k": 0.054,
+          "spread": 0.2
+        },
+        "corner": {
+          "k": 0.054
+        },
+        "free_kick": {
+          "k": 0.054
+        },
+        "long_throw": {
+          "k": 0.054,
+          "spread": 0.5
+        },
+        "cover": {
+          "k": 0.054,
+          "spread": 0.4
+        },
+        "recovery_run": {
+          "k": 0.054,
+          "spread": 0.2
         }
       },
       "speed": {
@@ -364,7 +416,160 @@
         "match_max": 1.0,
         "period_max": 0.75,
         "period_minutes": 10
+      },
+      "hooks": {
+        "decel_anchor": 5.5,
+        "behind_effort": 0.3,
+        "flair_risk": 0.4,
+        "flair_gate": 2.0,
+        "free_kick_range_m": 30.0,
+        "restart_noise": 0.06,
+        "organise_back_line": 0.5,
+        "anchor_space_m": 2.0,
+        "rash_chase": 0.3,
+        "press_goal_side_m": 2.0
+      },
+      "person": {
+        "mood": {
+          "goal": 30.0,
+          "assist": 15.0,
+          "big_miss": -20.0,
+          "error": -4.0,
+          "card": -10.0,
+          "red_card": -25.0,
+          "fouled": 3.0,
+          "duel_won": 3.0,
+          "duel_lost": -3.0,
+          "team_goal_for": 8.0,
+          "team_goal_against": -10.0,
+          "big_chance_xg": 0.3,
+          "drift_per_minute": 4.0,
+          "score_weight": 15.0,
+          "late_from_minute": 75,
+          "late_pressure": 10.0,
+          "temperament_weight": 0.5,
+          "pressure_weight": 0.4,
+          "leadership_weight": 1.0,
+          "own_weight": 0.8,
+          "team_weight": 0.4,
+          "risk": 0.25
+        },
+        "familiarity": {
+          "cost_per_point": 0.15,
+          "versatility_weight": 0.5,
+          "adaptability_weight": 0.3
+        },
+        "occasions": {
+          "professionalism": 0.5,
+          "penalty_pressure": 0.3,
+          "temper_foul": 0.6,
+          "cynical_foul": 0.4,
+          "dive_foul": 0.3,
+          "adaptation": 0.3
+        },
+        "floor_drop": 7.0
+      },
+      "traits": {
+        "moderate_share": 0.5,
+        "low_mood": -25.0,
+        "carry_s": 1.5,
+        "weights": {
+          "cuts_inside": 0.6,
+          "hugs_touchline": 0.6,
+          "shoots_from_distance": 0.6,
+          "places_shots": 0.25,
+          "powers_shots": 0.2,
+          "tries_lobs_and_chips": 0.4,
+          "tries_killer_balls": 0.8,
+          "plays_short_simple_passes": 0.4,
+          "switches_play": 0.4,
+          "crosses_early": 0.4,
+          "runs_with_ball_often": 0.3,
+          "rarely_dribbles": 0.3,
+          "tries_tricks": 0.4,
+          "tries_tricks_gate": 2.0,
+          "plays_one_twos": 0.4,
+          "holds_up_ball": 0.4,
+          "releases_ball_early": 0.3,
+          "dwells_on_ball": 0.3,
+          "gets_forward": 5.0,
+          "stays_back": 5.0,
+          "arrives_late_in_box": 6.0,
+          "moves_into_channels": 4.0,
+          "presses_relentlessly": 0.3,
+          "dives_into_tackles": 0.4,
+          "stays_on_feet": 0.4,
+          "goes_down_easily": 0.4,
+          "argues_with_officials": 0.05,
+          "rushes_out": 0.3,
+          "stays_on_line": 0.3,
+          "punches_rather_than_catches": 0.25,
+          "kicks_long": 0.4,
+          "throws_short": 0.4
+        },
+        "override_chance": {
+          "tries_killer_balls": 0.0,
+          "tries_lobs_and_chips": 0.0,
+          "crosses_early": 0.0,
+          "kicks_long": 0.0,
+          "plays_short_simple_passes": 0.0,
+          "plays_one_twos": 0.0,
+          "throws_short": 0.0,
+          "dwells_on_ball": 0.12,
+          "runs_with_ball_often": 0.0,
+          "holds_up_ball": 0.028,
+          "tries_tricks": 0.0,
+          "releases_ball_early": 0.28,
+          "cuts_inside": 1.0,
+          "hugs_touchline": 1.0,
+          "switches_play": 0.0,
+          "presses_relentlessly": 0.19,
+          "gets_forward": 1.0,
+          "arrives_late_in_box": 0.027,
+          "stays_back": 0.17,
+          "shoots_from_distance": 0.0,
+          "rushes_out": 0.065,
+          "stays_on_line": 0.0
+        }
+      },
+      "foot": {
+        "cost_cap": 5.0,
+        "base": 0.4,
+        "pressure_weight": 0.3,
+        "range_weight": 0.3,
+        "pressure_m": 5.0,
+        "range_m": 40.0,
+        "either_deg": 20.0,
+        "shift_s": 0.6,
+        "show_m": 1.5
+      },
+      "season": {
+        "form_neutral": 6.5,
+        "form_weight": 20.0,
+        "goal_weight": 15.0,
+        "ambition_weight": 0.6,
+        "cap": 40.0
       }
+    },
+    "pace": {
+      "enabled": true,
+      "limits_ms": [0.2, 2.0, 4.0, 5.5, 7.0],
+      "stand_m": 1.0,
+      "return_far_m": 5.0,
+      "run_from_m": 0.0,
+      "calm_ball_m": 30.0,
+      "sprint_mid": 0.5,
+      "sprint_slope": 1.0,
+      "tired_from": 0.5,
+      "step_down_at": 0.25,
+      "skip_at": {
+        "carry": 0.1,
+        "timed_run": 0.1,
+        "press": 0.2,
+        "loose_ball": 0.35,
+        "recovery": 0.35
+      },
+      "late_minutes": 15
     }
   },
   "generator": {
@@ -554,6 +759,94 @@
         ],
         "foreign_share": 0.35
       }
+    },
+    "person": {
+      "positions": {
+        "related": {
+          "GK": {},
+          "CB": {
+            "DM": 3.0,
+            "LB": 4.0,
+            "RB": 4.0
+          },
+          "LB": {
+            "RB": 2.0,
+            "LW": 4.0,
+            "CB": 4.0
+          },
+          "RB": {
+            "LB": 2.0,
+            "RW": 4.0,
+            "CB": 4.0
+          },
+          "DM": {
+            "CM": 2.0,
+            "CB": 3.0
+          },
+          "CM": {
+            "DM": 2.0,
+            "AM": 3.0
+          },
+          "AM": {
+            "CM": 3.0,
+            "LW": 4.0,
+            "RW": 4.0,
+            "ST": 4.0
+          },
+          "LW": {
+            "RW": 2.0,
+            "AM": 4.0,
+            "ST": 5.0,
+            "LB": 4.0
+          },
+          "RW": {
+            "LW": 2.0,
+            "AM": 4.0,
+            "ST": 5.0,
+            "RB": 4.0
+          },
+          "ST": {
+            "AM": 4.0,
+            "LW": 5.0,
+            "RW": 5.0
+          }
+        },
+        "spread": 1.5,
+        "far": {
+          "mean": 3.0,
+          "spread": 1.5
+        }
+      },
+      "foot": {
+        "left_share": 0.25,
+        "weaker": {
+          "mean": 40.0,
+          "spread": 18.0,
+          "min": 10,
+          "max": 100
+        }
+      },
+      "traits": {
+        "count_weights": [
+          34.0,
+          28.0,
+          18.0,
+          9.0,
+          5.0,
+          3.0,
+          1.5,
+          1.0,
+          0.5
+        ],
+        "strong_share": 0.35,
+        "keeper_only": [
+          "rushes_out",
+          "stays_on_line",
+          "punches_rather_than_catches",
+          "kicks_long",
+          "throws_short"
+        ]
+      }
     }
   },
   "fatigue": {
@@ -636,24 +929,169 @@
           "from": 1.0,
           "word": "hardly_ever_injured"
         }
+      ],
+      "professionalism": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "temperament": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "pressure_handling": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "sportsmanship": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "leadership": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "adaptability": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "versatility": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "ambition": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "loyalty": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "money_motivation": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
+      ],
+      "controversy": [
+        {
+          "from": 14.0,
+          "word": "high"
+        },
+        {
+          "from": 7.0,
+          "word": "middling"
+        },
+        {
+          "from": 1.0,
+          "word": "low"
+        }
       ]
     }
   },
   "match_rating": {
-    "base": 6.0,
+    "base": 6.66,
     "min": 1.0,
     "max": 10.0,
-    "goal": 1.0,
-    "shot_on_target": 0.15,
-    "shot_off_target": -0.05,
-    "xg": 0.5,
-    "pass_completed": 0.02,
-    "pass_failed": -0.04,
-    "tackle_won": 0.1,
-    "interception": 0.1,
-    "block": 0.15,
-    "clearance": 0.05,
-    "save": 0.3,
+    "value_added": 5.1,
+    "goals_prevented": 1.0,
     "foul": -0.05,
     "yellow": -0.5,
     "red": -1.5,
@@ -676,5 +1114,18 @@
       "RB"
     ]
   },
-  "flags": {}
+  "flags": {
+    "ai_style_pick": {
+      "owner": "team-shape owner (the person)",
+      "hypothesis": "an AI-managed side that starts in the named style the staff advice rates best for its squad plays recognisably different matches; with the shipped styles some pairings play far outside the realism bands (40 equal matches: shots per team 24.5 and 23.8 against 11.2 and 15.1, goals per match 4.0 and 3.8), recorded as band misses for the tuning work; it ships on so the AI picks a style",
+      "removal_condition": "removed, with the pick kept on, once a paired run of 40 equal matches on seeds 9 and 42 keeps every core band with the flag on",
+      "state": "on"
+    },
+    "team_stands": {
+      "owner": "team-shape owner (the person)",
+      "hypothesis": "the per-position stands of tactics.json move the back line toward the real phase shapes without raising shots per team above the real band of 8 to 16; with the table seeded as if the ball sat on the halfway line it lifts the back line 6 to 11 m out of possession and shots per team rise to about 90, so it ships off",
+      "removal_condition": "removed, with the table kept or dropped, once the stands are seeded again from the engine's own measured positions with a block depth that reads the ball, and a paired run of 40 equal matches on seeds 9 and 42 keeps every core band with the flag on",
+      "state": "off"
+    }
+  }
 }

@@ -10,9 +10,10 @@
 //! writes no byte, so the hashed bytes do not depend on it.
 
 use crate::canon::{self, Writer};
+use crate::math::DVec2;
 use crate::player::Player;
 use crate::rules::{Phase, Referee};
-use crate::sim::{EngineEvent, EventDetail, Simulation};
+use crate::sim::{EngineEvent, EventDetail, Simulation, Windows};
 use crate::tactics::change::{Change, RejectReason};
 
 use super::{FieldKind, Fixture, GATE_SCHEMA, INVENTORY_VERSION};
@@ -49,6 +50,7 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         control_since,
         last_touch,
         last_kicker,
+        last_kick_dir,
         summary,
         referee,
         restart,
@@ -64,13 +66,40 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         ai,
         keeper_beaten,
         pass_in_flight,
+        possession_phase,
+        windows:
+            Windows {
+                regained_at,
+                lost_at,
+                trigger_at,
+                trap_at,
+            },
+        heavy_mask,
+        slide_ball,
         shot_in_flight,
         shot_on_target,
         shot_quality,
         blockers_tried,
+        shot_xg,
+        shooter,
+        shot_deflected,
+        last_pass,
+        value_from,
+        bench_mood,
+        trait_acts,
+        carrying,
+        chase_seen,
+        chances,
         restart_taker,
         clearers_tried,
+        cutters_tried,
+        duelled,
+        // Read by no play: it marks a half's walk-on due between the step that places the
+        // kick-off and the driver that takes the walk-on before the record.
+        walk_on_due: _,
         // Test seams under the `scenario` feature; no release build has them.
+        #[cfg(feature = "scenario")]
+            pinned_restart: _,
         #[cfg(feature = "scenario")]
             census: _,
         #[cfg(feature = "scenario")]
@@ -87,6 +116,9 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         finished: _,
         // Rewritten before every use.
         scratch: _,
+        // Each side's mood as a refresh reads it, rewritten at the start of a refresh (when
+        // the team-mood weight acts) from the moods hashed with each player.
+        team_moods: _,
         // A shared copy of `config.tuning`, constant for the match.
         tuning: _,
         // Functions of each player's deltas and form (hashed in G3) and the team files.
@@ -97,6 +129,10 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         // and in every build without the `sensitivity` feature.
         #[cfg(feature = "sensitivity")]
             probe: _,
+        // The realism measures: a read-only seam, absent in every gated match and in every
+        // build without the `measures` feature.
+        #[cfg(feature = "measures")]
+            measures: _,
     } = sim;
 
     use FieldKind::{Bytes, Floats};
@@ -126,10 +162,27 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     w.index(*last_touch);
     w.mark(Bytes, || "last_kicker".into());
     w.index(*last_kicker);
+    w.mark(Floats, || "last_kick_dir".into());
+    w.v2_at(&|| "last_kick_dir".into(), *last_kick_dir);
     w.mark(Bytes, || "keeper_beaten".into());
     w.bool(*keeper_beaten);
     w.mark(Bytes, || "pass_in_flight".into());
     w.index(*pass_in_flight);
+    w.mark(Bytes, || "possession_phase".into());
+    w.index(*possession_phase);
+    w.mark(Bytes, || "regained_at".into());
+    for at in regained_at.iter().chain(lost_at) {
+        w.u32(at.unwrap_or(u32::MAX));
+    }
+    w.mark(Bytes, || "trigger_at".into());
+    for at in trigger_at.iter().flatten().chain(trap_at) {
+        w.u32(at.unwrap_or(u32::MAX));
+    }
+    w.u32(*heavy_mask);
+    for (i, at) in slide_ball.iter().enumerate() {
+        w.mark(Floats, || format!("slide_ball[{i}]"));
+        w.v2_at(&|| format!("slide_ball[{i}]"), *at);
+    }
     w.mark(Bytes, || "shot_in_flight".into());
     w.index(*shot_in_flight);
     w.mark(Bytes, || "shot_on_target".into());
@@ -138,8 +191,42 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     w.f64_at(|| "shot_quality".into(), *shot_quality);
     w.mark(Bytes, || "blockers_tried".into());
     w.u32(*blockers_tried);
+    w.mark(Floats, || "shot_xg".into());
+    w.f64_at(|| "shot_xg".into(), *shot_xg);
+    w.mark(Bytes, || "shooter".into());
+    w.index(*shooter);
+    w.mark(Bytes, || "shot_deflected".into());
+    w.index(shot_deflected.map(|(side, _)| side));
+    w.index(shot_deflected.map(|(_, shooter)| shooter));
+    w.mark(Bytes, || "last_pass".into());
+    w.index(last_pass.map(|(passer, _)| passer));
+    w.index(last_pass.map(|(_, receiver)| receiver));
+    w.mark(Bytes, || "value_from".into());
+    w.index(value_from.map(|(player, _)| player));
+    w.mark(Floats, || "value_from.at".into());
+    w.v2_at(
+        &|| "value_from.at".into(),
+        value_from.map_or(DVec2::ZERO, |(_, at)| at),
+    );
+    w.mark(Floats, || "bench_mood".into());
+    for (team, mood) in bench_mood.iter().enumerate() {
+        w.f64_at(|| format!("bench_mood[{team}]"), *mood);
+    }
+    w.mark(Bytes, || "trait_acts".into());
+    for act in trait_acts {
+        let (kind, end, value) = crate::traits::TraitAct::encode(*act);
+        w.u8(kind);
+        w.u8(end);
+        w.u32(value);
+    }
+    w.u32(*carrying);
+    w.u32(*chase_seen);
     w.mark(Bytes, || "clearers_tried".into());
     w.u32(*clearers_tried);
+    w.mark(Bytes, || "cutters_tried".into());
+    w.u32(*cutters_tried);
+    w.mark(Bytes, || "duelled".into());
+    w.u32(*duelled);
     w.mark(Bytes, || "restart_taker".into());
     w.index(*restart_taker);
 
@@ -196,6 +283,11 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
             w.u32(d.since);
             w.u32(d.ready_at);
             w.index(Some(d.taker));
+            w.v2_at(&|| "referee.phase.exit".into(), d.exit);
+            w.u32(d.appear_at);
+            w.u32(d.extra);
+            w.bool(d.quick);
+            w.u32(d.hard_at);
         }
         Phase::FullTime => w.u8(2),
     }
@@ -258,6 +350,26 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
         w.mark(Bytes, || format!("teams[{t}]"));
         w.team(&|| format!("teams[{t}]"), team);
     }
+    // A side's game state only when it has one, so a match with none hashes as before.
+    for (t, team) in teams.iter().enumerate() {
+        if !team.game_state.is_empty()
+            || team.rules_active != 0
+            || team.take_up.is_some()
+            || team.base != team.tactics
+        {
+            w.mark(Bytes, || format!("teams[{t}].game_state"));
+            w.game_state(&|| format!("teams[{t}].game_state"), team);
+        }
+    }
+    if !chances.is_empty() {
+        w.mark(Bytes, || "chances".into());
+        w.count(chances.len());
+        for (k, &(at, side, xg)) in chances.iter().enumerate() {
+            w.u32(at);
+            w.index(Some(side));
+            w.f64_at(|| format!("chances[{k}].xg"), xg);
+        }
+    }
     w.mark(Bytes, || "timeline".into());
     w.count(timeline.len());
     for (from, shapes) in timeline {
@@ -272,8 +384,6 @@ pub(crate) fn state(w: &mut Writer, sim: &Simulation, events: &[EngineEvent]) {
     }
     w.mark(Bytes, || "ai".into());
     for state in ai {
-        w.opt_pair(state.trailing_acted);
-        w.opt_pair(state.leading_acted);
         w.bool(state.due);
     }
     w.mark(Bytes, || "ledgers".into());
@@ -370,6 +480,7 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
         deltas,
         form,
         form_match,
+        mood,
         energy,
         pos,
         vel,
@@ -377,8 +488,10 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
         facing,
         status,
         yellow,
+        knock,
         foul_ready,
         lapse_until,
+        pace,
     } = p;
     use FieldKind::{Bytes, Floats};
     w.mark(Floats, || format!("players[{i}].pos"));
@@ -393,6 +506,8 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
     w.u8(canon::status_code(*status));
     w.mark(Bytes, || format!("players[{i}].yellow"));
     w.u8(*yellow);
+    w.mark(Bytes, || format!("players[{i}].knock"));
+    w.u8(u8::from(*knock));
     w.mark(Bytes, || format!("players[{i}].foul_ready"));
     w.u32(*foul_ready);
     w.mark(Bytes, || format!("players[{i}].lapse_until"));
@@ -408,6 +523,16 @@ fn player(w: &mut Writer, i: usize, p: &Player) {
     w.mark(Bytes, || format!("players[{i}].form"));
     w.u8(*form as u8);
     w.u8(*form_match as u8);
+    w.mark(Bytes, || format!("players[{i}].pace"));
+    w.u8(pace.job.code());
+    w.u8(pace.grade.code());
+    w.u8(pace.level.code());
+    w.u8(u8::from(pace.sprint));
+    w.u32(pace.since);
+    w.mark(Floats, || format!("players[{i}].pace.speed"));
+    w.f64_at(|| format!("players[{i}].pace.speed"), pace.speed);
+    w.mark(Floats, || format!("players[{i}].mood"));
+    w.f64_at(|| format!("players[{i}].mood"), *mood);
     w.mark(Floats, || format!("players[{i}].derived"));
     w.derived(&|| format!("players[{i}].derived"), derived, deltas);
 }
@@ -431,6 +556,29 @@ fn change(w: &mut Writer, change: &Change) {
                 w.u8(*squad as u8);
                 w.u8(rd.role);
                 w.u8(rd.duty);
+            }
+        }
+        Change::Rule { active } => {
+            w.u8(2);
+            w.u8(*active);
+        }
+        // Applied when queued, so never waiting; written for completeness.
+        Change::Instructions(levels) => {
+            w.u8(3);
+            w.count(levels.len());
+            for (primitive, level) in levels {
+                w.u8(*primitive);
+                w.u8(*level);
+            }
+        }
+        Change::GameState(state) => {
+            w.u8(4);
+            w.count(state.rules.len());
+            w.count(state.instructions.len());
+            for ins in &state.instructions {
+                w.u8(ins.slot);
+                w.u8(ins.primitive);
+                w.u8(ins.level);
             }
         }
     }
@@ -504,6 +652,16 @@ fn event(w: &mut Writer, e: &EngineEvent) {
         }
         // Filtered out by the caller.
         Some(EventDetail::Script(_)) => w.u8(5),
+        Some(EventDetail::Override {
+            trait_kind,
+            cause,
+            instruction,
+        }) => {
+            w.u8(6);
+            w.u8(trait_kind.index());
+            w.u8(*cause as u8);
+            w.u8(*instruction as u8);
+        }
     }
     w.opt_u32(*period);
     w.opt_u32(*shootout_round);
@@ -540,5 +698,9 @@ fn reject_reason(w: &mut Writer, reason: &Option<RejectReason>) {
             w.u8(*squad as u8);
         }
         Some(RejectReason::OutOfRange) => w.u8(7),
+        Some(RejectReason::NotForPosition { slot }) => {
+            w.u8(8);
+            w.u8(*slot);
+        }
     }
 }

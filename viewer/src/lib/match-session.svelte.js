@@ -62,6 +62,7 @@ import { adapterFor, memoryAdapter, mergeRatings, readPart } from './views.js';
 import { TICKS_PER_MINUTE, totalMinutes } from './skip.js';
 import { MatchSocket, socketAddress } from './socket.js';
 import { Stoppages, stopsPlay } from './stoppages.js';
+import { drawWalkOn, walkOnDue, walkOnSeconds } from './walk-on.js';
 
 /// The screens the match screen can show.
 export const SCREENS = Object.freeze([
@@ -261,6 +262,9 @@ export class MatchSession {
     this.status = null;
     this.matchId = null;
     this.renderedTick = 0;
+    /// Each half's walk-on by the tick it ends on, and the walk-on being drawn, if any.
+    this.walkOns = new Map();
+    this.interlude = null;
     this.kickedOff = false;
     this.resuming = false;
     this.reconnectAttempt = 0;
@@ -281,6 +285,8 @@ export class MatchSession {
     /// release's engine plays it, and the tick it continues from.
     this.stepOpts = { version: null, resumeTick: null };
     this.teamNames = new Map();
+    /// Every player of the hello by `player.id`: his name, for the feed's trait line.
+    this.playerNames = new Map();
     this.halfTimes = 0;
     /// The type of every command sent, in order, for the browser drives.
     this.sent = [];
@@ -604,6 +610,8 @@ export class MatchSession {
 
   begin(hello, { stored = false } = {}) {
     this.history = new History(hello.ticks_expected);
+    this.walkOns = new Map();
+    this.interlude = null;
     this.helloVersion = hello['protocol.version'] ?? null;
     this.reportClock.reset();
     this.report = null;
@@ -622,6 +630,9 @@ export class MatchSession {
     this.hello = hello;
     this.ground = groundOf(hello);
     this.teamNames = new Map(hello.teams.map((t) => [t['team.id'], t['team.name']]));
+    this.playerNames = new Map(
+      hello.teams.flatMap((t) => [...(t.roster ?? []), ...(t.squad ?? [])].map((p) => [p['player.id'], p['player.name']]))
+    );
     this.engineVersion = hello['engine.version'] ?? null;
     this.engineWord = stored ? 'Replay' : 'Engine connected';
     this.scrubMax = Math.max(1, hello.ticks_expected);
@@ -725,6 +736,49 @@ export class MatchSession {
   /// match's, by match id (`views.js`).
   get squadRatings() {
     return mergeRatings(this.squadViews?.ratings ?? {}, this.liveRatings);
+  }
+
+  /// The home club's season part of the views answer (`views.js` `readSeason`), or null when
+  /// the answer carries none (an engine-served page, a replay, before the answer).
+  get squadSeason() {
+    return this.squadViews?.season ?? null;
+  }
+
+  /// The position code of the formation slot squad player `index` plays today: the draft
+  /// lineup and formation before kick-off, the kicked-off lineup and the formation in force
+  /// after it. Null on the bench, for a stored match or a replay, or with no lineup.
+  slotPositionOf(index) {
+    const dugout = this.dugout;
+    dugout.version;
+    const formations = dugout.schema?.formations;
+    if (!Number.isInteger(index) || !Array.isArray(formations)) {
+      return null;
+    }
+    let lineup = null;
+    let formation = null;
+    if (dugout.preMatch && dugout.editor) {
+      lineup = dugout.editor.slots;
+      formation = dugout.editor.formation;
+    } else if (Array.isArray(dugout.lineup)) {
+      lineup = dugout.lineup;
+      formation = dugout.tactics?.formation ?? dugout.confirmed?.formation;
+    }
+    const n = Array.isArray(lineup) ? lineup.indexOf(index) : -1;
+    if (n < 0) {
+      return null;
+    }
+    return formations[formation]?.slots?.[n]?.position ?? null;
+  }
+
+  /// The feed's trait override rows of squad player `index` in the match on show, once it is
+  /// at full time (the panel counts them "last match"); empty before full time, for a player
+  /// with none, or with no such player.
+  overridesOf(index) {
+    const id = this.squad[index]?.['player.id'];
+    if (!id || this.period !== 'FULL TIME') {
+      return [];
+    }
+    return this.feedRows.filter((row) => row.kind === KIND.traitOverride && row.player === id);
   }
 
   /// Opens the Squad screen from the view on show; it goes back there.
@@ -900,7 +954,7 @@ export class MatchSession {
       history.measurePage();
     }
     if (result.kind === 'restart') {
-      this.stoppages.add(this.incoming.tick);
+      this.stoppages.restart(this.incoming.tick);
     }
     // A match can run past the announced ticks; the timeline's end follows the newest tick.
     if (history.newestTick > history.ticksExpected) {
@@ -918,6 +972,10 @@ export class MatchSession {
   }
 
   onMessage(message) {
+    if (message.type === 'walk-on') {
+      this.walkOns.set(message.first_tick, message);
+      return;
+    }
     if (GROUND_MESSAGES.has(message.type)) {
       this.onGround(message);
       return;
@@ -953,7 +1011,7 @@ export class MatchSession {
     }
     this.match.add(message);
     if (stopsPlay(message)) {
-      this.stoppages.add(message.tick);
+      this.stoppages.stop(message.tick);
     }
     // Full time marks the real end, so the timeline stops at the last tick that arrived.
     if (message.type === 'event' && message['event.type'] === KIND.fullTime && this.history) {
@@ -1064,7 +1122,19 @@ export class MatchSession {
     if (!history || history.count === 0) {
       return;
     }
+    if (this.interlude && this.playInterlude(timestamp)) {
+      return;
+    }
+    const before = this.renderedTick;
     const step = this.scheduler.advance(timestamp, history.newestTick, history.firstTick);
+    // Playback that runs into a half's first tick shows the walk-on to it first; a seek, a
+    // scrub or a skip passes it.
+    if (!this.scrubbing && this.skip?.state !== 'playing') {
+      const walkOn = walkOnDue(this.walkOns, before, step.from);
+      if (walkOn && this.startInterlude(walkOn, timestamp)) {
+        return;
+      }
+    }
     if (!history.tickAt(step.from, this.earlier)) {
       return;
     }
@@ -1090,6 +1160,50 @@ export class MatchSession {
     this.reportSeen(timestamp);
   }
 
+  /// Starts the walk-on before its half's first tick: the cursor waits on that tick, and the
+  /// pitch shows the players walking from the tunnel. `false` when the tick is not stored.
+  startInterlude(message, timestamp) {
+    const base = new Int16Array(COMPONENT_COUNT);
+    if (!this.history.tickAt(message.first_tick, base)) {
+      return false;
+    }
+    this.scheduler.seek(message.first_tick);
+    this.interlude = { message, base, seconds: 0, last: timestamp };
+    this.pitch?.clearTrail();
+    this.drawInterlude();
+    signal('viewer.walk_on', {
+      period: message.period,
+      first_tick: message.first_tick,
+      seconds: walkOnSeconds(message),
+    });
+    return true;
+  }
+
+  /// One frame of the walk-on, at the playback speed; a pause holds it. `false` once it has
+  /// ended, so the frame plays the half's first tick.
+  playInterlude(timestamp) {
+    const it = this.interlude;
+    const elapsed = Math.min(250, Math.max(0, timestamp - it.last));
+    it.last = timestamp;
+    if (this.scheduler.playing) {
+      it.seconds += (elapsed / 1000) * this.scheduler.speed;
+    }
+    if (it.seconds >= walkOnSeconds(it.message)) {
+      this.interlude = null;
+      this.renderedTick = it.message.first_tick;
+      this.scheduler.rest();
+      return false;
+    }
+    this.drawInterlude();
+    return true;
+  }
+
+  drawInterlude() {
+    const it = this.interlude;
+    drawWalkOn(it.message, it.seconds, it.base, this.rendered);
+    this.pitch?.draw(this.rendered);
+  }
+
   /// Brings every panel to `tick`. A seek never replays a goal moment: the banner belongs to
   /// the frame in which play crosses the goal, not to a rewind that lands after it.
   flush(tick, { seek }) {
@@ -1111,7 +1225,7 @@ export class MatchSession {
     }
     const { reset, batch } = this.batcher.take(state.entries);
     if (reset || batch.length > 0) {
-      const rows = batch.map((event) => feedRow(event, this.teamNames));
+      const rows = batch.map((event) => feedRow(event, this.teamNames, this.playerNames));
       this.feedRows = reset ? rows : [...this.feedRows, ...rows];
       // Goals and cards are read out as they are released, never again on a rewind.
       const said = reset ? null : rows.findLast((row) => row.announce);
@@ -1312,6 +1426,7 @@ export class MatchSession {
       return;
     }
     const from = this.renderedTick;
+    this.interlude = null;
     // A rewind that jumps past a break opens no report behind it.
     if (tick > from) {
       this.reportClock.pass(this.match.events, tick);
@@ -1376,6 +1491,9 @@ export class MatchSession {
       this.engineWord = 'Engine finished';
       this.setNotice('end', 'Full time. The whole match is here and plays back.');
       this.streamEnded = true;
+      // The launcher adds a finished match to the season record when the views are read, so
+      // the season, the goal progress and the form on the panel move without a relaunch.
+      this.loadViews({ again: true });
       if (this.skipRunning) {
         this.finishSkip();
         return;
@@ -1491,10 +1609,13 @@ export class MatchSession {
   /// Plays a replay file with no engine: every stored frame goes through the same path live
   /// frames take, so playback and rewind are the same code as a live match.
   /// With `leave`, the replay was opened from the start screen: closing it, or a file that
-  /// cannot be read, goes back there.
-  async openReplay(bytes, name = 'replay', { leave = false } = {}) {
+  /// cannot be read, goes back there. `input` is the file's bytes, or the chosen file itself:
+  /// a file the browser cannot read (moved or changed since it was chosen) is refused like a
+  /// file that is not a replay, with the browser's reason.
+  async openReplay(input, name = 'replay', { leave = false } = {}) {
     let read;
     try {
+      const bytes = input instanceof Blob ? new Uint8Array(await input.arrayBuffer()) : input;
       read = await readReplay(bytes);
     } catch (error) {
       const reason = error.reason ?? error.message;

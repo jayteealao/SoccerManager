@@ -249,6 +249,37 @@ fn the_formations_suite_reports_every_pairing_and_names_each_failing_band() {
     assert_eq!(lines, failing, "{stderr}");
     assert!(stderr.contains("goals_per_match"), "{stderr}");
     assert!(stderr.contains("4-4-2 v 4-4-2"), "{stderr}");
+    // The formation field rating: one row per formation in the tactics file's order, the
+    // weights an equilibrium, the flag its rule; it only reports, so the failing goal
+    // bands alone set the exit code and calib.pass above.
+    let nash = &report["calib.nash"];
+    assert_eq!(nash["flag_margin"], 0.1);
+    assert_eq!(nash["matches_per_pairing"], 1);
+    let rated = nash["formations"].as_array().unwrap();
+    assert_eq!(rated.len(), 10, "{nash}");
+    assert_eq!(rated[0]["formation"], "4-4-2");
+    assert_eq!(rated[9]["formation"], "5-4-1");
+    let order: Vec<&Value> = pairings
+        .iter()
+        .filter(|p| p["pairing"][0] == p["pairing"][1])
+        .map(|p| &p["pairing"][0])
+        .collect();
+    let named: Vec<&Value> = rated.iter().map(|f| &f["formation"]).collect();
+    assert_eq!(named, order);
+    let weights: f64 = rated.iter().map(|f| f["weight"].as_f64().unwrap()).sum();
+    assert!((weights - 1.0).abs() < 1e-3, "{nash}");
+    for f in rated {
+        let gain = f["field_rating"].as_f64().unwrap() - f["win_rate"].as_f64().unwrap();
+        // Off the boundary, the flag is the rule; on it, rounding decides either way.
+        if (gain - 0.1).abs() > 1e-9 {
+            assert_eq!(f["flagged"], gain > 0.1, "{f}");
+        }
+    }
+    assert_eq!(report["calib.pass"], false);
+    assert!(
+        stderr.contains("formation field rating (report only"),
+        "{stderr}"
+    );
     let _ = std::fs::remove_dir_all(&data);
 }
 

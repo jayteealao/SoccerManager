@@ -5,7 +5,9 @@
 
 mod common;
 
-use engine::data::{ATTRIBUTES_FILE, RULES_FILE, SLOTS_FILE, TACTICS_FILE, TUNING_FILE};
+use engine::data::{
+    ATTRIBUTES_FILE, RULES_FILE, SLOTS_FILE, TACTICS_FILE, TRAITS_FILE, TUNING_FILE,
+};
 use engine::{Content, ContentDir, EngineError, FlagState, FlagStates};
 use serde_json::{Value, json};
 
@@ -16,7 +18,13 @@ fn folder(name: &str, flags: Value) -> ContentDir {
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join("rules")).unwrap();
     let shipped = common::content_dir();
-    for rel in [ATTRIBUTES_FILE, RULES_FILE, TACTICS_FILE, SLOTS_FILE] {
+    for rel in [
+        ATTRIBUTES_FILE,
+        RULES_FILE,
+        TACTICS_FILE,
+        SLOTS_FILE,
+        TRAITS_FILE,
+    ] {
         std::fs::copy(shipped.path(rel), root.join(rel)).unwrap();
     }
     let mut tuning: Value =
@@ -226,7 +234,8 @@ fn a_flag_the_file_turns_on_applies_at_load_and_the_command_line_turns_it_off() 
 #[test]
 fn the_shipped_content_with_no_states_is_unchanged() {
     let content = common::content();
-    assert!(content.flags.is_empty());
+    // The style pick is the one flag the shipped file turns on.
+    assert_eq!(content.flags.names(), [engine::flags::AI_STYLE_PICK]);
     let again = content.with_flags(&FlagStates::default()).unwrap();
     assert_eq!(again.digest, content.digest);
     assert_eq!(again.tuning, content.tuning);

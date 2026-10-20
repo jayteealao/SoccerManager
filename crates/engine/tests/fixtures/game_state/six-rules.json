@@ -1,0 +1,40 @@
+{
+  "rules": [
+    {
+      "when": [
+        { "kind": "score", "state": "leading", "by": 1 },
+        { "kind": "time_left", "minutes": 15 }
+      ],
+      "set": [
+        { "primitive": "mentality", "level": "cautious" },
+        { "primitive": "line_of_engagement", "level": "low" }
+      ]
+    },
+    {
+      "when": [{ "kind": "score", "state": "trailing", "by": 1 }, { "kind": "time_left", "minutes": 20 }],
+      "set": [{ "primitive": "mentality", "level": "attacking" }, { "formation": "4-3-3" }]
+    },
+    {
+      "when": [{ "kind": "red_cards_ours", "at_least": 1 }],
+      "set": [{ "primitive": "pressing", "level": "low" }, { "formation": "4-4-1-1" }]
+    },
+    {
+      "when": [{ "kind": "red_cards_theirs" }],
+      "set": [{ "primitive": "line_height", "level": "high" }]
+    },
+    {
+      "when": [{ "kind": "run_of_play", "below": -0.5 }],
+      "set": [{ "primitive": "on_losing_the_ball", "level": "counter_press" }]
+    },
+    {
+      "when": [{ "kind": "team_energy", "below": 0.6 }, { "kind": "score", "state": "level" }],
+      "set": [{ "primitive": "tempo", "level": "slow" }]
+    }
+  ],
+  "instructions": [
+    { "slot": 10, "primitive": "forward_runs", "level": "run_in_behind" },
+    { "slot": 5, "primitive": "dribbling", "level": "dribble_more" },
+    { "slot": 6, "primitive": "pressing", "level": "high" },
+    { "slot": 8, "primitive": "cross_type", "level": "floated" }
+  ]
+}

@@ -101,6 +101,15 @@ pub struct Tuning {
     pub compactness_x: f64,
     #[garde(range(min = 0.0, max = 3.0))]
     pub compactness_y: f64,
+    /// The far-player delay of the slide: seconds of follow time per metre of a player's
+    /// distance from the ball. Each outfield player's anchor shift follows his own followed
+    /// ball point ([`crate::team::follow`]), which eases toward the ball with a time constant
+    /// of this value times his distance, so a player near the ball slides at once and a far
+    /// one late. The only value tuned against the slide band; 0 turns the delay off (every
+    /// followed point is the ball), as before it existed.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 0.5))]
+    pub far_delay_s_per_m: f64,
     /// Defending: how far, in metres, the covering defender stands goal-side of the most
     /// advanced central attacker, and the half-width of the central channel in which an
     /// attacker is covered.
@@ -195,6 +204,12 @@ pub struct Tuning {
     pub injury_per_tackle: f64,
     #[garde(range(min = 0.0, max = 0.01))]
     pub injury_per_minute: f64,
+    /// Knocks for each tackle injury: after a tackle injury roll that does not injure, the
+    /// tackled player takes a knock with this multiple of that roll's chance. A knock changes
+    /// nothing in play; the AI manager reads it. 3 when the file gives none.
+    #[serde(default = "default_knock_ratio")]
+    #[garde(range(min = 0.0, max = 20.0))]
+    pub knock_ratio: f64,
     /// The expected-goals model of a shot.
     #[garde(dive)]
     pub xg: XgTuning,
@@ -211,6 +226,141 @@ pub struct Tuning {
     /// acceleration, and concentration lapses.
     #[garde(dive)]
     pub contract: ContractTuning,
+    /// The pace selector: the six levels, the distances that choose between them, the sprint
+    /// chance, the tired mix and the late minutes. A tuning file without this block loads with
+    /// the selector off, so every player runs at his top speed, as before it existed.
+    #[serde(default = "PaceTuning::off")]
+    #[garde(dive)]
+    pub pace: PaceTuning,
+}
+
+/// The pace selector's values ([`crate::pace`]). Speeds in metres per second, distances in
+/// metres, shares and thresholds from 0 to 1.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct PaceTuning {
+    /// `false` turns the selector off: every player runs at his top speed.
+    #[garde(skip)]
+    pub enabled: bool,
+    /// The upper limits of stand, walk, jog, run and high speed; a sprint is the player's top
+    /// speed. Strictly rising and positive.
+    #[garde(custom(rising_limits))]
+    pub limits_ms: [f64; 5],
+    /// Within this distance of his target a player stands.
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub stand_m: f64,
+    /// Farther than this from his target, a player in shape returns to it (NORMAL).
+    #[garde(range(min = 0.0, max = 60.0))]
+    pub return_far_m: f64,
+    /// Farther than this from his target, a NORMAL job runs rather than jogs.
+    #[garde(range(min = 0.0, max = 120.0))]
+    pub run_from_m: f64,
+    /// Within this distance of the ball, a player in shape follows it (NORMAL); farther, he
+    /// holds (CALM).
+    #[garde(range(min = 0.0, max = 120.0))]
+    pub calm_ball_m: f64,
+    /// The sprint chance of an URGENT job: `sprint_mid + sprint_slope · (work-rate share − 0.5)`,
+    /// inside 0 to 1 at a share of 0 and of 1.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub sprint_mid: f64,
+    #[garde(range(min = 0.0, max = 2.0), custom(chance_in_range(&self.sprint_mid)))]
+    pub sprint_slope: f64,
+    /// Below this energy a player saves energy.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub tired_from: f64,
+    /// A tired player whose saving times his tired mix reaches this moves a step slower at
+    /// every level below a sprint.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub step_down_at: f64,
+    /// Per URGENT job: a tired player whose saving times one less his tired mix reaches this
+    /// skips the job's sprint. Lower for a less urgent job.
+    #[garde(dive)]
+    pub skip_at: SkipAt,
+    /// The late minutes of a match: the last this many minutes of its regulation length. Each
+    /// extra-time period has a late window of the same share of its length as this is of a
+    /// half ([`crate::rules::clock::late`]).
+    #[garde(range(min = 0, max = 60))]
+    pub late_minutes: u32,
+}
+
+/// The sprint skip threshold of each URGENT job.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct SkipAt {
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub carry: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub timed_run: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub press: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub loose_ball: f64,
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub recovery: f64,
+}
+
+/// Refuses level limits that are not positive and strictly rising.
+fn rising_limits(limits: &[f64; 5], _ctx: &()) -> garde::Result {
+    if limits[0] <= 0.0 || limits.windows(2).any(|w| w[1] <= w[0]) {
+        return Err(garde::Error::new(
+            "must be positive and strictly rising".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Refuses a sprint chance outside 0 to 1 at a work-rate share of 0 or of 1.
+fn chance_in_range(mid: &f64) -> impl FnOnce(&f64, &()) -> garde::Result + '_ {
+    move |slope, _| {
+        let half = slope / 2.0;
+        if mid - half < 0.0 || mid + half > 1.0 {
+            return Err(garde::Error::new(format!(
+                "gives a sprint chance outside 0 to 1 with sprint_mid {mid}"
+            )));
+        }
+        Ok(())
+    }
+}
+
+impl PaceTuning {
+    /// The shipped values: most open-play time at walk and jog, sprints only for URGENT jobs.
+    pub fn shipped() -> Self {
+        Self {
+            enabled: true,
+            limits_ms: [0.2, 2.0, 4.0, 5.5, 7.0],
+            stand_m: 1.0,
+            return_far_m: 5.0,
+            // Started at 15 m. With the team stands off, NORMAL jobs that jogged within 15 m
+            // of their target put 5.8 percent of open play at run pace against the real 10.5
+            // (band 8 to 13) and left the default teams' matches almost without a duel (about
+            // one foul a side). At 0 a NORMAL job runs, and jogs only when tiredness steps it
+            // down: run 8.4 percent, walk 54, jog 33 (real 49.5 and 36), the closest fit of the
+            // values tried (15, 10, 7.5, 5, 2.5, 2, 1.5, 0).
+            run_from_m: 0.0,
+            calm_ball_m: 30.0,
+            sprint_mid: 0.5,
+            sprint_slope: 1.0,
+            tired_from: 0.5,
+            step_down_at: 0.25,
+            skip_at: SkipAt {
+                carry: 0.10,
+                timed_run: 0.10,
+                press: 0.20,
+                loose_ball: 0.35,
+                recovery: 0.35,
+            },
+            late_minutes: 15,
+        }
+    }
+
+    /// The selector off, with the shipped values kept for the day it is turned on: a tuning
+    /// file written before the selector existed plays as it did.
+    pub fn off() -> Self {
+        Self {
+            enabled: false,
+            ..Self::shipped()
+        }
+    }
 }
 
 /// How a clearance flies. A carrier's clearance goes toward the far half, turned by up to
@@ -336,6 +486,7 @@ impl Default for ShotTuning {
                 intercept: -1.0,
                 distance_coef: -0.1,
                 angle_coef: 1.0,
+                keeper_coef: 0.139,
             },
             save_hold: 0.333,
             parry_speed: 0.8,
@@ -365,6 +516,16 @@ pub struct XgTuning {
     pub distance_coef: f64,
     #[garde(range(min = 0.0, max = 10.0))]
     pub angle_coef: f64,
+    /// The keeper off his line, for a shot from outside the penalty area: the chance moves by
+    /// `keeper_coef x max(0, min(off, 16.5) - keeper_depth)` in log-odds, `off` the keeper's
+    /// distance off his goal line in metres. Fitted on the StatsBomb open data's open-play shots from
+    /// outside the area (five men's leagues, 2015/16, 14,364 shots with the keeper in the
+    /// freeze frame), with this model as the offset: 0.139 per metre (standard error 0.016).
+    /// Inside the area the one-on-one contest reads a keeper who comes out. 0 (an older
+    /// file) leaves the keeper out.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub keeper_coef: f64,
 }
 
 /// The weights of the scored-options decision layer (named mechanism). The ball carrier
@@ -374,8 +535,9 @@ pub struct XgTuning {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
 pub struct DecisionWeights {
-    /// A pass: forward progress (-1 to 1 over 40 m), the open lane (up to 6 m), the space
-    /// around the receiver (up to 8 m), and the distance (up to 45 m, a cost).
+    /// A pass: forward progress (-1 to 1 over 40 m; read only with the threat off, see
+    /// [`ThreatTuning`]), the open lane (up to 6 m), the space around the receiver (up to
+    /// 8 m), and the distance (up to 45 m, a cost).
     #[garde(range(min = -5.0, max = 5.0))]
     pub progress: f64,
     #[garde(range(min = -5.0, max = 5.0))]
@@ -399,20 +561,72 @@ pub struct DecisionWeights {
     pub shot_lane: f64,
     #[garde(range(min = -5.0, max = 5.0))]
     pub shot_distance: f64,
-    /// A dribble: the base, the free space ahead (up to 10 m), the cost of an opponent
-    /// within 2.5 m (a negative cost makes the carrier take the defender on), and the bonus
-    /// in the first 10 ticks after gaining the ball. The pressure weight is also added to a
-    /// shot with an open lane taken with an opponent within 2 m.
+    /// A dribble: the base, the free space ahead (up to 10 m), and the bonus in the first
+    /// 10 ticks after gaining the ball.
     #[garde(range(min = -5.0, max = 5.0))]
     pub dribble_base: f64,
     #[garde(range(min = -5.0, max = 5.0))]
     pub dribble_space: f64,
+    /// Added to a shot with an open lane (wider than 1 m) taken with an opponent within 2 m.
     #[garde(range(min = -5.0, max = 5.0))]
-    pub pressure: f64,
+    pub shot_under_pressure: f64,
+    /// Subtracted from the dribble score when an opponent is within 2.5 m: a negative value
+    /// raises a pressed dribble, so the carrier takes the defender on.
+    #[garde(range(min = -5.0, max = 5.0))]
+    pub takeon_under_pressure: f64,
+    /// The size of the pressure model's penalty ([`crate::pressure`]), for every side: a
+    /// player's penalty is his pressure intensity x the action's difficulty x (1 - his
+    /// resistance). An outfield pass's aim noise grows by `pass_under_pressure` times the
+    /// passer's penalty, and a receiver of his side's pass reaches the ball only within
+    /// `1 - touch_under_pressure` times his penalty of his reach, so his first touch more often
+    /// lets the ball run on. Each is sized so that the engine's gap between pressed and free
+    /// players matches the real gap in the StatsBomb open data (pass completion; miscontrols
+    /// per reception). 0 (an older file) leaves play as before.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 500.0))]
+    pub pass_under_pressure: f64,
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub touch_under_pressure: f64,
+    /// The pressed carrier's choice ([`crate::pressure`]): each option that keeps the ball (a
+    /// pass, a dribble, a hold) loses `pressure_choice` x his penalty for it (the intensity he
+    /// feels x the option's difficulty x (1 - his resistance for it)) x the danger of losing
+    /// the ball where it would be lost. A clearance keeps no ball, so it pays nothing. Sized so
+    /// that the rise of the long-ball and clearance share under pressure comes as near the
+    /// StatsBomb open data's as the form allows. 0 (an older file) leaves the choice as the
+    /// pressure model's intensity grades it.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 50.0))]
+    pub pressure_choice: f64,
+    /// The weight error of a pressed pass: an outfield passer's pass runs too hard or too soft
+    /// by up to `pass_weight_under_pressure` times his pressure penalty of its speed (the same
+    /// penalty that widens its aim), so pressure spoils both the direction and the weight of a
+    /// pass. 0 (an older file) leaves every pass at its planned speed.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub pass_weight_under_pressure: f64,
+    /// The size of a defender's chance to cut out or block a pass in flight as it passes him
+    /// ([`crate::possession`]): his chance is `pass_cut` times his read of the pass (or his
+    /// block, for a ball too fast to control) times how close it passes him and how slow it is.
+    /// While a pass is in flight an opponent wins it only this way. 0 (an older file) keeps the
+    /// old rule: the nearest player within reach of a ball he can control wins it.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub pass_cut: f64,
+    /// The size of a defender's contest of a take-on ([`crate::possession`]): a defender in
+    /// front of a carrier who runs with the ball meets him once as he comes within the
+    /// pressed distance, and wins the ball with `take_on_contest` times the running tackle
+    /// contest of the two players, scaled by the angle he meets him at, how square he
+    /// stands and the pace the carrier runs at him with, the last two moved by his read of
+    /// the take-on. Fitted so that take-ons beat their man as often as the StatsBomb open
+    /// data's dribbles (0.529). 0 (an older file) leaves only the tackles within reach.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub take_on_contest: f64,
     #[garde(range(min = -5.0, max = 5.0))]
     pub first_touch: f64,
-    /// A clearance: the base, the bonus under pressure in the own third, and the base for
-    /// a goalkeeper.
+    /// A clearance: the base, the bonus under pressure (scaled by the danger the clearance
+    /// removes, see clear_worth), and the base for a goalkeeper.
     #[garde(range(min = -5.0, max = 5.0))]
     pub clear: f64,
     #[garde(range(min = -5.0, max = 5.0))]
@@ -453,6 +667,151 @@ pub struct DecisionWeights {
     /// supporting): `teamwork_bonus · (2 · share − 1)`, 0 at rating 10.
     #[garde(range(min = 0.0, max = 5.0))]
     pub teamwork_bonus: f64,
+    /// The loss danger's weight at the attacked goal line, read only with the threat off
+    /// ([`ThreatTuning`], which reads the real threat of the place instead): an option's loss term reads
+    /// `(1 - s)^2 + attack_danger s^2` at the place the ball would be lost (`s` 0 at the
+    /// side's own goal line, 1 at the attacked one). The first term is the threat a loss hands
+    /// the opponent, the second the threat the side gives up. Set from the StatsBomb open data
+    /// (five men's leagues, 2015/16): the xG a side makes within 15 s of an open-play pass
+    /// near the goal it attacks is 1.96 times the xG the opponent makes within 15 s of a loss
+    /// near the side's own goal (fits `b s^2` and `a (1 - s)^2`). An older file without it
+    /// loads 1, the even shape.
+    #[serde(default = "default_attack_danger")]
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub attack_danger: f64,
+    /// A clearance gives the ball away: it loses `loss_weight x clear_loss x danger` at the
+    /// place it lands. The StatsBomb open data's clearances go to the opponent 0.686 of the
+    /// time. 0 (an older file) leaves the clearance free.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub clear_loss: f64,
+    /// A shot that does not score gives the ball away as a lost pass does: it loses
+    /// `loss_weight x shot_loss x (1 - xG) x danger` at the shooter's place, with the shot's
+    /// own xG. In the StatsBomb open data the opponent has the ball next after 0.724 of the
+    /// open-play shots that do not score. 0 (an older file) leaves the shot without a loss term.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub shot_loss: f64,
+    /// The carrier's read of his options: each option's score strays by up to
+    /// `perceive x (1.5 - q)` either side, `q` the mean share of his pass see, choose and
+    /// pressure stages (vision, decisions and composure leading), one draw per option from
+    /// its own stream, after the option noise. No real figure sets it; it is the option
+    /// noise's own size. 0 (an older file) draws nothing.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 2.0))]
+    pub perceive: f64,
+    /// A clearance is worth the danger it removes from the side's own goal at the clearer's
+    /// place: with `r = (1 - s)^2 / (19/27)` (the first term of the loss danger, 1 on average
+    /// over the side's own third), it scores `clear + (r - 1) x clear_worth + r x
+    /// clear_pressure x press`. Far from the own goal `r` is near 0, so the clearance loses
+    /// about `clear_worth` and an attacker near the goal he attacks does not clear. A design
+    /// value, checked against the StatsBomb open data's clearances by third (0.839 in the own
+    /// third, 0.155 in the middle, 0.005 in the final). 0 (an older file) leaves only the
+    /// pressure bonus scaled.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub clear_worth: f64,
+    /// The shooter's read of his own chance: the chance of a central shot (keeper term
+    /// included) moved by `shot_skill x (2 x strike - 1)` in log-odds, `strike` his share of
+    /// the shot's execute stage (the long-shot stage from outside the area: long shots,
+    /// technique, strength) blended toward its pressure stage (composure) as the press
+    /// grows. Fitted on the engine's own open-play shots (1,000 matches played with it at 0):
+    /// the log-odds a goal moves by per unit of `2 x strike - 1` at the same expected goals,
+    /// 0.37 (standard error 0.09). 0 (an older file) reads every shooter as the average one.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 5.0))]
+    pub shot_skill: f64,
+    /// The size of the shooter's misread of the keeper's distance off his line: he sees it
+    /// as `off x (1 + e)`, `e` up to `keeper_read x (1.5 - q) x (1 + grade x (1 - c))`
+    /// either way, `q` his read share for the keeper (vision, decisions and anticipation),
+    /// `grade` the pressure on the ball he feels and `c` his shot's composure share; one draw
+    /// on the perceived-score stream. At 0.4 an average reader misreads by up to 40 percent,
+    /// a top one about 20 and a poor one about 60: the real lob choice blurs the keeper's
+    /// distance by a logistic scale of 0.396 in its log (342 lobs in 29,819 StatsBomb
+    /// open-play shots). 0 (an older file) reads it exactly and draws nothing.
+    #[serde(default)]
+    #[garde(range(min = 0.0, max = 2.0))]
+    pub keeper_read: f64,
+    /// The real threat of a place ([`ThreatTuning`]): with it on, every option is valued by
+    /// the threat of the place it reaches against the threat of the carrier's place, on the
+    /// loss danger's scale, and the danger's second term reads the same threat. An older file
+    /// without it loads it off.
+    #[serde(default = "ThreatTuning::off")]
+    #[garde(dive)]
+    pub threat: ThreatTuning,
+}
+
+fn default_attack_danger() -> f64 {
+    1.0
+}
+
+/// The real threat of a place (named mechanism): the open-play xG a side makes within 15 s of
+/// having the ball there, `1 / (1 + exp(-(intercept + distance_coef d + angle_coef a +
+/// angle2_coef a^2)))`, `d` the distance in metres to the centre of the goal the side attacks
+/// and `a` the angle in radians its mouth subtends, read as a shot's xG reads its place; the
+/// square makes it level off near the goal mouth (within 6 m, 0.204 real and fitted), where a
+/// straight angle term would run to 0.89 on the goal line. Fitted on the StatsBomb open data
+/// (five men's leagues, 2015/16, 1,551 matches): 2.30 million receptions and carry ends, a
+/// fractional logistic fit (central box 0.091 real, 0.088 fitted; wide box 0.039 and 0.032;
+/// wide final third 0.011 and 0.012; middle third 0.0049 and 0.0050). Read in units of
+/// `unit` xG, the threat a loss at the side's own goal line hands the opponent (the loss
+/// danger's unit, 0.0159 in the same data), so the threat and the chance of losing the ball
+/// share one scale.
+///
+/// With it on (`unit` above 0): a pass is worth the threat at its receiver, a dribble the
+/// threat at the end of its carry, a clearance the threat where it lands and a shot its read
+/// chance, each less the threat at the carrier's place (a hold keeps it); the danger of a loss
+/// at a place is `(1 - s)^2` plus the threat there, the threat the side gives up (a shot's
+/// loss reads the same danger at the shooter's place). Each value counts with `weight`, the loss
+/// weight of the default mentality (balanced, 0.5), so at the default the value an option reaches
+/// and its chance of losing the ball count alike and a mentality's loss weight alone moves the
+/// appetite for risk away from it. `decision.progress` and
+/// `decision.attack_danger` are read only with it off.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct ThreatTuning {
+    #[garde(range(min = -10.0, max = 10.0))]
+    pub intercept: f64,
+    #[garde(range(min = -2.0, max = 0.0))]
+    pub distance_coef: f64,
+    #[garde(range(min = 0.0, max = 10.0))]
+    pub angle_coef: f64,
+    #[garde(range(min = -10.0, max = 0.0))]
+    pub angle2_coef: f64,
+    /// The unit, in xG; 0 turns the threat off.
+    #[garde(range(min = 0.0, max = 1.0))]
+    pub unit: f64,
+    /// The weight of an option's threat value: the default mentality's loss weight.
+    #[garde(range(min = 0.0, max = 4.0))]
+    pub weight: f64,
+}
+
+impl ThreatTuning {
+    /// The shipped fit.
+    pub fn shipped() -> Self {
+        Self {
+            intercept: -3.161,
+            distance_coef: -0.04525,
+            angle_coef: 2.633,
+            angle2_coef: -0.787,
+            unit: 0.0159,
+            weight: 0.5,
+        }
+    }
+
+    /// Off, with the shipped fit kept: an older file plays with the progress term and the
+    /// even danger shape.
+    pub fn off() -> Self {
+        Self {
+            unit: 0.0,
+            ..Self::shipped()
+        }
+    }
+
+    /// `true` when the threat values options.
+    pub fn on(&self) -> bool {
+        self.unit > 0.0
+    }
 }
 
 /// Seconds between the ball going dead and the restart, per restart kind. Play restarts
@@ -509,6 +868,7 @@ impl Default for Tuning {
             aim_noise: 0.06,
             compactness_x: 0.3,
             compactness_y: 0.3,
+            far_delay_s_per_m: FAR_DELAY_S_PER_M,
             cover_distance: default_cover_distance(),
             cover_channel: default_cover_channel(),
             back_line_gap: default_back_line_gap(),
@@ -551,7 +911,14 @@ impl Default for Tuning {
                 shot_distance: 1.0,
                 dribble_base: -0.4,
                 dribble_space: 0.55,
-                pressure: -0.8,
+                shot_under_pressure: -0.8,
+                takeon_under_pressure: -0.8,
+                pass_under_pressure: 48.0,
+                touch_under_pressure: 0.88,
+                pressure_choice: 9.0,
+                pass_weight_under_pressure: 1.0,
+                pass_cut: 0.6,
+                take_on_contest: 2.5,
                 first_touch: 0.6,
                 clear: -1.0,
                 clear_pressure: 1.2,
@@ -565,17 +932,28 @@ impl Default for Tuning {
                 carry_s: 0.0,
                 carry_cost: 0.0,
                 teamwork_bonus: 0.1,
+                attack_danger: 1.963,
+                clear_loss: 0.686,
+                shot_loss: 0.724,
+                perceive: 0.1,
+                clear_worth: 2.0,
+                shot_skill: 0.37,
+                keeper_read: 0.4,
+                threat: ThreatTuning::shipped(),
             },
             injury_per_tackle: INJURY_PER_TACKLE,
             injury_per_minute: INJURY_PER_MINUTE,
+            knock_ratio: KNOCK_RATIO,
             xg: XgTuning {
                 intercept: -4.191,
                 distance_coef: -0.0441,
                 angle_coef: 6.3836,
+                keeper_coef: 0.139,
             },
             shots: ShotTuning::default(),
             clearances: ClearanceTuning::default(),
             contract: ContractTuning::default(),
+            pace: PaceTuning::shipped(),
         }
     }
 }
@@ -606,6 +984,13 @@ const TACKLE_WIN_BASE: f64 = 0.5;
 fn default_tackle_win_base() -> f64 {
     0.05
 }
+/// The shipped far-player delay: seeded at 0.04 from the real far-player response (players 30
+/// to 45 m from the ball follow it over 1 s about half as much as players near it), then
+/// tuned only against the slide band (0.44 to 0.68 up the pitch, both phases, on each of four
+/// seeds) by halving and then bisecting: 0.04 and 0.02 left one seed below the band, and 0.01
+/// kept every figure inside it.
+const FAR_DELAY_S_PER_M: f64 = 0.01;
+
 fn default_lone_line_hold() -> f64 {
     0.0
 }
@@ -627,6 +1012,13 @@ const FOUL_BASE: f64 = 0.1;
 /// The shipped injury rates: a planning estimate of about 0.6 injuries per match with the
 /// default teams, to be replaced with a sourced rate.
 const INJURY_PER_TACKLE: f64 = 0.004;
+/// Three knocks for each tackle injury: a design value; the substitution report sets the share
+/// of changes made for an injury or a knock beside the real injury share.
+const KNOCK_RATIO: f64 = 3.0;
+
+fn default_knock_ratio() -> f64 {
+    KNOCK_RATIO
+}
 const INJURY_PER_MINUTE: f64 = 0.0002;
 
 #[cfg(test)]
@@ -661,5 +1053,53 @@ mod tests {
                 .contains("keeper_catch_chance: greater than 1"),
             "{report}"
         );
+    }
+
+    #[test]
+    fn pace_levels_that_do_not_rise_or_a_chance_outside_one_are_refused() {
+        let mut t = Tuning::default();
+        t.pace.limits_ms = [0.2, 2.0, 2.0, 5.5, 7.0];
+        let report = t.validate().unwrap_err().to_string();
+        assert!(report.contains("pace.limits_ms"), "{report}");
+        let mut t = Tuning::default();
+        t.pace.limits_ms[0] = 0.0;
+        assert!(t.validate().is_err());
+        let mut t = Tuning::default();
+        t.pace.sprint_mid = 0.8;
+        let report = t.validate().unwrap_err().to_string();
+        assert!(report.contains("pace.sprint_slope"), "{report}");
+        let mut t = Tuning::default();
+        t.pace.skip_at.press = 1.5;
+        assert!(t.validate().is_err());
+    }
+
+    /// A tuning block written before the far-player delay loads with it off, so every
+    /// followed ball point is the ball; a delay above the bound is refused.
+    #[test]
+    fn a_tuning_block_without_the_far_player_delay_loads_with_it_off() {
+        let mut json = serde_json::to_value(Tuning::default()).unwrap();
+        let block = json.as_object_mut().unwrap();
+        assert!(block.remove("far_delay_s_per_m").is_some());
+        let t: Tuning = serde_json::from_value(json).unwrap();
+        assert_eq!(t.far_delay_s_per_m, 0.0);
+        assert!(Tuning::default().far_delay_s_per_m > 0.0);
+        let t = Tuning {
+            far_delay_s_per_m: 0.6,
+            ..Tuning::default()
+        };
+        let report = t.validate().unwrap_err().to_string();
+        assert!(report.contains("far_delay_s_per_m"), "{report}");
+    }
+
+    /// A tuning block written before the pace selector loads with it off: every player runs
+    /// at his top speed, as before it existed.
+    #[test]
+    fn a_tuning_block_without_the_pace_block_loads_with_the_selector_off() {
+        let mut json = serde_json::to_value(Tuning::default()).unwrap();
+        assert!(json.as_object_mut().unwrap().remove("pace").is_some());
+        let t: Tuning = serde_json::from_value(json).unwrap();
+        assert_eq!(t.pace, PaceTuning::off());
+        assert!(!t.pace.enabled);
+        assert!(Tuning::default().pace.enabled);
     }
 }
