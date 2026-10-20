@@ -199,7 +199,7 @@ test('a player instruction: forward runs off for a centre-back, sent for the str
 });
 
 test('a game plan with two conditions that hold switches on, and a seventh cannot be added', async ({ page }, info) => {
-  test.setTimeout(8 * 60_000);
+  test.setTimeout(15 * 60_000);
   const sent = await recordClientMessages(page, managerCommand);
   const engine = await startEngine({ args: ['--seed', '42', '--web', VIEWER, ...fastForward(MINUTE_3)] });
   try {
@@ -207,7 +207,8 @@ test('a game plan with two conditions that hold switches on, and a seventh canno
     await playToMinute3(page);
     await tab(page, 'Plans & opposition').click();
     await evidence(page, info, 'plans-t0');
-    // The score now and a time condition that holds from minute 5: the plan's two conditions.
+    // The score now and "45 minutes or less left", which holds from minute 45: the plan's two
+    // conditions. Seed 42 keeps its minute-3 score to half-time, so the plan switches on at 45'.
     const score = await hook(page, () => {
       const last = window.__touchline.events().at(-1);
       return { home: last?.['home.score'] ?? 0, away: last?.['away.score'] ?? 0 };
@@ -228,19 +229,20 @@ test('a game plan with two conditions that hold switches on, and a seventh canno
     expect(message['change.kind']).toBe('game-state');
     expect(message.detail.game_state.rules).toHaveLength(1);
     expect(message.detail.game_state.rules[0].when.map((c) => c.kind)).toEqual(['score', 'time_left']);
-    const queueId = await hook(page, () => window.__touchline.pending().at(-1)?.queue_id);
-    // The plan switches on: a tactics change the page did not queue, for the home side.
-    const fired = await until(
+    // The side that saved the plan: the team of an applied change the page queued.
+    const saved = await until(
       page,
-      (own) =>
+      () =>
         window.__touchline
           .events()
-          .find((e) => e['event.type'] === 'tactics-change' && e['change.state'] === 'applied' && e['change.queue_id'] !== own && !window.__touchline.pending().some((c) => c.queue_id === e['change.queue_id'])) ?? null,
-      queueId,
-      240_000
+          .find((e) => e['event.type'] === 'tactics-change' && e['change.state'] === 'applied' && window.__touchline.pending().some((c) => c.queue_id === e['change.queue_id'])) ?? null,
+      undefined,
+      60_000
     );
-    expect(await fired.jsonValue()).toBeTruthy();
+    const home = (await saved.jsonValue())['team.id'];
 
+    // Five more plans as New plan drafts them (losing by 1, 15 minutes or less left), which do
+    // not hold before minute 75; then New plan is off.
     const max = await hook(page, () => window.__touchline.board().game_state.rules.length);
     for (let i = max; i < 6; i += 1) {
       const count = sent.length;
@@ -252,6 +254,28 @@ test('a game plan with two conditions that hold switches on, and a seventh canno
     await expect(board(page).getByRole('button', { name: 'New plan' })).toBeDisabled();
     await expect(board(page).locator('[data-plans-full]')).toContainText('remove one to add another');
     await evidence(page, info, 'plans-final');
+    const ours = await hook(page, () => window.__touchline.pending().map((c) => c.queue_id));
+
+    // The first plan switches on at minute 45: a tactics change of the home side that the page
+    // did not queue.
+    const fired = await until(
+      page,
+      ([own, side]) =>
+        window.__touchline
+          .events()
+          .find(
+            (e) =>
+              e['event.type'] === 'tactics-change' &&
+              e['change.state'] === 'applied' &&
+              e['change.kind'] === 'tactics' &&
+              e['team.id'] === side &&
+              !own.includes(e['change.queue_id']) &&
+              !window.__touchline.pending().some((c) => c.queue_id === e['change.queue_id'])
+          ) ?? null,
+      [ours, home],
+      480_000
+    );
+    expect((await fired.jsonValue()).minute).toBeGreaterThanOrEqual(45);
   } finally {
     engine.cleanUp();
   }
