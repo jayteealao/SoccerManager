@@ -13,11 +13,28 @@ use crate::bounds::{clopper_pearson, garwood};
 use crate::special::{norm_quantile, t_quantile};
 
 /// One outer unit's totals: the band's numerator and denominator summed over the unit's
-/// matches. A mean band has a denominator of one per match.
+/// matches, and, for a measure scaled by a second ratio (the factorial-moment ratio, a red
+/// card arm over its control), that ratio's numerator and denominator. The unit set's value
+/// is `(sum num / sum den) * (sum scale_num / sum scale_den)`; a plain ratio or mean has both
+/// scale terms equal (one per match). A mean band has a denominator of one per match.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Unit {
     pub num: f64,
     pub den: f64,
+    pub scale_num: f64,
+    pub scale_den: f64,
+}
+
+impl Unit {
+    /// A unit of a plain ratio (or a mean, with `den` its match count).
+    pub fn ratio(num: f64, den: f64) -> Self {
+        Unit {
+            num,
+            den,
+            scale_num: 1.0,
+            scale_den: 1.0,
+        }
+    }
 }
 
 /// The real side of a band.
@@ -51,22 +68,31 @@ pub struct Interval {
 /// A band whose interval cannot be formed reads not sure with this reason.
 pub type NoInterval = String;
 
-/// The ratio of sums over the units and its error, studentized at unit level: the
-/// linearized error of a ratio estimator with the units as clusters,
+/// The value of the units and its error, studentized at unit level: the delta-method
+/// (linearized) error with the units as clusters. Each unit's influence is
+/// `v (num/N - den/D + scale_num/S - scale_den/C)` over the totals, and the squared error is
+/// `G / (G - 1)` times the sum of the centred squared influences. For a plain ratio it is
 /// `sqrt(G / (G - 1) * sum((num - r den)^2)) / sum(den)`.
 pub fn ratio_and_se(units: &[Unit]) -> (f64, f64) {
-    let num: f64 = units.iter().map(|u| u.num).sum();
-    let den: f64 = units.iter().map(|u| u.den).sum();
-    if den == 0.0 {
+    let total = |f: fn(&Unit) -> f64| units.iter().map(f).sum::<f64>();
+    let (n, d) = (total(|u| u.num), total(|u| u.den));
+    let (sn, sd) = (total(|u| u.scale_num), total(|u| u.scale_den));
+    if d == 0.0 || sd == 0.0 {
         return (f64::NAN, f64::INFINITY);
     }
-    let r = num / den;
-    let g = units.len() as f64;
+    let v = n / d * (sn / sd);
     if units.len() < 2 {
-        return (r, f64::INFINITY);
+        return (v, f64::INFINITY);
     }
-    let ss: f64 = units.iter().map(|u| (u.num - r * u.den).powi(2)).sum();
-    (r, (g / (g - 1.0) * ss).sqrt() / den)
+    let part = |x: f64, t: f64| if t != 0.0 { x / t } else { 0.0 };
+    let psi: Vec<f64> = units
+        .iter()
+        .map(|u| v * (part(u.num, n) - u.den / d + part(u.scale_num, sn) - u.scale_den / sd))
+        .collect();
+    let g = units.len() as f64;
+    let mean = psi.iter().sum::<f64>() / g;
+    let ss: f64 = psi.iter().map(|p| (p - mean).powi(2)).sum();
+    (v, (g / (g - 1.0) * ss).sqrt())
 }
 
 /// The leave-one-out (jackknife) error of the mean of `values`; for a mean it equals the
@@ -282,7 +308,7 @@ pub(crate) mod tests {
     }
 
     fn units(values: &[f64]) -> Vec<Unit> {
-        values.iter().map(|&v| Unit { num: v, den: 1.0 }).collect()
+        values.iter().map(|&v| Unit::ratio(v, 1.0)).collect()
     }
 
     #[test]
@@ -304,6 +330,43 @@ pub(crate) mod tests {
         let half = t_quantile(0.95, 6.0) * sd / n.sqrt();
         assert!((lo - (mean - half)).abs() < 1e-12);
         assert!((hi - (mean + half)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn a_scaled_ratio_takes_its_error_from_each_units_influence() {
+        // Two arms over a control: the value is (A / B) * (S / C).
+        let u = [
+            Unit {
+                num: 3.0,
+                den: 2.0,
+                scale_num: 2.0,
+                scale_den: 4.0,
+            },
+            Unit {
+                num: 5.0,
+                den: 2.0,
+                scale_num: 2.0,
+                scale_den: 2.0,
+            },
+            Unit {
+                num: 4.0,
+                den: 2.0,
+                scale_num: 2.0,
+                scale_den: 3.0,
+            },
+        ];
+        let (v, se) = ratio_and_se(&u);
+        assert!((v - 12.0 / 6.0 * (6.0 / 9.0)).abs() < 1e-12);
+        assert!(se > 0.0 && se.is_finite());
+        // A plain ratio's influence error equals the cluster ratio error.
+        let plain = [
+            Unit::ratio(3.0, 2.0),
+            Unit::ratio(5.0, 2.0),
+            Unit::ratio(1.0, 1.0),
+        ];
+        let (r, se) = ratio_and_se(&plain);
+        let ss: f64 = plain.iter().map(|u| (u.num - r * u.den).powi(2)).sum();
+        assert!((se - (1.5 * ss).sqrt() / 5.0).abs() < 1e-12);
     }
 
     #[test]
