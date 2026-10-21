@@ -33,17 +33,25 @@ use serde::Serialize;
 
 use super::distribution::PairedHist;
 use super::measures;
-use super::{BandCheck, RunBuilder, Suite};
+use super::{BandCheck, RuleWord, RunBuilder, Suite};
 
 /// Resamples of the bootstrap.
 pub const RESAMPLES: usize = 1999;
 /// The joint false-alarm limit of a run.
 pub const FALSE_ALARM: f64 = 0.03;
-/// The normal quantile of 80 percent power.
-pub const Z_POWER: f64 = 0.8416;
-/// The two-sided normal threshold of one band at the false-alarm limit: the joint
-/// threshold over many bands is never below it, also when no resample varies.
-pub const ONE_BAND: f64 = 2.1701;
+/// The power the paired change test sizes for.
+pub const POWER: f64 = 0.8;
+
+/// The normal quantile of 80 percent power, about 0.8416.
+pub fn z_power() -> f64 {
+    pass_rule::special::norm_quantile(POWER)
+}
+
+/// The two-sided normal threshold of one band at the false-alarm limit, about 2.1701: the
+/// joint threshold over many bands is never below it, also when no resample varies.
+pub fn one_band() -> f64 {
+    pass_rule::special::norm_quantile(1.0 - FALSE_ALARM / 2.0)
+}
 /// Mixed into the run seed for the resampling stream, so it is apart from every match's.
 const STREAM_LABEL: u64 = 0x6d61_785f_745f_6273;
 
@@ -142,6 +150,10 @@ pub struct VerdictRow {
     /// accepted, not shown equivalent, and its word stays not sure.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accepted: Option<bool>,
+    /// A version 6 band: its word against real football by the pass rule, with the
+    /// interval and the margin that set it. The row's word is this word.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pass_rule: Option<RuleWord>,
 }
 
 impl VerdictRow {
@@ -259,6 +271,7 @@ fn plain_row(c: &BandCheck, word: Word) -> VerdictRow {
         judged: None,
         note: None,
         accepted: None,
+        pass_rule: c.rule.clone(),
     }
 }
 
@@ -281,24 +294,30 @@ pub fn range_only(checks: &[BandCheck]) -> Vec<VerdictRow> {
         .filter(|c| c.band != "wall_ms")
         .map(|c| {
             let word = match (c.unjudged, c.pass) {
-                _ if c.whole => range_word(c),
+                _ if c.whole || c.rule.is_some() => range_word(c),
                 (true, _) => Word::NotSure,
                 (false, true) => Word::Pass,
                 (false, false) => Word::Fail,
             };
             let mut r = plain_row(c, word);
-            r.note = own_note(c).or_else(|| c.dist.as_ref().map(|d| d.note.clone()));
+            r.note = match &c.rule {
+                Some(rule) => Some(rule.note()),
+                None => own_note(c).or_else(|| c.dist.as_ref().map(|d| d.note.clone())),
+            };
             r
         })
         .collect()
 }
 
 /// The word of a row judged on its range alone, with its own error: fail outside the range;
-/// pass inside with the nearest edge at least [`ONE_BAND`] errors away (the bottom of a
+/// pass inside with the nearest edge at least [`one_band()`] errors away (the bottom of a
 /// floor band, which starts at 0, is no edge); not sure otherwise, as a band with no power
 /// never passes. A row with no error passes inside; a row with no value is not sure. A
 /// whole-distribution row takes the word of its bounds and noise floor.
 pub fn range_word(c: &BandCheck) -> Word {
+    if let Some(rule) = &c.rule {
+        return rule_word(rule.word);
+    }
     if c.unjudged || c.why_none.is_some() {
         return Word::NotSure;
     }
@@ -315,10 +334,19 @@ pub fn range_word(c: &BandCheck) -> Word {
         c.value - c.lo
     };
     let margin = low.min(c.hi - c.value);
-    if c.se == 0.0 || margin >= ONE_BAND * c.se {
+    if c.se == 0.0 || margin >= one_band() * c.se {
         Word::Pass
     } else {
         Word::NotSure
+    }
+}
+
+/// The pass rule's word as a verdict word.
+pub fn rule_word(w: pass_rule::rule::Word) -> Word {
+    match w {
+        pass_rule::rule::Word::Pass => Word::Pass,
+        pass_rule::rule::Word::NotSure => Word::NotSure,
+        pass_rule::rule::Word::Fail => Word::Fail,
     }
 }
 
@@ -333,10 +361,16 @@ pub fn range_rows(checks: &[BandCheck], note: Option<&str>) -> Vec<VerdictRow> {
             r.se = Some(c.se);
             r.judged = Some("range");
             let bounds = c.dist.as_ref().map(|d| d.note.as_str());
-            r.note = own_note(c).or_else(|| match (note, bounds) {
-                (Some(n), Some(b)) => Some(format!("{n}; {b}")),
-                (n, b) => n.or(b).map(str::to_string),
-            });
+            r.note = match &c.rule {
+                Some(rule) => Some(match note {
+                    Some(n) => format!("{n}; {}", rule.note()),
+                    None => rule.note(),
+                }),
+                None => own_note(c).or_else(|| match (note, bounds) {
+                    (Some(n), Some(b)) => Some(format!("{n}; {b}")),
+                    (n, b) => n.or(b).map(str::to_string),
+                }),
+            };
             r
         })
         .collect()
@@ -681,7 +715,7 @@ pub fn bootstrap(
         let k = ((resamples as f64 + 1.0) * (1.0 - FALSE_ALARM)).ceil() as usize;
         stats[k.clamp(1, stats.len()) - 1]
     }
-    .max(ONE_BAND);
+    .max(one_band());
     let found = observed
         .into_iter()
         .zip(rows)
@@ -710,7 +744,7 @@ pub(crate) fn significant(diff: f64, se: f64, c: f64) -> bool {
 /// Matches per suite unit that would give a band of error `se` at `per_unit` matches power
 /// to see `shift`: the error falls with the square root of the matches.
 pub fn needed(per_unit: u32, se: f64, shift: f64, c: f64) -> u32 {
-    let scale = ((c + Z_POWER) * se / shift).powi(2);
+    let scale = ((c + z_power()) * se / shift).powi(2);
     let n = (f64::from(per_unit.max(1)) * scale).ceil();
     if n >= f64::from(u32::MAX) {
         u32::MAX
@@ -751,7 +785,7 @@ pub fn judge(
         let enough = sets[r.set].strata.len() >= 2;
         let power_se = f.se.max(r.apart_se);
         let power =
-            enough && r.spread && f.diff.is_some() && (critical + Z_POWER) * power_se <= r.shift;
+            enough && r.spread && f.diff.is_some() && (critical + z_power()) * power_se <= r.shift;
         // A move fails a band when it is beyond the threshold and at least the smallest
         // shift that matters: a smaller move, however certain, is not a change of the band.
         let moved = f
@@ -800,6 +834,7 @@ pub fn judge(
             judged: Some("paired"),
             note: None,
             accepted: None,
+            pass_rule: None,
         });
     }
     let word = joint_word(&out, &guards);
@@ -813,6 +848,25 @@ pub fn judge(
         guards,
     };
     (out, joint)
+}
+
+/// Sets the word of every row of a version 6 band to its word against real football by the
+/// pass rule, from the band's check on the changed engine; the paired test still fills the
+/// change columns, and no longer sets the word.
+pub fn set_rule_words(rows: &mut [VerdictRow], checks: &[BandCheck]) {
+    for r in rows.iter_mut() {
+        let found = checks
+            .iter()
+            .find(|c| c.band == r.band && c.suite == r.suite && c.pairing == r.pairing);
+        if let Some(rule) = found.and_then(|c| c.rule.as_ref()) {
+            r.word = rule_word(rule.word);
+            r.note = Some(match r.note.take() {
+                Some(n) => format!("{n}; {}", rule.note()),
+                None => rule.note(),
+            });
+            r.pass_rule = Some(rule.clone());
+        }
+    }
 }
 
 /// One suite's power target and the band that set it.
@@ -1600,12 +1654,13 @@ mod tests {
             unjudged: false,
             whole: false,
             dist: None,
+            rule: None,
         }
     }
 
     #[test]
     fn a_range_only_row_passes_only_clear_of_its_edges_by_its_noise() {
-        // ONE_BAND * 0.1 = 0.217: the nearest edge must be at least that far.
+        // one_band() * 0.1 = 0.217: the nearest edge must be at least that far.
         assert_eq!(range_word(&check(2.0, 0.1)), Word::Pass);
         assert_eq!(range_word(&check(1.22, 0.1)), Word::Pass);
         assert_eq!(range_word(&check(1.2, 0.1)), Word::NotSure);
@@ -1700,5 +1755,73 @@ mod tests {
             ..check(2.0, 0.0)
         };
         assert!(!range_rows(&[none], None)[0].inside());
+    }
+
+    /// A pass-rule word of `word` with the interval -0.2 to 0.1 inside the margin 0.3.
+    fn rule(word: pass_rule::rule::Word) -> RuleWord {
+        RuleWord {
+            word,
+            lo: Some(-0.2),
+            hi: Some(0.1),
+            point: Some(-0.05),
+            margin: 0.3,
+            target: "real".into(),
+            cap: None,
+            exposure: 1000.0,
+            min_exposure: 100.0,
+            units: 3,
+            reason: None,
+        }
+    }
+
+    #[test]
+    fn a_version_6_band_takes_the_pass_rule_word_over_its_range() {
+        use pass_rule::rule::Word as Rule;
+        // Outside its range, yet inside its margin against real football: a pass.
+        let outside = BandCheck {
+            rule: Some(rule(Rule::Pass)),
+            ..check(3.5, 0.1)
+        };
+        assert_eq!(range_word(&outside), Word::Pass);
+        let rows = range_only(std::slice::from_ref(&outside));
+        assert_eq!(rows[0].word, Word::Pass);
+        assert_eq!(rows[0].pass_rule.as_ref().map(|r| r.word), Some(Rule::Pass));
+        assert!(
+            rows[0]
+                .note
+                .as_deref()
+                .unwrap()
+                .contains("against margin 0.3")
+        );
+        // Inside its range, but not shown inside its margin: not sure, and the joint word
+        // reads that.
+        let inside = BandCheck {
+            rule: Some(rule(Rule::NotSure)),
+            ..check(2.0, 0.1)
+        };
+        let rows = range_only(std::slice::from_ref(&inside));
+        assert_eq!(rows[0].word, Word::NotSure);
+        assert_eq!(joint_word(&rows, &[]), Word::NotSure);
+        // A change run's rows take the rule word of the changed engine's check.
+        let mut rows = range_rows(&[check(2.0, 0.1)], Some(PER_CLUB));
+        assert_eq!(rows[0].word, Word::Pass);
+        let failing = BandCheck {
+            rule: Some(rule(Rule::Fail)),
+            ..check(2.0, 0.1)
+        };
+        set_rule_words(&mut rows, &[failing]);
+        assert_eq!(rows[0].word, Word::Fail);
+        assert!(rows[0].pass_rule.is_some());
+        // A band of an older file keeps its word.
+        let mut rows = range_rows(&[check(2.0, 0.1)], None);
+        set_rule_words(&mut rows, &[check(2.0, 0.1)]);
+        assert_eq!(rows[0].word, Word::Pass);
+        assert!(rows[0].pass_rule.is_none());
+    }
+
+    #[test]
+    fn the_quantiles_are_the_constants_they_replace() {
+        assert!((z_power() - 0.8416).abs() < 1e-4);
+        assert!((one_band() - 2.1701).abs() < 1e-4);
     }
 }

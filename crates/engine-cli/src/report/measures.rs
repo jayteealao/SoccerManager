@@ -386,6 +386,9 @@ pub struct Obs<'a> {
     /// The match's extras: its measures, its players' running and its clubs; `None` for a
     /// match folded without them.
     pub extras: Option<&'a Extras>,
+    /// The generated league the match belongs to, the outer unit the pass rule resamples;
+    /// `None` for a match folded without its fixture.
+    pub league: Option<u32>,
 }
 
 impl Obs<'_> {
@@ -457,6 +460,11 @@ impl Terms {
     /// Matches the row covers that finished.
     pub fn covered(&self) -> usize {
         self.covered.iter().filter(|c| **c).count()
+    }
+
+    /// For each match, whether the row covers it and it finished.
+    pub fn covered_flags(&self) -> &[bool] {
+        &self.covered
     }
 
     /// The value with every weight 1, before rounding; `None` when a denominator is 0.
@@ -888,6 +896,11 @@ pub fn histograms(def: &BandDef, obs: &[Obs<'_>], scope: Scope) -> Vec<Option<Hi
                 Measure::Distribution { of, .. } => match of {
                     Source::Goals => points(&[f64::from(s.goals[0] + s.goals[1])]),
                     Source::Passes => points(&s.figures.passes.map(f64::from)),
+                    Source::Shots => points(&[f64::from(s.tactics.shots[0] + s.tactics.shots[1])]),
+                    Source::Cards => {
+                        let l = &s.laws;
+                        points(&[f64::from(l.yellow[0] + l.yellow[1] + l.red[0] + l.red[1])])
+                    }
                     Source::ShotDistance => {
                         let m = measures?;
                         pair(&m.shot_bins[0], &m.shot_bins[1])
@@ -968,6 +981,7 @@ mod tests {
                 pairing: None,
                 arm: None,
                 extras: None,
+                league: None,
             })
             .collect()
     }
@@ -1202,6 +1216,7 @@ mod tests {
             pairing: None,
             arm: None,
             extras: Some(e),
+            league: None,
         }
     }
 

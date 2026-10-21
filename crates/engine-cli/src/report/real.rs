@@ -17,9 +17,12 @@ use engine::observe::round_to;
 use serde::Serialize;
 use serde_json::Value;
 
+use pass_rule::interval::{Real, Unit};
+
 use super::bands::{BandDef, ChainCount, Evidence, Measure, Pointer, RealSource, Reduce, Registry};
 use super::distribution::{Sample, bin_of};
 use super::{se_mean, se_ratio, se_share};
+use crate::real_targets::ReferenceFile;
 
 /// Where the real-data folder came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -134,51 +137,95 @@ pub enum Outcome {
 /// The real value of `def` from `folder`, the file read for this band alone.
 #[cfg(test)]
 pub fn read(folder: &RealFolder, def: &BandDef) -> Outcome {
-    read_with(folder, def, None)
+    read_with(folder, def, None, None).0
 }
 
-/// The real value of `def` from `folder`; `csv` is the reduction of its CSV file when one pass
-/// over the file already read it for several bands.
+/// One reduction of a file: the value, its standard error when the reduction gives one, and
+/// the pass rule's real side (per-unit terms, tracked values, or the value and its error).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Reduced {
+    pub value: f64,
+    pub se: Option<f64>,
+    pub side: Real,
+}
+
+/// The real value of `def` from `folder`, and its real side for the pass rule; `csv` is the
+/// reduction of its CSV file when one pass over the file already read it for several bands,
+/// and `reference` the reference file of real targets for a band that names one.
 fn read_with(
     folder: &RealFolder,
     def: &BandDef,
-    csv: Option<Result<(f64, Option<f64>), String>>,
-) -> Outcome {
+    csv: Option<Result<Reduced, String>>,
+    reference: Option<&ReferenceFile>,
+) -> (Outcome, Option<Real>) {
     let Some(real) = &def.real else {
-        return Outcome::NoRecord;
+        return (Outcome::NoRecord, None);
     };
     let pointer = match &real.source {
         RealSource::NoCounterpart(n) => {
-            return Outcome::NoCounterpart {
-                reason: n.none.clone(),
-            };
+            return (
+                Outcome::NoCounterpart {
+                    reason: n.none.clone(),
+                },
+                None,
+            );
         }
         RealSource::Pointer(p) => p,
         RealSource::Target(t) => {
-            return Outcome::NotHere {
-                path: t.target.clone(),
-                reason: "a target of the reference file of real targets, read from gate/".into(),
+            let found = reference.and_then(|f| f.target(&t.target));
+            return match found.and_then(|x| x.value.map(|v| (v, x.se))) {
+                Some((value, se)) => (
+                    Outcome::Read {
+                        value,
+                        se: Some(se),
+                        file_date: None,
+                    },
+                    Some(Real::Summary { value, se }),
+                ),
+                None => (
+                    Outcome::NotHere {
+                        path: t.target.clone(),
+                        reason: if reference.is_some() {
+                            "the reference file of real targets has no scalar target by this key"
+                                .into()
+                        } else {
+                            "no reference file of real targets in gate/".into()
+                        },
+                    },
+                    None,
+                ),
             };
         }
     };
     let Some(dir) = &folder.path else {
-        return Outcome::NotHere {
-            path: String::new(),
-            reason: "no real-data folder: the content folder is in no git checkout; \
-                     pass --real-data"
-                .into(),
-        };
+        return (
+            Outcome::NotHere {
+                path: String::new(),
+                reason: "no real-data folder: the content folder is in no git checkout; \
+                         pass --real-data"
+                    .into(),
+            },
+            None,
+        );
     };
     if !dir.is_dir() {
-        return Outcome::NotHere {
-            path: dir.display().to_string(),
-            reason: "the folder does not exist".into(),
-        };
+        return (
+            Outcome::NotHere {
+                path: dir.display().to_string(),
+                reason: "the folder does not exist".into(),
+            },
+            None,
+        );
     }
     let path = dir.join(&pointer.file);
-    let not_here = |reason: String| Outcome::NotHere {
-        path: path.display().to_string(),
-        reason,
+    let not_here = |reason: String| {
+        (
+            Outcome::NotHere {
+                path: path.display().to_string(),
+                reason,
+            },
+            None,
+        )
     };
     if !path.is_file() {
         return not_here("the file does not exist".into());
@@ -189,16 +236,48 @@ fn read_with(
         csv.unwrap_or_else(|| read_csv(&path, pointer))
     };
     match read {
-        Ok((value, se)) => {
+        Ok(Reduced { value, se, side }) => {
             let scale = pointer.scale.unwrap_or(1.0);
             let file_date = modified_date(&path).filter(|d| *d > real.date);
-            Outcome::Read {
-                value: value * scale,
-                se: se.map(|s| s * scale.abs()),
-                file_date,
-            }
+            (
+                Outcome::Read {
+                    value: value * scale,
+                    se: se.map(|s| s * scale.abs()),
+                    file_date,
+                },
+                Some(scaled(side, scale)),
+            )
         }
         Err(reason) => not_here(reason),
+    }
+}
+
+/// A real side with every value times `scale`.
+fn scaled(side: Real, scale: f64) -> Real {
+    if scale == 1.0 {
+        return side;
+    }
+    match side {
+        Real::Matches(strata) => Real::Matches(
+            strata
+                .into_iter()
+                .map(|units| {
+                    units
+                        .into_iter()
+                        .map(|u| Unit {
+                            num: u.num * scale,
+                            ..u
+                        })
+                        .collect()
+                })
+                .collect(),
+        ),
+        Real::Summary { value, se } => Real::Summary {
+            value: value * scale,
+            se: se * scale.abs(),
+        },
+        Real::Tracked(values) => Real::Tracked(values.into_iter().map(|v| v * scale).collect()),
+        Real::Fixed(v) => Real::Fixed(v * scale),
     }
 }
 
@@ -221,7 +300,7 @@ fn lines(path: &Path) -> Result<Box<dyn BufRead>, String> {
 /// A JSON file: the value at the dotted key (`*` is the mean over every child, whose spread
 /// gives the error; keys joined by `+` are summed), over `den` when it names one (no error),
 /// and a share over `sample`.
-fn read_json(path: &Path, p: &Pointer, sample: u64) -> Result<(f64, Option<f64>), String> {
+fn read_json(path: &Path, p: &Pointer, sample: u64) -> Result<Reduced, String> {
     let mut text = String::new();
     lines(path)?
         .read_to_string(&mut text)
@@ -244,7 +323,15 @@ fn read_json(path: &Path, p: &Pointer, sample: u64) -> Result<(f64, Option<f64>)
         if d == 0.0 {
             return Err(format!("{den} is 0"));
         }
-        return Ok((value / d, None));
+        // A ratio of two summaries has no error the file gives: its real side is exact.
+        return Ok(Reduced {
+            value: value / d,
+            se: None,
+            side: Real::Summary {
+                value: value / d,
+                se: 0.0,
+            },
+        });
     }
     let se = if spread {
         Some(se_mean(&num))
@@ -259,7 +346,17 @@ fn read_json(path: &Path, p: &Pointer, sample: u64) -> Result<(f64, Option<f64>)
     } else {
         None
     };
-    Ok((value, se))
+    // A `*` term holds one value per tracked match: the pass rule leaves one match out at a
+    // time. Any other summary is drawn from its value and error.
+    let side = if spread {
+        Real::Tracked(num)
+    } else {
+        Real::Summary {
+            value,
+            se: se.unwrap_or(0.0),
+        }
+    };
+    Ok(Reduced { value, se, side })
 }
 
 /// The numbers at a dotted key, a `*` segment taking every child of an object.
@@ -341,7 +438,7 @@ enum Key {
 /// A CSV file without quoted fields, streamed line by line: the kept rows (by `where`,
 /// `range`, `same` and `skip_blank`), reduced as the pointer says. A mean is weighted by `weight` or
 /// divided by the sum of `den` when the pointer names one.
-fn read_csv(path: &Path, p: &Pointer) -> Result<(f64, Option<f64>), String> {
+fn read_csv(path: &Path, p: &Pointer) -> Result<Reduced, String> {
     read_csv_all(path, &[p])
         .pop()
         .unwrap_or_else(|| Err("no pointer".into()))
@@ -350,7 +447,7 @@ fn read_csv(path: &Path, p: &Pointer) -> Result<(f64, Option<f64>), String> {
 /// Every pointer of `pointers` over one CSV file, in one pass over its lines: each pointer's
 /// reduction, in their order, as [`read_csv`] gives it alone. A file read once serves every
 /// band that points into it, so a large compressed file is inflated once per judgement.
-fn read_csv_all(path: &Path, pointers: &[&Pointer]) -> Vec<Result<(f64, Option<f64>), String>> {
+fn read_csv_all(path: &Path, pointers: &[&Pointer]) -> Vec<Result<Reduced, String>> {
     let fail = |e: String| pointers.iter().map(|_| Err(e.clone())).collect();
     let mut rows = match lines(path) {
         Ok(r) => r.lines(),
@@ -623,8 +720,10 @@ impl<'a> CsvAcc<'a> {
         Ok(())
     }
 
-    /// The reduction of the kept rows, with its standard error when the reduction gives one.
-    fn finish(self) -> Result<(f64, Option<f64>), String> {
+    /// The reduction of the kept rows, with its standard error when the reduction gives one,
+    /// and the per-unit terms the pass rule resamples: one unit per kept row, or per group
+    /// for a reduction over groups.
+    fn finish(self) -> Result<Reduced, String> {
         let Self {
             p,
             reduce,
@@ -636,12 +735,20 @@ impl<'a> CsvAcc<'a> {
             hits,
             ..
         } = self;
-        let per_group = |f: &dyn Fn(&[f64]) -> Option<f64>| -> Result<(f64, Option<f64>), String> {
+        let read = |value: f64, se: Option<f64>, units: Vec<Unit>| -> Result<Reduced, String> {
+            Ok(Reduced {
+                value,
+                se,
+                side: Real::Matches(vec![units]),
+            })
+        };
+        let ones = |v: &[f64]| -> Vec<Unit> { v.iter().map(|x| Unit::ratio(*x, 1.0)).collect() };
+        let per_group = |f: &dyn Fn(&[f64]) -> Option<f64>| -> Result<Reduced, String> {
             let values: Vec<f64> = groups.values().filter_map(|v| f(v)).collect();
             if values.is_empty() {
                 return Err("no group has enough rows".into());
             }
-            Ok((mean(&values), Some(se_mean(&values))))
+            read(mean(&values), Some(se_mean(&values)), ones(&values))
         };
         let largest = |v: &[f64]| v.iter().copied().fold(f64::MIN, f64::max);
         let smallest = |v: &[f64]| v.iter().copied().fold(f64::MAX, f64::min);
@@ -650,9 +757,9 @@ impl<'a> CsvAcc<'a> {
                 if hits.is_empty() {
                     return Err("no row kept".into());
                 }
-                let hit = hits.values().filter(|h| **h).count();
-                let p = hit as f64 / hits.len() as f64;
-                Ok((p, Some(se_share(p, hits.len()))))
+                let flags: Vec<f64> = hits.values().map(|h| f64::from(u8::from(*h))).collect();
+                let p = mean(&flags);
+                read(p, Some(se_share(p, hits.len())), ones(&flags))
             }
             Reduce::GroupRange => {
                 let window = p.window.unwrap_or(2) as usize;
@@ -668,7 +775,12 @@ impl<'a> CsvAcc<'a> {
                 if d == 0.0 {
                     return Err(format!("{} sums to 0", p.den.as_deref().unwrap_or("den")));
                 }
-                Ok((xs.iter().sum::<f64>() / d, None))
+                let units = xs
+                    .iter()
+                    .zip(&ds)
+                    .map(|(x, d)| Unit::ratio(*x, *d))
+                    .collect();
+                read(xs.iter().sum::<f64>() / d, None, units)
             }
             Reduce::Mean | Reduce::BinShare if weight.is_some() => {
                 let w: f64 = ws.iter().sum();
@@ -676,21 +788,29 @@ impl<'a> CsvAcc<'a> {
                     return Err("the weights sum to 0".into());
                 }
                 let wx: Vec<f64> = xs.iter().zip(&ws).map(|(x, w)| x * w).collect();
-                Ok((wx.iter().sum::<f64>() / w, Some(se_ratio(&wx, &ws))))
+                let units = wx
+                    .iter()
+                    .zip(&ws)
+                    .map(|(a, b)| Unit::ratio(*a, *b))
+                    .collect();
+                read(wx.iter().sum::<f64>() / w, Some(se_ratio(&wx, &ws)), units)
             }
-            Reduce::Mean | Reduce::GoalDistance => Ok((mean(&xs), Some(se_mean(&xs)))),
+            Reduce::Mean | Reduce::GoalDistance => read(mean(&xs), Some(se_mean(&xs)), ones(&xs)),
             Reduce::BinShare | Reduce::Scoreline => {
                 let p = mean(&xs);
-                Ok((p, Some(se_share(p, xs.len()))))
+                read(p, Some(se_share(p, xs.len())), ones(&xs))
             }
             Reduce::Share => {
                 let (op, target) = (
                     p.op.unwrap_or(super::bands::Op::AtLeast),
                     p.value.unwrap_or(0.0),
                 );
-                let hit = xs.iter().filter(|s| op.holds(**s, target)).count();
-                let p = hit as f64 / xs.len() as f64;
-                Ok((p, Some(se_share(p, xs.len()))))
+                let flags: Vec<f64> = xs
+                    .iter()
+                    .map(|s| f64::from(u8::from(op.holds(*s, target))))
+                    .collect();
+                let p = mean(&flags);
+                read(p, Some(se_share(p, xs.len())), ones(&flags))
             }
             Reduce::FactorialRatio => {
                 let s: f64 = xs.iter().sum();
@@ -698,7 +818,17 @@ impl<'a> CsvAcc<'a> {
                     return Err(format!("{} sums to 0", p.key));
                 }
                 let f: f64 = xs.iter().map(|x| x * (x - 1.0)).sum();
-                Ok((xs.len() as f64 * f / (s * s), None))
+                // n sum(x(x-1)) / sum(x)^2 = (sum x(x-1) / sum x) (n / sum x).
+                let units = xs
+                    .iter()
+                    .map(|x| Unit {
+                        num: x * (x - 1.0),
+                        den: *x,
+                        scale_num: 1.0,
+                        scale_den: *x,
+                    })
+                    .collect();
+                read(xs.len() as f64 * f / (s * s), None, units)
             }
             Reduce::Histogram | Reduce::Cells | Reduce::Chains => Err(WHOLE_SAMPLE.into()),
         }
@@ -710,7 +840,7 @@ impl<'a> CsvAcc<'a> {
 fn csv_values<'r>(
     folder: &RealFolder,
     registry: &'r Registry,
-) -> BTreeMap<&'r str, Result<(f64, Option<f64>), String>> {
+) -> BTreeMap<&'r str, Result<Reduced, String>> {
     let mut by_file: BTreeMap<PathBuf, Vec<(&'r str, &'r Pointer)>> = BTreeMap::new();
     if let Some(dir) = folder.path.as_ref().filter(|d| d.is_dir()) {
         for def in registry.bands.iter().filter(|d| !d.is_distribution()) {
@@ -1277,6 +1407,10 @@ pub struct RealBand {
     /// Why the band only reports, when it does.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub report_only: Option<String>,
+    /// The pass rule's real side: per-unit terms, tracked values, or the value and its
+    /// error. Judging reads it; the record does not hold it.
+    #[serde(skip)]
+    pub side: Option<Real>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -1303,7 +1437,19 @@ pub struct GeneralisationInfo {
 
 /// Reads every band's real value from `folder`; a distribution band's comes from its whole
 /// sample in `samples`, read once for the judgement.
+#[cfg(test)]
 pub fn read_all(folder: &RealFolder, registry: &Registry, samples: &Samples) -> RealInfo {
+    read_all_with(folder, registry, samples, None)
+}
+
+/// [`read_all`], with the reference file of real targets for the bands that name a target.
+/// Each band's entry also carries its real side for the pass rule.
+pub fn read_all_with(
+    folder: &RealFolder,
+    registry: &Registry,
+    samples: &Samples,
+    reference: Option<&ReferenceFile>,
+) -> RealInfo {
     let floor = u64::from(registry.generalisation_floor);
     let present = folder.path.as_ref().is_some_and(|p| p.is_dir());
     let mut info = RealInfo {
@@ -1322,6 +1468,7 @@ pub fn read_all(folder: &RealFolder, registry: &Registry, samples: &Samples) -> 
     let mut csv = csv_values(folder, registry);
     for def in &registry.bands {
         let whole = def.is_distribution().then(|| samples.get(&def.band));
+        let mut side = None;
         let outcome = match whole {
             Some(Some(Ok(sample))) => {
                 let (value, se) = sample_mean(def, sample);
@@ -1353,7 +1500,11 @@ pub fn read_all(folder: &RealFolder, registry: &Registry, samples: &Samples) -> 
                 path: String::new(),
                 reason: "the whole sample was not read".into(),
             },
-            _ => read_with(folder, def, csv.remove(def.band.as_str())),
+            _ => {
+                let (outcome, s) = read_with(folder, def, csv.remove(def.band.as_str()), reference);
+                side = s;
+                outcome
+            }
         };
         let matches = match whole {
             Some(Some(Ok(sample))) => Some(sample.per_match.len() as u64),
@@ -1414,6 +1565,7 @@ pub fn read_all(folder: &RealFolder, registry: &Registry, samples: &Samples) -> 
                 word: generalisation_word(units, floor, nc),
             },
             report_only: def.report_only.clone(),
+            side,
         });
     }
     info
@@ -1632,7 +1784,7 @@ A,0,0
         for (p, got) in [&mean, &share, &only_a, &broken].into_iter().zip(&all) {
             assert_eq!(*got, read_csv(&path, p));
         }
-        assert_eq!(all[0].as_ref().unwrap().0, 2.0);
+        assert_eq!(all[0].as_ref().unwrap().value, 2.0);
         assert!(all[3].as_ref().unwrap_err().contains("no_such_column"));
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1859,6 +2011,7 @@ A,0,0
             judged: None,
             note: None,
             accepted: None,
+            pass_rule: None,
         }
     }
 
@@ -2218,5 +2371,141 @@ A,0,0
                 .ends_with("the folder does not exist")
         }));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ---- The pass rule's real side ---------------------------------------------------
+
+    /// The real side of one band read alone from `dir`.
+    fn side_of(dir: &Path, source: RealSource) -> (Outcome, Option<Real>) {
+        read_with(&at(dir), &band(source, 10, 1.0), None, None)
+    }
+
+    #[test]
+    fn a_csv_reduction_gives_one_unit_per_kept_row_that_reproduces_its_value() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("m.csv"),
+            "comp,hg,ag\nA,1,0\nA,3,2\nB,0,0\nA,2,2\n",
+        )
+        .unwrap();
+        let cases: [(Pointer, usize); 4] = [
+            (pointer("m.csv", "hg+ag"), 4),
+            (
+                Pointer {
+                    reduce: Some(Reduce::Share),
+                    op: Some(super::super::bands::Op::AtLeast),
+                    value: Some(3.0),
+                    ..pointer("m.csv", "hg+ag")
+                },
+                4,
+            ),
+            (
+                Pointer {
+                    reduce: Some(Reduce::FactorialRatio),
+                    ..pointer("m.csv", "hg")
+                },
+                4,
+            ),
+            (
+                Pointer {
+                    filter: Some(BTreeMap::from([(
+                        "comp".to_string(),
+                        vec!["A".to_string()],
+                    )])),
+                    ..pointer("m.csv", "hg")
+                },
+                3,
+            ),
+        ];
+        for (p, rows) in cases {
+            let (outcome, side) = side_of(dir.path(), RealSource::Pointer(Box::new(p.clone())));
+            let (value, _) = value(outcome);
+            let Some(Real::Matches(strata)) = side else {
+                panic!("{}: {side:?}", p.key);
+            };
+            assert_eq!(strata.len(), 1);
+            assert_eq!(strata[0].len(), rows, "{}", p.key);
+            let (estimate, se) = pass_rule::interval::ratio_and_se(&strata[0]);
+            assert!(
+                (estimate - value).abs() < 1e-12,
+                "{}: {estimate} {value}",
+                p.key
+            );
+            assert!(se > 0.0, "{}", p.key);
+        }
+    }
+
+    #[test]
+    fn a_json_key_over_every_match_is_a_tracked_side_and_a_summary_its_value_and_error() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("t.json"),
+            r#"{"per_match": {"a": {"x": 1.0}, "b": {"x": 2.0}, "c": {"x": 4.0}}, "rate": 0.5}"#,
+        )
+        .unwrap();
+        let (_, side) = side_of(
+            dir.path(),
+            RealSource::Pointer(Box::new(pointer("t.json", "per_match.*.x"))),
+        );
+        assert_eq!(side, Some(Real::Tracked(vec![1.0, 2.0, 4.0])));
+        let share = Pointer {
+            reduce: Some(Reduce::Share),
+            ..pointer("t.json", "rate")
+        };
+        let (outcome, side) = side_of(dir.path(), RealSource::Pointer(Box::new(share)));
+        let (v, se) = value(outcome);
+        assert_eq!(
+            side,
+            Some(Real::Summary {
+                value: v,
+                se: se.unwrap()
+            })
+        );
+        // A scale applies to the side as to the value.
+        let scaled = Pointer {
+            scale: Some(0.5),
+            ..pointer("t.json", "per_match.*.x")
+        };
+        let (_, side) = side_of(dir.path(), RealSource::Pointer(Box::new(scaled)));
+        assert_eq!(side, Some(Real::Tracked(vec![0.5, 1.0, 2.0])));
+    }
+
+    #[test]
+    fn a_reference_file_target_reads_its_value_and_error() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../gate/real-targets.json");
+        let file = ReferenceFile::load(&path).unwrap();
+        let key = "tier.1.goals_per_match";
+        let want = file.target(key).unwrap();
+        let def = band(
+            RealSource::Target(super::super::bands::TargetRef { target: key.into() }),
+            10,
+            1.0,
+        );
+        let folder = at(Path::new("."));
+        let (outcome, side) = read_with(&folder, &def, None, Some(&file));
+        assert_eq!(value(outcome), (want.value.unwrap(), Some(want.se)));
+        assert_eq!(
+            side,
+            Some(Real::Summary {
+                value: want.value.unwrap(),
+                se: want.se
+            })
+        );
+        // Without the file, or with a key it lacks, the band reads not here.
+        assert!(matches!(
+            read_with(&folder, &def, None, None).0,
+            Outcome::NotHere { .. }
+        ));
+        let missing = band(
+            RealSource::Target(super::super::bands::TargetRef {
+                target: "tier.9.goals_per_match".into(),
+            }),
+            10,
+            1.0,
+        );
+        assert!(matches!(
+            read_with(&folder, &missing, None, Some(&file)).0,
+            Outcome::NotHere { .. }
+        ));
     }
 }

@@ -24,8 +24,8 @@
       "const": "run-report"
     },
     "schema.version": {
-      "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows; 4 for a calibrate run that reports each band's real value (calib.real, calib.realism, and the real columns of each verdict); 5 for a calibrate run that reports the bands that only report apart (calib.reported), the developer's acceptances (calib.accepted), the match counts (calib.counts), and how each verdict row was judged; 6 for a calibrate run with the whole-distribution bands (upper and noise_floor on a verdict row); 7 for a calibrate run with the formation field rating (calib.nash); 8 for a calibrate run with the registry's figures (calib.figures); 9 for a calibrate run whose change run reports a styles sample (calib.styles). Every key of an older version stays.",
-      "enum": ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
+      "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows; 4 for a calibrate run that reports each band's real value (calib.real, calib.realism, and the real columns of each verdict); 5 for a calibrate run that reports the bands that only report apart (calib.reported), the developer's acceptances (calib.accepted), the match counts (calib.counts), and how each verdict row was judged; 6 for a calibrate run with the whole-distribution bands (upper and noise_floor on a verdict row); 7 for a calibrate run with the formation field rating (calib.nash); 8 for a calibrate run with the registry's figures (calib.figures); 9 for a calibrate run whose change run reports a styles sample (calib.styles); 10 for a calibrate run with a version 6 band file, whose verdict rows carry the pass rule's word, interval and margin (pass_rule). Every key of an older version stays.",
+      "enum": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
     },
     "calib.substitutions": {
       "description": "The substitutions of the run's matches (per team a match, the share of team matches by count, the minute quartiles, the reasons, the out-of-position share) beside the real era of the rule pack's substitution limit from the signature table; report only.",
@@ -200,6 +200,25 @@
         "accepted": {
           "description": "Since version 5: the developer accepted this not-sure row in the run folder's accepted.json. It is accepted, not shown equivalent: its word stays not sure and it never counts as a pass.",
           "const": true
+        },
+        "pass_rule": {
+          "description": "Since version 10: a version 6 band's word against real football by the equivalence rule. Pass when the interval of the engine minus the target sits inside plus or minus the margin, fail when it sits wholly outside, not sure otherwise. The row's word is this word.",
+          "type": "object",
+          "required": ["word", "margin", "target", "exposure", "min_exposure", "units"],
+          "additionalProperties": false,
+          "properties": {
+            "word": { "enum": ["pass", "fail", "not sure"] },
+            "lo": { "type": "number" },
+            "hi": { "type": "number" },
+            "point": { "type": "number" },
+            "margin": { "type": "number", "minimum": 0 },
+            "target": { "type": "string", "minLength": 1 },
+            "cap": { "type": "number", "minimum": 0 },
+            "exposure": { "type": "number", "minimum": 0 },
+            "min_exposure": { "type": "number", "minimum": 0 },
+            "units": { "type": "integer", "minimum": 0 },
+            "reason": { "type": "string", "minLength": 1 }
+          }
         }
       }
     },

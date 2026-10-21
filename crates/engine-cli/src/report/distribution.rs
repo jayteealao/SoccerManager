@@ -20,7 +20,9 @@
 
 use engine::rng::EngineRng;
 
-use super::verdict::{FALSE_ALARM, Word};
+#[cfg(test)]
+use super::verdict::FALSE_ALARM;
+use super::verdict::Word;
 use crate::stats::quantile_rank;
 
 /// A per-match histogram: each non-empty bin and its count. Bin `k` stands at the point
@@ -231,6 +233,7 @@ pub fn stream(seed: u64, name: &str) -> u64 {
 /// The equivalence test of an engine's sample against the real sample, `resamples` whole-
 /// match resamples of both from the stream `seed`. `Err` says why there is no value: fewer
 /// than two matches on a side, or a side that holds nothing.
+#[cfg(test)]
 pub fn judge_to_real(
     engine: &Sample,
     real: &Sample,
@@ -238,6 +241,20 @@ pub fn judge_to_real(
     margin: f64,
     seed: u64,
     resamples: usize,
+) -> Result<DistCheck, String> {
+    judge_to_real_at(engine, real, metric, margin, seed, resamples, FALSE_ALARM)
+}
+
+/// [`judge_to_real`] with the bounds at `tail` and `1 - tail`: the pass rule's alpha for a
+/// version 6 band, the run's false-alarm limit otherwise.
+pub fn judge_to_real_at(
+    engine: &Sample,
+    real: &Sample,
+    metric: Metric,
+    margin: f64,
+    seed: u64,
+    resamples: usize,
+    tail: f64,
 ) -> Result<DistCheck, String> {
     let bins = engine.bins;
     if real.bins != bins {
@@ -294,9 +311,9 @@ pub fn judge_to_real(
     let se = (ds.iter().map(|d| (d - mean) * (d - mean)).sum::<f64>() / ds.len() as f64).sqrt();
     ds.sort_by(f64::total_cmp);
     cs.sort_by(f64::total_cmp);
-    let upper = quantile_rank(&ds, 1.0 - FALSE_ALARM);
-    let lower = quantile_rank(&ds, FALSE_ALARM);
-    let floor = quantile_rank(&cs, 1.0 - FALSE_ALARM);
+    let upper = quantile_rank(&ds, 1.0 - tail);
+    let lower = quantile_rank(&ds, tail);
+    let floor = quantile_rank(&cs, 1.0 - tail);
     let (w, note) = word(upper, lower, floor, margin);
     Ok(DistCheck {
         distance: observed,

@@ -27,9 +27,11 @@ pub const PROOF_VERSION: u32 = 1;
 /// The source files that judge a band, in the order they are hashed: the verdict rules, the
 /// whole-distribution test, the measures and the band record; the report's checks (which pick
 /// each band's margin and resamples) and the real samples they read; and the run's judgement
-/// (which rows gate, how each is judged, and the pass rule); and the shared statistics, whose
-/// quantile rule sets the bounds of every whole-distribution band.
-const JUDGING: [&str; 8] = [
+/// (which rows gate, how each is judged, and the pass rule); the shared statistics, whose
+/// quantile rule sets the bounds of every whole-distribution band; the pass rule's crate,
+/// which sets every band's word from its interval and margin; and the reference file's
+/// reader, whose targets are the real side of a band that names one.
+const JUDGING: [&str; 14] = [
     include_str!("verdict.rs"),
     include_str!("distribution.rs"),
     include_str!("measures.rs"),
@@ -38,10 +40,31 @@ const JUDGING: [&str; 8] = [
     include_str!("real.rs"),
     include_str!("../calibrate/mod.rs"),
     include_str!("../stats.rs"),
+    include_str!("../../../pass-rule/src/special.rs"),
+    include_str!("../../../pass-rule/src/bounds.rs"),
+    include_str!("../../../pass-rule/src/floor.rs"),
+    include_str!("../../../pass-rule/src/interval.rs"),
+    include_str!("../../../pass-rule/src/rule.rs"),
+    include_str!("../real_targets/mod.rs"),
+];
+
+/// The judging files with no unit tests of their own, hashed whole after [`JUDGING`]: the
+/// pass rule's crate root and the reader of the football-data match files.
+const JUDGING_UNTESTED: [&str; 2] = [
+    include_str!("../../../pass-rule/src/lib.rs"),
+    include_str!("../real_targets/football_data.rs"),
 ];
 
 /// The line that starts a judging file's unit tests, which close every one of those files.
 const TESTS_START: &str = "\n#[cfg(test)]\nmod tests";
+/// The same line for a test module the crate's other modules share.
+const SHARED_TESTS_START: &str = "\n#[cfg(test)]\npub(crate) mod tests";
+
+/// Where the unit tests of a judging file start.
+fn tests_start(text: &str) -> Option<usize> {
+    text.find(TESTS_START)
+        .or_else(|| text.find(SHARED_TESTS_START))
+}
 
 /// What the gate is: the parts a proof's rates hold for.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -58,7 +81,7 @@ pub struct GateIdentity {
 /// The identity of the gate this build runs with `reg`.
 pub fn current(reg: &Registry) -> GateIdentity {
     GateIdentity {
-        registry: reg.digest(),
+        registry: reg.gate_digest(),
         measures: MEASURES_VERSION,
         verdict_code: verdict_code(),
     }
@@ -66,7 +89,8 @@ pub fn current(reg: &Registry) -> GateIdentity {
 
 /// The digest of the judging source files of this build.
 pub fn verdict_code() -> String {
-    source_digest(&JUDGING)
+    let all: Vec<&str> = JUDGING.iter().chain(&JUDGING_UNTESTED).copied().collect();
+    source_digest(&all)
 }
 
 /// SHA-256, as 12 hex characters, over each text with its carriage returns removed, its unit
@@ -76,9 +100,7 @@ fn source_digest(texts: &[&str]) -> String {
     let mut hasher = Sha256::new();
     for text in texts {
         let text = text.replace('\r', "");
-        let code = text
-            .find(TESTS_START)
-            .map_or(text.as_str(), |at| &text[..at]);
+        let code = tests_start(&text).map_or(text.as_str(), |at| &text[..at]);
         hasher.update((code.len() as u64).to_le_bytes());
         hasher.update(code.as_bytes());
     }
@@ -662,9 +684,7 @@ mod tests {
     fn every_judging_file_ends_with_its_tests() {
         for text in JUDGING {
             let text = text.replace('\r', "");
-            let at = text
-                .find(TESTS_START)
-                .expect("a judging file has unit tests");
+            let at = tests_start(&text).expect("a judging file has unit tests");
             for line in text[at..].lines() {
                 assert!(
                     !line.starts_with("pub fn ") && !line.starts_with("fn "),

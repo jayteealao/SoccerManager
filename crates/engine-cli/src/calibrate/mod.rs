@@ -264,6 +264,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         real_folder: real_folder.clone(),
         quiet: std::env::var_os(QUIET_ENV).is_some(),
         samples: std::sync::OnceLock::new(),
+        sides: std::sync::OnceLock::new(),
     };
 
     // The old engine's results come before the run folder exists and before any match of
@@ -398,6 +399,36 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         .iter()
         .map(|(_, s)| ctx.bench(s))
         .collect::<anyhow::Result<Vec<_>>>()?;
+    // The real values, with the pass rule's real sides, are read before any match of the
+    // changed engine plays: a band whose margin is under its floor with the real error read
+    // here stops the run now. They are read after the single-thread figure, whose process
+    // peak memory would otherwise hold them. The old engine's own quiet run leaves them to
+    // the parent.
+    let reference = {
+        let path = crate::real_targets::default_file(dir.root());
+        path.is_file()
+            .then(|| crate::real_targets::ReferenceFile::load(&path))
+            .transpose()?
+    };
+    let real_info = (!ctx.quiet).then(|| {
+        let _judge = stages::enter(Stage::Judge);
+        real::read_all_with(
+            &real_folder,
+            &ctx.bands,
+            &ctx.real_samples(),
+            reference.as_ref(),
+        )
+    });
+    if let Some(info) = &real_info {
+        floor_with_real(&ctx.bands, info)?;
+        let sides = info
+            .bands
+            .iter()
+            .filter_map(|b| b.side.clone().map(|side| (b.band.clone(), side)))
+            .collect();
+        let _ = ctx.sides.set(std::sync::Arc::new(sides));
+    }
+
     let Some(mut played) = ctx.play_all(&arms, &arm_dirs, &inputs, &benches, &owner_id)? else {
         return stopped();
     };
@@ -466,13 +497,10 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     } = ctx.judge_run(first, old.as_ref().map(|(_, f)| f), change, pilot_used);
     // The real values, read in place at each judgement; the old engine's own quiet run
     // leaves them to the parent.
-    let real_info = (!quiet).then(|| {
-        let _judge = stages::enter(Stage::Judge);
-        let info = real::read_all(&real_folder, &ctx.bands, &ctx.real_samples());
-        attach_real(&mut verdicts, &info, &ctx.bands);
-        attach_real(&mut reported, &info, &ctx.bands);
-        info
-    });
+    if let Some(info) = &real_info {
+        attach_real(&mut verdicts, info, &ctx.bands);
+        attach_real(&mut reported, info, &ctx.bands);
+    }
     let identity_value = serde_json::to_value(&identity)?;
     // The developer's acceptances in the run folder mark not-sure rows; a word never moves.
     let acceptances = (!quiet)
@@ -666,7 +694,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         counts,
         registry: RegistryInfo {
             version: REGISTRY_VERSION,
-            digest: ctx.bands.digest(),
+            digest: ctx.bands.gate_digest(),
             migrated_from: ctx.bands.migrated_from,
         },
         real: real_info,
@@ -1032,6 +1060,43 @@ fn match_counts(
 /// Sets each verdict row's real value and distance from the band's real entry, or the note
 /// the console prints in their place. A whole-distribution band whose real sample was read
 /// reads "whole sample", its distance its value.
+/// The margin floor again, with each band's real error as the pass rule will see it (the
+/// error of its real side read here). A band under its floor refuses the run before any
+/// match plays, naming the band, its margin and the margin it needs.
+fn floor_with_real(bands: &Registry, info: &real::RealInfo) -> anyhow::Result<()> {
+    let real_se = |b: &BandDef| {
+        info.band(&b.band)
+            .and_then(|r| r.side.as_ref())
+            .map(|side| side.estimate().1)
+            .filter(|e| e.is_finite())
+    };
+    match floor_refused(bands, &real_se) {
+        None => Ok(()),
+        Some(why) => anyhow::bail!(why),
+    }
+}
+
+/// The refusal of a run whose bands do not all hold their floor with the real errors
+/// `real_se` gives; `None` when every band holds it.
+fn floor_refused(bands: &Registry, real_se: &dyn Fn(&BandDef) -> Option<f64>) -> Option<String> {
+    let refused = bands.floor_refusals(real_se);
+    if refused.is_empty() {
+        return None;
+    }
+    let lines: Vec<String> = refused
+        .iter()
+        .map(|f| format!("  {}: {}", f.band, f.reason()))
+        .collect();
+    Some(format!(
+        "{} band(s) of {} hold a margin under the 97 percent floor with the real errors          read here; no match played. Widen each margin with a reason that cites a          noticeable error, or add real data:
+{}",
+        refused.len(),
+        crate::report::bands::BANDS_FILE,
+        lines.join("
+")
+    ))
+}
+
 fn attach_real(rows: &mut [verdict::VerdictRow], info: &real::RealInfo, bands: &Registry) {
     for r in rows.iter_mut() {
         let entry = info.band(&r.band);
@@ -1095,6 +1160,8 @@ struct RunCtx<'a> {
     quiet: bool,
     /// The distribution bands' real samples, read once, in the judge stage, on first use.
     samples: std::sync::OnceLock<std::sync::Arc<real::Samples>>,
+    /// Each band's real side for the pass rule, read with the real values before play.
+    sides: std::sync::OnceLock<std::sync::Arc<BTreeMap<String, pass_rule::interval::Real>>>,
 }
 
 /// The suites a run plays, and the numbers of the formation pairings it plays: `--suite`
@@ -1452,6 +1519,9 @@ impl RunCtx<'_> {
         let opts = self.opts;
         let mut builder = RunBuilder::new(self.bands.clone());
         builder.set_real_samples(self.real_samples(), opts.seed());
+        if let Some(sides) = self.sides.get() {
+            builder.set_real_sides(sides.clone());
+        }
         builder.minutes = opts.minutes;
         for &suite in &self.suites {
             let matches = self.matches_for(suite);
@@ -1532,6 +1602,7 @@ impl RunCtx<'_> {
                 outliers += has(reason::OUTLIER);
                 keys.entry(suite).or_default().push(k.key.as_u64());
                 self.add(&mut builder, suite, &k, row.band_record());
+                builder.set_league(suite, k.fixture.league);
                 let club = |c: usize| (k.fixture.league, u32::try_from(c).unwrap_or(u32::MAX));
                 let measured = row.measured.as_deref();
                 builder.set_extras(
@@ -1805,6 +1876,10 @@ impl RunCtx<'_> {
                 if only { &mut reported } else { &mut rows }.extend(row);
             }
         }
+        // A version 6 band's word is its word against real football by the pass rule on the
+        // changed engine; the paired test fills the change columns only.
+        verdict::set_rule_words(&mut rows, &first.checks);
+        verdict::set_rule_words(&mut reported, &first.reported);
         joint.word = verdict::joint_word(&rows, &joint.guards);
         verdict::mark_report_only(&mut reported, None, why);
         let power: BTreeMap<String, PowerInfo> = self
@@ -2175,5 +2250,50 @@ mod tests {
             .to_string();
         assert!(err.contains("no such pairing"), "{err}");
         assert!(err.contains("4-4-2 v 4-4-1-1"), "{err}");
+    }
+
+    #[test]
+    fn a_band_under_its_floor_with_the_real_error_read_here_refuses_the_run() {
+        let doc = serde_json::json!({
+            "schema_version": 6,
+            "sample_size": 1000,
+            "wall_minutes_per_sample": 30.0,
+            "stronger_team": {"attribute_boost": 1.15},
+            "generalisation_floor": 2,
+            "pass_rule": {"alpha": 0.05, "sound_pass": 0.97, "design_count": {"matches": 1000, "leagues": 30}},
+            "bands": [{
+                "band": "goals_per_match",
+                "suites": ["equal"],
+                "measure": {"kind": "mean", "per": "match", "of": ["goals.home", "goals.away"]},
+                "target": {"real": {}},
+                "margin": {"value": 0.4, "league_spread": 0.0, "noticeable_error": 0.4,
+                           "reason": "a player notices it", "spread_reason": "one population",
+                           "design_choice": true},
+                "definition_version": 1,
+                "population": "generated leagues",
+                "estimator": "mean per match",
+                "resampling": {"engine": "league", "real": "match"},
+                "min_exposure": {"unit": "matches", "value": 100.0},
+                "rare": false,
+                "engine_spread": {"per_match_sd": 1.7, "between_league_sd": 0.1, "measured": "a fixture"},
+                "real": {"source": {"dataset": "a fixture", "file": "m.csv", "key": "hg+ag"},
+                         "sample": 100, "date": "2026-10-21"},
+                "evidence": "calibration",
+                "confidence": {"measurement": {"count": 100},
+                               "generalisation": {"competitions": 1, "seasons": 1, "clubs": 20}},
+                "condition": "dry",
+                "gates": true
+            }]
+        });
+        let bands = Registry::from_bytes(doc.to_string().as_bytes()).unwrap();
+        // The engine's error alone holds the floor; a large real error does not.
+        assert_eq!(floor_refused(&bands, &|_| Some(0.001)), None);
+        let why = floor_refused(&bands, &|_| Some(0.2)).unwrap();
+        assert!(why.contains("1 band(s)"), "{why}");
+        assert!(
+            why.contains("goals_per_match: margin 0.4000 is below the 97 percent floor"),
+            "{why}"
+        );
+        assert!(why.contains("real error 0.2000"), "{why}");
     }
 }

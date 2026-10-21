@@ -212,6 +212,10 @@ pub enum Source {
     ChainPasses,
     /// The seconds of each possession chain, both sides: a measures build's chain bins.
     ChainSeconds,
+    /// The match's shots, both sides summed, blocked shots counted: one point per match.
+    Shots,
+    /// The match's cards, yellow and red, both sides summed: one point per match.
+    Cards,
 }
 
 impl Source {
@@ -223,6 +227,8 @@ impl Source {
             Source::ShotDistance => "shot_distance",
             Source::ChainPasses => "chain_passes",
             Source::ChainSeconds => "chain_seconds",
+            Source::Shots => "shots",
+            Source::Cards => "cards",
         }
     }
 
@@ -232,7 +238,7 @@ impl Source {
         use crate::measure_rows::{CHAIN_PASS_BINS, CHAIN_SECOND_BINS, SHOT_BINS};
         // At most a few dozen bins.
         match self {
-            Source::Goals | Source::Passes => None,
+            Source::Goals | Source::Passes | Source::Shots | Source::Cards => None,
             Source::ShotDistance => Some((1.0, SHOT_BINS as u32)),
             Source::ChainPasses => Some((1.0, CHAIN_PASS_BINS as u32)),
             Source::ChainSeconds => Some((2.0, CHAIN_SECOND_BINS as u32)),
@@ -631,6 +637,10 @@ pub struct Registry {
     pub pass_rule: Option<PassRuleSettings>,
     /// The named groups of bands that only report (version 6).
     pub report_only_groups: Vec<ReportOnlyGroup>,
+    /// SHA-256, as 12 hex characters, of the reference file of real targets read with the
+    /// registry; `None` when no reference file was here. It joins the registry's digest, as
+    /// a band that names a target is judged against that file.
+    pub reference: Option<String>,
 }
 
 /// A figure: a measure reported beside the value an earlier build gave, with no range; it
@@ -697,7 +707,12 @@ impl Registry {
             .then(|| crate::real_targets::ReferenceFile::load(&reference_path))
             .transpose()?;
         Ok(match reference {
-            Some(file) => Self::parse(&bytes, Some(&file))?,
+            Some(file) => {
+                let mut reg = Self::parse(&bytes, Some(&file))?;
+                let reference_bytes = read_bytes(&reference_path, "gate/real-targets.json")?;
+                reg.reference = Some(engine::data::hex12(&Sha256::digest(reference_bytes)));
+                reg
+            }
             None => Self::from_bytes(&bytes)?,
         })
     }
@@ -915,6 +930,20 @@ impl Registry {
     pub fn digest(&self) -> String {
         let views: Vec<Judgement<'_>> = self.bands.iter().map(BandDef::judgement).collect();
         let bytes = serde_json::to_vec(&views).unwrap_or_default();
+        engine::data::hex12(&Sha256::digest(bytes))
+    }
+
+    /// The gate's registry digest: [`Self::digest`] with the reference file of real targets
+    /// read with the registry. A registry read with a reference file is another gate from
+    /// the same registry read without one, or with another file; without one it is
+    /// [`Self::digest`].
+    pub fn gate_digest(&self) -> String {
+        let views: Vec<Judgement<'_>> = self.bands.iter().map(BandDef::judgement).collect();
+        let mut bytes = serde_json::to_vec(&views).unwrap_or_default();
+        if let Some(reference) = &self.reference {
+            bytes.extend_from_slice(b"\nreference:");
+            bytes.extend_from_slice(reference.as_bytes());
+        }
         engine::data::hex12(&Sha256::digest(bytes))
     }
 
@@ -1174,6 +1203,7 @@ impl RegistryV4 {
             migrated_from: None,
             pass_rule: None,
             report_only_groups: Vec::new(),
+            reference: None,
         }
     }
 }
@@ -1223,6 +1253,7 @@ impl RegistryV3 {
             migrated_from: Some(self.schema_version),
             pass_rule: None,
             report_only_groups: Vec::new(),
+            reference: None,
         }
     }
 }
@@ -1750,6 +1781,7 @@ impl RegistryV6 {
             migrated_from: None,
             pass_rule: Some(self.pass_rule),
             report_only_groups: self.report_only,
+            reference: None,
         }
     }
 }

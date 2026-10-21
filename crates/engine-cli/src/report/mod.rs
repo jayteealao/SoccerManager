@@ -22,8 +22,9 @@ use std::collections::BTreeMap;
 use engine::observe::{MatchStats, Record, round_to};
 use serde::{Deserialize, Serialize};
 
-use bands::{BandDef, Registry};
+use bands::{BandDef, Registry, Rule, Target};
 use measures::{Extras, Obs, Scope};
+use pass_rule::interval::{Interval, RareKind, Real, Unit};
 
 /// Matches slower than this, in milliseconds, are outliers (the contract's slow threshold).
 pub const SLOW_MATCH_MS: u64 = 2000;
@@ -219,6 +220,65 @@ pub struct BandCheck {
     /// bounds and word.
     #[serde(skip)]
     pub dist: Option<distribution::DistCheck>,
+    /// A version 6 band: its word by the pass rule, with the interval and the margin that
+    /// set it.
+    #[serde(skip)]
+    pub rule: Option<RuleWord>,
+}
+
+/// A band's word against real football (or its design target) by the pass rule, with what
+/// decided it: the interval of engine minus the target, each side at `1 - alpha`, the margin,
+/// and the exposure. A whole-distribution band's interval is the bounds of its distance.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RuleWord {
+    pub word: pass_rule::rule::Word,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lo: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hi: Option<f64>,
+    /// The difference (or distance) on the unresampled data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub point: Option<f64>,
+    pub margin: f64,
+    /// `real`, or `design <value>`.
+    pub target: String,
+    /// A design band's most distance from the real value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cap: Option<f64>,
+    /// Matches or events judged, in the unit of the minimum exposure.
+    pub exposure: f64,
+    pub min_exposure: f64,
+    /// The engine's outer units resampled: leagues, or matches for fixed clubs.
+    pub units: usize,
+    /// Why the word is not sure, when a reason beyond the interval holds it there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+impl RuleWord {
+    fn set_interval(&mut self, iv: &Interval) {
+        self.lo = Some(round_to(iv.lo, 6));
+        self.hi = Some(round_to(iv.hi, 6));
+        self.point = Some(round_to(iv.point, 6));
+    }
+
+    /// The interval and the margin in words, as the console's note shows them.
+    pub fn note(&self) -> String {
+        let mut out = match (self.lo, self.hi) {
+            (Some(lo), Some(hi)) => format!(
+                "interval {lo} to {hi} against margin {} ({})",
+                self.margin, self.target
+            ),
+            _ => format!("margin {} ({})", self.margin, self.target),
+        };
+        if let Some(cap) = self.cap {
+            out.push_str(&format!(", cap {cap}"));
+        }
+        if let Some(why) = &self.reason {
+            out.push_str(&format!("; {why}"));
+        }
+        out
+    }
 }
 
 /// One arm of the red-card suite: mean goals per match of the full (home) side and the
@@ -266,6 +326,8 @@ struct SuiteAcc {
     arms: Vec<Option<usize>>,
     /// For each record: its extras, kept only in a suite that judges a band reading them.
     extras: Vec<Option<Box<Extras>>>,
+    /// For each record: its generated league, when the fold knew its fixture.
+    leagues: Vec<Option<u32>>,
     /// A record of the suite carries the realism measures.
     measures: bool,
     outliers: u32,
@@ -286,6 +348,8 @@ pub struct RunBuilder {
     /// seed their range tests draw from.
     real: std::sync::Arc<real::Samples>,
     seed: u64,
+    /// The pass rule's real side of each band, read before play, by band.
+    sides: std::sync::Arc<BTreeMap<String, Real>>,
 }
 
 impl RunBuilder {
@@ -298,6 +362,23 @@ impl RunBuilder {
             minutes: 90,
             real: std::sync::Arc::default(),
             seed: 0,
+            sides: std::sync::Arc::default(),
+        }
+    }
+
+    /// Gives the builder each band's real side for the pass rule, read before play.
+    pub fn set_real_sides(&mut self, sides: std::sync::Arc<BTreeMap<String, Real>>) {
+        self.sides = sides;
+    }
+
+    /// Gives the record of `suite` folded in last its generated league.
+    pub fn set_league(&mut self, suite: Suite, league: u32) {
+        if let Some(last) = self
+            .suites
+            .get_mut(&suite)
+            .and_then(|acc| acc.leagues.last_mut())
+        {
+            *last = Some(league);
         }
     }
 
@@ -360,6 +441,7 @@ impl RunBuilder {
         acc.pairings.push(pairing);
         acc.arms.push(arm);
         acc.extras.push(None);
+        acc.leagues.push(None);
         outlier
     }
 
@@ -689,6 +771,7 @@ impl RunBuilder {
                 pairing: acc.pairings[i].map(|(p, _)| p),
                 arm: acc.arms[i],
                 extras: acc.extras[i].as_deref(),
+                league: acc.leagues[i],
             })
             .collect()
     }
@@ -750,6 +833,11 @@ impl RunBuilder {
             measures::places(&spec.def.measure),
         );
         let unjudged = spec.def.needs_measures() && !self.has_measures(spec.suite);
+        let rule = spec
+            .def
+            .rule
+            .as_ref()
+            .map(|rule| self.rule_word(spec.def, rule, &obs, &terms, unjudged));
         BandCheck {
             band: spec.def.band.clone(),
             suite: spec.suite.code().to_string(),
@@ -757,14 +845,166 @@ impl RunBuilder {
             value,
             lo: spec.def.lo,
             hi: spec.def.hi,
-            pass: !unjudged && measures::passes(spec.def, value, &terms),
+            pass: match &rule {
+                Some(r) => r.word == pass_rule::rule::Word::Pass,
+                None => !unjudged && measures::passes(spec.def, value, &terms),
+            },
             se: round_to(terms.se(), 5),
             informational: None,
             why_none: terms.why_none().map(str::to_string),
             unjudged,
             whole: false,
             dist: None,
+            rule,
         }
+    }
+
+    /// A version 6 band's word against real football (or its design target) by the pass
+    /// rule: the interval of the engine minus the target, resampled over whole leagues (or
+    /// whole matches for a band of fixed clubs) and over the real side read before play,
+    /// against the band's margin. A rare band takes exact count bounds; a pass below the
+    /// band's minimum exposure, or a band with no real value here, is not sure.
+    fn rule_word(
+        &self,
+        def: &BandDef,
+        rule: &Rule,
+        obs: &[Obs<'_>],
+        terms: &measures::Terms,
+        unjudged: bool,
+    ) -> RuleWord {
+        let alpha = self.bands.pass_rule.map_or(0.05, |p| p.alpha);
+        let [a, b, c, d] = terms.per_match();
+        let flags = terms.covered_flags();
+        let mut units: BTreeMap<u64, Unit> = BTreeMap::new();
+        let mut events = 0.0;
+        for (i, &covered) in flags.iter().enumerate() {
+            if !covered {
+                continue;
+            }
+            let key = match rule.resampling.engine {
+                bands::EngineUnit::League => u64::from(obs[i].league.unwrap_or(0)),
+                bands::EngineUnit::Match => i as u64,
+            };
+            let u = units.entry(key).or_insert(Unit {
+                num: 0.0,
+                den: 0.0,
+                scale_num: 0.0,
+                scale_den: 0.0,
+            });
+            u.num += a[i];
+            u.den += b[i];
+            u.scale_num += d[i];
+            u.scale_den += c[i];
+            events += a[i];
+        }
+        let matches = terms.covered() as f64;
+        let exposure = match rule.min_exposure.unit {
+            bands::ExposureUnit::Matches => matches,
+            bands::ExposureUnit::Events => events,
+        };
+        let units: Vec<Unit> = units.into_values().collect();
+        let mut out = RuleWord {
+            word: pass_rule::rule::Word::NotSure,
+            lo: None,
+            hi: None,
+            point: None,
+            margin: rule.margin.value,
+            target: match rule.target {
+                Target::Real => "real".into(),
+                Target::Design { value, .. } => format!("design {value}"),
+            },
+            cap: match rule.target {
+                Target::Design { cap, .. } => cap,
+                Target::Real => None,
+            },
+            exposure,
+            min_exposure: rule.min_exposure.value,
+            units: units.len(),
+            reason: None,
+        };
+        let real = self.sides.get(&def.band);
+        let why = if unjudged {
+            Some(verdict::NO_MEASURES_NOTE.to_string())
+        } else if let Some(w) = terms.why_none().filter(|_| terms.value().is_none()) {
+            Some(format!("no value: {w}"))
+        } else if matches!(def.measure, bands::Measure::ClubRange { .. }) {
+            Some("a per-club spread has no resampling units; judged when it has them".into())
+        } else {
+            None
+        };
+        if let Some(why) = why {
+            out.reason = Some(why);
+            return out;
+        }
+        let mut rng = engine::rng::EngineRng::from_seed(distribution::stream(self.seed, &def.band));
+        let mut draw = || rng.next_f64();
+        let interval = |to: &Real, draw: &mut dyn FnMut() -> f64| -> Result<Interval, String> {
+            if rule.rare {
+                let kind = match def.measure {
+                    bands::Measure::Share { .. } | bands::Measure::Scoreline { .. } => {
+                        RareKind::Share
+                    }
+                    _ => RareKind::Rate,
+                };
+                let (value, se) = to.estimate();
+                let bounds = pass_rule::interval::real_bounds(value, se, alpha);
+                Ok(pass_rule::interval::rare_interval(
+                    kind,
+                    events.round().max(0.0) as u64,
+                    matches,
+                    bounds,
+                    alpha,
+                ))
+            } else {
+                pass_rule::interval::interval(&units, to, alpha, verdict::RESAMPLES, draw)
+            }
+        };
+        let judged = match rule.target {
+            Target::Real => match real {
+                None => Err("no real value here; a band with no real value is never a pass".into()),
+                Some(side) => interval(side, &mut draw).map(|iv| {
+                    out.set_interval(&iv);
+                    pass_rule::rule::judge(&iv, rule.margin.value)
+                }),
+            },
+            Target::Design { value, cap } => {
+                interval(&Real::Fixed(value), &mut draw).and_then(|iv| {
+                    out.set_interval(&iv);
+                    match (cap, real) {
+                        (None, _) => {
+                            Ok(pass_rule::rule::judge_design(&iv, rule.margin.value, None))
+                        }
+                        (Some(cap), Some(side)) => {
+                            let to_real = interval(side, &mut draw)?;
+                            Ok(pass_rule::rule::judge_design(
+                                &iv,
+                                rule.margin.value,
+                                Some((&to_real, cap)),
+                            ))
+                        }
+                        // A cap with no real value here: never a pass.
+                        (Some(_), None) => {
+                            let w = pass_rule::rule::judge_design(&iv, rule.margin.value, None);
+                            Ok(if w == pass_rule::rule::Word::Pass {
+                                pass_rule::rule::Word::NotSure
+                            } else {
+                                w
+                            })
+                        }
+                    }
+                })
+            }
+        };
+        match judged {
+            Ok(word) => {
+                let (word, why) =
+                    pass_rule::rule::gate_exposure(word, exposure, rule.min_exposure.value);
+                out.word = word;
+                out.reason = why;
+            }
+            Err(why) => out.reason = Some(why),
+        }
+        out
     }
 
     /// A distribution band's row over the matches `obs`: its distance from the real sample,
@@ -788,18 +1028,51 @@ impl RunBuilder {
             unjudged,
             whole: true,
             dist: None,
+            rule: None,
+        };
+        let margin = def.rule.as_ref().map_or(def.hi, |r| r.margin.value);
+        let alpha = match (&def.rule, self.bands.pass_rule) {
+            (Some(_), Some(p)) => p.alpha,
+            _ => verdict::FALSE_ALARM,
+        };
+        let rule_word = |dist: Option<&distribution::DistCheck>, why: Option<String>| {
+            def.rule.as_ref().map(|r| RuleWord {
+                word: match dist {
+                    Some(d) if margin > d.floor => {
+                        pass_rule::rule::judge_distance(d.lower, d.upper, margin)
+                    }
+                    _ => pass_rule::rule::Word::NotSure,
+                },
+                lo: dist.map(|d| round_to(d.lower, 5)),
+                hi: dist.map(|d| round_to(d.upper, 5)),
+                point: dist.map(|d| round_to(d.distance, 5)),
+                margin,
+                target: "real".into(),
+                cap: None,
+                exposure: 0.0,
+                min_exposure: r.min_exposure.value,
+                units: 0,
+                reason: why.or_else(|| {
+                    dist.filter(|d| margin <= d.floor).map(|d| {
+                        format!("margin below noise floor (floor {})", round_to(d.floor, 5))
+                    })
+                }),
+            })
         };
         if unjudged {
+            c.rule = rule_word(None, Some(verdict::NO_MEASURES_NOTE.into()));
             return c;
         }
         let real = match self.real.get(&def.band) {
             Some(Ok(sample)) => sample,
             Some(Err(why)) => {
                 c.why_none = Some(format!("no real data here: {why}"));
+                c.rule = rule_word(None, c.why_none.clone());
                 return c;
             }
             None => {
                 c.why_none = Some("no real data here: the real sample was not read".into());
+                c.rule = rule_word(None, c.why_none.clone());
                 return c;
             }
         };
@@ -815,21 +1088,29 @@ impl RunBuilder {
             width,
         };
         let seed = distribution::stream(self.seed, &def.band);
-        match distribution::judge_to_real(
+        match distribution::judge_to_real_at(
             &engine,
             real,
             measures::metric(&def.measure),
-            def.hi,
+            margin,
             seed,
             verdict::RESAMPLES,
+            alpha,
         ) {
             Ok(d) => {
                 c.value = round_to(d.distance, 5);
-                c.pass = def.range().contains(c.value);
+                c.rule = rule_word(Some(&d), None);
+                c.pass = match &c.rule {
+                    Some(r) => r.word == pass_rule::rule::Word::Pass,
+                    None => def.range().contains(c.value),
+                };
                 c.se = round_to(d.se, 5);
                 c.dist = Some(d);
             }
-            Err(why) => c.why_none = Some(why),
+            Err(why) => {
+                c.rule = rule_word(None, Some(why.to_string()));
+                c.why_none = Some(why);
+            }
         }
         c
     }
@@ -902,6 +1183,7 @@ impl RunBuilder {
                 unjudged: false,
                 whole: false,
                 dist: None,
+                rule: None,
             });
         }
         out.extend(rest.iter().map(|s| self.check(s)));
@@ -1312,7 +1594,7 @@ pub struct RuleInterval {
 /// verdict row); 7 since the formation field rating (`calib.nash`); 8 since the registry's
 /// figures (`calib.figures`); 9 since a change run's styles sample (`calib.styles`). Every
 /// key of an older version stays.
-pub const REPORT_SCHEMA_VERSION: &str = "9";
+pub const REPORT_SCHEMA_VERSION: &str = "10";
 
 /// The matches a run judged: every engine's rows, the fixtures both engines of a change run
 /// played, and the matches of each engine.

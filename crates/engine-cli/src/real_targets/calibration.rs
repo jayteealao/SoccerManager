@@ -170,6 +170,7 @@ pub fn report(
             pairing: None,
             arm: None,
             extras: None,
+            league: None,
         })
         .collect();
     let mut linked: BTreeMap<&str, Vec<(&String, &Target)>> = BTreeMap::new();

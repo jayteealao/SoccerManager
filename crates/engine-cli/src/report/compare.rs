@@ -196,6 +196,7 @@ mod tests {
             unjudged: false,
             whole: false,
             dist: None,
+            rule: None,
         }
     }
 
