@@ -1,0 +1,16 @@
+[package]
+name = "pass-rule"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "The realism pass rule: quantiles, exact count bounds, the equivalence interval, the margin floor and the drift check"
+
+[dependencies]
+# Pure-Rust gamma and error functions; the quantiles are built on them.
+libm = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

@@ -32,6 +32,7 @@ required-features = ["measures"]
 
 [dependencies]
 engine = { path = "../engine" }
+pass-rule = { path = "../pass-rule" }
 protocol = { path = "../protocol" }
 script = { path = "../script" }
 stream = { path = "../stream" }

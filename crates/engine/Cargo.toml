@@ -44,6 +44,8 @@ measures = []
 criterion = { workspace = true }
 tracing-subscriber = { workspace = true }
 trybuild = { workspace = true }
+# The slow tests read their limits from the band file and judge them by the pass rule.
+pass-rule = { path = "../pass-rule" }
 # No default features, so `--no-default-features` also removes the recorder from test and
 # bench builds.
 engine = { path = ".", default-features = false, features = ["scenario"] }

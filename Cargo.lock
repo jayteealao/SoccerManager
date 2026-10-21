@@ -502,6 +502,7 @@ dependencies = [
  "garde",
  "glam",
  "libm",
+ "pass-rule",
  "rand",
  "rand_chacha",
  "serde",
@@ -525,6 +526,7 @@ dependencies = [
  "flate2",
  "garde",
  "libc",
+ "pass-rule",
  "protocol",
  "script",
  "serde",
@@ -1008,6 +1010,16 @@ checksum = "30d5b2194ed13191c1999ae0704b7839fb18384fa22e49b57eeaa97d79ce40da"
 dependencies = [
  "libc",
  "winapi",
+]
+
+[[package]]
+name = "pass-rule"
+version = "0.2.0-dev"
+dependencies = [
+ "libm",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
