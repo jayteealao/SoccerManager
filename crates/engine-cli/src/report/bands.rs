@@ -370,12 +370,21 @@ pub struct NoCounterpart {
     pub none: String,
 }
 
+/// A band whose real value is a target of the reference file of real targets, named by its
+/// key; the band file holds the key and no figure (version 6).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TargetRef {
+    pub target: String,
+}
+
 /// The source of a band's real value.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RealSource {
     Pointer(Box<Pointer>),
     NoCounterpart(NoCounterpart),
+    Target(TargetRef),
 }
 
 /// A band's real record: its source, the sample size behind it, the date it was measured
@@ -395,7 +404,15 @@ impl RealRecord {
     pub fn no_counterpart(&self) -> Option<&str> {
         match &self.source {
             RealSource::NoCounterpart(n) => Some(&n.none),
-            RealSource::Pointer(_) => None,
+            RealSource::Pointer(_) | RealSource::Target(_) => None,
+        }
+    }
+
+    /// The reference-file key, when the real value is a target of that file.
+    pub fn target_key(&self) -> Option<&str> {
+        match &self.source {
+            RealSource::Target(t) => Some(&t.target),
+            RealSource::Pointer(_) | RealSource::NoCounterpart(_) => None,
         }
     }
 }
@@ -482,6 +499,9 @@ pub struct BandDef {
     /// Why the band only reports and never changes the verdict: `gates: false`, a real
     /// sample under its floor, or a generalisation under the file's floor. Derived on load.
     pub report_only: Option<String>,
+    /// The pass rule's fields: a version 6 band's target, margin and definition; `None` for
+    /// a band of an earlier version.
+    pub rule: Option<Rule>,
 }
 
 /// The part of a band that decides its verdict, as the digests hash it. A gating band
@@ -503,6 +523,8 @@ struct Judgement<'a> {
     floor: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     report_only: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    rule: Option<&'a Rule>,
 }
 
 impl BandDef {
@@ -554,6 +576,7 @@ impl BandDef {
             gates: (!self.gates).then_some(false),
             floor: self.real.as_ref().and_then(|r| r.floor),
             report_only: self.report_only.as_deref(),
+            rule: self.rule.as_ref(),
         }
     }
 
@@ -582,6 +605,7 @@ impl BandDef {
             max_from_dry: None,
             gates: true,
             report_only: None,
+            rule: None,
         }
     }
 }
@@ -603,6 +627,10 @@ pub struct Registry {
     pub figures: Vec<FigureDef>,
     /// The layout version the file was migrated from; `None` for a version 4 or 5 file.
     pub migrated_from: Option<u32>,
+    /// The pass rule's settings; `None` before version 6.
+    pub pass_rule: Option<PassRuleSettings>,
+    /// The named groups of bands that only report (version 6).
+    pub report_only_groups: Vec<ReportOnlyGroup>,
 }
 
 /// A figure: a measure reported beside the value an earlier build gave, with no range; it
@@ -648,6 +676,7 @@ impl FigureDef {
             max_from_dry: None,
             gates: false,
             report_only: Some("a figure: reported beside an earlier build's value".into()),
+            rule: None,
         }
     }
 }
@@ -660,11 +689,30 @@ impl Registry {
     /// or a name used twice; the refusal names the file, the band and the field.
     pub fn load(dir: &ContentDir) -> anyhow::Result<Self> {
         let bytes = read_bytes(&dir.path(BANDS_FILE), BANDS_FILE)?;
-        Ok(Self::from_bytes(&bytes)?)
+        // A version 6 band may name a target of the reference file in gate/: the key must be
+        // in the file when the file is here, and the target's error joins the margin floor.
+        let reference_path = crate::real_targets::default_file(dir.root());
+        let reference = reference_path
+            .is_file()
+            .then(|| crate::real_targets::ReferenceFile::load(&reference_path))
+            .transpose()?;
+        Ok(match reference {
+            Some(file) => Self::parse(&bytes, Some(&file))?,
+            None => Self::from_bytes(&bytes)?,
+        })
     }
 
-    /// [`Self::load`] over bytes already in memory.
+    /// [`Self::load`] over bytes already in memory, with no reference file: a version 6
+    /// band's margin floor is then set on the engine's error alone.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, EngineError> {
+        Self::parse(bytes, None)
+    }
+
+    /// The load itself, with the reference file of real targets when one is here.
+    pub fn parse(
+        bytes: &[u8],
+        reference: Option<&crate::real_targets::ReferenceFile>,
+    ) -> Result<Self, EngineError> {
         let doc = serde_json::from_slice::<Value>(bytes).ok();
         let version = doc.as_ref().and_then(|v| v["schema_version"].as_u64());
         let refuse = |(field, reason): (String, String)| EngineError::Data {
@@ -673,6 +721,47 @@ impl Registry {
             field,
             reason,
         };
+        if version == Some(u64::from(V6_VERSION)) {
+            if let Some(doc) = &doc {
+                refusals(required_v6(doc)).map_err(refuse)?;
+            }
+            let registry = load_json_bytes::<RegistryV6>(KIND, bytes, BANDS_FILE, V6_VERSION, &())?
+                .value
+                .into_registry();
+            registry.check().map_err(refuse)?;
+            let mut list = registry.check_v6();
+            if let Some(file) = reference {
+                for (i, b) in registry.bands.iter().enumerate() {
+                    if let Some(key) = b.real.as_ref().and_then(RealRecord::target_key) {
+                        if file.target(key).is_none() {
+                            list.push((
+                                format!("bands[{i}] ({}).real.source.target", b.band),
+                                format!("{key} is not a target of {}", crate::real_targets::FILE),
+                            ));
+                        }
+                    }
+                }
+            }
+            let target_se = |b: &BandDef| {
+                let key = b.real.as_ref().and_then(RealRecord::target_key)?;
+                reference?.target(key).map(|t| t.se)
+            };
+            for f in registry.floor_refusals(&target_se) {
+                let i = registry
+                    .bands
+                    .iter()
+                    .position(|b| b.band == f.band)
+                    .unwrap_or(0);
+                let field = if f.which == "cap" {
+                    "target.cap"
+                } else {
+                    "margin.value"
+                };
+                list.push((format!("bands[{i}] ({}).{field}", f.band), f.reason()));
+            }
+            refusals(list).map_err(refuse)?;
+            return Ok(registry);
+        }
         let mut registry = if version == Some(u64::from(LEGACY_VERSION)) {
             load_json_bytes::<BandsV2>(KIND, bytes, BANDS_FILE, LEGACY_VERSION, &())?
                 .value
@@ -1071,6 +1160,7 @@ impl RegistryV4 {
                 max_from_dry: b.max_from_dry,
                 gates: b.gates,
                 report_only: None,
+                rule: None,
             })
             .collect();
         Registry {
@@ -1082,6 +1172,8 @@ impl RegistryV4 {
             bands,
             figures: self.figures,
             migrated_from: None,
+            pass_rule: None,
+            report_only_groups: Vec::new(),
         }
     }
 }
@@ -1129,6 +1221,8 @@ impl RegistryV3 {
             bands: self.bands.into_iter().map(BandDef::migrated).collect(),
             figures: Vec::new(),
             migrated_from: Some(self.schema_version),
+            pass_rule: None,
+            report_only_groups: Vec::new(),
         }
     }
 }
@@ -1361,6 +1455,686 @@ impl BandsV2 {
             },
             bands,
         }
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// Version 6: the pass rule's fields.
+// ---------------------------------------------------------------------------------------
+
+/// The layout with the pass rule's fields: a target, a margin with its reasons, the band's
+/// definition and the engine's measured spread.
+pub const V6_VERSION: u32 = 6;
+
+/// The pass rule's settings, at file level: the error rate of each side of a band's
+/// interval, the chance a sound engine must have to pass every gating band at once, and the
+/// run the margin floor is set on.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PassRuleSettings {
+    pub alpha: f64,
+    pub sound_pass: f64,
+    pub design_count: DesignCount,
+}
+
+/// The run size the margin floor is set on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DesignCount {
+    pub matches: u32,
+    pub leagues: u32,
+}
+
+/// A named group of bands that only report: at most `most` bands of `group`, each with
+/// `gates: false`, for the stated reason. No other band may report only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReportOnlyGroup {
+    pub group: String,
+    pub most: u32,
+    pub reason: String,
+}
+
+/// What a band is judged against.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Target {
+    /// The real value decides.
+    Real,
+    /// A design value decides; with a cap the band must also sit within `cap` of the real
+    /// value.
+    Design { value: f64, cap: Option<f64> },
+}
+
+/// A band's margin: the spread between leagues plus the smallest error a player would
+/// notice, each with its reason. The margin is a design choice; the test carries the
+/// sampling noise.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Margin {
+    pub value: f64,
+    pub league_spread: f64,
+    pub noticeable_error: f64,
+    /// Why the noticeable error is this size; a widened margin cites a noticeable error.
+    pub reason: String,
+    /// Where the league spread comes from.
+    pub spread_reason: String,
+    pub design_choice: bool,
+}
+
+/// The outer unit the engine side resamples.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum EngineUnit {
+    /// Whole generated leagues.
+    League,
+    /// Whole matches: a band whose suite plays fixed clubs (the strength pairs, the red-card
+    /// arms) has no leagues to resample.
+    Match,
+}
+
+/// How the real side is resampled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RealUnit {
+    /// Whole real matches of a file with match rows.
+    Match,
+    /// Whole tracked matches, one left out at a time.
+    TrackedMatch,
+    /// A value and its error with no rows.
+    Summary,
+    /// A target of the reference file of real targets.
+    Target,
+    /// No real side: a design target with no cap.
+    None,
+}
+
+/// How each side of a band is resampled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Resampling {
+    pub engine: EngineUnit,
+    pub real: RealUnit,
+}
+
+/// The unit of a band's minimum exposure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExposureUnit {
+    Matches,
+    Events,
+}
+
+/// The exposure a band needs before it may pass.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MinExposure {
+    pub unit: ExposureUnit,
+    pub value: f64,
+}
+
+/// The engine's measured spread of a band, with the run it was measured on.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EngineSpread {
+    /// The standard deviation of the band's per-match value.
+    pub per_match_sd: f64,
+    /// The standard deviation of the band's value between generated leagues, beyond what
+    /// the matches inside them explain.
+    pub between_league_sd: f64,
+    /// A distribution band: the distance two engine runs of the design count sit apart by
+    /// chance alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub noise_floor: Option<f64>,
+    /// The run it was measured on, and the date.
+    pub measured: String,
+}
+
+/// The pass rule's fields of one band.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Rule {
+    pub target: Target,
+    pub margin: Margin,
+    pub definition_version: u32,
+    pub population: String,
+    pub estimator: String,
+    pub resampling: Resampling,
+    pub min_exposure: MinExposure,
+    pub rare: bool,
+    pub engine_spread: EngineSpread,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context: Option<String>,
+}
+
+/// A band's target as the file writes it: `{"real": {}}`, `{"design": x}` or
+/// `{"design": x, "cap": c}`.
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TargetFile {
+    #[serde(default)]
+    real: Option<EmptyObject>,
+    #[serde(default)]
+    design: Option<f64>,
+    #[serde(default)]
+    cap: Option<f64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EmptyObject {}
+
+/// The version 6 layout of the file.
+#[derive(Debug, Clone, PartialEq, Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+struct RegistryV6 {
+    #[garde(skip)]
+    schema_version: u32,
+    #[garde(range(min = 1, max = 100_000))]
+    sample_size: u32,
+    #[garde(range(min = 0.1, max = 10_000.0))]
+    wall_minutes_per_sample: f64,
+    #[garde(dive)]
+    stronger_team: StrongerTeam,
+    #[garde(range(min = 1, max = 10_000))]
+    generalisation_floor: u32,
+    #[garde(skip)]
+    pass_rule: PassRuleSettings,
+    #[serde(default)]
+    #[garde(skip)]
+    report_only: Vec<ReportOnlyGroup>,
+    #[garde(skip)]
+    bands: Vec<BandV6>,
+    #[serde(default)]
+    #[garde(skip)]
+    figures: Vec<FigureDef>,
+}
+
+/// One band of the version 6 file.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BandV6 {
+    band: String,
+    suites: Vec<String>,
+    measure: Measure,
+    #[serde(default)]
+    group: Option<String>,
+    target: TargetFile,
+    margin: Margin,
+    definition_version: u32,
+    population: String,
+    estimator: String,
+    resampling: Resampling,
+    min_exposure: MinExposure,
+    rare: bool,
+    engine_spread: EngineSpread,
+    #[serde(default)]
+    context: Option<String>,
+    real: RealRecord,
+    evidence: Evidence,
+    confidence: Confidence,
+    condition: Condition,
+    #[serde(default)]
+    max_from_dry: Option<f64>,
+    gates: bool,
+}
+
+impl RegistryV6 {
+    fn into_registry(self) -> Registry {
+        let groups = self.report_only.clone();
+        let bands = self
+            .bands
+            .into_iter()
+            .map(|b| {
+                // The raw rules refused a target with both or neither form.
+                let target = match (b.target.real, b.target.design) {
+                    (_, Some(value)) => Target::Design {
+                        value,
+                        cap: b.target.cap,
+                    },
+                    (Some(EmptyObject {}) | None, None) => Target::Real,
+                };
+                let m = b.margin.value;
+                // The range of a version 6 band, for the readers that still show one: around
+                // its design target, or open for a real target, whose word the pass rule sets.
+                let (lo, hi) = match target {
+                    Target::Design { value, .. } => (value - m, value + m),
+                    Target::Real => (f64::MIN, f64::MAX),
+                };
+                let report_only = (!b.gates).then(|| {
+                    groups
+                        .iter()
+                        .find(|g| b.group.as_deref() == Some(g.group.as_str()))
+                        .map_or_else(
+                            || "gates: false in the band file".to_string(),
+                            |g| format!("named report-only group {}: {}", g.group, g.reason),
+                        )
+                });
+                BandDef {
+                    band: b.band,
+                    suites: b.suites,
+                    measure: b.measure,
+                    lo,
+                    hi,
+                    smallest_shift: b.margin.noticeable_error,
+                    group: b.group,
+                    real: Some(b.real),
+                    evidence: Some(b.evidence),
+                    confidence: Some(b.confidence),
+                    condition: b.condition,
+                    max_from_dry: b.max_from_dry,
+                    gates: b.gates,
+                    report_only,
+                    rule: Some(Rule {
+                        target,
+                        margin: b.margin,
+                        definition_version: b.definition_version,
+                        population: b.population,
+                        estimator: b.estimator,
+                        resampling: b.resampling,
+                        min_exposure: b.min_exposure,
+                        rare: b.rare,
+                        engine_spread: b.engine_spread,
+                        context: b.context,
+                    }),
+                }
+            })
+            .collect();
+        Registry {
+            schema_version: self.schema_version,
+            sample_size: self.sample_size,
+            wall_minutes_per_sample: self.wall_minutes_per_sample,
+            stronger_team: self.stronger_team,
+            generalisation_floor: self.generalisation_floor,
+            bands,
+            figures: self.figures,
+            migrated_from: None,
+            pass_rule: Some(self.pass_rule),
+            report_only_groups: self.report_only,
+        }
+    }
+}
+
+/// The fields every band of a version 6 file must hold, with no default.
+pub const REQUIRED_V6: [&str; 25] = [
+    "target",
+    "margin.value",
+    "margin.league_spread",
+    "margin.noticeable_error",
+    "margin.reason",
+    "margin.spread_reason",
+    "margin.design_choice",
+    "definition_version",
+    "population",
+    "estimator",
+    "resampling.engine",
+    "resampling.real",
+    "min_exposure.unit",
+    "min_exposure.value",
+    "rare",
+    "engine_spread.per_match_sd",
+    "engine_spread.between_league_sd",
+    "engine_spread.measured",
+    "real.source",
+    "real.sample",
+    "real.date",
+    "evidence",
+    "confidence.measurement",
+    "condition",
+    "gates",
+];
+
+/// The fields of version 5 that version 6 removed, with what replaced each.
+const REMOVED_IN_V6: [(&str, &str); 2] = [
+    (
+        "design",
+        "the fixed range is gone; a band holds a target and a margin",
+    ),
+    (
+        "real.floor",
+        "a small real sample widens the interval instead of making the band report only",
+    ),
+];
+
+/// The record rules of a version 6 file on the raw document, every refusal collected so
+/// that one load lists every gap: a missing field, a removed field, a blank reason, a target
+/// in a shape the file does not take, a real source that does not fit the target.
+fn required_v6(doc: &Value) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for field in [
+        "pass_rule.alpha",
+        "pass_rule.sound_pass",
+        "pass_rule.design_count",
+    ] {
+        if field
+            .split('.')
+            .try_fold(doc, |v, k| v.get(k))
+            .is_none_or(Value::is_null)
+        {
+            out.push((field.to_string(), "is required".to_string()));
+        }
+    }
+    let Some(bands) = doc["bands"].as_array() else {
+        return out;
+    };
+    for (i, b) in bands.iter().enumerate() {
+        let name = b["band"].as_str().unwrap_or("?");
+        let at = |field: &str| format!("bands[{i}] ({name}).{field}");
+        let get = |path: &str| path.split('.').try_fold(b, |v, k| v.get(k));
+        for field in REQUIRED_V6 {
+            if get(field).is_none_or(Value::is_null) {
+                out.push((at(field), "is required".into()));
+            }
+        }
+        for (field, why) in REMOVED_IN_V6 {
+            if get(field).is_some() {
+                out.push((at(field), format!("is not a version 6 field: {why}")));
+            }
+        }
+        for field in [
+            "margin.reason",
+            "margin.spread_reason",
+            "population",
+            "estimator",
+            "engine_spread.measured",
+            "real.date",
+        ] {
+            if let Some(v) = get(field).filter(|v| !v.is_null()) {
+                if v.as_str().is_none_or(|s| s.trim().is_empty()) {
+                    out.push((at(field), "must not be blank".into()));
+                }
+            }
+        }
+        if get("margin.design_choice").is_some_and(|v| *v != Value::Bool(true)) {
+            out.push((
+                at("margin.design_choice"),
+                "must be true: a margin is a design choice, stated as one".into(),
+            ));
+        }
+        if let Some(t) = b.get("target").and_then(Value::as_object) {
+            let (real, design) = (t.contains_key("real"), t.contains_key("design"));
+            if real == design {
+                out.push((
+                    at("target"),
+                    "must hold real ({}) or design (a value, with an optional cap)".into(),
+                ));
+            }
+            if real && t.contains_key("cap") {
+                out.push((at("target.cap"), "a cap goes with a design target".into()));
+            }
+        }
+        let none = b["real"]["source"]
+            .as_object()
+            .is_some_and(|s| s.contains_key("none"));
+        if none && b["target"].get("design").is_none() {
+            out.push((
+                at("target"),
+                "a band with no real counterpart needs a design target".into(),
+            ));
+        }
+        if b.get("gates")
+            .is_some_and(|g| !g.is_boolean() && !g.is_null())
+        {
+            out.push((at("gates"), "must be true or false".into()));
+        }
+    }
+    out
+}
+
+/// One refusal of the margin floor: the band, the margin it holds and the margin it needs,
+/// and the two errors behind the need.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct FloorRefusal {
+    pub band: String,
+    pub margin: f64,
+    pub needed: f64,
+    pub sigma_e: f64,
+    pub sigma_r: f64,
+    /// Which margin: `margin`, or `cap` for a design band's distance from the real value.
+    pub which: &'static str,
+}
+
+impl FloorRefusal {
+    /// The refusal as the loader states it.
+    pub fn reason(&self) -> String {
+        format!(
+            "{} {} is below the 97 percent floor; it needs at least {} \
+             (engine error {}, real error {})",
+            self.which,
+            fmt_g(self.margin),
+            fmt_g(self.needed),
+            fmt_g(self.sigma_e),
+            fmt_g(self.sigma_r)
+        )
+    }
+}
+
+/// A number to 4 significant figures.
+fn fmt_g(x: f64) -> String {
+    if x == 0.0 || !x.is_finite() {
+        return format!("{x}");
+    }
+    let places = (3 - x.abs().log10().floor() as i32).max(0) as usize;
+    format!("{x:.places$}")
+}
+
+impl Registry {
+    /// The bands that gate.
+    pub fn gating(&self) -> usize {
+        self.bands.iter().filter(|b| b.gates).count()
+    }
+
+    /// The pass rule's floor over every gating version 6 band, with `real_se` giving each
+    /// band's real error where it is known (the reference file's, or the value read in
+    /// place); an unknown real error counts as 0, so the engine's error alone sets the floor
+    /// until the real one is read. A distribution band's margin must exceed its noise floor;
+    /// a rare band's margin must hold the exact interval's half-width at its minimum exposure.
+    pub fn floor_refusals(&self, real_se: &dyn Fn(&BandDef) -> Option<f64>) -> Vec<FloorRefusal> {
+        let Some(settings) = self.pass_rule else {
+            return Vec::new();
+        };
+        let k = self.gating();
+        let matches = f64::from(settings.design_count.matches);
+        let leagues = f64::from(settings.design_count.leagues);
+        let mut out = Vec::new();
+        for b in self.bands.iter().filter(|b| b.gates) {
+            let Some(rule) = &b.rule else { continue };
+            let spread = &rule.engine_spread;
+            let sigma_r = real_se(b).unwrap_or(0.0);
+            let mut check = |margin: f64, needed: f64, sigma_e: f64, sigma_r: f64, which| {
+                if !pass_rule::floor::holds(margin, needed) {
+                    out.push(FloorRefusal {
+                        band: b.band.clone(),
+                        margin,
+                        needed,
+                        sigma_e,
+                        sigma_r,
+                        which,
+                    });
+                }
+            };
+            if b.is_distribution() {
+                let floor = spread.noise_floor.unwrap_or(f64::INFINITY);
+                check(rule.margin.value, floor, floor, 0.0, "margin");
+                continue;
+            }
+            let units = match rule.resampling.engine {
+                EngineUnit::League => leagues,
+                EngineUnit::Match => matches,
+            };
+            let sigma_e = pass_rule::floor::engine_error(
+                spread.per_match_sd,
+                spread.between_league_sd,
+                matches,
+                units,
+            );
+            let (to_target_r, cap) = match rule.target {
+                Target::Real => (sigma_r, None),
+                Target::Design { cap, .. } => (0.0, cap),
+            };
+            let needed = if rule.rare {
+                // Expected events per match from the measured spread (a count's variance
+                // equals its mean), and the exposure in matches.
+                let rate = spread.per_match_sd.powi(2);
+                let exposure = match rule.min_exposure.unit {
+                    ExposureUnit::Matches => rule.min_exposure.value,
+                    ExposureUnit::Events => rule.min_exposure.value / rate.max(1e-12),
+                };
+                pass_rule::floor::needed_rare_margin(rate, exposure, to_target_r, settings.alpha)
+            } else {
+                pass_rule::floor::needed_margin(
+                    sigma_e,
+                    to_target_r,
+                    settings.alpha,
+                    settings.sound_pass,
+                    k,
+                )
+            };
+            check(rule.margin.value, needed, sigma_e, to_target_r, "margin");
+            if let Some(cap) = cap {
+                let needed = pass_rule::floor::needed_margin(
+                    sigma_e,
+                    sigma_r,
+                    settings.alpha,
+                    settings.sound_pass,
+                    k,
+                );
+                check(cap, needed, sigma_e, sigma_r, "cap");
+            }
+        }
+        out
+    }
+
+    /// The version 6 rules beyond the layout, every refusal collected.
+    fn check_v6(&self) -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        let Some(settings) = self.pass_rule else {
+            return out;
+        };
+        if !(settings.alpha > 0.0 && settings.alpha < 0.5) {
+            out.push((
+                "pass_rule.alpha".into(),
+                format!("{} is not between 0 and 0.5", settings.alpha),
+            ));
+        }
+        if !(settings.sound_pass > 0.0 && settings.sound_pass < 1.0) {
+            out.push((
+                "pass_rule.sound_pass".into(),
+                format!("{} is not between 0 and 1", settings.sound_pass),
+            ));
+        }
+        if settings.design_count.matches == 0 || settings.design_count.leagues == 0 {
+            out.push(("pass_rule.design_count".into(), "must be above 0".into()));
+        }
+        for (i, g) in self.report_only_groups.iter().enumerate() {
+            if g.reason.trim().is_empty() {
+                out.push((
+                    format!("report_only[{i}] ({}).reason", g.group),
+                    "needs a reason".into(),
+                ));
+            }
+        }
+        let mut per_group: BTreeMap<&str, u32> = BTreeMap::new();
+        for (i, b) in self.bands.iter().enumerate() {
+            let at = |field: &str| format!("bands[{i}] ({}).{field}", b.band);
+            let Some(rule) = &b.rule else { continue };
+            let m = &rule.margin;
+            let finite = [m.value, m.league_spread, m.noticeable_error]
+                .iter()
+                .all(|x| x.is_finite());
+            if !finite || m.noticeable_error <= 0.0 || m.league_spread < 0.0 {
+                out.push((
+                    at("margin"),
+                    "the noticeable error must be above 0 and the league spread 0 or above".into(),
+                ));
+            } else if (m.value - (m.league_spread + m.noticeable_error)).abs()
+                > 1e-9 * m.value.abs().max(1.0)
+            {
+                out.push((
+                    at("margin.value"),
+                    format!(
+                        "{} is not the league spread {} plus the noticeable error {}",
+                        m.value, m.league_spread, m.noticeable_error
+                    ),
+                ));
+            }
+            if rule.definition_version == 0 {
+                out.push((at("definition_version"), "starts at 1".into()));
+            }
+            if !(rule.min_exposure.value.is_finite() && rule.min_exposure.value > 0.0) {
+                out.push((at("min_exposure.value"), "must be above 0".into()));
+            }
+            let spread = &rule.engine_spread;
+            if !(spread.per_match_sd >= 0.0 && spread.between_league_sd >= 0.0) {
+                out.push((at("engine_spread"), "the spreads must be 0 or above".into()));
+            }
+            if b.is_distribution() && spread.noise_floor.is_none() {
+                out.push((
+                    at("engine_spread.noise_floor"),
+                    "a distribution band needs its noise floor".into(),
+                ));
+            }
+            if let Target::Design { value, cap } = rule.target {
+                if !value.is_finite() {
+                    out.push((at("target.design"), "is not a number".into()));
+                }
+                if cap.is_some_and(|c| !(c.is_finite() && c > 0.0)) {
+                    out.push((at("target.cap"), "must be above 0".into()));
+                }
+            }
+            let target_source = matches!(
+                b.real.as_ref().map(|r| &r.source),
+                Some(RealSource::Target(_))
+            );
+            if target_source != (rule.resampling.real == RealUnit::Target) {
+                out.push((
+                    at("resampling.real"),
+                    "is target exactly when the real source names a reference-file target".into(),
+                ));
+            }
+            if !b.gates {
+                match self
+                    .report_only_groups
+                    .iter()
+                    .find(|g| b.group.as_deref() == Some(g.group.as_str()))
+                {
+                    None => out.push((
+                        at("gates"),
+                        "every band gates; only a band of a named report-only group may be \
+                         false"
+                            .into(),
+                    )),
+                    Some(g) => *per_group.entry(g.group.as_str()).or_default() += 1,
+                }
+            }
+        }
+        for g in &self.report_only_groups {
+            let n = per_group.get(g.group.as_str()).copied().unwrap_or(0);
+            if n > g.most {
+                out.push((
+                    format!("report_only ({})", g.group),
+                    format!("{n} bands report only; the group allows at most {}", g.most),
+                ));
+            }
+        }
+        out
+    }
+}
+
+/// A refusal list as one error: the first field, and every refusal in the reason, so one
+/// load names every gap.
+fn refusals(list: Vec<(String, String)>) -> Result<(), (String, String)> {
+    let mut it = list.into_iter();
+    let Some((field, reason)) = it.next() else {
+        return Ok(());
+    };
+    let rest: Vec<String> = it.map(|(f, r)| format!("{f}: {r}")).collect();
+    if rest.is_empty() {
+        Err((field, reason))
+    } else {
+        Err((
+            field,
+            format!("{reason}; and {} more: {}", rest.len(), rest.join("; ")),
+        ))
     }
 }
 
@@ -1786,6 +2560,7 @@ mod tests {
                     assert_eq!(real.sample, 0, "{}", b.band);
                     assert_eq!(c.measurement.count, 0, "{}", b.band);
                 }
+                RealSource::Target(t) => panic!("{}: a version 5 band names {}", b.band, t.target),
                 RealSource::Pointer(p) => {
                     assert!(!experiments.contains(&b.band.as_str()), "{}", b.band);
                     for text in [&p.dataset, &p.file, &p.key] {
@@ -2182,5 +2957,314 @@ mod tests {
             base.band("goals_per_match").unwrap().digest(),
             narrowed.band("goals_per_match").unwrap().digest()
         );
+    }
+
+    // ---- Version 6 -------------------------------------------------------------------
+
+    /// A version 6 band with every field, judged against `target`.
+    fn v6_band(name: &str, margin: f64, target: Value, source: Value) -> Value {
+        serde_json::json!({
+            "band": name,
+            "suites": ["equal"],
+            "measure": {"kind": "mean", "per": "match", "of": ["goals.home", "goals.away"]},
+            "target": target,
+            "margin": {
+                "value": margin,
+                "league_spread": 0.0,
+                "noticeable_error": margin,
+                "reason": "a player notices this many goals a match",
+                "spread_reason": "one population",
+                "design_choice": true
+            },
+            "definition_version": 1,
+            "population": "generated leagues of the equal suite",
+            "estimator": "mean per match",
+            "resampling": {"engine": "league", "real": "match"},
+            "min_exposure": {"unit": "matches", "value": 100.0},
+            "rare": false,
+            "engine_spread": {"per_match_sd": 1.7, "between_league_sd": 0.1, "measured": "run 9, 2026-10-21"},
+            "real": {"source": source, "sample": 1826, "date": "2026-10-21"},
+            "evidence": "calibration",
+            "confidence": {"measurement": {"count": 1826}, "generalisation": {"competitions": 5, "seasons": 1, "clubs": 98}},
+            "condition": "dry",
+            "gates": true
+        })
+    }
+
+    fn pointer() -> Value {
+        serde_json::json!({"dataset": "a fixture", "file": "wy2_matches.csv", "key": "hg+ag", "reduce": "mean"})
+    }
+
+    /// A version 6 file: a real band, a design band with no counterpart, a design band with
+    /// a cap, and a band of the named report-only group.
+    fn v6_doc() -> Value {
+        let mut design = v6_band(
+            "stronger_team_win_rate",
+            0.2,
+            serde_json::json!({"design": 0.75}),
+            serde_json::json!({"none": "engine experiment; no real match repeats it"}),
+        );
+        design["suites"] = serde_json::json!(["strength"]);
+        design["measure"] =
+            serde_json::json!({"kind": "builtin", "name": "stronger_team_win_rate"});
+        design["resampling"] = serde_json::json!({"engine": "match", "real": "none"});
+        design["engine_spread"]["per_match_sd"] = 0.5.into();
+        design["real"]["sample"] = 0.into();
+        design["confidence"] = serde_json::json!({"measurement": {"count": 0}, "generalisation": {"competitions": 0, "seasons": 0, "clubs": 0}});
+        let capped = v6_band(
+            "capped_goals",
+            0.5,
+            serde_json::json!({"design": 2.6, "cap": 0.6}),
+            pointer(),
+        );
+        let mut facing = v6_band(
+            "facing_ball_share",
+            0.3,
+            serde_json::json!({"real": {}}),
+            pointer(),
+        );
+        facing["group"] = "facing".into();
+        facing["gates"] = false.into();
+        serde_json::json!({
+            "schema_version": 6,
+            "sample_size": 1000,
+            "wall_minutes_per_sample": 30.0,
+            "stronger_team": {"attribute_boost": 1.15},
+            "generalisation_floor": 2,
+            "pass_rule": {"alpha": 0.05, "sound_pass": 0.97, "design_count": {"matches": 1000, "leagues": 30}},
+            "report_only": [{"group": "facing", "most": 2, "reason": "body facing is measured on two pose matches only"}],
+            "bands": [
+                v6_band("goals_per_match", 0.4, serde_json::json!({"real": {}}), pointer()),
+                design,
+                capped,
+                facing
+            ]
+        })
+    }
+
+    fn v6_edited(edit: impl FnOnce(&mut Value)) -> String {
+        let mut doc = v6_doc();
+        edit(&mut doc);
+        doc.to_string()
+    }
+
+    #[test]
+    fn a_version_6_file_loads_with_its_rule_and_its_named_report_only_group() {
+        let r = Registry::from_bytes(v6_doc().to_string().as_bytes()).unwrap();
+        assert_eq!(r.schema_version, 6);
+        assert_eq!(r.pass_rule.unwrap().alpha, 0.05);
+        assert_eq!(r.gating(), 3);
+        let goals = r.band("goals_per_match").unwrap();
+        let rule = goals.rule.as_ref().unwrap();
+        assert_eq!(rule.target, Target::Real);
+        assert_eq!(rule.margin.value, 0.4);
+        assert_eq!(goals.smallest_shift, 0.4);
+        assert_eq!(goals.report_only, None);
+        let design = r.band("stronger_team_win_rate").unwrap();
+        assert_eq!(
+            design.rule.as_ref().unwrap().target,
+            Target::Design {
+                value: 0.75,
+                cap: None
+            }
+        );
+        assert_eq!((design.lo, design.hi), (0.55, 0.95));
+        let facing = r.band("facing_ball_share").unwrap();
+        assert!(!facing.gates);
+        assert!(
+            facing
+                .report_only
+                .as_deref()
+                .unwrap()
+                .contains("named report-only group facing"),
+            "{:?}",
+            facing.report_only
+        );
+        // The rule joins the band's digest: a changed margin moves it.
+        let wider = Registry::from_bytes(
+            v6_edited(|d| {
+                d["bands"][0]["margin"]["value"] = 0.5.into();
+                d["bands"][0]["margin"]["noticeable_error"] = 0.5.into();
+            })
+            .as_bytes(),
+        )
+        .unwrap();
+        assert_ne!(
+            wider.band("goals_per_match").unwrap().digest(),
+            goals.digest()
+        );
+    }
+
+    #[test]
+    fn a_version_6_band_without_a_required_field_is_refused_naming_band_and_field() {
+        for field in REQUIRED_V6 {
+            let text = v6_edited(|d| {
+                let band = &mut d["bands"][0];
+                let mut path: Vec<&str> = field.split('.').collect();
+                let last = path.pop().unwrap();
+                let parent = path.iter().fold(band, |v, k| &mut v[*k]);
+                parent.as_object_mut().unwrap().remove(last);
+            });
+            let err = refusal(&text);
+            assert!(
+                err.contains(&format!("(goals_per_match).{field}: is required")),
+                "{field}: {err}"
+            );
+        }
+        // Every gap of one load is named at once.
+        let err = refusal(&v6_edited(|d| {
+            d["bands"][0].as_object_mut().unwrap().remove("population");
+            d["bands"][2].as_object_mut().unwrap().remove("estimator");
+        }));
+        assert!(
+            err.contains("(goals_per_match).population: is required"),
+            "{err}"
+        );
+        assert!(
+            err.contains("(capped_goals).estimator: is required"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn each_version_6_rule_is_refused_by_name() {
+        let cases: [(&str, Edit, &str); 9] = [
+            (
+                "a margin not marked a design choice",
+                Box::new(|d| d["bands"][0]["margin"]["design_choice"] = false.into()),
+                "(goals_per_match).margin.design_choice: must be true",
+            ),
+            (
+                "a blank reason",
+                Box::new(|d| d["bands"][0]["margin"]["reason"] = " ".into()),
+                "(goals_per_match).margin.reason: must not be blank",
+            ),
+            (
+                "a margin that is not its parts",
+                Box::new(|d| d["bands"][0]["margin"]["value"] = 0.9.into()),
+                "(goals_per_match).margin.value: 0.9 is not the league spread",
+            ),
+            (
+                "the old range",
+                Box::new(|d| d["bands"][0]["design"] = serde_json::json!({"lo": 1, "hi": 2})),
+                "(goals_per_match).design: is not a version 6 field",
+            ),
+            (
+                "a real floor",
+                Box::new(|d| d["bands"][0]["real"]["floor"] = 30.into()),
+                "(goals_per_match).real.floor: is not a version 6 field",
+            ),
+            (
+                "a band that does not gate outside the named group",
+                Box::new(|d| d["bands"][0]["gates"] = false.into()),
+                "(goals_per_match).gates: every band gates",
+            ),
+            (
+                "a named group over its cap",
+                Box::new(|d| d["report_only"][0]["most"] = 0.into()),
+                "report_only (facing): 1 bands report only; the group allows at most 0",
+            ),
+            (
+                "no counterpart and a real target",
+                Box::new(|d| d["bands"][1]["target"] = serde_json::json!({"real": {}})),
+                "(stronger_team_win_rate).target: a band with no real counterpart",
+            ),
+            (
+                "both target forms",
+                Box::new(|d| {
+                    d["bands"][0]["target"] = serde_json::json!({"real": {}, "design": 1.0})
+                }),
+                "(goals_per_match).target: must hold real",
+            ),
+        ];
+        for (what, edit, named) in cases {
+            let err = refusal(&v6_edited(edit));
+            assert!(err.contains(named), "{what}: {err}");
+        }
+    }
+
+    #[test]
+    fn a_margin_under_the_floor_is_refused_naming_the_margin_it_needs_and_one_at_it_loads() {
+        let doc = v6_doc();
+        let r = Registry::from_bytes(doc.to_string().as_bytes()).unwrap();
+        // The floor of goals_per_match from its engine spread: 1.7 per match over 1000
+        // matches, 0.1 between leagues over 30, with 3 gating bands.
+        let sigma_e = pass_rule::floor::engine_error(1.7, 0.1, 1000.0, 30.0);
+        let needed = pass_rule::floor::needed_margin(sigma_e, 0.0, 0.05, 0.97, r.gating());
+        let at = |m: f64| {
+            v6_edited(|d| {
+                d["bands"][0]["margin"]["value"] = m.into();
+                d["bands"][0]["margin"]["noticeable_error"] = m.into();
+            })
+        };
+        let err = refusal(&at(needed * 0.99));
+        assert!(err.contains("(goals_per_match).margin.value"), "{err}");
+        assert!(
+            err.contains("is below the 97 percent floor; it needs at least"),
+            "{err}"
+        );
+        assert!(err.contains(&fmt_g(needed)), "{err}");
+        assert!(Registry::from_bytes(at(needed).as_bytes()).is_ok());
+        // A design band's cap is held to the floor as well.
+        let err = refusal(&v6_edited(|d| d["bands"][2]["target"]["cap"] = 0.01.into()));
+        assert!(
+            err.contains("(capped_goals).target.cap: cap 0.01000 is below"),
+            "{err}"
+        );
+        // A distribution band needs its noise floor, and a margin above it.
+        let dist = |margin: f64, floor: Option<f64>| {
+            v6_edited(|d| {
+                let b = &mut d["bands"][0];
+                b["measure"] = serde_json::json!({"kind": "distribution", "of": "goals", "width": 1.0, "bins": 11});
+                b["margin"]["value"] = margin.into();
+                b["margin"]["noticeable_error"] = margin.into();
+                if let Some(f) = floor {
+                    b["engine_spread"]["noise_floor"] = f.into();
+                }
+            })
+        };
+        assert!(refusal(&dist(0.05, None)).contains("needs its noise floor"));
+        assert!(refusal(&dist(0.05, Some(0.06))).contains("(goals_per_match).margin.value"));
+        assert!(Registry::from_bytes(dist(0.07, Some(0.06)).as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn a_target_key_the_reference_file_lacks_is_refused_naming_the_key() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../gate/real-targets.json");
+        let file = crate::real_targets::ReferenceFile::load(&path).unwrap();
+        let named = |key: &str| {
+            v6_edited(|d| {
+                d["bands"][0]["real"]["source"] = serde_json::json!({"target": key});
+                d["bands"][0]["resampling"]["real"] = "target".into();
+                // Wide enough for any target's error.
+                d["bands"][0]["margin"]["value"] = 5.0.into();
+                d["bands"][0]["margin"]["noticeable_error"] = 5.0.into();
+            })
+        };
+        let ok = Registry::parse(named("tier.1.goals_per_match").as_bytes(), Some(&file)).unwrap();
+        assert_eq!(
+            ok.band("goals_per_match")
+                .unwrap()
+                .real
+                .as_ref()
+                .unwrap()
+                .target_key(),
+            Some("tier.1.goals_per_match")
+        );
+        let err = Registry::parse(named("tier.9.goals_per_match").as_bytes(), Some(&file))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "(goals_per_match).real.source.target: tier.9.goals_per_match is not a target"
+            ),
+            "{err}"
+        );
+        // A target source goes with a target resampling.
+        let err = refusal(&v6_edited(|d| {
+            d["bands"][0]["real"]["source"] =
+                serde_json::json!({"target": "tier.1.goals_per_match"});
+        }));
+        assert!(err.contains("(goals_per_match).resampling.real"), "{err}");
     }
 }

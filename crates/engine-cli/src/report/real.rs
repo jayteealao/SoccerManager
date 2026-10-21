@@ -154,6 +154,12 @@ fn read_with(
             };
         }
         RealSource::Pointer(p) => p,
+        RealSource::Target(t) => {
+            return Outcome::NotHere {
+                path: t.target.clone(),
+                reason: "a target of the reference file of real targets, read from gate/".into(),
+            };
+        }
     };
     let Some(dir) = &folder.path else {
         return Outcome::NotHere {
@@ -1049,6 +1055,12 @@ pub fn samples(folder: &RealFolder, registry: &Registry) -> Samples {
                     Err(format!("no real counterpart: {}", n.none)),
                 );
             }
+            Some(RealSource::Target(t)) => {
+                out.insert(
+                    def.band.clone(),
+                    Err(format!("{} is a target of the reference file", t.target)),
+                );
+            }
             None => {
                 out.insert(def.band.clone(), Err("no real record".into()));
             }
@@ -1322,7 +1334,7 @@ pub fn read_all(folder: &RealFolder, registry: &Registry, samples: &Samples) -> 
                             .as_ref()
                             .and_then(|d| modified_date(&d.join(&p.file)))
                             .filter(|d| *d > r.date),
-                        RealSource::NoCounterpart(_) => None,
+                        RealSource::NoCounterpart(_) | RealSource::Target(_) => None,
                     }),
                 }
             }
@@ -1568,6 +1580,7 @@ mod tests {
             max_from_dry: None,
             gates: true,
             report_only: None,
+            rule: None,
         }
     }
 

@@ -988,6 +988,7 @@ mod tests {
             max_from_dry: None,
             gates: true,
             report_only: None,
+            rule: None,
         }
     }
 
