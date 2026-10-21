@@ -53,6 +53,8 @@ pub mod rows;
 pub mod rules;
 pub mod run_folder;
 pub mod runner;
+#[cfg(test)]
+mod spread;
 pub mod stages;
 pub mod styles;
 pub mod worker;
