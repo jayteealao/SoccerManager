@@ -1,0 +1,13 @@
+Div,Date,Time,HomeTeam,AwayTeam,FTHG,FTAG,FTR,HTHG,HTAG,HTR,HS,AS,HST,AST,HF,AF,HC,AC,HY,AY,HR,AR
+D1,01/09/2022,15:00,Leverkusen,Eisenfeld,0,2,A,0,1,D,9,13,2,4,13,15,3,4,0,1,0,0
+D1,03/09/2022,15:00,Leverkusen,Grunwald,2,2,D,1,1,D,12,17,4,5,15,14,7,5,0,2,0,0
+D1,05/09/2022,15:00,Leverkusen,Hollerbach,3,2,H,1,1,D,15,17,7,5,10,14,6,5,3,1,1,0
+D1,07/09/2022,15:00,Eisenfeld,Leverkusen,1,1,D,1,1,D,19,16,4,3,11,15,5,5,1,1,1,0
+D1,09/09/2022,15:00,Eisenfeld,Grunwald,2,2,D,1,1,D,18,12,6,4,10,14,4,2,0,3,0,0
+D1,11/09/2022,15:00,Eisenfeld,Hollerbach,3,2,H,1,1,D,15,13,5,5,12,13,6,4,2,1,0,0
+D1,13/09/2022,15:00,Grunwald,Leverkusen,0,0,D,0,0,D,10,11,3,1,10,12,4,4,2,1,0,0
+D1,15/09/2022,15:00,Grunwald,Eisenfeld,1,0,H,1,0,D,16,11,3,1,14,12,7,3,3,1,1,0
+D1,17/09/2022,15:00,Grunwald,Hollerbach,3,1,H,1,1,D,13,14,6,3,10,15,6,3,3,1,0,0
+D1,19/09/2022,15:00,Hollerbach,Leverkusen,1,2,A,1,1,D,13,10,4,5,15,11,7,2,0,3,0,0
+D1,21/09/2022,15:00,Hollerbach,Eisenfeld,2,2,D,1,1,D,20,12,4,5,14,11,3,6,2,2,1,0
+D1,23/09/2022,15:00,Hollerbach,Grunwald,0,0,D,0,0,D,15,10,3,2,12,13,4,4,1,2,0,0

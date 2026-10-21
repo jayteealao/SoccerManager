@@ -42,6 +42,8 @@ libm = { version = "0.2.16", default-features = false }
 trybuild = "1.0.119"
 # Reads the compressed real-data files of the realism bands (pure-Rust back end, no C build).
 flate2 = "1.1"
+# Test folders that delete themselves, so no test leaves a folder in the system temp folder.
+tempfile = "3"
 
 [profile.release]
 debug = 1

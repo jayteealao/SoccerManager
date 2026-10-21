@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://soccermanager.local/schemas/real-targets.schema.json",
+  "title": "Reference file of real targets",
+  "description": "gate/real-targets.json: every real figure the realism harness checks the engine against, each with its full record and the credit of its source. Built by engine-cli real-targets build; never shipped with the game.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "builder", "built_from", "credits", "definitions", "targets", "absent"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "builder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "git_head"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "git_head": { "type": "string", "minLength": 1 }
+      }
+    },
+    "built_from": {
+      "description": "Each raw file read, relative to the data folder.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "bytes", "sha256"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "bytes": { "type": "integer", "minimum": 0 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    },
+    "credits": {
+      "description": "One credit per provider, by the provider's name.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "source", "licence", "use_note"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "source": { "type": "string", "minLength": 1 },
+          "licence": { "type": "string", "minLength": 1 },
+          "use_note": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "definitions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shots_include_blocked", "shots_check", "tiers", "relegation_places", "strength", "seasons"],
+      "properties": {
+        "shots_include_blocked": { "type": "boolean" },
+        "shots_check": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["competition", "matches", "file_mean", "with_blocked_mean", "without_blocked_mean", "include_blocked"],
+          "properties": {
+            "competition": { "type": "string" },
+            "matches": { "type": "integer", "minimum": 0 },
+            "file_mean": { "type": "number" },
+            "with_blocked_mean": { "type": "number" },
+            "without_blocked_mean": { "type": "number" },
+            "include_blocked": { "type": "boolean" }
+          }
+        },
+        "tiers": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 } },
+        "relegation_places": { "type": "object", "additionalProperties": { "type": ["integer", "null"], "minimum": 0 } },
+        "strength": { "type": "object", "additionalProperties": { "type": "number" } },
+        "seasons": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "targets": {
+      "description": "Every target by key: fd.<div>.<stat>, tier.<n>.<stat>, group.t<n>.e<elo>.<stat>, wy.<league>.<stat>, fotmob.<div>.<stat>.",
+      "type": "object",
+      "propertyNames": { "pattern": "^(fd|tier|group|wy|fotmob)\\.[A-Za-z0-9_.]+$" },
+      "additionalProperties": { "$ref": "#/$defs/target" }
+    },
+    "absent": {
+      "description": "Targets that could not be built, by key, with the reason.",
+      "type": "object",
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "se", "n", "seasons", "layer", "provider", "source_label", "event_definition",
+        "denominator", "unit_of_observation", "label", "engine_count"
+      ],
+      "oneOf": [
+        { "required": ["value"], "not": { "required": ["shares"] } },
+        { "required": ["shares", "bins", "width"], "not": { "required": ["value"] } }
+      ],
+      "properties": {
+        "value": { "type": "number" },
+        "shares": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 1 }, "minItems": 2 },
+        "bins": { "type": "integer", "minimum": 2 },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "se": { "type": "number", "minimum": 0 },
+        "n": { "type": "integer", "minimum": 1 },
+        "seasons": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "between_season_sd": { "type": "number", "minimum": 0 },
+        "between_league_sd": { "type": "number", "minimum": 0 },
+        "layer": { "enum": ["league", "tier", "group", "pooled"] },
+        "leagues": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "provider": { "type": "string", "minLength": 1 },
+        "source_label": { "type": "string", "minLength": 1 },
+        "event_definition": { "type": "string", "minLength": 1 },
+        "denominator": { "type": "string", "minLength": 1 },
+        "unit_of_observation": { "type": "string", "minLength": 1 },
+        "label": { "enum": ["calibration", "validation"] },
+        "engine_count": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["text"],
+          "properties": {
+            "text": { "type": "string", "minLength": 1 },
+            "band": { "type": "string", "minLength": 1 },
+            "measure": { "type": "string", "minLength": 1 }
+          }
+        },
+        "context": { "type": "string", "minLength": 1 },
+        "extrapolated": { "type": "boolean" },
+        "formula": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["intercept", "tier", "strength", "residual_sd", "fitted_on"],
+          "properties": {
+            "intercept": { "type": "number" },
+            "tier": { "type": "number" },
+            "strength": { "type": "number" },
+            "residual_sd": { "type": "number", "minimum": 0 },
+            "fitted_on": { "type": "array", "items": { "type": "string" }, "minItems": 4 }
+          }
+        }
+      }
+    }
+  }
+}

@@ -16,6 +16,7 @@ mod guard;
 mod launch;
 mod matchday;
 mod measure_rows;
+mod real_targets;
 mod record;
 mod replay;
 mod replay_inputs;
@@ -95,6 +96,9 @@ fn main() {
         cli::Command::Resume(opts) => resume::run(content_dir, &opts),
         cli::Command::Calibrate(opts) => match &opts.action {
             Some(cli::CalibrateAction::Accept { band, run }) => report::accepted::accept(band, run),
+            Some(cli::CalibrateAction::Report { run, targets }) => {
+                real_targets::calibration::run(content_dir, run, targets.as_ref())
+            }
             Some(cli::CalibrateAction::Proof {
                 seed,
                 matches,
@@ -124,6 +128,7 @@ fn main() {
         cli::Command::FastModel(opts) => fast_model::run(content_dir, &opts),
         cli::Command::RestartWaits(opts) => restart_waits::run(content_dir, &opts),
         cli::Command::Signatures(opts) => signatures::run(content_dir, &opts),
+        cli::Command::RealTargets(opts) => real_targets::run(content_dir, &opts),
         #[cfg(feature = "measures")]
         cli::Command::Primitives(opts) => calibrate::primitives::run(content_dir, &opts),
         cli::Command::MatchdayTiming(opts) => matchday::timing::run(content_dir, &opts),

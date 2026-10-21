@@ -61,6 +61,8 @@ pub enum Command {
     RestartWaits(RestartWaitsOpts),
     /// Write the real-team signature table of the tactical primitives.
     Signatures(SignaturesOpts),
+    /// Check the raw real data, or build the real-targets file.
+    RealTargets(RealTargetsOpts),
     /// Check or fit a tactical primitive from played matches.
     #[cfg(feature = "measures")]
     Primitives(PrimitivesOpts),
@@ -91,6 +93,63 @@ pub struct RestartWaitsOpts {
     /// Where the table goes, usually content/restart-waits.json.
     #[arg(long, value_name = "FILE")]
     pub out: PathBuf,
+}
+
+/// The real-targets command.
+#[derive(Debug, Args)]
+pub struct RealTargetsOpts {
+    #[command(subcommand)]
+    pub action: RealTargetsAction,
+}
+
+/// What `real-targets` does.
+#[derive(Debug, Subcommand)]
+pub enum RealTargetsAction {
+    /// Count the raw data files and name each missing one.
+    #[command(
+        long_about = "Count the raw data files the reference file is built from: the\n\
+                      110 football-data.co.uk result files, the 25 FotMob tables,\n\
+                      the 20 SoccerTrack v2 annotation files and a ClubElo snapshot.\n\
+                      Names each missing file, and each file that differs from its\n\
+                      manifest. Exits 1 when a file is missing or differs."
+    )]
+    CheckData {
+        /// The raw data folder.
+        #[arg(
+            long,
+            value_name = "DIR",
+            long_help = "The raw data folder; default the main checkout's .scratch/data."
+        )]
+        data: Option<PathBuf>,
+    },
+    /// Build the reference file of real targets from the raw data.
+    #[command(
+        long_about = "Build the reference file of real targets from the raw data, read\n\
+                      in place: per-league targets over five seasons, a target set per\n\
+                      tier, banding-group targets from a formula fitted on the leagues\n\
+                      with data, league-table targets, whole distributions, duel\n\
+                      contests and pass completion. Each target carries its full record\n\
+                      and credit. Also writes the real club names to\n\
+                      real-names/football-data.json beside it, for the packaging check.\n\
+                      Prints the blocked-shot cross-check."
+    )]
+    Build {
+        /// The raw data folder.
+        #[arg(
+            long,
+            value_name = "DIR",
+            long_help = "The raw data folder; default the main checkout's .scratch/data."
+        )]
+        data: Option<PathBuf>,
+        /// The reference file to write.
+        #[arg(
+            long,
+            value_name = "FILE",
+            long_help = "The reference file to write; default gate/real-targets.json\n\
+                         beside the content folder."
+        )]
+        out: Option<PathBuf>,
+    },
 }
 
 /// The real-team signature table command.
@@ -1182,6 +1241,27 @@ impl CalibrateOpts {
 /// What `calibrate` does with a run folder instead of a run.
 #[derive(Debug, Subcommand)]
 pub enum CalibrateAction {
+    /// Show a run against the real targets; report only.
+    #[command(
+        long_about = "Show the engine against the real targets, band by band, from a\n\
+                      run folder's stored rows: a mean with its error, or a whole\n\
+                      distribution with its distance from the real one. Reads the\n\
+                      equal suite's matches. Writes calibration.json in the run folder;\n\
+                      never report.json, so the run's verdict does not change."
+    )]
+    Report {
+        /// The run folder of a finished calibrate run.
+        #[arg(long, value_name = "DIR")]
+        run: PathBuf,
+        /// The reference file of real targets.
+        #[arg(
+            long,
+            value_name = "FILE",
+            long_help = "The reference file of real targets; default\n\
+                         gate/real-targets.json beside the content folder."
+        )]
+        targets: Option<PathBuf>,
+    },
     /// Accept a not-sure band of a run folder: accepted, not shown equivalent.
     #[command(
         long_about = "Accept a band that reads not sure in a run folder's last judgement.\n\n\

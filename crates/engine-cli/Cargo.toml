@@ -56,3 +56,4 @@ libc = { workspace = true }
 [dev-dependencies]
 # JSON Schema validation of the records in tests only; the release binary does not link it.
 boon = { workspace = true }
+tempfile = { workspace = true }

@@ -444,6 +444,19 @@ Standard error carries structured lines beside the tables. Each line has a `sign
 - `calibrate.verdict_failed` (`warn`), for each band that failed in a change run: `band`, `suite`, `pairing`, `value`, `lo`, `hi`, `diff`, `se`, and `smallest_shift`.
 - `calibrate.run_finished` (`info`), for a run that does not end in an error: `mode`, `outcome` (`stopped`, `judged again`, or `judged`), `pass`, `verdict` (change runs only), `exit`, and `elapsed_s`. A run that ends in an error prints the failure record instead.
 
+### Calibration report
+
+```bash
+engine-cli calibrate report --run <DIR> [--targets <FILE>]
+```
+
+`calibrate report` shows the engine against the real targets of the reference file (see [real-targets](#real-targets)), band by band, from the stored rows of a finished run folder. It plays nothing and needs no `--seed`. It reads the matches of the equal suite (clubs of the same strength) and, for each registry band that a target names in its `engine_count.band`, prints the engine's value with its standard error and each real target with its value, standard error and `engine less real`; for a whole-distribution band it prints the engine's shares, each target's shares, and their distance (total variation for the scoreline cells, Wasserstein-1 otherwise). Banding-group targets are left to the file. The bands no target names are listed last. It writes `calibration.json` in the run folder, with every target, and never writes `report.json`: the run's verdict does not change. A folder without a finished match of the equal suite is refused, with exit code 1.
+
+| Argument | Value | Default | Meaning |
+|---|---|---|---|
+| `--run` | folder | required | The run folder of a finished calibrate run. |
+| `--targets` | file | `gate/real-targets.json` beside the content folder | The reference file of real targets. |
+
 ### Real values
 
 Each judgement reads every band's real value in place from the real-data folder: `--real-data`, or by default `.scratch/out` in the main checkout, found from the content folder through git's own files (a linked worktree's `.git` file names its git folder, whose `commondir` names the main checkout's). No git program runs. The real value is reported beside the verdict with its distance from the run's value, `value` minus `real`; it never changes a word, `calib.pass` or the exit code. Before the verdict table, standard error prints `real data: <folder> (<flag|default>); <n> of <total> bands without a real value; <k> with no real counterpart`, and, when the folder does not exist, `no real data here: <folder> does not exist`. Both tables gain the columns `real` and `distance`; a band without a real value reads `no real data here` there, a band that measures an engine experiment `no real counterpart`, and a band of a migrated band file `no real record`. A band that only reports ends its line with `(report only: <reason>)`. After the table, a line states the realism claim, for example `realism claim: none; no band of this run is validation evidence with a real counterpart (15 calibration bands are not counted: tuning may have read them)`.
@@ -605,6 +618,26 @@ The table's `substitutions` rows come from `wy2_subs.csv` with `wy2_matches.csv`
 The held-out sets are never read: rows of other competitions are skipped before they are parsed, a held-out competition asked for by name stops the run with `held-out set: <name> is never read`, and so does an event whose match belongs to a held-out competition. Two runs on the same files write the same bytes. Output: one JSON line with the file written, the rows, the teams and the matches.
 
 Exit codes: 0 when the table is written; 1 when a flag is refused, a file cannot be read or lacks a column, a held-out set is reached, or a statistic has fewer than 5 teams.
+
+## real-targets
+
+Check the raw real data, or build the reference file of real targets, `gate/real-targets.json`. The raw files are read in place, by default from `.scratch/data` in the main checkout (found from the content folder as `calibrate --real-data` finds `.scratch/out`); only the derived figures enter the reference file, which lives in `gate/` and never ships with the game.
+
+```text
+engine-cli real-targets check-data [--data <DIR>]
+engine-cli real-targets build [--data <DIR>] [--out <FILE>]
+```
+
+`check-data` counts the 110 football-data.co.uk result files (22 divisions, 2021/22 to 2025/26), the 25 FotMob tables, the 20 SoccerTrack v2 annotation files named in their download record, and a ClubElo snapshot `clubelo/clubelo-<date>.csv`. It prints each group's count against the expected count, then names each missing file (`missing: <path>`) and each file that differs from its manifest's sha256, or for SoccerTrack its recorded size (`not as recorded: <path>`).
+
+`build` writes the reference file: per-league targets over the five seasons (goals, results, shots, fouls, corners and cards, with each target's standard error over whole matches and its spread between seasons), a target set per tier (each league with equal weight, with the spread between leagues), banding-group targets for the leagues without data (by tier and a 50-point ClubElo strength bin, the prediction of a formula fitted on the leagues with data, with its prediction error, marked `extrapolated` outside the fitted range), league-table targets (champion points, the points of the first direct relegation place, the spread of points per game, the title margin), whole distributions (every scoreline cell, goals, shots and cards per match), Wyscout duel contests per match (two rows of one duel count as one contest), and pass completion by Opta's count from the FotMob tables. Every target carries its provider, event definition, denominator, unit of observation, calibration or validation label and how the engine counts the same thing; the file credits each provider and records each raw file read with its sha256. Before any shot target, a cross-check on StatsBomb's Bundesliga 2023/24 events decides whether the result files' shot counts include blocked shots; it prints its table, and when they do not, no shot target is built. Beside the file it writes `real-names/football-data.json`, the real club names of the result files, which the packaging check keeps out of the shipped content. Two builds of the same files write the same bytes. The Wyscout held-out sets (Germany 2017/18, World Cup 2018, Euro 2016) are never opened.
+
+| Flag | Value | Default | Meaning |
+|---|---|---|---|
+| `--data` | folder | the main checkout's `.scratch/data` | The raw data folder. |
+| `--out` | file | `gate/real-targets.json` beside the content folder | The reference file to write. |
+
+Exit codes: `check-data` 0 when every file is there and as recorded, 1 otherwise; `build` 0 when the file is written, 1 when a raw file cannot be read.
 
 ## primitives
 
