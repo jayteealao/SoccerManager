@@ -342,6 +342,301 @@ fn tick_plants() -> Vec<Plant> {
     plants
 }
 
+/// `base` with `records` and, when given, its timeline and events: one planted input.
+fn planted(
+    base: &Input,
+    records: Vec<TickRecord>,
+    timeline: Option<Vec<(u32, [Team; 2])>>,
+    events: Option<Vec<EngineEvent>>,
+) -> Input {
+    Input {
+        tuning: base.tuning.clone(),
+        timeline: timeline.unwrap_or_else(|| base.timeline.clone()),
+        events: events.unwrap_or_else(|| base.events.clone()),
+        records,
+        rules: base.rules.clone(),
+    }
+}
+
+/// `p` as a record position.
+fn at(p: DVec2) -> [f32; 2] {
+    [p.x as f32, p.y as f32]
+}
+
+/// A record position as the checkers read it.
+fn read(p: [f32; 2]) -> DVec2 {
+    DVec2::new(f64::from(p[0]), f64::from(p[1]))
+}
+
+/// Separation plants on the records of `base`, each a pair that comes near or under the
+/// minimum distance in a way a cheaper pair check could miss: closing from far at top
+/// speed, held just outside the minimum for many records then just inside, a sent-off
+/// player coming back from the parking spot onto a team-mate, a substitute entering onto an
+/// opponent on his entry tick, and a long jump onto another player.
+fn near_miss_plants(base: &Input) -> Vec<Plant> {
+    let min = engine::validate::MIN_SEPARATION;
+    let pitch = *base.timeline[0].1[0].pitch();
+    let tick = |k: usize| base.records[k].tick;
+    let plant = |name, k: usize, player, input: Input| Plant {
+        name,
+        input,
+        rule: "separation",
+        tick: tick(k),
+        index: None,
+        player: Some(player),
+    };
+    let mut plants = Vec::new();
+
+    // Player 2 closes on player 9 from 20 m over 40 records, ending 0.05 m from him: no
+    // more than the top speed's step on each record.
+    let k = 4000;
+    let mut records = base.records.clone();
+    for (n, r) in records[k - 40..=k].iter_mut().enumerate() {
+        let gap = 0.05 + (20.0 - 0.05) * (40 - n) as f64 / 40.0;
+        r.players[2] = at(read(r.players[9]) + DVec2::new(gap, 0.0));
+    }
+    let d = (read(records[k].players[2]) - read(records[k].players[9])).length();
+    assert!(d < min, "the closing pair ends under the minimum: {d}");
+    plants.push(plant(
+        "pair closing at top speed from far",
+        k,
+        2,
+        planted(base, records, None, None),
+    ));
+
+    // Players 4 and 15 held on one spot just outside the minimum for 200 records, then just
+    // inside it.
+    let (k, hold) = (6000, 200);
+    let mut records = base.records.clone();
+    let spot = DVec2::new(0.5, 0.5);
+    let outside = (min + 1e-6) as f32;
+    let inside = (min - 1e-4) as f32;
+    for (n, r) in records[k - hold..=k].iter_mut().enumerate() {
+        r.players[4] = at(spot);
+        let off = if n == hold { inside } else { outside };
+        r.players[15] = [spot.x as f32 + off, spot.y as f32];
+    }
+    let gap = |r: &TickRecord| (read(r.players[4]) - read(r.players[15])).length();
+    assert!(gap(&records[k - 1]) >= min && gap(&records[k - 1]) < min + 1e-5);
+    assert!(gap(&records[k]) < min);
+    plants.push(plant(
+        "pair held at the minimum, then under it",
+        k,
+        4,
+        planted(base, records, None, None),
+    ));
+
+    // Player 6 parked for 100 records, as a sent-off player is, then on player 7's spot.
+    let k = 8000;
+    let mut records = base.records.clone();
+    for r in &mut records[k - 100..k] {
+        r.players[6] = at(pitch.parking_spot(0, 6));
+    }
+    records[k].players[6] = records[k].players[7];
+    plants.push(plant(
+        "parked player back onto a team-mate",
+        k,
+        6,
+        planted(base, records, None, None),
+    ));
+
+    // An away substitute enters slot 4 (player 15) on an opponent, player 1, on his entry
+    // tick: parked before it, as a player off the pitch is.
+    let k = 10_000;
+    let mut records = base.records.clone();
+    for r in &mut records[k - 50..k] {
+        r.players[15] = at(pitch.parking_spot(1, 4));
+    }
+    records[k].players[15] = records[k].players[1];
+    let mut events = base.events.clone();
+    let mut entry = events
+        .iter()
+        .find(|e| e.team.is_some())
+        .copied()
+        .expect("an event with a team");
+    entry.kind = Sub;
+    entry.tick = tick(k);
+    entry.team = Some(1);
+    entry.player = Some(15);
+    entry.secondary = None;
+    entry.spot = None;
+    entry.card = None;
+    entry.advantage = None;
+    entry.added_time_s = None;
+    entry.detail = Some(engine::EventDetail::Substitution {
+        off: base.rules.lineups[1][4],
+        on: 20,
+    });
+    let place = events.partition_point(|e| e.tick <= tick(k));
+    events.insert(place, entry);
+    plants.push(plant(
+        "substitute enters onto an opponent",
+        k,
+        1,
+        planted(base, records, None, Some(events)),
+    ));
+
+    // Player 3 jumps onto the player farthest from him, at least 30 m away.
+    let k = 12_000;
+    let mut records = base.records.clone();
+    let from = read(records[k - 1].players[3]);
+    let far = (0..22)
+        .filter(|&j| j != 3)
+        .max_by(|&a, &b| {
+            let d = |j: usize| (read(records[k].players[j]) - from).length();
+            d(a).total_cmp(&d(b))
+        })
+        .unwrap();
+    assert!((read(records[k].players[far]) - from).length() >= 30.0);
+    records[k].players[3] = records[k].players[far];
+    plants.push(plant(
+        "30 m jump onto another player",
+        k,
+        3.min(far),
+        planted(base, records, None, None),
+    ));
+    plants
+}
+
+/// The first stretch at or after record `from` in which the ball lies still for the anchor
+/// grace and ten records more, with no team shape and no event inside it.
+fn still_stretch(base: &Input, from: usize) -> usize {
+    let grace = base.tuning.anchor_grace_ticks as usize;
+    let r = &base.records;
+    (from.max(1)..r.len() - grace - 10)
+        .find(|&s| {
+            let window = &r[s..s + grace + 10];
+            let outside = |t: u32| t <= r[s - 1].tick || t > window.last().unwrap().tick;
+            window.iter().all(|x| x.ball == r[s].ball && !x.restart)
+                && base.timeline.iter().all(|(t, _)| outside(*t))
+                && base.events.iter().all(|e| outside(e.tick))
+        })
+        .expect("a stretch with the ball still")
+}
+
+/// An anchor plant on the first still stretch at or after record `from`: the player in
+/// `slot` of `team` held at the pitch corner farthest from the ball and his anchors for the
+/// grace period and ten records more. When `change` is given, it is applied to the shape in
+/// force and the changed shape comes into force on the record before the stretch, so the
+/// drift is judged on it.
+fn drift_plant(
+    base: &Input,
+    name: &'static str,
+    from: usize,
+    team: usize,
+    slot: &dyn Fn(&Team) -> usize,
+    change: Option<&dyn Fn(&mut Team)>,
+) -> Plant {
+    let grace = base.tuning.anchor_grace_ticks as usize;
+    let still = still_stretch(base, from);
+    let start = base.records[still - 1].tick;
+    let mut teams = base
+        .timeline
+        .iter()
+        .rev()
+        .find(|(t, _)| *t <= start)
+        .unwrap()
+        .1
+        .clone();
+    let mut timeline = base.timeline.clone();
+    if let Some(change) = change {
+        change(&mut teams[team]);
+        let place = timeline.partition_point(|(t, _)| *t <= start);
+        timeline.insert(place, (start, teams.clone()));
+    }
+    let slot = slot(&teams[team]);
+    let player = team * 11 + slot;
+    let pitch = *teams[team].pitch();
+    let ball = read([base.records[still].ball[0], base.records[still].ball[1]]);
+    let anchors = [true, false].map(|has| teams[team].anchor(slot, ball, has, &base.tuning));
+    let (hx, hy) = (pitch.half_length() - 1.0, pitch.half_width() - 1.0);
+    let corner = [(hx, hy), (hx, -hy), (-hx, hy), (-hx, -hy)]
+        .map(|(x, y)| DVec2::new(x, y))
+        .into_iter()
+        .max_by(|a, b| {
+            let far = |p: &DVec2| {
+                anchors
+                    .iter()
+                    .fold((*p - ball).length(), |d, a| d.min((*p - *a).length()))
+            };
+            far(a).total_cmp(&far(b))
+        })
+        .unwrap();
+    let mut records = base.records.clone();
+    for x in &mut records[still..still + grace + 10] {
+        x.players[player] = at(corner);
+    }
+    Plant {
+        name,
+        input: planted(base, records, Some(timeline), None),
+        rule: "anchor_tolerance",
+        tick: base.records[still + grace - 1].tick,
+        index: None,
+        player: Some(player),
+    }
+}
+
+/// Anchor plants on a shape other than the kick-off one: after a tactics change, after a
+/// sending-off reshapes a line, in the second half after the ends switch, and on an acting
+/// keeper.
+fn shape_plants(base: &Input) -> Vec<Plant> {
+    let content = common::content();
+    let tuning = base.tuning.clone();
+    let quarter = base.records.len() / 4;
+    let second_half = base
+        .events
+        .iter()
+        .find(|e| e.kind == HalfTime)
+        .map(|e| base.records.partition_point(|r| r.tick <= e.tick))
+        .expect("a half-time");
+    let same = |s: usize| move |_: &Team| s;
+    let tactics_change = |team: &mut Team| {
+        let mut tactics = Tactics::defaults(&content.tactics);
+        tactics.mentality = (content.tactics.mentalities.len() - 1) as u8;
+        tactics.instructions[engine::data::tactics::LINE_HEIGHT] = 2;
+        team.set_tactics(tactics, &content.tactics, &tuning);
+    };
+    let sent_off = |team: &mut Team| team.reshape(3);
+    let keeper_off = |team: &mut Team| team.reshape(0);
+    vec![
+        drift_plant(
+            base,
+            "drift after a tactics change",
+            quarter,
+            0,
+            &same(7),
+            Some(&tactics_change),
+        ),
+        drift_plant(
+            base,
+            "drift after a sending-off reshapes the line",
+            quarter * 3 / 2,
+            1,
+            &same(2),
+            Some(&sent_off),
+        ),
+        drift_plant(
+            base,
+            "drift in the second half",
+            second_half,
+            0,
+            &same(9),
+            None,
+        ),
+        drift_plant(
+            base,
+            "drift of an acting keeper",
+            quarter * 3,
+            1,
+            &|team: &Team| {
+                assert_ne!(team.keeper_slot(), 0, "an outfield player keeps goal");
+                team.keeper_slot()
+            },
+            Some(&keeper_off),
+        ),
+    ]
+}
+
 fn event(kind: EngineEventKind, tick: u32, team: Option<usize>, scores: [u32; 2]) -> EngineEvent {
     EngineEvent {
         tick,
@@ -555,6 +850,20 @@ fn every_planted_tick_rule_gives_the_same_report() {
     }
 }
 
+/// The near misses and shape changes a cheaper checker could get wrong give the same
+/// report, each with its plant caught.
+#[test]
+fn every_near_miss_and_shape_change_plant_gives_the_same_report() {
+    let base = recorded_match();
+    assert!(old(&base).is_empty(), "the base match is clean");
+    let near = near_miss_plants(&base);
+    let shapes = shape_plants(&base);
+    assert_eq!((near.len(), shapes.len()), (5, 4));
+    for p in near.iter().chain(&shapes) {
+        check_plant(p);
+    }
+}
+
 #[test]
 fn every_planted_event_rule_gives_the_same_report() {
     for p in &event_plants() {
@@ -595,6 +904,18 @@ fn the_fixed_set_plants_every_rule() {
     for rule in RunningCheck::RULES {
         assert!(RULES.contains(&rule), "{rule} has no plant");
     }
+    // Separation and the anchor rule also carry the near misses and the shape changes.
+    let base = recorded_match();
+    assert!(
+        near_miss_plants(&base)
+            .iter()
+            .all(|p| p.rule == "separation")
+    );
+    assert!(
+        shape_plants(&base)
+            .iter()
+            .all(|p| p.rule == "anchor_tolerance")
+    );
 }
 
 /// Plays `config` through the running checker and a record list, with `prepare` run on
