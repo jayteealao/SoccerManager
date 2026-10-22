@@ -1226,12 +1226,17 @@
         "design": 0.8
       },
       "margin": {
-        "value": 0.8,
+        "value": 0.48,
         "league_spread": 0.0,
-        "noticeable_error": 0.8,
-        "reason": "the old pass region 0 to 1.6 carried over: the design target is its centre and the noticeable error its half-width, so the band passes where it passed before",
+        "noticeable_error": 0.4,
+        "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift; the design target is the centre of the old pass region 0 to 1.6",
         "spread_reason": "one population: the band's real pool gives no between-league spread",
-        "design_choice": true
+        "design_choice": true,
+        "widening": {
+          "value": 0.08,
+          "reason": "engine spread at the design count; engine experiment, no real source",
+          "provisional": true
+        }
       },
       "definition_version": 1,
       "population": "the red-card suite's matches with a player sent off at kick-off, per arm",

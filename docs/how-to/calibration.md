@@ -151,7 +151,7 @@ The table prints each band's interval and margin, and `report.json` holds them o
 The headline counts the provisional margins:
 
 ```text
-margins: 35 provisional, widened to hold the 97 percent floor on today's 3 generated leagues; the floor is set again on 30 leagues
+margins: 36 provisional, widened to hold the 97 percent floor on today's 3 generated leagues; the floor is set again on 30 leagues
 ```
 
 `calib.provisional_margins` in `report.json` names them. After it, each report-only band prints its needed margin and whether it would hold now; `calib.report_only_floor` holds the same rows.

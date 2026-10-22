@@ -1926,14 +1926,15 @@ mod tests {
     }
 
     /// The built-in measures carry their old pass region: a design target at its centre and
-    /// a noticeable error of its half-width.
+    /// a noticeable error of its half-width. `full_over_control` keeps the centre of its old
+    /// region 0 to 1.6, and its margin is the floor's needed value, 0.48, marked provisional.
     #[test]
     fn the_built_in_bands_keep_their_old_pass_region() {
         let r = Registry::load(&shipped()).unwrap();
         for (name, lo, hi) in [
             ("stronger_team_win_rate", 0.5, 1.0),
             ("reduced_minus_full", -10.0, 0.0),
-            ("full_over_control", 0.0, 1.6),
+            ("full_over_control", 0.32, 1.28),
         ] {
             let b = r.band(name).unwrap();
             assert!(
@@ -2008,9 +2009,15 @@ mod tests {
     fn the_widened_margins_are_provisional_and_hold_their_parts() {
         let r = Registry::load(&shipped()).unwrap();
         let provisional = r.provisional();
-        assert_eq!(provisional.len(), 35);
+        assert_eq!(provisional.len(), 36);
         for p in &provisional {
-            assert_eq!(p.reason, PROVISIONAL_REASON, "{}", p.band);
+            // The one engine experiment among them has no real source to lower its floor.
+            let reason = if p.band == "full_over_control" {
+                "engine spread at the design count; engine experiment, no real source"
+            } else {
+                PROVISIONAL_REASON
+            };
+            assert_eq!(p.reason, reason, "{}", p.band);
             let m = &r.band(&p.band).unwrap().rule.as_ref().unwrap().margin;
             assert!(p.widening > 0.0, "{}", p.band);
             let parts = m.league_spread + m.noticeable_error + p.widening;
