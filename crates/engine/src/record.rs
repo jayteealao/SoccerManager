@@ -192,6 +192,13 @@ pub trait TickSink {
     /// (a pause, or a viewer too far behind), so a sink can finish work that waited on another
     /// thread without a further tick. The default does nothing.
     fn on_hold(&mut self, _tick: u32) {}
+
+    /// Whether [`TickSink::on_tick`] reads its record. A driver may skip building the record,
+    /// and the `on_tick` call, for a sink that answers `false`; every other hook is still
+    /// called. Answer `false` only when `on_tick` does nothing. The default reads.
+    fn reads_records(&self) -> bool {
+        true
+    }
 }
 
 /// Discards every record (benchmarks).
@@ -200,6 +207,10 @@ pub struct NullSink;
 impl TickSink for NullSink {
     fn on_tick(&mut self, _record: &TickRecord) -> Result<(), EngineError> {
         Ok(())
+    }
+
+    fn reads_records(&self) -> bool {
+        false
     }
 }
 
@@ -264,6 +275,10 @@ impl<A: TickSink, B: TickSink> TickSink for FanoutSink<A, B> {
         self.a.on_hold(tick);
         self.b.on_hold(tick);
     }
+
+    fn reads_records(&self) -> bool {
+        self.a.reads_records() || self.b.reads_records()
+    }
 }
 
 /// An absent sink discards every record, so a caller can hold an optional second sink
@@ -308,6 +323,10 @@ impl<S: TickSink> TickSink for Option<S> {
         if let Some(sink) = self {
             sink.on_hold(tick);
         }
+    }
+
+    fn reads_records(&self) -> bool {
+        self.as_ref().is_some_and(S::reads_records)
     }
 }
 
@@ -508,6 +527,41 @@ mod tests {
             self.steps += 1;
             Ok(())
         }
+    }
+
+    /// A sink whose `on_tick` does nothing reads no record; a fan-out or an optional sink
+    /// reads when a sink inside it does.
+    #[test]
+    fn only_sinks_that_read_records_are_asked_for_them() {
+        assert!(!NullSink.reads_records());
+        assert!(VecSink::default().reads_records());
+        assert!(Steps::default().reads_records(), "the default reads");
+        assert!(!FanoutSink::new(NullSink, NullSink).reads_records());
+        assert!(FanoutSink::new(NullSink, VecSink::default()).reads_records());
+        assert!(FanoutSink::new(VecSink::default(), NullSink).reads_records());
+        assert!(!None::<VecSink>.reads_records());
+        assert!(!Some(NullSink).reads_records());
+        assert!(Some(VecSink::default()).reads_records());
+    }
+
+    /// A match played into sinks that read no record ends as one played into a recording
+    /// sink: on the same tick, with the same events and summary, every step hook still
+    /// called.
+    #[test]
+    fn a_match_into_a_non_reading_sink_plays_as_into_a_recording_one() {
+        let config = crate::data::test_support::shipped_config(1, 10).unwrap();
+        let mut recorded = Simulation::new(config.clone()).unwrap();
+        let mut sink = VecSink::default();
+        recorded.run(&mut sink).unwrap();
+        let mut bare = Simulation::new(config).unwrap();
+        bare.run(&mut FanoutSink::new(NullSink, NullSink)).unwrap();
+        assert_eq!(bare.tick(), recorded.tick());
+        assert_eq!(sink.records.len() as u32, recorded.tick());
+        assert_eq!(
+            format!("{:?}", bare.summary()),
+            format!("{:?}", recorded.summary())
+        );
+        assert_eq!(bare.take_events(), recorded.take_events());
     }
 
     #[test]

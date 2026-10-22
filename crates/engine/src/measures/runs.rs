@@ -137,6 +137,10 @@ impl TickSink for RunsSink {
         Ok(())
     }
 
+    fn reads_records(&self) -> bool {
+        false
+    }
+
     fn on_step(&mut self, sim: &Simulation) -> Result<(), EngineError> {
         if self.running.is_empty() {
             self.running = vec![None; sim.players().len()];
