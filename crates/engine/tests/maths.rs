@@ -84,5 +84,12 @@ fn libm_resolves_without_default_features() {
                 .to_owned()
         })
         .collect();
-    assert_eq!(users, ["engine"], "only the engine depends on libm");
+    // The engine and the pass rule, which takes its quantiles from the same libm.
+    let mut users = users;
+    users.sort();
+    assert_eq!(
+        users,
+        ["engine", "pass-rule"],
+        "only the engine and the pass rule depend on libm"
+    );
 }
