@@ -712,9 +712,8 @@ fn band_result_holds_every_band(entry: &golden::LedgerEntry, index: usize) {
         assert_eq!(s["matches"], want, "{suite}");
         assert_eq!(s["recorded"], want, "{suite}");
     }
-    // Each band of the registry that the three suites of a band run judge has a verdict,
-    // under its own name, and each suite's time budget has one as `wall_ms`. The red-card
-    // bands belong to the red-card suite, which a band run does not play.
+    // The band run's verdicts, each under its band's own name; each suite's time budget has
+    // one as `wall_ms`.
     let judged: Vec<&str> = report["calib.bands"]
         .as_array()
         .unwrap()
@@ -723,36 +722,73 @@ fn band_result_holds_every_band(entry: &golden::LedgerEntry, index: usize) {
         .map(|b| b["band"].as_str().unwrap())
         .collect();
     let registry = read("content/realism-bands.json");
-    // The bands that only report (gates false) were added after these runs; a band run
-    // judges the 18 that gate.
-    let bands: Vec<&serde_json::Value> = registry["bands"]
+    // Every band gates except the bands of a group the file names as report-only: each such
+    // group holds at most its `most` bands and gives its reason. On this branch the
+    // non-gating set is exactly the four rare bands whose real figure is too uncertain to
+    // judge; the facing group is named and holds none of the bands here.
+    let groups: Vec<(&str, u64)> = registry["report_only"]
         .as_array()
         .unwrap()
         .iter()
-        .filter(|b| b["gates"] != false)
-        .collect();
-    assert_eq!(bands.len(), 18, "the registry holds 18 gating bands");
-    let played = ["equal", "strength", "formations"];
-    let names: Vec<&str> = bands
-        .iter()
-        .filter(|b| {
-            b["suites"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|s| played.contains(&s.as_str().unwrap()))
+        .map(|g| {
+            assert!(
+                !g["reason"].as_str().unwrap().trim().is_empty(),
+                "a report-only group gives its reason"
+            );
+            (g["group"].as_str().unwrap(), g["most"].as_u64().unwrap())
         })
-        .map(|b| b["band"].as_str().unwrap())
-        .chain(["wall_ms"])
         .collect();
-    assert_eq!(
-        names.len(),
-        17,
-        "16 bands of the three suites and the time budget"
-    );
-    for band in names {
-        assert!(judged.contains(&band), "no verdict for band {band}");
+    let bands = registry["bands"].as_array().unwrap();
+    let mut non_gating: Vec<&str> = Vec::new();
+    for b in bands {
+        let name = b["band"].as_str().unwrap();
+        if b["gates"] == false {
+            let group = b["group"]
+                .as_str()
+                .unwrap_or_else(|| panic!("{name} names no group"));
+            assert!(
+                groups.iter().any(|(g, _)| *g == group),
+                "{name}: group {group} is not a report-only group"
+            );
+            non_gating.push(name);
+        } else {
+            assert_eq!(b["gates"], true, "{name} gates");
+        }
     }
+    for (group, most) in &groups {
+        let held = bands
+            .iter()
+            .filter(|b| b["gates"] == false && b["group"] == *group)
+            .count();
+        assert!(
+            held as u64 <= *most,
+            "group {group} holds {held} bands, at most {most}"
+        );
+    }
+    non_gating.sort_unstable();
+    assert_eq!(
+        non_gating,
+        [
+            "five_one_share",
+            "goals_free_kick_share",
+            "goals_penalty_share",
+            "goals_throw_in_share"
+        ],
+        "only the rare_real_error group does not gate"
+    );
+    // The recorded band run came before most bands gated: each band it judged is still a
+    // band of the file, and the time budget has its verdict. A verdict for every gating band
+    // returns with the next recorded band run.
+    for band in &judged {
+        assert!(
+            *band == "wall_ms" || bands.iter().any(|b| b["band"] == *band),
+            "the band run judged {band}, which the file no longer holds"
+        );
+    }
+    assert!(
+        judged.contains(&"wall_ms"),
+        "no verdict for the time budget"
+    );
 }
 
 /// The regeneration kept what the gate measures: gate schema 8 with state inventory 7, and
