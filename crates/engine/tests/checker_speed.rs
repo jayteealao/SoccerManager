@@ -17,9 +17,10 @@ use engine::{EngineEvent, RunningCheck, Simulation, StreamRules, Tuning, Validat
 /// it was made faster, 2026-10-22, release build.
 const BEFORE_RATIO: f64 = 0.8827;
 
-/// The ratio a checker must not exceed by more than [`TOLERANCE`]: the measured ratio of
-/// the checker as it is kept.
-const KEPT_RATIO: f64 = BEFORE_RATIO;
+/// The ratio a checker must not exceed by more than [`TOLERANCE`]: the median of three
+/// release runs on the faster checker (reused shape anchors, job targets without a copy),
+/// 2026-10-22: 0.6232, 0.6179, 0.6226.
+const KEPT_RATIO: f64 = 0.6226;
 
 /// How far above the kept ratio a measured ratio may lie before it fails: timing noise.
 const TOLERANCE: f64 = 0.10;
