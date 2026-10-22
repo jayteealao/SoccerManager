@@ -129,18 +129,53 @@ Every run reads each band's real value from the measured real data and prints it
 real data: C:\Users\you\SoccerManager\.scratch\out (default); 0 of 154 bands without a real value; 3 with no real counterpart
 ```
 
-- `real` is the value measured on real matches; `distance` is the run's value minus it. A band inside its design range can still sit far from real football: the distance says how far.
+- `real` is the value measured on real matches; `distance` is the run's value minus it.
 - `no real data here` means the folder, the file or the key is not there. `calib.real.bands` in `report.json` names the file and the reason.
 - `no real counterpart` marks the three bands of the strength and red-card suites: they measure engine experiments that no real match repeats, so they have no real value by design and are never counted as missing.
 - `(report only: ...)` at the end of a line marks a band that does not change the verdict: its band file says `gates: false`, its real sample is under its own floor, or its real value comes from too few competitions and seasons.
 
 The last line after the table is the realism claim. Only bands labelled `validation` in the band file count toward it; every shipped band is `calibration`, so today the claim says `none`.
 
-The real values never change a verdict, `calib.pass` or the exit code.
+The real values set each band's word: see [Read a band's word](#read-a-bands-word).
+
+## Read a band's word
+
+Each band's word compares the engine with its target, real football or a design value, by the band's own margin:
+
+- `pass`: the whole interval of the engine value minus the target sits inside the margin. A point inside the margin is not enough.
+- `fail`: the whole interval sits outside the margin.
+- `not sure`: the interval crosses an edge of the margin, or the run is under the band's minimum exposure, or the band has no target value here. Not sure is never a pass; play more matches or more leagues to narrow the interval.
+
+The table prints each band's interval and margin, and `report.json` holds them on each row (`pass_rule`: the interval's ends, the point, the margin, the target, the exposure). Every band can block a change except the bands of a report-only group of the band file (today the four rare goal and scoreline bands whose real figures are too uncertain to judge).
+
+The headline counts the provisional margins:
+
+```text
+margins: 35 provisional, widened to hold the 97 percent floor on today's 3 generated leagues; the floor is set again on 30 leagues
+```
+
+`calib.provisional_margins` in `report.json` names them. After it, each report-only band prints its needed margin and whether it would hold now; `calib.report_only_floor` holds the same rows.
+
+## Read the band history and drifts
+
+Each judged run adds one line per band row to `gate/bands/history.jsonl` of the checkout that holds the content folder: the run, its date, build and content, the band, its definition version, value, error, word and matches. Judging a run folder again replaces that run's lines. Set `SM_BAND_HISTORY` to another file to keep the history there, or to `off` to keep none; the tests of the command line point it into each test's own folder.
+
+After the table the run prints the drift section: the bands whose history drifts, each with its direction, the run where the rise began and the run that flagged it. A band's first 5 points of one definition version set its reference, and a two-sided cumulative sum of its later points against that reference flags a drift. `calib.drift` in `report.json` holds the same. A drift never changes a word or the exit code: trace it to the changes made since the run it names.
+
+## Judge the slow tests by the band file
+
+The engine's slow tests read their limits from the band file by band name and judge their own matches with the same rule. A band with a design target needs nothing more. A band with a real target reads the reference file, else the real value of a calibrate report: set `SM_REAL_REPORT` to its `report.json`.
+
+```powershell
+$env:SM_REAL_REPORT = "C:\path\to\run\report.json"
+cargo test --release -p engine --all-features --test discipline --test tempo_and_restarts -- --ignored
+```
+
+Each test prints each band's word, interval and margin, and fails on fail and on not sure.
 
 ## Read the reported bands
 
-Most bands only report: they are measured and judged, but never change the verdict. Their table follows the verdict table:
+The bands of a report-only group (today the four rare goal and scoreline bands) are measured and judged, but never change the verdict. Their table follows the verdict table:
 
 ```text
 reported bands (they never change the verdict):
@@ -149,7 +184,7 @@ reported: <p> pass, <f> fail, <n> not sure (<a> accepted, not shown equivalent);
 matches: <total> in total; <pairs> pairs; observations: changed engine <n>, old engine <m>
 ```
 
-Each row has a word by the same rules as a gating band. A change run judges a reported band by the paired test where it can, and by its range on this engine alone where it cannot; the row then says why, for example `range only: base has no measures` when the old engine was built without the measures. A band of the measures (shot distance, passes by kind and length, goals by phase, possession by third, running) needs a build with them: build with `--features measures` (see "Record the realism measures"). The per-club spread, `worst_to_best_spread`, takes each club that plays 34 matches in the run; a run where none does reads `no value: no club has 34 matches in this run`.
+Each row has a word by the same rules as a gating band. A change run judges a reported band by the paired test where it can, and by its pass-rule word on this engine alone where it cannot; the row then says why, for example `range only: base has no measures` when the old engine was built without the measures. A band of the measures (shot distance, passes by kind and length, goals by phase, possession by third, running) needs a build with them: build with `--features measures` (see "Record the realism measures"). The per-club spread, `worst_to_best_spread`, takes each club that plays 34 matches in the run; a run where none does reads `no value: no club has 34 matches in this run`.
 
 The reported bands never move the joint word, its threshold, `calib.pass` or the exit code. Read a `fail` there as a gap between the engine and real football to look into, not as a broken change.
 

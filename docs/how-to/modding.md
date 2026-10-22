@@ -40,24 +40,39 @@ To see the effect over many matches, run a calibration run:
 target/release/engine-cli calibrate --seed 2026 --matches 200 --content-dir my-content
 ```
 
-The run report compares every realism band, and the goal bands of every formation pairing, against `realism-bands.json`. Standard error names each band that fails, and the exit code is 2 when a band fails. Add `--suite equal` to skip the formations suite, which plays 55 pairings. A `realism-bands.json` of version 4, 3 or 2 still loads; one of version 1 is refused: copy the shipped file of version 5.
+The run report compares every realism band, and the goal bands of every formation pairing, against `realism-bands.json`. Standard error names each band that fails, and the exit code is 2 when a band fails. Add `--suite equal` to skip the formations suite, which plays 55 pairings. A `realism-bands.json` of an earlier version is refused, naming version 6: copy the shipped file of version 6.
 
 To judge the change against the engine before it, add `--base main` from your git checkout: each band then reads `pass`, `fail`, or `not sure`. See [Measure a tuning change](calibration.md).
 
 ## Add a realism band
 
-Every band is an entry of `bands` in `realism-bands.json`, so a new band needs no code. The file is at version 5: each band has its design range and its record. To check the substitutions of each team in the equal suite, add:
+Every band is an entry of `bands` in `realism-bands.json`, so a new band needs no code. The file is at version 6: each band has its target, its margin with the reasons for it, how it is resampled, its engine spread and its record. To check the substitutions of each team in the equal suite against a design value, add:
 
 ```json
 {
   "band": "substitutions_per_team",
   "suites": ["equal"],
   "measure": { "kind": "mean", "per": "team", "of": ["substitutions.{side}"] },
-  "design": { "lo": 2.0, "hi": 5.0, "smallest_shift": 0.75 },
+  "target": { "design": 3.5 },
+  "margin": {
+    "value": 1.5,
+    "league_spread": 0.0,
+    "noticeable_error": 1.5,
+    "reason": "design value: a change of a substitution and a half per team is one a player notices",
+    "spread_reason": "one population: no real substitution counts are measured",
+    "design_choice": true
+  },
+  "definition_version": 1,
+  "population": "the equal suite's matches between equal generated clubs",
+  "estimator": "mean per team of the substitutions made",
+  "resampling": { "engine": "league", "real": "none" },
+  "min_exposure": { "unit": "matches", "value": 100, "reason": "enough matches for the bootstrap to see the band's spread" },
+  "rare": false,
+  "engine_spread": { "per_match_sd": 1.0, "between_league_sd": 0.0, "measured": "an estimate until a run measures it" },
   "real": {
     "source": { "none": "the measured results hold no substitution counts" },
     "sample": 0,
-    "date": "2026-10-10"
+    "date": "2026-10-22"
   },
   "evidence": "calibration",
   "confidence": {
@@ -65,11 +80,11 @@ Every band is an entry of `bands` in `realism-bands.json`, so a new band needs n
     "generalisation": { "competitions": 0, "seasons": 0, "clubs": 0 }
   },
   "condition": "dry",
-  "gates": false
+  "gates": true
 }
 ```
 
-The next calibration run judges it in the table of reported bands; with `gates: false` it never changes the verdict. The measure's fields come from a closed list, and a mistake is refused with the band and the field named; see [`realism-bands.json`](../reference/data-files.md#realism-bandsjson) for the list, the record's fields, the ten kinds of measure and how a `real.source` pointer reads a measured value. Set `design.smallest_shift` to the smallest change that should matter: a change run sizes itself to see it. Promote the band to `gates: true` only once its real value is measured and its range is set from it.
+The next calibration run judges it: `pass` when the whole interval of its value minus 3.5 sits inside 1.5, `fail` when the whole interval sits outside, `not sure` otherwise. The loader refuses a margin under the 97 percent floor that the band's engine spread sets, naming the margin it needs. The measure's fields come from a closed list, and a mistake is refused with the band and the field named; see [`realism-bands.json`](../reference/data-files.md#realism-bandsjson) for the list, the record's fields, the kinds of measure and how a `real.source` pointer reads a measured value. Every band gates, except a band of a group the file names under `report_only`; see [the content folder's guide](../../content/README.md#the-pass-rule).
 
 ## Add a rule pack
 
