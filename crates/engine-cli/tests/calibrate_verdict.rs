@@ -700,7 +700,9 @@ fn a_flag_that_shifts_goals_fails_the_pooled_formations_band_and_the_joint_verdi
     let goals = row(&same, "goals_per_match");
     assert_eq!(goals["diff"], 0.0);
     let level = goals["value"].as_f64().unwrap();
-    assert!((moved - level - diff).abs() < 1e-6, "{goals}");
+    // The report rounds a value to 3 decimals and a difference to 5, so the two runs' values
+    // differ from the difference by at most the two roundings.
+    assert!((moved - level - diff).abs() <= 1.1e-3, "{goals}");
 
     // A band passes only inside its margin around its target: with the target at the
     // engine's own level and a margin of a quarter of the move, the moved engine fails it
