@@ -6,7 +6,8 @@
 //! The criterion tests are slow: `cargo test --release -p engine --all-features -- --ignored`.
 //! - A sending-off gives no advantage: 120 seeds, cards otherwise off, the away keeper,
 //!   centre-back, or striker sent off at kick-off. The reduced side never outscores the full
-//!   side on average, and the full side scores at most 1.6 times its no-send-off mean.
+//!   side on average, and the full side's goals over its no-send-off mean stay inside the
+//!   `full_over_control` band (design 0.8, margin 0.48).
 //! - Every shipped formation holds against 4-4-2 at 11 against 11: neither side averages more
 //!   than 4.0 goals per match over 120 seeds.
 
