@@ -2593,4 +2593,23 @@ A,0,0
             Outcome::NotHere { .. }
         ));
     }
+
+    /// The slow tests read the reference file through the pass-rule crate's narrow view; it
+    /// gives the same four figures as the full reader for every key of the committed file.
+    #[test]
+    fn the_slow_tests_view_of_the_reference_file_matches_the_full_reader() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../gate/real-targets.json");
+        let full = crate::real_targets::ReferenceFile::load(&path).unwrap();
+        let view = pass_rule::limits::reference_targets(&path).unwrap();
+        assert_eq!(view.len(), full.targets.len());
+        for (key, target) in &full.targets {
+            let seen = view
+                .get(key)
+                .unwrap_or_else(|| panic!("the view has no {key}"));
+            assert_eq!(seen.value, target.value, "{key} value");
+            assert_eq!(seen.se, target.se, "{key} se");
+            assert_eq!(seen.n, target.n, "{key} n");
+            assert_eq!(seen.between_league_sd, target.between_league_sd, "{key}");
+        }
+    }
 }

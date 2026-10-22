@@ -20,7 +20,10 @@ mod common;
 
 use std::sync::OnceLock;
 
-use common::{calm_match, content, default_teams, index, run_many, short_match, spread};
+use common::{
+    calm_match, content, default_teams, index, judge_band, limits, run_many, short_match, spread,
+    units,
+};
 use engine::math::{DVec2, DVec3};
 use engine::observe::MatchFigures;
 use engine::pitch::Pitch;
@@ -28,6 +31,7 @@ use engine::record::NullSink;
 use engine::rules::restart;
 use engine::scenario::Scene;
 use engine::{MatchConfig, Simulation, StoppageKind};
+use pass_rule::interval::Unit;
 
 /// The ball rolls from `at` with velocity `v` after `last` touched it, with every player far
 /// away, in a match where nobody decides. Steps until the restart the ball gives is taken.
@@ -469,24 +473,43 @@ fn passes_are_realistic() {
     let per_team = f64::from(passes) / (2.0 * n);
     let accuracy = 100.0 * f64::from(completed) / f64::from(passes.max(1));
     eprintln!("passes per team {per_team:.1}, accuracy {accuracy:.2}%");
-    assert!(
-        (350.0..=550.0).contains(&per_team),
-        "passes per team {per_team:.1}"
-    );
-    assert!((75.0..=88.0).contains(&accuracy), "accuracy {accuracy:.2}%");
+    let limits = limits();
+    let passes: Vec<Unit> = runs
+        .iter()
+        .map(|r| Unit::ratio(f64::from(r.summary.passes[0] + r.summary.passes[1]), 2.0))
+        .collect();
+    // Each team's own completion percentage, one unit per team and match.
+    let accuracy: Vec<Unit> = runs
+        .iter()
+        .flat_map(|r| {
+            [0, 1].map(|t| {
+                let made = f64::from(r.summary.passes[t].max(1));
+                Unit::ratio(100.0 * f64::from(r.summary.passes_completed[t]) / made, 1.0)
+            })
+        })
+        .collect();
+    let failures: Vec<String> = [("passes_per_team", passes), ("pass_accuracy_pct", accuracy)]
+        .iter()
+        .filter_map(|(band, sample)| judge_band(&limits, band, sample).err())
+        .collect();
+    assert!(failures.is_empty(), "{failures:#?}");
 }
 
 #[test]
 #[ignore = "slow, and a target for later tuning that fails on the shipped values"]
 fn the_ball_is_in_play_for_about_an_hour() {
     let runs = runs();
-    let per_90: f64 = runs
+    let per_90: Vec<f64> = runs
         .iter()
         .map(|r| f64::from(r.ball_in_play_s) / 60.0 * 90.0 / f64::from(r.minutes))
-        .sum::<f64>()
-        / runs.len() as f64;
-    eprintln!("ball in play {per_90:.2} minutes per 90");
-    assert!((52.0..=65.0).contains(&per_90), "ball in play {per_90:.2}");
+        .collect();
+    eprintln!(
+        "ball in play {:.2} minutes per 90",
+        per_90.iter().sum::<f64>() / per_90.len() as f64
+    );
+    if let Err(e) = judge_band(&limits(), "ball_in_play_minutes", &units(per_90)) {
+        panic!("{e}");
+    }
 }
 
 #[test]
@@ -499,10 +522,13 @@ fn throw_ins_stay_in_band() {
         .sum();
     let per_match = f64::from(throw_ins) / runs.len() as f64;
     eprintln!("throw-ins per match {per_match:.2}");
-    assert!(
-        (35.0..=55.0).contains(&per_match),
-        "throw-ins per match {per_match:.2}"
+    let sample = units(
+        runs.iter()
+            .map(|r| f64::from(r.summary.throw_ins[0] + r.summary.throw_ins[1])),
     );
+    if let Err(e) = judge_band(&limits(), "throw_ins_per_match", &sample) {
+        panic!("{e}");
+    }
 }
 
 fn median(mut v: Vec<f64>) -> f64 {
