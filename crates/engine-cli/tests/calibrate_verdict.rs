@@ -8,7 +8,10 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::process::Output;
 
-use common::{RecordSchemas, bin, edited_content, read_rows, record, temp};
+use common::{
+    RecordSchemas, bin, edited_content, equal_gating_bands, hold_floor, read_rows, record,
+    set_design, temp, test_band,
+};
 use serde_json::{Value, json};
 
 const FLAG: &str = "card_storm";
@@ -24,17 +27,31 @@ fn calibrate(data: &Path, content: &Path, out: &Path, args: &[&str]) -> Output {
 
 /// [`calibrate`] from `seed`.
 fn calibrate_on(seed: &str, data: &Path, content: &Path, out: &Path, args: &[&str]) -> Output {
-    bin(data)
-        .arg("--content-dir")
-        .arg(content)
-        .arg("calibrate")
-        .args(["--seed", seed, "--suite", "equal", "--minutes", "5"])
-        .args(["--jobs", "4"])
-        .args(args)
-        .arg("--out")
-        .arg(out)
-        .output()
-        .unwrap()
+    holding_floor(content, || {
+        bin(data)
+            .arg("--content-dir")
+            .arg(content)
+            .arg("calibrate")
+            .args(["--seed", seed, "--suite", "equal", "--minutes", "5"])
+            .args(["--jobs", "4"])
+            .args(args)
+            .arg("--out")
+            .arg(out)
+            .output()
+            .unwrap()
+    })
+}
+
+/// `run`, again after widening the margins a test's band edits put under their floor.
+fn holding_floor(content: &Path, run: impl Fn() -> Output) -> Output {
+    let mut out = run();
+    for _ in 0..3 {
+        if !hold_floor(content, &String::from_utf8_lossy(&out.stderr)) {
+            break;
+        }
+        out = run();
+    }
+    out
 }
 
 fn stderr(out: &Output) -> String {
@@ -95,8 +112,13 @@ fn ledger_lines(run: &Path) -> usize {
         .sum()
 }
 
-/// Edits the band `name` of the registry in `content`: `edit` gets the band, whose design
-/// range is under `design`.
+/// Sets `band` to a design target at the middle of `lo` to `hi` with half that width as its
+/// margin: the version 6 form of an earlier design range.
+fn set_range(band: &mut Value, lo: f64, hi: f64) {
+    set_design(band, (lo + hi) / 2.0, (hi - lo) / 2.0);
+}
+
+/// Edits the band `name` of the registry in `content`: `edit` gets the band.
 fn edit_band(content: &Path, name: &str, edit: impl FnOnce(&mut Value)) {
     let path = content.join("realism-bands.json");
     let mut doc: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
@@ -133,7 +155,11 @@ fn a_change_run_without_power_never_passes_and_reports_its_stages_and_rules() {
         "a run that is not a pass exits 2"
     );
     let rows = report["calib.verdicts"].as_array().unwrap();
-    assert_eq!(rows.len(), 15, "every band of the equal suite: {rows:?}");
+    assert_eq!(
+        rows.len(),
+        equal_gating_bands(),
+        "every band of the equal suite: {rows:?}"
+    );
     let unpowered: Vec<&Value> = rows.iter().filter(|r| r["power"] == false).collect();
     assert!(!unpowered.is_empty(), "4 matches give some band no power");
     for r in &unpowered {
@@ -200,6 +226,9 @@ fn a_change_run_without_power_never_passes_and_reports_its_stages_and_rules() {
 fn a_flag_that_shifts_a_measure_fails_its_band_and_the_joint_verdict() {
     let data = temp("engine-cli-verdict", "shift");
     let content = flagged(&data);
+    edit_band(&content, "yellow_cards_per_team", |b| {
+        set_range(b, 1.2, 2.6)
+    });
     let plain = |name: &str, args: &[&str]| {
         let run = data.join(name);
         let out = calibrate_on(
@@ -266,8 +295,7 @@ fn a_changed_range_is_judged_again_from_the_stored_rows() {
     let before = report(&first, &run);
     let lines = ledger_lines(&run);
     edit_band(&content, "corners_per_team", |b| {
-        b["design"]["lo"] = 0.0.into();
-        b["design"]["hi"] = 1.0.into();
+        set_range(b, 0.0, 1.0);
     });
     let again = calibrate(&data, &content, &run, &["--matches", "8"]);
     let text = stderr(&again);
@@ -288,8 +316,9 @@ fn a_changed_range_is_judged_again_from_the_stored_rows() {
     );
     let corners = row(&after, "corners_per_team");
     assert_eq!(
-        (corners["lo"].as_f64(), corners["hi"].as_f64()),
-        (Some(0.0), Some(1.0))
+        corners["pass_rule"]["margin"].as_f64(),
+        Some(0.5),
+        "{corners}"
     );
     assert_ne!(
         after["calib.registry"]["digest"],
@@ -298,30 +327,20 @@ fn a_changed_range_is_judged_again_from_the_stored_rows() {
     let _ = std::fs::remove_dir_all(&data);
 }
 
-/// A band added only in the content file is judged and reported with no code change,
-/// and a version 2 bands file still loads with the same bands.
+/// A band added only in the content file is judged and reported with no code change, and a
+/// band file of an earlier version is refused, naming version 6.
 #[test]
-fn a_new_band_in_the_content_file_is_judged_and_a_version_two_file_loads() {
+fn a_new_band_in_the_content_file_is_judged_and_an_earlier_file_is_refused() {
     let data = temp("engine-cli-verdict", "registry");
     let content = edited_content(&data, "realism-bands.json", |doc| {
-        doc["bands"].as_array_mut().unwrap().push(json!({
-            "band": "probe_fouls_per_team",
-            "suites": ["equal"],
-            "measure": { "kind": "mean", "per": "team", "of": ["fouls.{side}"] },
-            "design": { "lo": 0.0, "hi": 30.0, "smallest_shift": 2.5 },
-            "real": {
-                "source": { "none": "a test band with no real counterpart" },
-                "sample": 0,
-                "date": "2026-10-09"
-            },
-            "evidence": "calibration",
-            "confidence": {
-                "measurement": { "count": 0 },
-                "generalisation": { "competitions": 0, "seasons": 0, "clubs": 0 }
-            },
-            "condition": "dry",
-            "gates": true
-        }));
+        let measure = json!({ "kind": "mean", "per": "team", "of": ["fouls.{side}"] });
+        doc["bands"].as_array_mut().unwrap().push(test_band(
+            "probe_fouls_per_team",
+            &["equal"],
+            measure,
+            15.0,
+            15.0,
+        ));
     });
     let run = data.join("run");
     let out = calibrate(&data, &content, &run, &["--matches", "4"]);
@@ -341,50 +360,16 @@ fn a_new_band_in_the_content_file_is_judged_and_a_version_two_file_loads() {
         "schema_version": 2,
         "sample_size": 1000,
         "goals_per_match": { "lo": 2.4, "hi": 3.2 },
-        "shots_per_team": { "lo": 8.0, "hi": 16.0 },
-        "possession_pct": { "lo": 35.0, "hi": 65.0 },
         "stronger_team": { "attribute_boost": 1.15, "min_win_rate": 0.5 },
-        "wall_minutes_per_sample": 30.0,
-        "ten_plus_goals_share": { "lo": 0.0, "hi": 0.005 },
-        "sending_off_share": { "lo": 0.08, "hi": 0.22 },
-        "yellow_cards_per_team": { "lo": 1.2, "hi": 2.6 },
-        "shots_on_target_share": { "lo": 0.3, "hi": 0.42 },
-        "goals_per_xg": { "lo": 0.85, "hi": 1.15 },
-        "passes_per_team": { "lo": 350.0, "hi": 550.0 },
-        "pass_accuracy_pct": { "lo": 75.0, "hi": 88.0 },
-        "corners_per_team": { "lo": 3.5, "hi": 6.5 },
-        "throw_ins_per_match": { "lo": 35.0, "hi": 55.0 },
-        "goal_kicks_per_match": { "lo": 12.0, "hi": 22.0 },
-        "goalless_share": { "lo": 0.04, "hi": 0.12 }
+        "wall_minutes_per_sample": 30.0
     });
     std::fs::write(content.join("realism-bands.json"), v2.to_string()).unwrap();
     let old_run = data.join("v2");
     let out = calibrate(&data, &content, &old_run, &["--matches", "4"]);
-    let old = report(&out, &old_run);
-    assert_eq!(old["calib.registry"]["migrated_from"], 2);
-    let shipped = record(
-        &std::fs::read_to_string(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content/realism-bands.json"),
-        )
-        .unwrap(),
-    );
-    let bands = old["calib.bands"].as_array().unwrap();
-    for b in shipped["bands"].as_array().unwrap() {
-        // The bands that only report came after version 2.
-        if !b["suites"].as_array().unwrap().contains(&json!("equal")) || b["gates"] == false {
-            continue;
-        }
-        let check = bands
-            .iter()
-            .find(|c| c["band"] == b["band"])
-            .unwrap_or_else(|| panic!("no {}", b["band"]));
-        assert_eq!(
-            (&check["lo"], &check["hi"]),
-            (&b["design"]["lo"], &b["design"]["hi"]),
-            "{}",
-            b["band"]
-        );
-    }
+    assert_eq!(out.status.code(), Some(1));
+    let text = stderr(&out);
+    assert!(text.contains("schema_version 2"), "{text}");
+    assert!(text.contains("this build reads 6"), "{text}");
     let _ = std::fs::remove_dir_all(&data);
 }
 
@@ -423,6 +408,11 @@ fn every_observation_mode_gives_the_same_digest_and_verdicts() {
 fn a_tuning_change_runs_from_start_to_verdict() {
     let data = temp("engine-cli-verdict", "whole");
     let content = flagged(&data);
+    // A run here has no real data: one band is judged against a design target no engine
+    // meets, so the run ends with a failed band and a failed joint verdict.
+    edit_band(&content, "passes_per_team", |b| {
+        set_range(b, 1000.0, 1100.0)
+    });
     let run = data.join("run");
     let args = [
         "--matches",
@@ -466,7 +456,7 @@ fn a_tuning_change_runs_from_start_to_verdict() {
     assert_eq!(unique.len(), keys.len(), "no fixture played twice");
     assert_eq!(keys.len() as u64, target);
     assert!(text.contains("joint verdict: fail"), "{text}");
-    assert_eq!(row(&r, "yellow_cards_per_team")["word"], "fail");
+    assert_eq!(row(&r, "passes_per_team")["word"], "fail");
     assert!(
         text.contains("stage            time ms    peak MB"),
         "{text}"
@@ -475,7 +465,7 @@ fn a_tuning_change_runs_from_start_to_verdict() {
 
     // Step 6: a narrowed range, judged again from the stored rows.
     edit_band(&content, "goals_per_match", |b| {
-        b["design"]["hi"] = 3.0.into()
+        set_range(b, 0.0, 3.0);
     });
     let again = calibrate(&data, &content, &run, &args);
     let text = stderr(&again);
@@ -493,7 +483,7 @@ fn a_tuning_change_runs_from_start_to_verdict() {
     assert!(text.contains("goals_per_match"), "{text}");
     assert_eq!(ledger_lines(&run), lines);
     assert_eq!(after["calib.base"]["cache"]["played"], 0);
-    assert_eq!(row(&after, "goals_per_match")["hi"], 3.0);
+    assert_eq!(row(&after, "goals_per_match")["pass_rule"]["margin"], 1.5);
     let _ = std::fs::remove_dir_all(&data);
 }
 
@@ -511,16 +501,18 @@ fn formations(data: &Path, content: &Path, out: &Path, args: &[&str]) -> Output 
 
 /// [`formations`] on `seed`.
 fn formations_on(seed: &str, data: &Path, content: &Path, out: &Path, args: &[&str]) -> Output {
-    let mut cmd = bin(data);
-    cmd.arg("--content-dir")
-        .arg(content)
-        .arg("calibrate")
-        .args(["--seed", seed, "--suite", "formations", "--minutes", "5"])
-        .args(["--jobs", "4"]);
-    for p in PAIRINGS {
-        cmd.args(["--pairing", p]);
-    }
-    cmd.args(args).arg("--out").arg(out).output().unwrap()
+    holding_floor(content, || {
+        let mut cmd = bin(data);
+        cmd.arg("--content-dir")
+            .arg(content)
+            .arg("calibrate")
+            .args(["--seed", seed, "--suite", "formations", "--minutes", "5"])
+            .args(["--jobs", "4"]);
+        for p in PAIRINGS {
+            cmd.args(["--pairing", p]);
+        }
+        cmd.args(args).arg("--out").arg(out).output().unwrap()
+    })
 }
 
 /// The formations rows of `calib.bands`, without the time budget.
@@ -548,12 +540,10 @@ fn a_change_run_judges_the_formations_suite_pooled_and_reports_pairings_as_infor
     // Five-minute matches score far below the shipped goals ranges, and a band that far
     // outside its range sets no power target; widened, the goals bands size the run.
     edit_band(&content, "goals_per_match", |b| {
-        b["design"]["lo"] = 0.0.into();
-        b["design"]["hi"] = 10.0.into();
+        set_range(b, 0.0, 10.0);
     });
     edit_band(&content, "goalless_share", |b| {
-        b["design"]["lo"] = 0.0.into();
-        b["design"]["hi"] = 1.0.into();
+        set_range(b, 0.0, 1.0);
     });
     let run = data.join("run");
     let args = ["--matches", "8", "--pilot", "4", "--base-binary", exe()];
@@ -609,15 +599,13 @@ fn a_change_run_judges_the_formations_suite_pooled_and_reports_pairings_as_infor
         "the pairings differ on seed 0: {low} {pooled}"
     );
     edit_band(&content, "goals_per_match", |b| {
-        b["design"]["lo"] = ((low + pooled) / 2.0).into();
-        b["design"]["hi"] = 10.0.into();
+        set_range(b, (low + pooled) / 2.0, 10.0);
     });
     edit_band(&content, "goalless_share", |b| {
-        b["design"]["lo"] = 0.0.into();
-        b["design"]["hi"] = 1.0.into();
+        set_range(b, 0.0, 1.0);
     });
     edit_band(&content, "ten_plus_goals_share", |b| {
-        b["design"]["hi"] = 1.0.into()
+        set_range(b, 0.0, 1.0);
     });
     let again = formations_on("0", &data, &content, &run, &args);
     let text = stderr(&again);
@@ -627,8 +615,13 @@ fn a_change_run_judges_the_formations_suite_pooled_and_reports_pairings_as_infor
         .into_iter()
         .filter(|c| c["band"] == "goals_per_match" && c["pass"] == false)
         .collect();
-    assert_eq!(missed.len(), 1, "one pairing below the floor: {after}");
-    assert_eq!(missed[0]["informational"], true);
+    // The lower pairing misses; a pairing whose interval crosses the floor is not sure, which
+    // is no pass either.
+    assert!(
+        missed.iter().any(|c| c["value"].as_f64() == Some(low)),
+        "the lower pairing misses: {after}"
+    );
+    assert!(missed.iter().all(|c| c["informational"] == true), "{after}");
     assert!(
         after["calib.verdicts"]
             .as_array()
@@ -646,9 +639,10 @@ fn a_change_run_judges_the_formations_suite_pooled_and_reports_pairings_as_infor
     let _ = std::fs::remove_dir_all(&data);
 }
 
-/// A flag that moves goals per match by more than the band's smallest shift fails the
-/// pooled formations band and the joint verdict; without the flag the band does not move.
-/// The band's range is widened so that only the move can fail it. The runs play seed 0, the
+/// A flag that moves goals per match by more than the band's smallest shift is seen by the
+/// paired test of the pooled formations band; with the band's target at the engine's own
+/// level and a margin smaller than the move, it fails the band and the joint verdict, and
+/// without the flag the band does not fail. The runs play seed 0, the
 /// lowest whose 24 short matches show the move (seed 1 until every option was valued by the
 /// real threat of its place, when its matches moved goals by 0.15; seed 9 until the AI sides
 /// started in the style their staff picks, when its matches moved goals by 0.19).
@@ -671,8 +665,7 @@ fn a_flag_that_shifts_goals_fails_the_pooled_formations_band_and_the_joint_verdi
         });
     });
     edit_band(&content, "goals_per_match", |b| {
-        b["design"]["lo"] = 0.0.into();
-        b["design"]["hi"] = 10.0.into();
+        set_range(b, 0.0, 10.0);
     });
     let change = |name: &str, args: &[&str]| {
         let run = data.join(name);
@@ -691,7 +684,7 @@ fn a_flag_that_shifts_goals_fails_the_pooled_formations_band_and_the_joint_verdi
         let out = formations_on("0", &data, &content, &run, &all);
         (report(&out, &run), out.status.code())
     };
-    let (flagged, code) = change("flagged", &["--flag", "open_goal=on"]);
+    let (flagged, _) = change("flagged", &["--flag", "open_goal=on"]);
     let goals = row(&flagged, "goals_per_match");
     assert_eq!(goals["suite"], "formations");
     assert!(goals.get("pairing").is_none(), "pooled: {goals}");
@@ -702,25 +695,36 @@ fn a_flag_that_shifts_goals_fails_the_pooled_formations_band_and_the_joint_verdi
     );
     assert!(diff > 0.2, "above the smallest shift: {goals}");
     assert!(diff > critical * se, "beyond the threshold: {goals}");
-    assert!(
-        goals["value"].as_f64().unwrap() <= 10.0,
-        "inside the widened range: {goals}"
-    );
-    assert_eq!(goals["word"], "fail");
-    assert_eq!(flagged["calib.joint"]["word"], "fail");
-    assert!(flagged["calib.joint"].get("guards").is_none(), "no guard");
-    assert_eq!(code, Some(2));
-
+    let moved = goals["value"].as_f64().unwrap();
     let (same, _) = change("same", &[]);
     let goals = row(&same, "goals_per_match");
     assert_eq!(goals["diff"], 0.0);
-    assert_ne!(goals["word"], "fail");
+    let level = goals["value"].as_f64().unwrap();
+    assert!((moved - level - diff).abs() < 1e-6, "{goals}");
+
+    // A band passes only inside its margin around its target: with the target at the
+    // engine's own level and a margin of a quarter of the move, the moved engine fails it
+    // and the joint verdict fails; the same engine does not fail it. Both runs are judged
+    // again from their stored rows.
+    edit_band(&content, "goals_per_match", |b| {
+        set_design(b, level, diff / 4.0)
+    });
+    let (flagged, code) = change("flagged", &["--flag", "open_goal=on"]);
+    assert_eq!(flagged["calib.units"]["played"], 0);
+    let goals = row(&flagged, "goals_per_match");
+    assert_eq!(goals["word"], "fail", "{goals}");
+    assert_eq!(flagged["calib.joint"]["word"], "fail");
+    assert!(flagged["calib.joint"].get("guards").is_none(), "no guard");
+    assert_eq!(code, Some(2));
+    let (same, _) = change("same", &[]);
+    assert_ne!(row(&same, "goals_per_match")["word"], "fail");
     let _ = std::fs::remove_dir_all(&data);
 }
 
-/// A plain run (no old engine) keeps one range check per formations pairing, exactly as
-/// before the change run pooled the suite: the rows below are the ones the program gives on
-/// this command with the shipped engine, and none carries the information mark.
+/// A plain run (no old engine) keeps one check per formations pairing, exactly as before the
+/// change run pooled the suite: the rows below are the ones the program gives on this
+/// command with the shipped engine, and none carries the information mark. With no real
+/// value here no row passes.
 #[test]
 fn a_plain_run_keeps_the_formations_checks_per_pairing_unchanged() {
     let data = temp("engine-cli-verdict", "plain-pairings");
@@ -729,12 +733,12 @@ fn a_plain_run_keeps_the_formations_checks_per_pairing_unchanged() {
     let out = formations(&data, &content, &run, &["--matches", "8"]);
     let r = report(&out, &run);
     let expected = json!([
-        {"band": "goalless_share", "pairing": "4-4-2 v 4-2-3-1", "value": 0.75, "lo": 0.04, "hi": 0.12, "pass": false, "se": 0.15309},
-        {"band": "goalless_share", "pairing": "4-4-2 v 4-3-3", "value": 0.75, "lo": 0.04, "hi": 0.12, "pass": false, "se": 0.15309},
-        {"band": "goals_per_match", "pairing": "4-4-2 v 4-2-3-1", "value": 0.25, "lo": 2.4, "hi": 3.2, "pass": false, "se": 0.15309},
-        {"band": "goals_per_match", "pairing": "4-4-2 v 4-3-3", "value": 0.25, "lo": 2.4, "hi": 3.2, "pass": false, "se": 0.15309},
-        {"band": "ten_plus_goals_share", "pairing": "4-4-2 v 4-2-3-1", "value": 0.0, "lo": 0.0, "hi": 0.005, "pass": true, "se": 0.0},
-        {"band": "ten_plus_goals_share", "pairing": "4-4-2 v 4-3-3", "value": 0.0, "lo": 0.0, "hi": 0.005, "pass": true, "se": 0.0}
+        {"band": "goalless_share", "pairing": "4-4-2 v 4-2-3-1", "value": 0.75, "pass": false, "se": 0.15309},
+        {"band": "goalless_share", "pairing": "4-4-2 v 4-3-3", "value": 0.75, "pass": false, "se": 0.15309},
+        {"band": "goals_per_match", "pairing": "4-4-2 v 4-2-3-1", "value": 0.25, "pass": false, "se": 0.15309},
+        {"band": "goals_per_match", "pairing": "4-4-2 v 4-3-3", "value": 0.25, "pass": false, "se": 0.15309},
+        {"band": "ten_plus_goals_share", "pairing": "4-4-2 v 4-2-3-1", "value": 0.0, "pass": false, "se": 0.0},
+        {"band": "ten_plus_goals_share", "pairing": "4-4-2 v 4-3-3", "value": 0.0, "pass": false, "se": 0.0}
     ]);
     let rows: Vec<Value> = formations_checks(&r)
         .into_iter()
@@ -742,7 +746,7 @@ fn a_plain_run_keeps_the_formations_checks_per_pairing_unchanged() {
             assert!(c.get("informational").is_none(), "{c}");
             json!({
                 "band": c["band"], "pairing": c["pairing"], "value": c["value"],
-                "lo": c["lo"], "hi": c["hi"], "pass": c["pass"], "se": c["se"]
+                "pass": c["pass"], "se": c["se"]
             })
         })
         .collect();
@@ -775,9 +779,9 @@ fn a_band_far_outside_its_range_sets_no_power_target() {
     // Far: a range no five-minute match comes near, and a smallest shift only the cap
     // could power.
     edit_band(&content, band, |b| {
-        b["design"]["lo"] = 5000.0.into();
-        b["design"]["hi"] = 6000.0.into();
-        b["design"]["smallest_shift"] = 0.001.into();
+        set_range(b, 5000.0, 6000.0);
+        b["margin"]["noticeable_error"] = 0.001.into();
+        b["margin"]["value"] = 0.001.into();
     });
     let far = data.join("far");
     let out = calibrate(&data, &content, &far, &args);
@@ -810,8 +814,10 @@ fn a_band_far_outside_its_range_sets_no_power_target() {
 
     // Control: inside a wide range, the tiny shift drives the target to the cap.
     edit_band(&content, band, |b| {
-        b["design"]["lo"] = 0.0.into();
-        b["design"]["hi"] = 1000.0.into();
+        set_range(b, 0.0, 1000.0);
+        // The same tiny smallest shift: the margin is mostly league spread.
+        b["margin"]["noticeable_error"] = 0.001.into();
+        b["margin"]["league_spread"] = 499.999.into();
     });
     let control = data.join("control");
     let out = calibrate(&data, &content, &control, &args);

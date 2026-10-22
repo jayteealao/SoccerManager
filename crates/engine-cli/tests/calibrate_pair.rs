@@ -8,7 +8,7 @@ mod common;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use common::{RecordSchemas, bin, record, temp};
+use common::{RecordSchemas, bin, equal_gating_bands, record, temp};
 use serde_json::{Value, json};
 
 const FLAG: &str = "probe_short_range";
@@ -165,26 +165,18 @@ fn a_paired_run_plays_both_arms_on_the_same_seeds_and_compares_every_band() {
     let rows = report["calib.compare"].as_array().unwrap();
     assert!(rows.iter().all(|r| r["suite"] == "equal"), "{rows:?}");
     let names: Vec<&str> = rows.iter().map(|r| r["band"].as_str().unwrap()).collect();
-    assert_eq!(
-        names,
-        [
-            "corners_per_team",
-            "goal_kicks_per_match",
-            "goalless_share",
-            "goals_per_match",
-            "goals_per_xg",
-            "pass_accuracy_pct",
-            "passes_per_team",
-            "possession_away_pct",
-            "possession_home_pct",
-            "sending_off_share",
-            "shots_on_target_share",
-            "shots_per_team",
-            "ten_plus_goals_share",
-            "throw_ins_per_match",
-            "yellow_cards_per_team",
-        ]
-    );
+    let mut sorted = names.clone();
+    sorted.sort_unstable();
+    assert_eq!(names, sorted, "sorted by name");
+    for band in [
+        "corners_per_team",
+        "goals_per_match",
+        "shots_per_team",
+        "yellow_cards_per_team",
+    ] {
+        assert!(names.contains(&band), "no {band} in {names:?}");
+    }
+    assert_eq!(names.len(), equal_gating_bands());
     for row in rows {
         assert!(row["off"].is_number() && row["on"].is_number(), "{row}");
         let band = |arm: &str| {

@@ -16,6 +16,7 @@ use serde_json::Value;
 fn bin() -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_engine-cli"));
     cmd.env("SM_DATA_DIR", temp("data"));
+    cmd.env("SM_BAND_HISTORY", "off");
     cmd.env("SM_CONTENT_DIR", content_dir());
     cmd
 }

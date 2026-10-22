@@ -1693,7 +1693,18 @@ mod tests {
         let (rows, joint) = judge(&sets, &[gating], &found, 2.0, Vec::new(), &BTreeMap::new());
         assert_eq!(joint.word, Word::Pass);
         // Reported rows of any word leave the gating word as it is.
-        let mut reported = range_rows(&[check(2.0, 0.1), check(5.0, 0.1), check(1.1, 0.1)], None);
+        let ruled = |value: f64, w: pass_rule::rule::Word| BandCheck {
+            rule: Some(rule(w)),
+            ..check(value, 0.1)
+        };
+        let mut reported = range_rows(
+            &[
+                ruled(2.0, pass_rule::rule::Word::Pass),
+                ruled(5.0, pass_rule::rule::Word::Fail),
+                ruled(1.1, pass_rule::rule::Word::NotSure),
+            ],
+            None,
+        );
         assert_eq!(joint_word(&rows, &joint.guards), Word::Pass);
         reported[2].accepted = Some(true);
         let text = render_reported(&reported, true);
@@ -1777,7 +1788,11 @@ mod tests {
         assert_eq!(rows[0].word, Word::NotSure);
         assert_eq!(joint_word(&rows, &[]), Word::NotSure);
         // A change run's rows take the rule word of the changed engine's check.
-        let mut rows = range_rows(&[check(2.0, 0.1)], Some(PER_CLUB));
+        let passing = BandCheck {
+            rule: Some(rule(Rule::Pass)),
+            ..check(2.0, 0.1)
+        };
+        let mut rows = range_rows(&[passing], Some(PER_CLUB));
         assert_eq!(rows[0].word, Word::Pass);
         let failing = BandCheck {
             rule: Some(rule(Rule::Fail)),
@@ -1786,11 +1801,6 @@ mod tests {
         set_rule_words(&mut rows, &[failing]);
         assert_eq!(rows[0].word, Word::Fail);
         assert!(rows[0].pass_rule.is_some());
-        // A band of an older file keeps its word.
-        let mut rows = range_rows(&[check(2.0, 0.1)], None);
-        set_rule_words(&mut rows, &[check(2.0, 0.1)]);
-        assert_eq!(rows[0].word, Word::Pass);
-        assert!(rows[0].pass_rule.is_none());
     }
 
     #[test]

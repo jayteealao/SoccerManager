@@ -15,6 +15,7 @@ fn bin(data: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_engine-cli"));
     cmd.env("SM_DATA_DIR", data);
     cmd.env("SM_LOG", "warn");
+    cmd.env("SM_BAND_HISTORY", data.join("band-history.jsonl"));
     cmd.env("SM_CONTENT_DIR", repo().join("content"));
     cmd
 }

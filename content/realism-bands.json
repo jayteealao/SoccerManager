@@ -49,7 +49,7 @@
         "league_spread": 0.20067,
         "noticeable_error": 0.2,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
-        "spread_reason": "the between-league standard deviation of the reference file's tier.1.goals_per_match",
+        "spread_reason": "the between-league standard deviation of the reference file's tier 1 target of this statistic",
         "design_choice": true,
         "widening": {
           "value": 0.25183,
@@ -124,14 +124,14 @@
         "real": {}
       },
       "margin": {
-        "value": 2.826,
+        "value": 2.859,
         "league_spread": 0.75318,
         "noticeable_error": 2.0,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
-        "spread_reason": "the between-league standard deviation of the reference file's tier.1.shots_per_team",
+        "spread_reason": "the between-league standard deviation of the reference file's tier 1 target of this statistic",
         "design_choice": true,
         "widening": {
-          "value": 0.07282,
+          "value": 0.10582,
           "reason": "engine spread at the design count, 3 leagues",
           "provisional": true
         }
@@ -414,7 +414,7 @@
         "league_spread": 0.042206,
         "noticeable_error": 0.035,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
-        "spread_reason": "the between-league standard deviation of the reference file's tier.1.sending_off_share",
+        "spread_reason": "the between-league standard deviation of the reference file's tier 1 target of this statistic",
         "design_choice": true
       },
       "definition_version": 1,
@@ -480,14 +480,14 @@
         "real": {}
       },
       "margin": {
-        "value": 0.7464,
+        "value": 0.8334,
         "league_spread": 0.336498,
         "noticeable_error": 0.35,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
-        "spread_reason": "the between-league standard deviation of the reference file's tier.1.yellow_cards_per_team",
+        "spread_reason": "the between-league standard deviation of the reference file's tier 1 target of this statistic",
         "design_choice": true,
         "widening": {
-          "value": 0.059902,
+          "value": 0.146902,
           "reason": "engine spread at the design count, 3 leagues",
           "provisional": true
         }
@@ -831,7 +831,7 @@
         "league_spread": 0.260355,
         "noticeable_error": 0.75,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
-        "spread_reason": "the between-league standard deviation of the reference file's tier.1.corners_per_team",
+        "spread_reason": "the between-league standard deviation of the reference file's tier 1 target of this statistic",
         "design_choice": true
       },
       "definition_version": 1,
@@ -893,14 +893,14 @@
         "real": {}
       },
       "margin": {
-        "value": 7.2,
+        "value": 7.418,
         "league_spread": 0.0,
         "noticeable_error": 5.0,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
         "spread_reason": "one population: the band's real pool gives no between-league spread",
         "design_choice": true,
         "widening": {
-          "value": 2.2,
+          "value": 2.418,
           "reason": "engine spread at the design count, 3 leagues",
           "provisional": true
         }
@@ -1030,14 +1030,14 @@
         "real": {}
       },
       "margin": {
-        "value": 0.08144,
+        "value": 0.08145,
         "league_spread": 0.011804,
         "noticeable_error": 0.02,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
-        "spread_reason": "the between-league standard deviation of the reference file's tier.1.goalless_share",
+        "spread_reason": "the between-league standard deviation of the reference file's tier 1 target of this statistic",
         "design_choice": true,
         "widening": {
-          "value": 0.049636,
+          "value": 0.049646,
           "reason": "engine spread at the design count, 3 leagues",
           "provisional": true
         }
@@ -1288,14 +1288,14 @@
         "real": {}
       },
       "margin": {
-        "value": 3.178,
+        "value": 3.55,
         "league_spread": 1.388872,
         "noticeable_error": 0.95,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
-        "spread_reason": "the between-league standard deviation of the reference file's tier.1.fouls_per_team",
+        "spread_reason": "the between-league standard deviation of the reference file's tier 1 target of this statistic",
         "design_choice": true,
         "widening": {
-          "value": 0.839128,
+          "value": 1.211128,
           "reason": "engine spread at the design count, 3 leagues",
           "provisional": true
         }
@@ -1358,14 +1358,14 @@
         "real": {}
       },
       "margin": {
-        "value": 0.4261,
+        "value": 0.4756,
         "league_spread": 0.0,
         "noticeable_error": 0.15,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
         "spread_reason": "one population: the band's real pool gives no between-league spread",
         "design_choice": true,
         "widening": {
-          "value": 0.2761,
+          "value": 0.3256,
           "reason": "engine spread at the design count, 3 leagues",
           "provisional": true
         }
@@ -1668,14 +1668,14 @@
         "real": {}
       },
       "margin": {
-        "value": 0.389,
+        "value": 0.4052,
         "league_spread": 0.0,
         "noticeable_error": 0.075,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
         "spread_reason": "one population: the band's real pool gives no between-league spread",
         "design_choice": true,
         "widening": {
-          "value": 0.314,
+          "value": 0.3302,
           "reason": "engine spread at the design count, 3 leagues",
           "provisional": true
         }

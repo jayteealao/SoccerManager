@@ -20,6 +20,7 @@ fn fixture() -> PathBuf {
 fn bin() -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_engine-cli"));
     cmd.env("SM_LOG", "warn");
+    cmd.env("SM_BAND_HISTORY", "off");
     cmd.env("SM_CONTENT_DIR", repo().join("content"));
     cmd
 }

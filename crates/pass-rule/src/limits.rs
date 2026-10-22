@@ -545,7 +545,7 @@ mod tests {
         let j = l.judge_sample("missing", &units(&[1.0, 0.0]));
         assert_eq!(j.word, Word::NotSure);
         let mut few = units(&vec![1.0; 40]);
-        few.extend(units(&vec![0.0; 10]));
+        few.extend(units(&[0.0; 10]));
         let j = l.judge_sample("p", &few);
         assert_eq!(j.word, Word::NotSure, "{j}");
         assert!(j.reason.as_deref().unwrap().contains("under the minimum"));
@@ -560,7 +560,7 @@ mod tests {
         let l = limits(&dir, no_report());
         // 8 events over 200 matches: Garwood bounds about 0.017 to 0.079.
         let mut sample = units(&vec![0.0; 192]);
-        sample.extend(units(&vec![1.0; 8]));
+        sample.extend(units(&[1.0; 8]));
         let j = l.judge_sample("r", &sample);
         assert_eq!(j.word, Word::Pass, "{j}");
         assert_eq!(j.exposure, 200.0);

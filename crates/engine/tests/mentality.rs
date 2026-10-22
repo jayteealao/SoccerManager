@@ -18,7 +18,7 @@ fn match_shots(mentality: &str) -> Vec<f64> {
     let m = schema
         .mentality_index(mentality)
         .expect("the tactics file names the mentality") as u8;
-    let shots = run_many(1..=200, |seed| {
+    run_many(1..=200, |seed| {
         let mut tactics = Tactics::defaults(schema);
         tactics.mentality = m;
         let config = MatchConfig::new(seed, 90, &content, [&a, &b])
@@ -28,8 +28,7 @@ fn match_shots(mentality: &str) -> Vec<f64> {
         let mut sim = Simulation::new(config).unwrap();
         sim.run(&mut NullSink).unwrap();
         f64::from(sim.summary().shots[0])
-    });
-    shots
+    })
 }
 
 #[test]

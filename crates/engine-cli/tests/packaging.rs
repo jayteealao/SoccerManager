@@ -150,6 +150,25 @@ impl Forbidden {
     }
 }
 
+/// The band file's text with each band's target pointers (`target.target` and
+/// `real.source.target`) taken out.
+fn without_target_pointers(text: &str) -> String {
+    let Ok(mut v) = serde_json::from_str::<Value>(text) else {
+        return text.to_string();
+    };
+    if let Some(bands) = v["bands"].as_array_mut() {
+        for b in bands {
+            if let Some(target) = b.get_mut("target").and_then(Value::as_object_mut) {
+                target.remove("target");
+            }
+            if let Some(source) = b.pointer_mut("/real/source").and_then(Value::as_object_mut) {
+                source.remove("target");
+            }
+        }
+    }
+    v.to_string()
+}
+
 /// Every fault of the content folder `dir`: a reference-file record, a target key, or a
 /// string equal to a real club name.
 fn content_faults(dir: &Path, forbidden: &Forbidden) -> Vec<String> {
@@ -181,8 +200,15 @@ fn content_faults(dir: &Path, forbidden: &Forbidden) -> Vec<String> {
         let Ok(text) = std::fs::read_to_string(&path) else {
             continue;
         };
+        // A band of the band file may name its reference-file target by key: a pointer that
+        // calibrate resolves from the checkout, never a figure. Every other key is a fault.
+        let scanned = if rel == "realism-bands.json" {
+            without_target_pointers(&text)
+        } else {
+            text.clone()
+        };
         for key in &forbidden.keys {
-            if text.contains(key.as_str()) {
+            if scanned.contains(key.as_str()) {
                 faults.push(format!("{rel}: target key {key}"));
             }
         }
@@ -258,4 +284,19 @@ fn a_content_folder_with_a_record_a_key_or_a_real_name_fails() {
             .any(|f| f.contains("target key fd.E0.goals_per_match")),
         "{faults:?}"
     );
+
+    // The band file may point a band at its target by key, and nowhere else.
+    let pointer = TempDir::new().unwrap();
+    std::fs::write(
+        pointer.path().join("realism-bands.json"),
+        r#"{"bands": [{"band": "g", "real": {"source": {"target": "fd.E0.goals_per_match"}}}]}"#,
+    )
+    .unwrap();
+    assert!(content_faults(pointer.path(), &forbidden).is_empty());
+    std::fs::write(
+        pointer.path().join("realism-bands.json"),
+        r#"{"bands": [{"band": "g", "margin": {"reason": "from fd.E0.goals_per_match"}}]}"#,
+    )
+    .unwrap();
+    assert!(!content_faults(pointer.path(), &forbidden).is_empty());
 }

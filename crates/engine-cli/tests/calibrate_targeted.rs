@@ -9,7 +9,7 @@ mod common;
 use std::path::Path;
 use std::process::Output;
 
-use common::{RecordSchemas, bin, edited_content, record, temp};
+use common::{RecordSchemas, bin, edited_content, equal_gating_bands, record, temp};
 use serde_json::{Value, json};
 
 /// The pairing the slice names, stored as `4-4-2 v 4-4-1-1` (4-4-2 is formation 0).
@@ -295,7 +295,11 @@ fn a_rerun_against_its_own_report_is_noise_on_every_row() {
     let report = finished(&out, &run);
     let diff = &report["calib.diff"];
     let rows = diff["rows"].as_array().unwrap();
-    assert_eq!(rows.len(), 15, "every equal-suite band but the time budget");
+    assert_eq!(
+        rows.len(),
+        equal_gating_bands(),
+        "every equal-suite band but the time budget"
+    );
     assert!(
         rows.iter()
             .all(|r| r["noise"] == true && r["change"] == 0.0),

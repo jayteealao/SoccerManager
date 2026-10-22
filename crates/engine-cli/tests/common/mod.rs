@@ -21,6 +21,8 @@ pub fn bin(data: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_engine-cli"));
     cmd.env("SM_DATA_DIR", data);
     cmd.env("SM_LOG", "warn");
+    // Each test keeps its band history in its own data folder, never the checkout's.
+    cmd.env("SM_BAND_HISTORY", data.join("band-history.jsonl"));
     cmd.env(
         "SM_CONTENT_DIR",
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content"),
@@ -284,4 +286,138 @@ pub fn stems(dir: &Path) -> Vec<String> {
         .unwrap_or_default();
     out.sort();
     out
+}
+
+/// A complete band of the version 6 band file for a test: `measure` over `suites`, judged
+/// against the design target `design` with the margin `margin`, whole matches resampled, a
+/// minimum exposure of one match and a small engine spread, so the loader's floor holds.
+pub fn test_band(name: &str, suites: &[&str], measure: Value, design: f64, margin: f64) -> Value {
+    serde_json::json!({
+        "band": name,
+        "suites": suites,
+        "measure": measure,
+        "target": { "design": design },
+        "margin": {
+            "value": margin,
+            "league_spread": 0.0,
+            "noticeable_error": margin,
+            "reason": "a test margin",
+            "spread_reason": "one population: a test band",
+            "design_choice": true
+        },
+        "definition_version": 1,
+        "population": "a test's matches",
+        "estimator": "the measure over the test's matches",
+        "resampling": { "engine": "match", "real": "none" },
+        "min_exposure": { "unit": "matches", "value": 1.0, "reason": "a test band" },
+        "rare": false,
+        "engine_spread": {
+            "per_match_sd": 1e-6,
+            "between_league_sd": 0.0,
+            "measured": "a test band"
+        },
+        "real": {
+            "source": { "none": "a test band with no real counterpart" },
+            "sample": 0,
+            "date": "2026-10-22"
+        },
+        "evidence": "calibration",
+        "confidence": {
+            "measurement": { "count": 0 },
+            "generalisation": { "competitions": 0, "seasons": 0, "clubs": 0 }
+        },
+        "condition": "dry",
+        "gates": true
+    })
+}
+
+/// Sets `band` of the version 6 band file to the design target `design` with the margin
+/// `margin`, as [`test_band`] holds them; the band keeps its measure, suites and record.
+pub fn set_design(band: &mut Value, design: f64, margin: f64) {
+    let made = test_band("x", &[], Value::Null, design, margin);
+    for field in [
+        "target",
+        "margin",
+        "resampling",
+        "min_exposure",
+        "engine_spread",
+    ] {
+        band[field] = made[field].clone();
+    }
+}
+
+/// Widens each margin a run refused for the 97 percent floor with the real errors of a test's
+/// real-data folder: the fixture folders hold small hand-made samples whose real errors are
+/// wide. Each named band's margin becomes its needed margin plus a hundredth, the extra part
+/// a widening with its reason. Returns whether `stderr` held such a refusal.
+pub fn hold_floor(content: &Path, stderr: &str) -> bool {
+    // The run's refusal ("  band: margin m is below ...; it needs at least n") and the
+    // loader's ("bands[i] (band).margin.value: margin m is below ...; it needs at least n").
+    let mut needed: Vec<(String, f64)> = Vec::new();
+    for part in stderr
+        .split("is below the 97 percent floor; it needs at least ")
+        .skip(1)
+    {
+        let Some(value) = part
+            .split(|c: char| c.is_whitespace() || c == ';' || c == ',')
+            .next()
+            .and_then(|v| v.parse::<f64>().ok())
+        else {
+            continue;
+        };
+        needed.push((String::new(), value));
+    }
+    let names: Vec<String> = stderr
+        .split("is below the 97 percent floor")
+        .filter_map(|before| {
+            let head = before.rsplit_once(": margin ")?.0;
+            let head = head.trim_end_matches(".margin.value");
+            let name = head
+                .rsplit(|c: char| c.is_whitespace() || c == '(' || c == ')')
+                .find(|w| !w.is_empty())?;
+            Some(name.to_string())
+        })
+        .collect();
+    for (slot, name) in needed.iter_mut().zip(names) {
+        slot.0 = name;
+    }
+    if needed.is_empty() {
+        return false;
+    }
+    let shipped = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content");
+    assert!(
+        std::fs::canonicalize(content).ok() != std::fs::canonicalize(&shipped).ok(),
+        "a test widens margins only in its own copy of the content"
+    );
+    let path = content.join("realism-bands.json");
+    let mut doc: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    for b in doc["bands"].as_array_mut().unwrap() {
+        let Some((_, value)) = needed.iter().find(|(n, _)| b["band"] == n.as_str()) else {
+            continue;
+        };
+        let margin = value * 1.01;
+        let m = &mut b["margin"];
+        let base = m["league_spread"].as_f64().unwrap() + m["noticeable_error"].as_f64().unwrap();
+        m["value"] = margin.into();
+        m["widening"] = serde_json::json!({
+            "value": margin - base,
+            "reason": "a test's real-data folder holds a small hand-made sample",
+            "provisional": true
+        });
+    }
+    std::fs::write(&path, serde_json::to_string_pretty(&doc).unwrap()).unwrap();
+    true
+}
+
+/// The bands of the shipped band file that gate in the equal suite.
+pub fn equal_gating_bands() -> usize {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content/realism-bands.json");
+    let file: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    file["bands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|b| b["gates"] != false)
+        .filter(|b| b["suites"].as_array().unwrap().iter().any(|s| s == "equal"))
+        .count()
 }

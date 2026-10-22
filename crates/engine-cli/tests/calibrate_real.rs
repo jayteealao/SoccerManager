@@ -10,7 +10,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Output;
 
-use common::{RecordSchemas, bin, copy_tree, edited_content, record, temp};
+use common::{RecordSchemas, bin, copy_tree, edited_content, hold_floor, record, set_design, temp};
 use serde_json::{Value, json};
 
 /// The bands the test points at fixture files, with the hand-checked value of each.
@@ -84,6 +84,8 @@ fn content(data: &Path) -> PathBuf {
                     json!({ "reduce": "group_share", "group_by": "match", "tokens": ["1701", "1703"] }),
                 ),
                 NO_COUNTERPART => {
+                    // A band with no real counterpart is judged against a design target.
+                    set_design(b, 5.0, 2.0);
                     b["real"]["sample"] = 0.into();
                     b["confidence"] = json!({
                         "measurement": { "count": 0 },
@@ -92,6 +94,8 @@ fn content(data: &Path) -> PathBuf {
                     json!({ "none": "a test band: no real match repeats it" })
                 }
                 _ if b["real"]["source"].get("none").is_some() => continue,
+                // A band read from the reference file keeps its target pointer.
+                _ if b["real"]["source"].get("target").is_some() => continue,
                 _ => pointer("not-in-the-fixture.csv", "x", json!({})),
             };
             b["real"]["source"] = source;
@@ -100,18 +104,29 @@ fn content(data: &Path) -> PathBuf {
 }
 
 fn calibrate(data: &Path, content: &Path, out: &Path, real: &Path) -> Output {
-    bin(data)
-        .arg("--content-dir")
-        .arg(content)
-        .arg("calibrate")
-        .args(["--seed", "9", "--suite", "equal", "--minutes", "5"])
-        .args(["--jobs", "4", "--matches", "4"])
-        .arg("--real-data")
-        .arg(real)
-        .arg("--out")
-        .arg(out)
-        .output()
-        .unwrap()
+    let run = || {
+        bin(data)
+            .arg("--content-dir")
+            .arg(content)
+            .arg("calibrate")
+            .args(["--seed", "9", "--suite", "equal", "--minutes", "5"])
+            .args(["--jobs", "4", "--matches", "4"])
+            .arg("--real-data")
+            .arg(real)
+            .arg("--out")
+            .arg(out)
+            .output()
+            .unwrap()
+    };
+    // The fixture's small real samples put some margins under their floor: widen them.
+    let mut out = run();
+    for _ in 0..3 {
+        if !hold_floor(content, &String::from_utf8_lossy(&out.stderr)) {
+            break;
+        }
+        out = run();
+    }
+    out
 }
 
 fn stderr(out: &Output) -> String {
@@ -159,13 +174,28 @@ fn line<'a>(text: &'a str, band: &str) -> &'a str {
         .unwrap_or_else(|| panic!("no table line for {band}: {text}"))
 }
 
-/// The shipped file's bands: the 18 that gate, the 35 that only report and the 101 team-shape
-/// bands, which only report too.
-const BANDS: u64 = 18 + 35 + 101;
+/// The shipped file's bands: the 157 that gate and the 4 rare bands that only report.
+const BANDS: u64 = 161;
 
-/// Bands with a pointer: the shipped file's, less the three engine experiments and the
-/// test's own band with no counterpart.
-const POINTER_BANDS: u64 = BANDS - 3 - 1;
+/// The shipped bands with no real counterpart: the engine experiments and design values.
+const SHIPPED_NO_COUNTERPART: u64 = 8;
+
+/// Bands with a real source: the shipped file's, less those with no real counterpart and the
+/// test's own band with none.
+const POINTER_BANDS: u64 = BANDS - SHIPPED_NO_COUNTERPART - 1;
+
+/// The bands of `content`'s band file that gate in the equal suite with calibration evidence.
+fn calibration_bands(content: &Path) -> u64 {
+    let path = content.join("realism-bands.json");
+    let file: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    file["bands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|b| b["gates"] != false && b["evidence"] == "calibration")
+        .filter(|b| b["suites"].as_array().unwrap().iter().any(|s| s == "equal"))
+        .count() as u64
+}
 
 #[test]
 fn the_real_values_come_from_the_named_folder_and_an_absent_folder_is_stated() {
@@ -184,7 +214,7 @@ fn the_real_values_come_from_the_named_folder_and_an_absent_folder_is_stated() {
     assert_eq!(info["from"], "flag");
     assert_eq!(info["present"], true);
     assert!(info.get("missing_path").is_none(), "{info}");
-    assert_eq!(info["no_counterpart"], 4, "{info}");
+    assert_eq!(info["no_counterpart"], SHIPPED_NO_COUNTERPART + 1, "{info}");
     assert_eq!(
         info["missing"].as_u64(),
         Some(POINTER_BANDS - READ.len() as u64),
@@ -223,15 +253,17 @@ fn the_real_values_come_from_the_named_folder_and_an_absent_folder_is_stated() {
     );
     assert!(
         text.contains(&format!(
-            "real data: {} (flag); {} of {BANDS} bands without a real value; 4 with no real counterpart",
+            "real data: {} (flag); {} of {BANDS} bands without a real value; {} with no real counterpart",
             real.display(),
-            POINTER_BANDS - READ.len() as u64
+            POINTER_BANDS - READ.len() as u64,
+            SHIPPED_NO_COUNTERPART + 1
         )),
         "{text}"
     );
     assert!(text.contains("realism claim: none"), "{text}");
     assert_eq!(
-        r["calib.realism"]["calibration_bands"], 15,
+        r["calib.realism"]["calibration_bands"],
+        calibration_bands(&content),
         "{}",
         r["calib.realism"]
     );
@@ -250,7 +282,7 @@ fn the_real_values_come_from_the_named_folder_and_an_absent_folder_is_stated() {
     assert_eq!(info2["present"], false);
     assert_eq!(info2["missing_path"], absent.display().to_string());
     assert_eq!(info2["missing"].as_u64(), Some(POINTER_BANDS), "{info2}");
-    assert_eq!(info2["no_counterpart"], 4);
+    assert_eq!(info2["no_counterpart"], SHIPPED_NO_COUNTERPART + 1);
     assert!(
         text2.contains(&format!(
             "{POINTER_BANDS} of {BANDS} bands without a real value"

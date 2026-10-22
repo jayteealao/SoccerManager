@@ -1405,7 +1405,7 @@ fn modified_date(path: &Path) -> Option<String> {
 }
 
 /// The calendar date of a day count from 1970-01-01 (Howard Hinnant's `civil_from_days`).
-fn civil_date(days: i64) -> String {
+pub(crate) fn civil_date(days: i64) -> String {
     let z = days + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z.rem_euclid(146_097);
@@ -2136,9 +2136,15 @@ A,0,0
     }
 
     #[test]
-    fn a_band_under_its_floor_prints_report_only_and_leaves_the_joint_word() {
+    fn a_band_of_a_report_only_group_prints_report_only_and_leaves_the_joint_word() {
         let thin = serde_json::json!({"competitions": 1, "seasons": 1, "clubs": 20});
-        let r = registry(&[("corners_per_team", "confidence.generalisation", thin)]);
+        // A thin real sample alone no longer makes a band report only: a band reports only
+        // when it belongs to a group the band file names.
+        let r = registry(&[
+            ("corners_per_team", "confidence.generalisation", thin),
+            ("corners_per_team", "gates", serde_json::json!(false)),
+            ("corners_per_team", "group", serde_json::json!("facing")),
+        ]);
         // The record shows the counts, the error and the words.
         let info = read_all(
             &at(&std::env::temp_dir().join("engine-cli-real-absent")),
@@ -2155,7 +2161,9 @@ A,0,0
                 .report_only
                 .as_deref()
                 .unwrap()
-                .contains("under the floor")
+                .contains("body facing"),
+            "{:?}",
+            corners.report_only
         );
         let goals = info.band("goals_per_match").unwrap();
         assert_eq!(
@@ -2172,8 +2180,10 @@ A,0,0
         assert_eq!(strong.report_only, None);
         assert_eq!(
             (info.missing, info.no_counterpart),
-            // The 101 team-shape bands read a file this folder lacks.
-            (15 + 35 + 101, 3)
+            // The 101 team-shape bands read a file this folder lacks, and the shots and cards
+            // distributions a reference file it lacks; the three experiment bands and the five
+            // bands only the slow tests judge have no real counterpart.
+            (15 + 35 + 101 + 2, 3 + 5)
         );
 
         let mut joint = Joint {
@@ -2390,7 +2400,13 @@ A,0,0
         );
         let r = registry(&[]);
         let got = samples(&at(&dir), &r);
-        assert_eq!(got.len(), 6, "{got:?}");
+        // The shots and cards distributions read reference-file targets, which this
+        // registry, read without the reference file, does not hold.
+        assert_eq!(got.len(), 8, "{got:?}");
+        for band in ["shots_total_distribution", "cards_total_distribution"] {
+            let why = got[band].as_ref().unwrap_err();
+            assert!(why.contains("is not a target"), "{band}: {why}");
+        }
         let hist = |band: &str| -> Vec<Hist> {
             got[band]
                 .as_ref()
@@ -2450,11 +2466,16 @@ A,0,0
         assert_eq!(passes.status, "not_here");
         // An absent folder: every band not here.
         let none = samples(&at(&dir.join("absent")), &r);
-        assert!(none.values().all(|s| {
-            s.as_ref()
-                .unwrap_err()
-                .ends_with("the folder does not exist")
-        }));
+        let target_backed = ["shots_total_distribution", "cards_total_distribution"];
+        assert!(
+            none.iter()
+                .filter(|(b, _)| !target_backed.contains(&b.as_str()))
+                .all(|(_, s)| {
+                    s.as_ref()
+                        .unwrap_err()
+                        .ends_with("the folder does not exist")
+                })
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
