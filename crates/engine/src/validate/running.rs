@@ -20,8 +20,8 @@
 use std::collections::VecDeque;
 
 use super::{
-    BallRest, JOB_NEAR_M, MAX_BALL_REST_S, MAX_BALL_SPEED, MIN_SEPARATION, RESTART_SPOT_TOLERANCE,
-    RunSpell, StreamRules, Violation, job_closing, job_distance,
+    BallRest, JOB_NEAR_M, JobSide, MAX_BALL_REST_S, MAX_BALL_SPEED, MIN_SEPARATION,
+    RESTART_SPOT_TOLERANCE, RunSpell, StreamRules, Violation, job_distance_from,
 };
 use crate::error::EngineError;
 use crate::math::DVec2;
@@ -56,6 +56,8 @@ const SEPARATION_BOUND_SQ: f64 = MIN_SEPARATION * MIN_SEPARATION * 1.0001;
 #[derive(Clone, Copy)]
 struct ShapeCache {
     frames: [[AnchorFrame; 2]; PLAYERS_PER_TEAM],
+    /// Each slot's side for the job-target rule.
+    jobs: [JobSide; PLAYERS_PER_TEAM],
 }
 
 impl ShapeCache {
@@ -64,6 +66,7 @@ impl ShapeCache {
             frames: std::array::from_fn(|slot| {
                 [true, false].map(|has| team.anchor_frame(slot, has))
             }),
+            jobs: std::array::from_fn(|slot| JobSide::of(team, slot)),
         }
     }
 
@@ -611,10 +614,12 @@ impl RunningCheck {
                 reference,
             ));
             let d_ball = (*p - reference).length();
-            let d_job = job_distance(&pos, &parked, i, teams, nearer, &self.tuning);
+            let job_side = &self.cache[team].jobs[slot];
+            let d_job = job_distance_from(&pos, &parked, team, *p, job_side, nearer, &self.tuning);
             let prev_dist = self.prev_dist[i];
             let toward_ball = self
                 .prev_chase
+                .as_ref()
                 .is_some_and(|(was, at)| (*p - was).length() < (at[i] - was).length() - 1e-3);
             let far = d_ball > self.tuning.anchor_ball_distance
                 && d_anchor > self.tuning.anchor_tolerance
@@ -627,17 +632,11 @@ impl RunningCheck {
                 self.max_step,
                 &self.tuning,
             );
-            let toward_job = self.prev_chase.is_some_and(|(_, at)| {
-                job_closing(
-                    &at,
-                    *p,
-                    prev_dist[2],
-                    &parked,
-                    i,
-                    teams,
-                    nearer,
-                    &self.tuning,
-                )
+            // The mover's own entry is not a target, so the previous positions serve as the
+            // targets with him already at `p`: what `job_closing` judges, without its copy.
+            let toward_job = self.prev_chase.as_ref().is_some_and(|(_, at)| {
+                job_distance_from(at, &parked, team, *p, job_side, nearer, &self.tuning)
+                    < prev_dist[2] - 1e-3
             });
             let closing = d_ball < prev_dist[0] - 1e-3
                 || d_anchor < prev_dist[1] - 1e-3
