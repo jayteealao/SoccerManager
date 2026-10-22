@@ -144,7 +144,8 @@ pub fn fields_of(m: &Measure) -> Vec<&str> {
         Measure::Scoreline { .. }
         | Measure::Builtin { .. }
         | Measure::Distribution { .. }
-        | Measure::Cells { .. } => Vec::new(),
+        | Measure::Cells { .. }
+        | Measure::Scenario { .. } => Vec::new(),
     }
 }
 
@@ -315,6 +316,12 @@ pub fn check(m: &Measure) -> Result<(), String> {
             list(den, false, "den")
         }
         Measure::Builtin { .. } => Ok(()),
+        Measure::Scenario { test } => {
+            if test.trim().is_empty() {
+                return Err("a scenario names the slow test that plays it".into());
+            }
+            Ok(())
+        }
         Measure::Difference { of, minus } => {
             list(of, false, "of")?;
             list(minus, false, "minus")
@@ -755,6 +762,15 @@ pub fn terms(def: &BandDef, obs: &[Obs<'_>], scope: Scope) -> Terms {
             }
             return t;
         }
+        // A scenario plays in its slow test, never in a suite.
+        Measure::Scenario { test } => {
+            t.error = Error::Fixed;
+            for _ in obs {
+                push(&mut t, false, || ([0.0], [0.0]));
+            }
+            t.why_none = Some(format!("a scenario band is judged by its slow test {test}"));
+            return t;
+        }
         // A whole distribution has no per-match terms: it is judged by its distance, from
         // [`histograms`].
         Measure::Distribution { .. } | Measure::Cells { .. } => {
@@ -918,35 +934,6 @@ pub fn histograms(def: &BandDef, obs: &[Obs<'_>], scope: Scope) -> Vec<Option<Hi
             })
         })
         .collect()
-}
-
-/// The row's range check, as the hard-coded checks made it: the rounded value inside the
-/// range; the stronger team's win rate above `lo`; a red-card row at or below `hi`, judged
-/// on the unrounded means.
-pub fn passes(def: &BandDef, rounded: f64, terms: &Terms) -> bool {
-    match &def.measure {
-        Measure::Builtin {
-            name: Builtin::StrongerTeamWinRate,
-        } => rounded > def.lo,
-        Measure::Builtin {
-            name: Builtin::ReducedMinusFull,
-        } => terms.value.unwrap_or(0.0) <= def.hi,
-        Measure::Builtin {
-            name: Builtin::FullOverControl,
-        } => {
-            let [a, b, c, d] = terms.per_match();
-            let mean = |x: &[f64], y: &[f64]| {
-                let n: f64 = y.iter().sum();
-                if n > 0.0 {
-                    x.iter().sum::<f64>() / n
-                } else {
-                    0.0
-                }
-            };
-            mean(&a, &b) <= def.hi * mean(&c, &d)
-        }
-        _ => def.range().contains(rounded),
-    }
 }
 
 #[cfg(test)]

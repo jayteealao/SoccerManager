@@ -1186,10 +1186,14 @@ pub fn samples(folder: &RealFolder, registry: &Registry) -> Samples {
                 );
             }
             Some(RealSource::Target(t)) => {
-                out.insert(
-                    def.band.clone(),
-                    Err(format!("{} is a target of the reference file", t.target)),
-                );
+                let got = match registry.targets.get(&t.target) {
+                    Some(target) => target_sample(folder, def, &t.target, target),
+                    None => Err(format!(
+                        "{} is not a target of the reference file read with the band file",
+                        t.target
+                    )),
+                };
+                out.insert(def.band.clone(), got);
             }
             None => {
                 out.insert(def.band.clone(), Err("no real record".into()));
@@ -1210,6 +1214,88 @@ pub fn samples(folder: &RealFolder, registry: &Registry) -> Samples {
         }
     }
     out
+}
+
+/// The raw-data folder beside a real-data folder: the folder itself when it holds the
+/// football-data files, otherwise its sibling `data` (the main checkout's `.scratch/data`
+/// beside `.scratch/out`).
+fn data_folder(folder: &RealFolder) -> Option<PathBuf> {
+    let dir = folder.path.as_ref()?;
+    if dir.join("football-data").is_dir() {
+        return Some(dir.clone());
+    }
+    dir.parent().map(|p| p.join("data"))
+}
+
+/// The whole real sample of a distribution band whose real side is a distribution target
+/// of the reference file (`<layer>.dist.<kind>`): every match of the target's leagues and
+/// seasons read in place from the football-data files, binned as the target was built. Each
+/// league weighs the same, as the target pools its leagues, so the sample's pooled shares
+/// are the target's: each match counts `n / (leagues x matches of its league)`.
+fn target_sample(
+    folder: &RealFolder,
+    def: &BandDef,
+    key: &str,
+    target: &crate::real_targets::Target,
+) -> Result<Sample, String> {
+    use crate::real_targets::football_data::{DISTS, match_rows};
+    let kind = key
+        .rsplit_once(".dist.")
+        .map(|(_, k)| k)
+        .ok_or_else(|| format!("{key} is not a distribution target"))?;
+    let dist = DISTS
+        .iter()
+        .find(|d| d.name == kind)
+        .ok_or_else(|| format!("{key}: no reader of the distribution {kind}"))?;
+    let (width, bins) = super::measures::hist_bins(&def.measure)
+        .ok_or_else(|| "the band is not a whole distribution".to_string())?;
+    if target.bins != Some(bins) || target.width != Some(width) {
+        return Err(format!(
+            "{key} holds {:?} bins of {:?}; the band has {bins} of {width}",
+            target.bins, target.width
+        ));
+    }
+    let data = data_folder(folder).ok_or_else(|| {
+        "no real-data folder: the content folder is in no git checkout; pass --real-data"
+            .to_string()
+    })?;
+    let leagues: Vec<&str> = target
+        .leagues
+        .iter()
+        .flatten()
+        .map(String::as_str)
+        .collect();
+    let seasons: Vec<&str> = target.seasons.iter().map(String::as_str).collect();
+    let read = match_rows(&data, &leagues, &seasons).map_err(|e| format!("{e:#}"))?;
+    if !read.missing.is_empty() {
+        return Err(format!(
+            "{}: {} result files are not here, such as {}",
+            data.display(),
+            read.missing.len(),
+            read.missing[0]
+        ));
+    }
+    let mut per_league: BTreeMap<&str, Vec<u32>> = BTreeMap::new();
+    for row in &read.rows {
+        if let Some(k) = (dist.bin)(row, bins, width) {
+            per_league.entry(row.div.as_str()).or_default().push(k);
+        }
+    }
+    let total: usize = per_league.values().map(Vec::len).sum();
+    if per_league.is_empty() || total < 2 {
+        return Err(format!("{key}: no match of its leagues holds the columns"));
+    }
+    let groups = per_league.len() as f64;
+    let mut per_match = Vec::with_capacity(total);
+    for matches in per_league.values() {
+        let weight = total as f64 / (groups * matches.len() as f64);
+        per_match.extend(matches.iter().map(|&k| vec![(k, weight)]));
+    }
+    Ok(Sample {
+        per_match,
+        bins,
+        width,
+    })
 }
 
 /// The samples of `bands` from one file of `folder`; `Err` when the folder or the file is
@@ -1717,7 +1803,6 @@ mod tests {
                 source,
                 sample,
                 date: "2026-09-22".into(),
-                floor: None,
             }),
             evidence: Some(Evidence::Calibration),
             confidence: Some(Confidence {

@@ -597,6 +597,18 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     if let Some(r) = &realism {
         eprintln!("{}", r.claim);
     }
+    let provisional_margins = crate::report::ProvisionalMargins::of(&ctx.bands);
+    let report_only_floor = real_info
+        .as_ref()
+        .map(|info| ctx.bands.report_only_floor(&|b| real_error(info, b)))
+        .unwrap_or_default();
+    if !quiet {
+        eprint!("{}", provisional_margins.line());
+        eprint!(
+            "{}",
+            crate::report::render_report_only_floor(&report_only_floor)
+        );
+    }
     let rules = rule_set.map(|set| rules::run(&loaded.content, &set));
     if let Some(r) = &rules {
         if !quiet && !r.rows.is_empty() {
@@ -697,10 +709,11 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         registry: RegistryInfo {
             version: REGISTRY_VERSION,
             digest: ctx.bands.gate_digest(),
-            migrated_from: ctx.bands.migrated_from,
         },
         real: real_info,
         realism,
+        provisional_margins,
+        report_only_floor,
         stages: stages::snapshot(run_started.elapsed()),
         rules,
         styles: None,
@@ -1059,20 +1072,20 @@ fn match_counts(
     }
 }
 
-/// Sets each verdict row's real value and distance from the band's real entry, or the note
-/// the console prints in their place. A whole-distribution band whose real sample was read
-/// reads "whole sample", its distance its value.
-/// The margin floor again, with each band's real error as the pass rule will see it (the
-/// error of its real side read here). A band under its floor refuses the run before any
-/// match plays, naming the band, its margin and the margin it needs.
+/// Each band's real error as the pass rule will see it: the error of its real side read
+/// here.
+fn real_error(info: &real::RealInfo, b: &BandDef) -> Option<f64> {
+    info.band(&b.band)
+        .and_then(|r| r.side.as_ref())
+        .map(|side| side.estimate().1)
+        .filter(|e| e.is_finite())
+}
+
+/// The margin floor again, with each band's real error read here. A band under its floor
+/// refuses the run before any match plays, naming the band, its margin and the margin it
+/// needs.
 fn floor_with_real(bands: &Registry, info: &real::RealInfo) -> anyhow::Result<()> {
-    let real_se = |b: &BandDef| {
-        info.band(&b.band)
-            .and_then(|r| r.side.as_ref())
-            .map(|side| side.estimate().1)
-            .filter(|e| e.is_finite())
-    };
-    match floor_refused(bands, &real_se) {
+    match floor_refused(bands, &|b| real_error(info, b)) {
         None => Ok(()),
         Some(why) => anyhow::bail!(why),
     }
@@ -1099,6 +1112,9 @@ fn floor_refused(bands: &Registry, real_se: &dyn Fn(&BandDef) -> Option<f64>) ->
     ))
 }
 
+/// Sets each verdict row's real value and distance from the band's real entry, or the note
+/// the console prints in their place. A whole-distribution band whose real sample was read
+/// reads "whole sample", its distance its value.
 fn attach_real(rows: &mut [verdict::VerdictRow], info: &real::RealInfo, bands: &Registry) {
     for r in rows.iter_mut() {
         let entry = info.band(&r.band);

@@ -24,7 +24,7 @@
       "const": "run-report"
     },
     "schema.version": {
-      "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows; 4 for a calibrate run that reports each band's real value (calib.real, calib.realism, and the real columns of each verdict); 5 for a calibrate run that reports the bands that only report apart (calib.reported), the developer's acceptances (calib.accepted), the match counts (calib.counts), and how each verdict row was judged; 6 for a calibrate run with the whole-distribution bands (upper and noise_floor on a verdict row); 7 for a calibrate run with the formation field rating (calib.nash); 8 for a calibrate run with the registry's figures (calib.figures); 9 for a calibrate run whose change run reports a styles sample (calib.styles); 10 for a calibrate run with a version 6 band file, whose verdict rows carry the pass rule's word, interval and margin (pass_rule). Every key of an older version stays.",
+      "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows; 4 for a calibrate run that reports each band's real value (calib.real, calib.realism, and the real columns of each verdict); 5 for a calibrate run that reports the bands that only report apart (calib.reported), the developer's acceptances (calib.accepted), the match counts (calib.counts), and how each verdict row was judged; 6 for a calibrate run with the whole-distribution bands (upper and noise_floor on a verdict row); 7 for a calibrate run with the formation field rating (calib.nash); 8 for a calibrate run with the registry's figures (calib.figures); 9 for a calibrate run whose change run reports a styles sample (calib.styles); 10 for a calibrate run with a version 6 band file, whose verdict rows carry the pass rule's word, interval and margin (pass_rule), with the provisional margins (calib.provisional_margins) and the report-only bands against their floor (calib.report_only_floor). Every key of an older version stays.",
       "enum": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
     },
     "calib.substitutions": {
@@ -998,13 +998,51 @@
             }
           },
           "calib.registry": {
-            "description": "The band registry the run was judged with: its layout version (4 since the band record), the digest of what decides each band's verdict, and the version it was migrated from when it was.",
+            "description": "The band registry the run was judged with: its layout version (4 since the band record, 6 since the pass rule's fields) and the digest of what decides each band's verdict. Before version 10 a run also named the version the file was migrated from.",
             "type": "object",
             "required": ["version", "digest"],
             "properties": {
               "version": { "type": "integer", "minimum": 3 },
               "digest": { "type": "string", "pattern": "^[0-9a-f]{12}$" },
               "migrated_from": { "type": "integer", "minimum": 1 }
+            }
+          },
+          "calib.provisional_margins": {
+            "description": "Version 10: the margins widened provisionally to hold the 97 percent floor until the floor is set again on more leagues; their count and, for each, the band, the margin, the part added and its reason.",
+            "type": "object",
+            "required": ["count", "bands"],
+            "properties": {
+              "count": { "type": "integer", "minimum": 0 },
+              "bands": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["band", "margin", "widening", "reason"],
+                  "properties": {
+                    "band": { "type": "string", "minLength": 1 },
+                    "margin": { "type": "number" },
+                    "widening": { "type": "number", "exclusiveMinimum": 0 },
+                    "reason": { "type": "string", "minLength": 1 }
+                  }
+                }
+              }
+            }
+          },
+          "calib.report_only_floor": {
+            "description": "Version 10: each band of a named report-only group against the floor it would need if it gated, with the real errors read here, and whether it would hold now. Moving a band back to gating is a band-file edit by a person.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["band", "group", "margin", "needed", "sigma_e", "sigma_r", "holds"],
+              "properties": {
+                "band": { "type": "string", "minLength": 1 },
+                "group": { "type": "string", "minLength": 1 },
+                "margin": { "type": "number" },
+                "needed": { "type": "number" },
+                "sigma_e": { "type": "number", "minimum": 0 },
+                "sigma_r": { "type": "number", "minimum": 0 },
+                "holds": { "type": "boolean" }
+              }
             }
           },
           "calib.stages": {

@@ -91,9 +91,6 @@ pub const RED_CARD_ARMS: [(&str, Option<usize>); 4] = [
 /// migration's `full_over_control` top.
 pub const RED_CARD_LIMIT: f64 = 1.6;
 
-/// The lowest value a red-card `reduced_minus_full` row shows; only its top (0) is judged.
-const RED_CARD_FLOOR: f64 = -10.0;
-
 /// The rows a run judges for each band: one per suite that judges it, one per formation
 /// pairing in the formations suite (or one over every pairing, `pooled`), and one per arm
 /// in the red-card suite; in [`Suite`] order, then pairing or arm, then registry order.
@@ -847,7 +844,7 @@ impl RunBuilder {
             hi: spec.def.hi,
             pass: match &rule {
                 Some(r) => r.word == pass_rule::rule::Word::Pass,
-                None => !unjudged && measures::passes(spec.def, value, &terms),
+                None => !unjudged && spec.def.range().contains(value),
             },
             se: round_to(terms.se(), 5),
             informational: None,
@@ -1452,6 +1449,18 @@ pub struct CalibrationReport {
     /// The realism claim, from validation bands with a real counterpart only.
     #[serde(rename = "calib.realism", skip_serializing_if = "Option::is_none")]
     pub realism: Option<real::Realism>,
+    /// The margins widened provisionally to hold their floor, until the floor is set again
+    /// on more leagues: their count and each band.
+    #[serde(rename = "calib.provisional_margins")]
+    pub provisional_margins: ProvisionalMargins,
+    /// Each band of a named report-only group against the floor it would need if it gated,
+    /// with whether it would hold now (with the real errors read here); absent in the old
+    /// engine's own quiet run.
+    #[serde(
+        rename = "calib.report_only_floor",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub report_only_floor: Vec<bands::ReportOnlyFloor>,
     /// The time and memory of each stage, and the run's total.
     #[serde(rename = "calib.stages")]
     pub stages: BTreeMap<String, StageCost>,
@@ -1469,6 +1478,51 @@ pub struct CalibrationReport {
         skip_serializing_if = "Option::is_none"
     )]
     pub substitutions: Option<substitutions::SubstitutionReport>,
+}
+
+/// `calib.provisional_margins`: how many margins hold a provisional widening, and each one.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ProvisionalMargins {
+    pub count: u32,
+    pub bands: Vec<bands::Provisional>,
+}
+
+impl ProvisionalMargins {
+    pub fn of(registry: &bands::Registry) -> Self {
+        let bands = registry.provisional();
+        ProvisionalMargins {
+            count: u32::try_from(bands.len()).unwrap_or(u32::MAX),
+            bands,
+        }
+    }
+
+    /// The console line, or nothing when no margin is provisional.
+    pub fn line(&self) -> String {
+        if self.count == 0 {
+            return String::new();
+        }
+        format!(
+            "margins: {} provisional, widened to hold the 97 percent floor on today's 3 \
+             generated leagues; the floor is set again on 30 leagues",
+            self.count
+        )
+    }
+}
+
+/// The console lines of the report-only bands against their floor.
+pub fn render_report_only_floor(rows: &[bands::ReportOnlyFloor]) -> String {
+    let mut out = String::new();
+    for r in rows {
+        out.push_str(&format!(
+            "report-only band {} (group {}): margin {} against a floor of {}; would hold now: {}\n",
+            r.band,
+            r.group,
+            round_to(r.margin, 6),
+            round_to(r.needed, 6),
+            if r.holds { "yes" } else { "no" }
+        ));
+    }
+    out
 }
 
 /// One figure's row: its value over a suite beside the value an earlier build gave.
@@ -1657,9 +1711,6 @@ pub struct RegistryInfo {
     pub version: u32,
     /// SHA-256 of the bands, 12 hex characters.
     pub digest: String,
-    /// The layout version the file was migrated from, when it was.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub migrated_from: Option<u32>,
 }
 
 /// The compact rows of a run, over every arm: the row format, the row files, the rows the

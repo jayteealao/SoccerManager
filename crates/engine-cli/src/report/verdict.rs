@@ -309,36 +309,13 @@ pub fn range_only(checks: &[BandCheck]) -> Vec<VerdictRow> {
         .collect()
 }
 
-/// The word of a row judged on its range alone, with its own error: fail outside the range;
-/// pass inside with the nearest edge at least [`one_band()`] errors away (the bottom of a
-/// floor band, which starts at 0, is no edge); not sure otherwise, as a band with no power
-/// never passes. A row with no error passes inside; a row with no value is not sure. A
-/// whole-distribution row takes the word of its bounds and noise floor.
+/// The word of a row judged without an old engine: the pass rule's word, from the band's
+/// interval against its margin. A row the pass rule did not judge is not sure, never a
+/// pass: every band of the band file has the rule's fields, so no fixed range decides.
 pub fn range_word(c: &BandCheck) -> Word {
-    if let Some(rule) = &c.rule {
-        return rule_word(rule.word);
-    }
-    if c.unjudged || c.why_none.is_some() {
-        return Word::NotSure;
-    }
-    if let Some(d) = &c.dist {
-        return d.word;
-    }
-    if !c.pass {
-        return Word::Fail;
-    }
-    let range = super::bands::Band { lo: c.lo, hi: c.hi };
-    let low = if range.is_floor() {
-        f64::INFINITY
-    } else {
-        c.value - c.lo
-    };
-    let margin = low.min(c.hi - c.value);
-    if c.se == 0.0 || margin >= one_band() * c.se {
-        Word::Pass
-    } else {
-        Word::NotSure
-    }
+    c.rule
+        .as_ref()
+        .map_or(Word::NotSure, |rule| rule_word(rule.word))
 }
 
 /// The pass rule's word as a verdict word.
@@ -469,7 +446,7 @@ pub fn paired(
             let to = measures::terms(spec.def, &o_sub, spec.scope);
             let places = measures::places(&spec.def.measure);
             let value = tc.value().map(|v| round_to(v, places));
-            let in_range = measures::passes(spec.def, value.unwrap_or(0.0), &tc);
+            let in_range = spec.def.range().contains(value.unwrap_or(0.0));
             let outside = match tc.value() {
                 Some(v) if !in_range => (spec.def.lo - v).max(v - spec.def.hi).max(0.0),
                 _ => 0.0,
@@ -1659,24 +1636,21 @@ mod tests {
     }
 
     #[test]
-    fn a_range_only_row_passes_only_clear_of_its_edges_by_its_noise() {
-        // one_band() * 0.1 = 0.217: the nearest edge must be at least that far.
-        assert_eq!(range_word(&check(2.0, 0.1)), Word::Pass);
-        assert_eq!(range_word(&check(1.22, 0.1)), Word::Pass);
-        assert_eq!(range_word(&check(1.2, 0.1)), Word::NotSure);
-        assert_eq!(range_word(&check(2.9, 0.1)), Word::NotSure);
-        assert_eq!(range_word(&check(3.1, 0.1)), Word::Fail);
-        assert_eq!(range_word(&check(0.9, 0.0)), Word::Fail);
-        // No error at all: inside is a pass.
-        assert_eq!(range_word(&check(1.0, 0.0)), Word::Pass);
-        // A floor band has no bottom edge: 0 is clear of it.
-        let floor = BandCheck {
-            lo: 0.0,
-            hi: 0.016,
-            pass: true,
-            ..check(0.0, 0.004)
-        };
-        assert_eq!(range_word(&floor), Word::Pass);
+    fn a_row_takes_the_pass_rule_word_and_a_row_without_it_is_not_sure() {
+        // No fixed range decides: inside the range is not a pass without the rule's word.
+        assert_eq!(range_word(&check(2.0, 0.1)), Word::NotSure);
+        assert_eq!(range_word(&check(3.1, 0.1)), Word::NotSure);
+        for w in [
+            pass_rule::rule::Word::Pass,
+            pass_rule::rule::Word::NotSure,
+            pass_rule::rule::Word::Fail,
+        ] {
+            let judged = BandCheck {
+                rule: Some(rule(w)),
+                ..check(0.0, 0.1)
+            };
+            assert_eq!(range_word(&judged), rule_word(w));
+        }
         // No value, or no measures: not sure, with the reason as the note.
         let none = BandCheck {
             why_none: Some("no club has 34 matches in this run".into()),
