@@ -166,6 +166,8 @@ impl Child<'_> {
         let run_dir = self.out.join(&meta.name);
         let log = self.out.join(format!("{}.log", meta.name));
         let mut cmd = Command::new(self.exe);
+        // The proof's runs are experiments on the engine, not points of its history.
+        cmd.env(crate::report::history::HISTORY_ENV, "off");
         cmd.arg("--content-dir")
             .arg(self.content)
             .arg("calibrate")

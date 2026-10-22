@@ -426,6 +426,8 @@ fn calibrate(exe: &Path, content: &Path) -> Command {
         cmd.env("SM_LOG", CHILD_LOG);
     }
     cmd.env(super::QUIET_ENV, "1");
+    // The run that started the old engine keeps the history.
+    cmd.env(crate::report::history::HISTORY_ENV, "off");
     cmd
 }
 

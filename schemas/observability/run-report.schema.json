@@ -1045,6 +1045,32 @@
               }
             }
           },
+          "calib.drift": {
+            "description": "Version 10: the band history this run added one point per band row to, and the bands whose history drifts: a two-sided cumulative sum of a band's points of one definition version against the mean of its first five, with the run where the rise began. A drift never changes a word or the exit code. Absent when the run keeps no history.",
+            "type": "object",
+            "required": ["history", "added", "drifts"],
+            "properties": {
+              "history": { "type": "string", "minLength": 1 },
+              "added": { "type": "integer", "minimum": 0 },
+              "drifts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["band", "suite", "definition_version", "direction", "since_run", "flagged_run", "points"],
+                  "properties": {
+                    "band": { "type": "string", "minLength": 1 },
+                    "suite": { "type": "string" },
+                    "pairing": { "type": "string" },
+                    "definition_version": { "type": "integer", "minimum": 1 },
+                    "direction": { "enum": ["up", "down"] },
+                    "since_run": { "type": "string" },
+                    "flagged_run": { "type": "string" },
+                    "points": { "type": "integer", "minimum": 0 }
+                  }
+                }
+              }
+            }
+          },
           "calib.stages": {
             "description": "Time and memory of each stage: play, checks, commentary, writing, disk and judge, as thread time summed over the threads and the largest heap growth of one thread in the stage, and total, the run's wall time and the process's peak working set where the platform gives it.",
             "type": "object",

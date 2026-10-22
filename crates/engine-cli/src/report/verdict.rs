@@ -1018,7 +1018,7 @@ fn table(rows: &[VerdictRow], change: bool) -> String {
                 r.suite,
                 pairing,
                 r.value,
-                format!("{} to {}", r.lo, r.hi),
+                range_cell(r.lo, r.hi),
                 real,
                 distance,
                 r.word.code()
@@ -1028,9 +1028,29 @@ fn table(rows: &[VerdictRow], change: bool) -> String {
     out
 }
 
+/// The range column of a plain table: a band judged by its margin around a target has no
+/// fixed range, and an open end is left out rather than printed as the largest number.
+fn range_cell(lo: f64, hi: f64) -> String {
+    let bounded = |v: f64| v.is_finite() && v.abs() < f64::MAX;
+    match (bounded(lo), bounded(hi)) {
+        (true, true) => format!("{lo} to {hi}"),
+        (true, false) => format!("from {lo}"),
+        (false, true) => format!("up to {hi}"),
+        (false, false) => "-".to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_open_range_prints_no_largest_number() {
+        assert_eq!(range_cell(1.0, 2.5), "1 to 2.5");
+        assert_eq!(range_cell(-f64::MAX, f64::MAX), "-");
+        assert_eq!(range_cell(0.0, f64::MAX), "from 0");
+        assert_eq!(range_cell(f64::NEG_INFINITY, 3.0), "up to 3");
+    }
 
     /// A paired row from per-match values: a mean (`b` = 1).
     fn row(set: usize, changed: Vec<f64>, old: Vec<f64>, shift: f64) -> PairedRow {

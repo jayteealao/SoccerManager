@@ -9,6 +9,7 @@ pub mod bands;
 pub mod baseline;
 pub mod compare;
 pub mod distribution;
+pub mod history;
 pub mod measures;
 pub mod nash;
 pub mod proof;
@@ -28,6 +29,14 @@ use pass_rule::interval::{Interval, RareKind, Real, Unit};
 
 /// Matches slower than this, in milliseconds, are outliers (the contract's slow threshold).
 pub const SLOW_MATCH_MS: u64 = 2000;
+
+/// A match whose possession of either side lies outside this range is an outlier, and its
+/// files are kept. The screen picks matches to keep; it judges no band (the band file's
+/// version 2 range, kept fixed since bands moved to margins around real football).
+pub const OUTLIER_POSSESSION_PCT: std::ops::RangeInclusive<f64> = 35.0..=65.0;
+
+/// A match in which either side's shots lie outside this range is an outlier.
+pub const OUTLIER_SHOTS_PER_TEAM: std::ops::RangeInclusive<u32> = 8..=16;
 
 /// The version of the measure definitions: how a match's figures are counted. A change to a
 /// measure raises it, so a run folder made under the old definitions is not resumed.
@@ -480,17 +489,17 @@ impl RunBuilder {
     /// `true` for a failed match, a match with validator violations, a slow match, a
     /// dark-path hit, and a match with a possession or a team's shots outside its band.
     pub fn outlier(&self, s: &MatchStats) -> bool {
-        let outside = |band: &str, v: f64| self.bands.range(band).is_some_and(|r| !r.contains(v));
+        let possession = |v: f64| !OUTLIER_POSSESSION_PCT.contains(&v);
         s.outcome != "success"
             || s.validate_violations > 0
             || s.duration_ms > SLOW_MATCH_MS
             || s.tactics.change_never_applied > 0
-            || outside("possession_home_pct", s.figures.possession_pct[0])
-            || outside("possession_away_pct", s.figures.possession_pct[1])
+            || possession(s.figures.possession_pct[0])
+            || possession(s.figures.possession_pct[1])
             || s.tactics
                 .shots
                 .iter()
-                .any(|&n| outside("shots_per_team", f64::from(n)))
+                .any(|&n| !OUTLIER_SHOTS_PER_TEAM.contains(&n))
     }
 
     /// The aggregate figures of every planned suite.
@@ -1462,6 +1471,10 @@ pub struct CalibrationReport {
     )]
     pub report_only_floor: Vec<bands::ReportOnlyFloor>,
     /// The time and memory of each stage, and the run's total.
+    /// The band history this run added to and the bands whose history drifts; absent when
+    /// the run keeps no history.
+    #[serde(rename = "calib.drift", skip_serializing_if = "Option::is_none")]
+    pub drift: Option<history::DriftInfo>,
     #[serde(rename = "calib.stages")]
     pub stages: BTreeMap<String, StageCost>,
     /// A change run's rules stage.
@@ -1503,7 +1516,7 @@ impl ProvisionalMargins {
         }
         format!(
             "margins: {} provisional, widened to hold the 97 percent floor on today's 3 \
-             generated leagues; the floor is set again on 30 leagues",
+             generated leagues; the floor is set again on 30 leagues\n",
             self.count
         )
     }
@@ -2002,16 +2015,27 @@ mod tests {
         let wall = BTreeMap::from([(Suite::Equal, 1_000)]);
         let checks = b.checks(&wall);
         let names: Vec<&str> = checks.iter().map(|c| c.band.as_str()).collect();
-        let mut expected = vec![
+        // Every band of the equal suite, in the band file's order, then the time budget.
+        let registry = bands();
+        let mut expected: Vec<&str> = registry
+            .names()
+            .into_iter()
+            .filter(|b| registry.suites_of(b).unwrap().contains(&Suite::Equal))
+            .filter(|b| registry.report_only(b).is_none())
+            .collect();
+        expected.push("wall_ms");
+        assert_eq!(names, expected);
+        assert!(names.starts_with(&[
             "goals_per_match",
             "shots_per_team",
             "possession_home_pct",
-            "possession_away_pct",
-        ];
-        expected.extend(V2);
-        expected.push("wall_ms");
-        assert_eq!(names, expected);
-        assert!(checks.iter().all(|c| c.pass), "{checks:?}");
+            "possession_away_pct"
+        ]));
+        // No real value is read in a unit test, so no band passes; each has its rule word.
+        for c in checks.iter().filter(|c| c.band != "wall_ms") {
+            assert!(!c.pass, "{c:?}");
+            assert!(c.rule.is_some(), "{c:?}");
+        }
         assert!(checks.iter().all(|c| c.pairing.is_none()));
     }
 
@@ -2096,21 +2120,23 @@ mod tests {
         assert_eq!(pairings[1].ten_plus_goals_share, 0.5);
         assert_eq!(pairings[1].goalless_share, 0.5);
         let checks = b.checks(&BTreeMap::new());
-        let rows: Vec<(&str, Option<&str>, bool)> = checks
+        let rows: Vec<(&str, Option<&str>, f64)> = checks
             .iter()
-            .map(|c| (c.band.as_str(), c.pairing.as_deref(), c.pass))
+            .map(|c| (c.band.as_str(), c.pairing.as_deref(), c.value))
             .collect();
         assert_eq!(
             rows,
             [
-                ("goals_per_match", Some("4-4-2 v 4-4-2"), true),
-                ("ten_plus_goals_share", Some("4-4-2 v 4-4-2"), true),
-                ("goalless_share", Some("4-4-2 v 4-4-2"), false),
-                ("goals_per_match", Some("4-4-2 v 4-3-3"), false),
-                ("ten_plus_goals_share", Some("4-4-2 v 4-3-3"), false),
-                ("goalless_share", Some("4-4-2 v 4-3-3"), false),
+                ("goals_per_match", Some("4-4-2 v 4-4-2"), 3.0),
+                ("ten_plus_goals_share", Some("4-4-2 v 4-4-2"), 0.0),
+                ("goalless_share", Some("4-4-2 v 4-4-2"), 0.0),
+                ("goals_per_match", Some("4-4-2 v 4-3-3"), 5.5),
+                ("ten_plus_goals_share", Some("4-4-2 v 4-3-3"), 0.5),
+                ("goalless_share", Some("4-4-2 v 4-3-3"), 0.5),
             ]
         );
+        // Two matches a pairing are under every band's minimum exposure: none passes.
+        assert!(checks.iter().all(|c| !c.pass && c.rule.is_some()));
         assert!(checks.iter().all(|c| c.suite == "formations"));
     }
 
@@ -2122,22 +2148,13 @@ mod tests {
         assert!(b.add(Suite::Equal, record([5, 1], [6, 6], [70.0, 30.0]), None));
         let figures = b.figures();
         let checks = b.checks(&BTreeMap::new());
-        let failed: Vec<&str> = checks
-            .iter()
-            .filter(|c| !c.pass)
-            .map(|c| c.band.as_str())
-            .collect();
-        // One match with no card red and a score: the two share floors miss as well.
-        assert_eq!(
-            failed,
-            [
-                "goals_per_match",
-                "shots_per_team",
-                "possession_home_pct",
-                "possession_away_pct",
-                "sending_off_share",
-                "goalless_share"
-            ]
+        // One match is far under every band's minimum exposure: no band passes.
+        assert!(
+            checks
+                .iter()
+                .filter(|c| c.band != "wall_ms")
+                .all(|c| !c.pass),
+            "{checks:?}"
         );
         assert_eq!(figures[&Suite::Equal].outliers, 1);
     }
@@ -2246,29 +2263,41 @@ mod tests {
         assert!(!arm("striker").pass, "the full side scored 2.0 against 1.6");
         assert!(!f.pass);
         let checks = b.checks(&BTreeMap::new());
-        let rows: Vec<(&str, Option<&str>, f64, bool)> = checks
+        let rows: Vec<(&str, Option<&str>, f64)> = checks
             .iter()
             .filter(|c| c.suite == "red-card")
-            .map(|c| (c.band.as_str(), c.pairing.as_deref(), c.value, c.pass))
+            .map(|c| (c.band.as_str(), c.pairing.as_deref(), c.value))
             .collect();
         assert_eq!(
             rows,
             [
-                ("reduced_minus_full", Some("keeper"), -1.5, true),
-                ("full_over_control", Some("keeper"), 1.5, true),
-                ("reduced_minus_full", Some("centre-back"), -0.5, true),
-                ("full_over_control", Some("centre-back"), 1.0, true),
-                ("reduced_minus_full", Some("striker"), -1.0, true),
-                ("full_over_control", Some("striker"), 2.0, false),
+                ("reduced_minus_full", Some("keeper"), -1.5),
+                ("full_over_control", Some("keeper"), 1.5),
+                ("reduced_minus_full", Some("centre-back"), -0.5),
+                ("full_over_control", Some("centre-back"), 1.0),
+                ("reduced_minus_full", Some("striker"), -1.0),
+                ("full_over_control", Some("striker"), 2.0),
             ]
+        );
+        // Two matches an arm are under the minimum exposure: the rule word is not a pass.
+        assert!(
+            checks
+                .iter()
+                .filter(|c| c.suite == "red-card")
+                .all(|c| !c.pass && c.rule.is_some())
         );
     }
 
     #[test]
     fn every_band_belongs_to_a_suite_and_the_red_card_suite_is_not_in_all() {
         let r = bands();
+        // A scenario band is judged by its slow test and plays in no suite.
         for band in r.names() {
-            assert!(!r.suites_of(band).unwrap().is_empty(), "{band}");
+            let scenario = matches!(
+                r.band(band).unwrap().measure,
+                bands::Measure::Scenario { .. }
+            );
+            assert_eq!(r.suites_of(band).unwrap().is_empty(), scenario, "{band}");
         }
         assert!(r.suites_of("no_such_band").is_none());
         assert!(!Suite::ALL.contains(&Suite::RedCard));
@@ -2400,22 +2429,17 @@ mod tests {
                 "{ratio} {arm:?}"
             );
         }
-        // Every row's pass is its range check, and its sampling error is a real one.
-        for c in &checks {
-            if ![
-                "stronger_team_win_rate",
-                "reduced_minus_full",
-                "full_over_control",
-            ]
-            .contains(&c.band.as_str())
-            {
-                assert_eq!(c.pass, (c.lo..=c.hi).contains(&c.value), "{c:?}");
-            }
+        // Every row's pass is its rule word, and its sampling error is a real one.
+        for c in checks.iter().filter(|c| c.band != "wall_ms") {
+            let word = c.rule.as_ref().map(|r| r.word);
+            assert_eq!(c.pass, word == Some(pass_rule::rule::Word::Pass), "{c:?}");
         }
+        // The record-backed bands carry a real error; a rare share with no event has none.
+        let record_backed = &V2;
         assert!(
             checks
                 .iter()
-                .filter(|c| c.suite == "equal")
+                .filter(|c| c.suite == "equal" && record_backed.contains(&c.band.as_str()))
                 .all(|c| c.se > 0.0 || c.band == "ten_plus_goals_share")
         );
     }

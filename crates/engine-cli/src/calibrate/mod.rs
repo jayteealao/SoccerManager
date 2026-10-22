@@ -714,6 +714,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         realism,
         provisional_margins,
         report_only_floor,
+        drift: None,
         stages: stages::snapshot(run_started.elapsed()),
         rules,
         styles: None,
@@ -758,6 +759,11 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         report.diff = Some(diff);
     }
 
+    report.drift = band_history(&dir, &ctx.bands, &report);
+    if let (Some(d), false) = (&report.drift, quiet) {
+        eprint!("{}", crate::report::history::render(d));
+    }
+
     let code = match (&opts.pair, played.as_slice()) {
         (Some(flag), [off, on]) => compare_arms(&mut report, (flag, written), &states, off, on),
         // A change run passes only on a joint pass, any other run on its range checks: a
@@ -780,6 +786,40 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         code,
     );
     Ok(code)
+}
+
+/// Adds this run's band rows to the band history and reads the drifts back. A run whose
+/// content folder is outside any checkout, or with `SM_BAND_HISTORY=off`, keeps none; a
+/// history that cannot be read or written is named in a warning and the run goes on.
+fn band_history(
+    dir: &ContentDir,
+    registry: &Registry,
+    report: &CalibrationReport,
+) -> Option<crate::report::history::DriftInfo> {
+    use crate::report::history;
+    let path = history::path(dir.root())?;
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
+    let stamp = history::RunStamp {
+        run: &report.run_id,
+        date: history::date_of(millis),
+        build: engine::build_hash(),
+        content: &report.content_hash,
+    };
+    let points = history::points(&stamp, registry, &report.bands, report.matches);
+    match history::record(&path, &points) {
+        Ok(all) => Some(history::DriftInfo {
+            history: path.display().to_string(),
+            added: points.len(),
+            drifts: history::drifts(&all),
+        }),
+        Err(e) => {
+            tracing::warn!(signal = "calibrate.history", error = %format!("{e:#}"));
+            eprintln!("band history not kept: {e:#}");
+            None
+        }
+    }
 }
 
 /// `--suite styles`: the styles suite alone, `--matches` matches per ordered pairing. It
@@ -1103,12 +1143,12 @@ fn floor_refused(bands: &Registry, real_se: &dyn Fn(&BandDef) -> Option<f64>) ->
         .map(|f| format!("  {}: {}", f.band, f.reason()))
         .collect();
     Some(format!(
-        "{} band(s) of {} hold a margin under the 97 percent floor with the real errors          read here; no match played. Widen each margin with a reason that cites a          noticeable error, or add real data:
-{}",
+        "{} band(s) of {} hold a margin under the 97 percent floor with the real errors \
+         read here; no match played. Widen each margin with a reason that cites a \
+         noticeable error, or add real data:\n{}",
         refused.len(),
         crate::report::bands::BANDS_FILE,
-        lines.join("
-")
+        lines.join("\n")
     ))
 }
 
