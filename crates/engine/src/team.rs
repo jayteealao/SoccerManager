@@ -603,9 +603,55 @@ impl Team {
     /// sideways stand. In play the shift reads each outfield player's followed ball point
     /// ([`follow`]), so a far player's anchor slides late; the validator, the restarts and
     /// the keeper pass the ball itself.
-    #[inline]
+    ///
+    /// Play calls this every tick, so it keeps its own direct body: built from
+    /// `anchor_frame` and `AnchorFrame::at` it played about 6 percent slower per
+    /// tick. The two must agree bit for bit; the frame and the rule checker's cache tests
+    /// check that.
     pub fn anchor(&self, slot: usize, ball: DVec2, in_possession: bool, t: &Tuning) -> DVec2 {
-        self.anchor_frame(slot, in_possession).at(ball, t)
+        if slot == self.keeper_slot() {
+            // The keeper stands on the line from the goal centre toward the ball.
+            let goal = self.own_goal();
+            let out = crate::math::toward(goal, ball) * t.keeper_depth;
+            let at = DVec2::new(goal.x + out.x, out.y.clamp(-3.0, 3.0));
+            return self.pitch.clamp(at, 0.5);
+        }
+        let (fx, fy) = self.formation[slot];
+        let (sx, sy) = self.pitch.scale();
+        // The player's own plan: a player instruction may set his width, and a rule change
+        // reaches his place once he has taken it up.
+        let plan = self.plan_for(slot);
+        let slot_plan = &plan.slots[slot];
+        let offset = if in_possession {
+            slot_plan.in_possession
+        } else {
+            slot_plan.out_of_possession
+        };
+        // The role's offset comes after the existing sums, so an offset of 0 keeps every
+        // anchor's bits.
+        // Out of possession the line height moves the back line and the line of engagement
+        // the players in front of it.
+        let block = if in_possession {
+            0.0
+        } else if self.in_back_line(slot) {
+            plan.block_depth
+        } else {
+            plan.engage_depth_m
+        };
+        let depth = (fx + block + slot_plan.depth + offset.x) * sx;
+        let side = self.slot_side(slot);
+        // Width spreads the side with the ball; defensive width spreads it without the ball.
+        let width = if in_possession {
+            plan.width
+        } else {
+            plan.defensive_width
+        };
+        let base = DVec2::new(
+            (depth - self.pitch.half_length()) * self.attack_x,
+            (fy * width + side * offset.y) * sy * self.attack_x,
+        );
+        let shift = DVec2::new(ball.x * t.compactness_x, ball.y * t.compactness_y);
+        self.pitch.clamp(base + shift, 0.5)
     }
 
     /// The part of [`Team::anchor`] that does not read the ball: for the keeper his goal
