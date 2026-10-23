@@ -50,7 +50,7 @@ pub enum Command {
     /// Continue a match from its latest snapshot to full time.
     Resume(ResumeOpts),
     /// Play many AI-managed matches and check the realism bands.
-    Calibrate(CalibrateOpts),
+    Calibrate(Box<CalibrateOpts>),
     /// Replay the 22 gate matches and compare with the golden file.
     Gate(GateOpts),
     /// Check each commit's golden-file change against the ledger rules.
@@ -1445,7 +1445,7 @@ mod tests {
 
     fn calibrate(args: &[&str]) -> Result<CalibrateOpts, clap::Error> {
         parse(args).map(|cli| match cli.command {
-            Command::Calibrate(opts) => opts,
+            Command::Calibrate(opts) => *opts,
             other => panic!("{other:?}"),
         })
     }

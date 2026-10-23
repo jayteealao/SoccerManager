@@ -200,20 +200,20 @@ fn weighted(t: &[Vec<f64>; 4], weights: &[f64]) -> Option<f64> {
     (b > 0.0 && c > 0.0).then(|| a / b * (d / c))
 }
 
-/// The judgement of a rule from the per-match sums of its band at each level (the same
-/// fixtures, in the same order, at every level): the band's value per level, the change from
-/// the first level to the last and the steps between them (each signed by `direction`, the
-/// way the band should move), and the word.
-pub fn judge(
-    per_level: &[[Vec<f64>; 4]],
-    direction: Direction,
-    seed: u64,
-) -> (
+/// A rule's judgement: the band's value per level, the change from the first level to the
+/// last, the steps between levels, and the word.
+pub type Judged = (
     Vec<Option<f64>>,
     Option<RuleInterval>,
     Option<Vec<RuleInterval>>,
     &'static str,
-) {
+);
+
+/// The judgement of a rule from the per-match sums of its band at each level (the same
+/// fixtures, in the same order, at every level): the band's value per level, the change from
+/// the first level to the last and the steps between them (each signed by `direction`, the
+/// way the band should move), and the word.
+pub fn judge(per_level: &[[Vec<f64>; 4]], direction: Direction, seed: u64) -> Judged {
     let n = per_level.first().map_or(0, |t| t[0].len());
     let ones = vec![1.0; n];
     let values: Vec<Option<f64>> = per_level.iter().map(|t| weighted(t, &ones)).collect();

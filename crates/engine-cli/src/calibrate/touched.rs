@@ -700,9 +700,9 @@ mod tests {
             let as_attribute =
                 rules_of(&format!("attributes.json#/attributes[{job}]/group"), &index);
             let as_rule = rules_of(&format!("sensitivity.json#/rules[{job}]/levels/0"), &index);
-            assert_eq!(as_rule, [job.clone()]);
+            assert_eq!(as_rule, std::slice::from_ref(job));
             if !job.contains('.') && !["height", "age", "nationality"].contains(&job.as_str()) {
-                assert_eq!(as_attribute, [job.clone()], "{job}");
+                assert_eq!(as_attribute, std::slice::from_ref(job), "{job}");
             }
         }
         assert_eq!(

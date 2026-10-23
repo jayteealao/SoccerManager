@@ -667,7 +667,7 @@ mod tests {
         assert_eq!(info[0].action, "confirmed");
         assert_eq!(info[1].action, "skipped");
         assert_eq!(confirmed(&after), [(id.clone(), SAVE.to_string())]);
-        let exp = expected(&after, &[id.clone()], &t);
+        let exp = expected(&after, std::slice::from_ref(&id), &t);
         assert_eq!(
             exp[0].direction,
             Direction::Up,
