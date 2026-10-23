@@ -1650,8 +1650,14 @@ pub struct StageCost {
 }
 
 /// What a change run's rules stage did.
-#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct RulesReport {
+    /// The run's kind; the selection of rules does not depend on it.
+    #[serde(default)]
+    pub kind: String,
+    /// What the change touched, and the rules it selected.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub touched: Option<crate::calibrate::touched::Touched>,
     /// Touched rules checked.
     pub checked: u32,
     /// Levels checked, over every rule.
@@ -1669,41 +1675,48 @@ pub struct RulesReport {
 }
 
 /// One rule of the rules stage.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RuleRow {
     /// The job, or `five-match` for the five-match rule.
     pub job: String,
     pub statistic: String,
-    /// The low and the high level: ratings, centimetres, years or percent of adaptation;
-    /// for the five-match rule, the average and the top copy's rating.
-    pub levels: [f64; 2],
-    /// The statistic at the low and at the high level; absent for the five-match rule.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// The low, the middle and the high level: ratings, centimetres, years or percent of
+    /// adaptation; for the five-match rule, its two copies, the average and the top rating.
+    pub levels: Vec<f64>,
+    /// The statistic at the low, the middle and the high level; absent for the five-match
+    /// rule.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub low: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mid: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub high: Option<f64>,
+    /// The two steps, low to middle and middle to high, each a relative move in the job's
+    /// direction; absent for the five-match rule, or when one is not finite.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub steps: Option<[RuleInterval; 2]>,
     /// The relative move from low to high in the job's direction; absent for the five-match
     /// rule, or when it is not finite.
-    #[serde(rename = "move", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "move", default, skip_serializing_if = "Option::is_none")]
     pub mv: Option<RuleInterval>,
     /// The job's share of the outcome move; for the five-match rule, the pooled share of
     /// runs the top copy won. Absent when no arm was played, or when the arms' outcome did
     /// not move, so the share has no finite value.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub share: Option<RuleInterval>,
     /// The five-match rule's share of runs per role.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub roles: Option<BTreeMap<String, f64>>,
     /// `pass`, `fail` or `not_sure`.
-    pub word: &'static str,
+    pub word: String,
     /// The rule runs and reports: its word is information, and a full sensitivity run does
     /// not fail on it. Written only when set.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub report_only: bool,
 }
 
 /// An estimate and its 95 percent interval.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct RuleInterval {
     pub est: f64,
     pub lo: f64,

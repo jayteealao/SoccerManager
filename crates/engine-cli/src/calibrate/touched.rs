@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use anyhow::Context;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// The five-match rule's id among the rules.
@@ -337,7 +337,7 @@ pub fn under(key: &str, setting: &str) -> bool {
 }
 
 /// Why the rules were selected as they were.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Reason {
     /// Engine code changed: every rule.
@@ -362,17 +362,17 @@ impl Reason {
 }
 
 /// `calib.rules.touched`: what the change touched and the rules it selected.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Touched {
     pub reason: Reason,
     /// The commit the content was compared with; none without a revision.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub against: Option<String>,
     /// Why there is nothing to compare with, for a `no-base` run.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub why: Option<String>,
     /// The changed paths of engine code.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub code: Vec<String>,
     /// The changed settings.
     pub settings: Vec<String>,

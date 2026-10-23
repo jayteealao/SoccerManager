@@ -294,6 +294,13 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     } else {
         None
     };
+    // The settings the change touched against the base revision select the rules it plays.
+    let touched = if change {
+        let rev = opts.base.as_deref().or(opts.base_rev.as_deref());
+        Some(touched::find(dir.root(), rev, &[])?)
+    } else {
+        None
+    };
     // A run folder of the same identity keeps the bands it was last judged with, which
     // name what a re-judgement changed.
     let known = run_folder::holds(&run_dir, &identity)
@@ -680,7 +687,9 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
             crate::report::render_report_only_floor(&report_only_floor)
         );
     }
-    let rules = rule_set.map(|set| rules::run(&loaded.content, &set));
+    let rules = rule_set
+        .zip(touched.as_ref())
+        .map(|(set, touched)| rules::run(&loaded.content, &set, touched, kind.code()));
     if let Some(r) = &rules {
         if !quiet && !r.rows.is_empty() {
             eprint!("{}", rules::render_table(r));
