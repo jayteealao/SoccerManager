@@ -7,6 +7,7 @@
 //! that returns uniform draws, so the caller keeps its own seeded stream.
 
 pub mod bounds;
+pub mod change;
 pub mod floor;
 pub mod interval;
 pub mod limits;
