@@ -390,22 +390,18 @@ pub struct PairedRow {
     pub dist: Option<Box<PairedHist>>,
 }
 
-/// The pairs of one suite: each pair's stratum, and the matches per suite unit (per
-/// pairing, per arm) the run played.
+/// The pairs of one suite: each pair's stratum (its formation pairing or red-card arm).
 #[derive(Debug, Clone)]
 pub struct SuiteSet {
-    pub suite: Suite,
     pub strata: Vec<u32>,
-    pub per_unit: u32,
 }
 
 /// The paired rows of a change run: for every suite both builders planned, the fixtures
 /// both played, joined on key. `keys` give each builder's matches' fixture keys, suite by
-/// suite, in the order the builder holds them; `per_unit` the matches per suite unit.
+/// suite, in the order the builder holds them.
 pub fn paired(
     changed: (&RunBuilder, &BTreeMap<Suite, Vec<u64>>),
     old: (&RunBuilder, &BTreeMap<Suite, Vec<u64>>),
-    per_unit: &BTreeMap<Suite, u32>,
 ) -> (Vec<SuiteSet>, Vec<PairedRow>) {
     let (cb, ck) = changed;
     let (ob, ok) = old;
@@ -435,11 +431,7 @@ pub fn paired(
             .map(|o| o.pairing.or(o.arm).map_or(0, |v| v as u32 + 1))
             .collect();
         let set = sets.len();
-        sets.push(SuiteSet {
-            suite,
-            strata,
-            per_unit: per_unit.get(&suite).copied().unwrap_or(0),
-        });
+        sets.push(SuiteSet { strata });
         for spec in specs.iter().filter(|s| s.suite == suite) {
             if spec.def.is_distribution() {
                 rows.push(paired_distribution(cb, spec, (&c_sub, &o_sub), set));
@@ -1077,11 +1069,7 @@ mod tests {
     }
 
     fn set(n: usize) -> SuiteSet {
-        SuiteSet {
-            suite: Suite::Equal,
-            strata: vec![0; n],
-            per_unit: u32::try_from(n).unwrap(),
-        }
+        SuiteSet { strata: vec![0; n] }
     }
 
     /// A deterministic normal draw (Box-Muller) from the engine's stream.
@@ -1297,8 +1285,7 @@ mod tests {
             ob.add(Suite::Equal, stats(*g, i != 2), None);
         }
         let keys: BTreeMap<Suite, Vec<u64>> = [(Suite::Equal, vec![10, 20, 30, 40])].into();
-        let per_unit: BTreeMap<Suite, u32> = [(Suite::Equal, 4)].into();
-        let (sets, rows) = paired((&cb, &keys), (&ob, &keys), &per_unit);
+        let (sets, rows) = paired((&cb, &keys), (&ob, &keys));
         assert_eq!(
             sets[0].strata.len(),
             2,

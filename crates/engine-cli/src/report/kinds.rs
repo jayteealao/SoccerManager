@@ -198,7 +198,9 @@ impl KindTable {
         ))
     }
 
-    /// A tuning command refuses every seed of the release set before any match plays.
+    /// A tuning command refuses every seed of the release set before any match plays. The
+    /// tuning commands are built with the measures feature only.
+    #[cfg_attr(not(feature = "measures"), allow(dead_code))]
     pub fn refuse_release_seed(&self, seed: u64) -> Result<(), String> {
         let set = self.release.seeds;
         if set.contains(seed) {
@@ -574,12 +576,32 @@ pub fn headline_count(kind: Kind, def: &KindDef) -> String {
 
 /// Every kind's count line that `changelog` lacks; empty when each kind's counts have their
 /// line, so a count changed without its CHANGELOG entry is named.
+#[cfg(test)]
 pub fn missing_changelog_lines(table: &KindTable, changelog: &str) -> Vec<String> {
     Kind::ALL
         .into_iter()
         .map(|k| changelog_line(k, table.get(k)))
         .filter(|line| !changelog.contains(line.as_str()))
         .collect()
+}
+
+/// The kinds table at the earlier design count (1000 matches over 30 leagues), for tests
+/// that build a band file by hand.
+#[cfg(test)]
+pub fn design_kinds() -> serde_json::Value {
+    let count =
+        serde_json::json!({"equal": 1000, "strength": 1000, "formations": 1000, "red-card": 1000});
+    serde_json::json!({
+        "change": {"seeds": {"from": 0, "to": 999_999},
+                   "rare_margin": {"factor": 2.0, "reason": "change runs catch only large errors"},
+                   "count": count, "leagues": 30},
+        "milestone": {"seeds": {"from": 1_000_000, "to": 1_999_999},
+                      "rare_margin": {"factor": 1.0, "reason": "the normal margin"},
+                      "count": count, "leagues": 30},
+        "release": {"seeds": {"from": 2_000_000, "to": 2_999_999},
+                    "rare_margin": {"factor": 1.0, "reason": "the normal margin"},
+                    "count": count, "leagues": 30, "tuning": "refused"}
+    })
 }
 
 #[cfg(test)]
@@ -704,23 +726,4 @@ mod tests {
         assert_eq!(missing.len(), 1);
         assert!(missing[0].contains("equal 1200"), "{missing:?}");
     }
-}
-
-/// The kinds table at the earlier design count (1000 matches over 30 leagues), for tests
-/// that build a band file by hand.
-#[cfg(test)]
-pub fn design_kinds() -> serde_json::Value {
-    let count =
-        serde_json::json!({"equal": 1000, "strength": 1000, "formations": 1000, "red-card": 1000});
-    serde_json::json!({
-        "change": {"seeds": {"from": 0, "to": 999_999},
-                   "rare_margin": {"factor": 2.0, "reason": "change runs catch only large errors"},
-                   "count": count, "leagues": 30},
-        "milestone": {"seeds": {"from": 1_000_000, "to": 1_999_999},
-                      "rare_margin": {"factor": 1.0, "reason": "the normal margin"},
-                      "count": count, "leagues": 30},
-        "release": {"seeds": {"from": 2_000_000, "to": 2_999_999},
-                    "rare_margin": {"factor": 1.0, "reason": "the normal margin"},
-                    "count": count, "leagues": 30, "tuning": "refused"}
-    })
 }

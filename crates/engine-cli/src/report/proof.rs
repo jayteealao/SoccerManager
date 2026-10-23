@@ -31,7 +31,7 @@ pub const PROOF_VERSION: u32 = 1;
 /// quantile rule sets the bounds of every whole-distribution band; the pass rule's crate,
 /// which sets every band's word from its interval and margin; and the reference file's
 /// reader, whose targets are the real side of a band that names one.
-const JUDGING: [&str; 14] = [
+const JUDGING: [&str; 18] = [
     include_str!("verdict.rs"),
     include_str!("distribution.rs"),
     include_str!("measures.rs"),
@@ -46,6 +46,10 @@ const JUDGING: [&str; 14] = [
     include_str!("../../../pass-rule/src/interval.rs"),
     include_str!("../../../pass-rule/src/rule.rs"),
     include_str!("../real_targets/mod.rs"),
+    include_str!("kinds.rs"),
+    include_str!("compare.rs"),
+    include_str!("../../../pass-rule/src/change.rs"),
+    include_str!("../../../pass-rule/src/count.rs"),
 ];
 
 /// The judging files with no unit tests of their own, hashed whole after [`JUDGING`]: the

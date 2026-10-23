@@ -485,3 +485,34 @@ fn the_fit_of_tempo_slow_lands_within_the_noise_of_its_real_ratio() {
     assert_eq!(fit["source"], "wyscout_2017_18");
     std::fs::remove_dir_all(&data).unwrap();
 }
+
+/// A fit on a release seed is refused before any match plays: tuning never sees the release
+/// seeds.
+#[test]
+fn a_fit_on_a_release_seed_is_refused_before_any_match() {
+    let data = tempfile::TempDir::new().unwrap();
+    let content = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content");
+    let out = data.path().join("fit.json");
+    let run = primitives(
+        data.path(),
+        &content,
+        &[
+            "fit",
+            "--primitive",
+            "tempo",
+            "--level",
+            "slow",
+            "--seed",
+            "2000000",
+            "--out",
+            out.to_str().unwrap(),
+        ],
+    );
+    assert_ne!(run.status.code(), Some(0), "{}", stderr(&run));
+    assert!(
+        stderr(&run).contains("is a release seed"),
+        "{}",
+        stderr(&run)
+    );
+    assert!(!out.exists());
+}

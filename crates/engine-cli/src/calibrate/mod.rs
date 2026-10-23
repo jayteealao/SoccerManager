@@ -2201,7 +2201,7 @@ impl RunCtx<'_> {
         let Some(old) = old else {
             return (Vec::new(), Vec::new());
         };
-        verdict::paired((&changed.builder, &changed.keys), old, &self.matches)
+        verdict::paired((&changed.builder, &changed.keys), old)
     }
 
     /// Writes the run's `target.json`: its kind, its matches per suite, and the registry the

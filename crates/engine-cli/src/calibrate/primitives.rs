@@ -2037,11 +2037,16 @@ pub fn run(
             table,
             out,
         } => {
+            // Tuning never sees the release seeds: refused before any match plays.
+            let dir = engine::ContentDir::resolve(content_dir)?;
+            if let Some(kinds) = crate::report::bands::Registry::load(&dir)?.kinds {
+                kinds
+                    .refuse_release_seed(*seed)
+                    .map_err(anyhow::Error::msg)?;
+            }
             let path = match table {
                 Some(p) => p.clone(),
-                None => engine::ContentDir::resolve(content_dir)?
-                    .root()
-                    .join("signatures.json"),
+                None => dir.root().join("signatures.json"),
             };
             let table: serde_json::Value = serde_json::from_slice(
                 &std::fs::read(&path).with_context(|| format!("cannot read {}", path.display()))?,
