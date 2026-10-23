@@ -21,12 +21,64 @@
         "reason": "a change run judges each rare band on twice its own margin, so it catches only large errors; the normal margin judges milestone and release runs"
       },
       "count": {
-        "equal": 1000,
-        "strength": 1000,
-        "formations": 1000,
-        "red-card": 1000
+        "equal": 36842,
+        "strength": 115,
+        "formations": 670,
+        "red-card": 248
       },
-      "leagues": 30
+      "leagues": 30,
+      "computed": {
+        "equal": {
+          "units": 1,
+          "real": {
+            "matches": 36842,
+            "band": "ten_plus_goals_share",
+            "why": "its minimum exposure"
+          },
+          "old": {
+            "matches": 10928,
+            "band": "ten_plus_goals_share",
+            "why": "told from its noticeable error 0.00125 at agreement 0.8732"
+          },
+          "count": 36842,
+          "driver": "real"
+        },
+        "formations": {
+          "units": 55,
+          "real": {
+            "matches": 36842,
+            "band": "ten_plus_goals_share",
+            "why": "its minimum exposure"
+          },
+          "old": {
+            "matches": 10928,
+            "band": "ten_plus_goals_share",
+            "why": "told from its noticeable error 0.00125 at agreement 0.8732"
+          },
+          "count": 670,
+          "driver": "real"
+        },
+        "red-card": {
+          "units": 4,
+          "real": {
+            "matches": 991,
+            "band": "full_over_control",
+            "why": "its margin floor"
+          },
+          "count": 248,
+          "driver": "real"
+        },
+        "strength": {
+          "units": 1,
+          "real": {
+            "matches": 115,
+            "band": "stronger_team_win_rate",
+            "why": "its margin floor"
+          },
+          "count": 115,
+          "driver": "real"
+        }
+      }
     },
     "milestone": {
       "seeds": {
@@ -38,12 +90,64 @@
         "reason": "milestone runs judge each rare band on its own margin"
       },
       "count": {
-        "equal": 1000,
-        "strength": 1000,
-        "formations": 1000,
-        "red-card": 1000
+        "equal": 36842,
+        "strength": 115,
+        "formations": 670,
+        "red-card": 248
       },
-      "leagues": 30
+      "leagues": 30,
+      "computed": {
+        "equal": {
+          "units": 1,
+          "real": {
+            "matches": 36842,
+            "band": "ten_plus_goals_share",
+            "why": "its minimum exposure"
+          },
+          "old": {
+            "matches": 10928,
+            "band": "ten_plus_goals_share",
+            "why": "told from its noticeable error 0.00125 at agreement 0.8732"
+          },
+          "count": 36842,
+          "driver": "real"
+        },
+        "formations": {
+          "units": 55,
+          "real": {
+            "matches": 36842,
+            "band": "ten_plus_goals_share",
+            "why": "its minimum exposure"
+          },
+          "old": {
+            "matches": 10928,
+            "band": "ten_plus_goals_share",
+            "why": "told from its noticeable error 0.00125 at agreement 0.8732"
+          },
+          "count": 670,
+          "driver": "real"
+        },
+        "red-card": {
+          "units": 4,
+          "real": {
+            "matches": 991,
+            "band": "full_over_control",
+            "why": "its margin floor"
+          },
+          "count": 248,
+          "driver": "real"
+        },
+        "strength": {
+          "units": 1,
+          "real": {
+            "matches": 115,
+            "band": "stronger_team_win_rate",
+            "why": "its margin floor"
+          },
+          "count": 115,
+          "driver": "real"
+        }
+      }
     },
     "release": {
       "seeds": {
@@ -55,15 +159,1034 @@
         "reason": "release runs judge each rare band on its own margin"
       },
       "count": {
-        "equal": 1000,
-        "strength": 1000,
-        "formations": 1000,
-        "red-card": 1000
+        "equal": 36842,
+        "strength": 115,
+        "formations": 670,
+        "red-card": 248
       },
       "leagues": 30,
+      "computed": {
+        "equal": {
+          "units": 1,
+          "real": {
+            "matches": 36842,
+            "band": "ten_plus_goals_share",
+            "why": "its minimum exposure"
+          },
+          "old": {
+            "matches": 10928,
+            "band": "ten_plus_goals_share",
+            "why": "told from its noticeable error 0.00125 at agreement 0.8732"
+          },
+          "count": 36842,
+          "driver": "real"
+        },
+        "formations": {
+          "units": 55,
+          "real": {
+            "matches": 36842,
+            "band": "ten_plus_goals_share",
+            "why": "its minimum exposure"
+          },
+          "old": {
+            "matches": 10928,
+            "band": "ten_plus_goals_share",
+            "why": "told from its noticeable error 0.00125 at agreement 0.8732"
+          },
+          "count": 670,
+          "driver": "real"
+        },
+        "red-card": {
+          "units": 4,
+          "real": {
+            "matches": 991,
+            "band": "full_over_control",
+            "why": "its margin floor"
+          },
+          "count": 248,
+          "driver": "real"
+        },
+        "strength": {
+          "units": 1,
+          "real": {
+            "matches": 115,
+            "band": "stronger_team_win_rate",
+            "why": "its margin floor"
+          },
+          "count": 115,
+          "driver": "real"
+        }
+      },
       "tuning": "refused"
     }
   },
+  "pair_agreement": [
+    {
+      "measure": "before the split",
+      "revision": "9b887ee",
+      "build": "release, one shared random stream",
+      "runs": [
+        "calib-0000000000000009-1792739284194",
+        "calib-0000000000000009-1792739331045"
+      ],
+      "change": "tuning.json engine.foul_base 0.1 to 0.12 in the second run's content",
+      "median": 0.5154,
+      "lo": 0.3875,
+      "hi": 0.5546,
+      "pairs": 400,
+      "bands": {
+        "corners_per_team": {
+          "r": 0.469,
+          "lo": 0.4022,
+          "hi": 0.5309,
+          "pairs": 400
+        },
+        "fouls_per_team": {
+          "r": 0.3875,
+          "lo": 0.3152,
+          "hi": 0.4554,
+          "pairs": 400
+        },
+        "goals_per_match": {
+          "r": 0.3266,
+          "lo": 0.251,
+          "hi": 0.3983,
+          "pairs": 400
+        },
+        "passes_per_team": {
+          "r": 0.5289,
+          "lo": 0.4669,
+          "hi": 0.5857,
+          "pairs": 400
+        },
+        "shots_on_target_per_team": {
+          "r": 0.5546,
+          "lo": 0.4948,
+          "hi": 0.6091,
+          "pairs": 400
+        },
+        "shots_per_team": {
+          "r": 0.6508,
+          "lo": 0.6006,
+          "hi": 0.6958,
+          "pairs": 400
+        },
+        "xg_per_team": {
+          "r": 0.5154,
+          "lo": 0.4522,
+          "hi": 0.5734,
+          "pairs": 400
+        }
+      }
+    },
+    {
+      "measure": "after the split",
+      "revision": "9b887ee",
+      "build": "release, --features engine/keyed-streams",
+      "runs": [
+        "calib-0000000000000009-1792739375359",
+        "calib-0000000000000009-1792739409031"
+      ],
+      "change": "tuning.json engine.foul_base 0.1 to 0.12 in the second run's content",
+      "median": 0.6172,
+      "lo": 0.5975,
+      "hi": 0.6938,
+      "pairs": 400,
+      "bands": {
+        "corners_per_team": {
+          "r": 0.5541,
+          "lo": 0.4943,
+          "hi": 0.6087,
+          "pairs": 400
+        },
+        "fouls_per_team": {
+          "r": 0.65,
+          "lo": 0.5997,
+          "hi": 0.6951,
+          "pairs": 400
+        },
+        "goals_per_match": {
+          "r": 0.5975,
+          "lo": 0.5418,
+          "hi": 0.6479,
+          "pairs": 400
+        },
+        "passes_per_team": {
+          "r": 0.6938,
+          "lo": 0.6485,
+          "hi": 0.7342,
+          "pairs": 400
+        },
+        "shots_on_target_per_team": {
+          "r": 0.6172,
+          "lo": 0.5635,
+          "hi": 0.6657,
+          "pairs": 400
+        },
+        "shots_per_team": {
+          "r": 0.7508,
+          "lo": 0.7125,
+          "hi": 0.7847,
+          "pairs": 400
+        },
+        "xg_per_team": {
+          "r": 0.6132,
+          "lo": 0.5591,
+          "hi": 0.6622,
+          "pairs": 400
+        }
+      }
+    },
+    {
+      "measure": "head",
+      "revision": "fa3c6bb",
+      "build": "release, --features measures; a change run against its own commit",
+      "runs": [
+        "calib-0000000000000009-1792739454817"
+      ],
+      "change": "tuning.json engine.foul_base 0.1 to 0.12 in the changed engine's content",
+      "median": 0.9888,
+      "lo": 0.9871,
+      "hi": 0.9898,
+      "pairs": 1000,
+      "bands": {
+        "ball_in_play_minutes": {
+          "hi": 0.9711,
+          "lo": 0.9645,
+          "pairs": 1000,
+          "r": 0.9679
+        },
+        "cb_depth_in": {
+          "hi": 0.996,
+          "lo": 0.9951,
+          "pairs": 1000,
+          "r": 0.9956
+        },
+        "cb_depth_out": {
+          "hi": 0.9973,
+          "lo": 0.9967,
+          "pairs": 1000,
+          "r": 0.997
+        },
+        "cb_pace_hs_share": {
+          "hi": 0.9875,
+          "lo": 0.9847,
+          "pairs": 1000,
+          "r": 0.9862
+        },
+        "cb_pace_jog_share": {
+          "hi": 0.9906,
+          "lo": 0.9884,
+          "pairs": 1000,
+          "r": 0.9896
+        },
+        "cb_pace_run_share": {
+          "hi": 0.995,
+          "lo": 0.9939,
+          "pairs": 1000,
+          "r": 0.9945
+        },
+        "cb_pace_sprint_share": {
+          "hi": 0.9682,
+          "lo": 0.961,
+          "pairs": 1000,
+          "r": 0.9648
+        },
+        "cb_pace_stand_share": {
+          "hi": 0.9915,
+          "lo": 0.9895,
+          "pairs": 1000,
+          "r": 0.9906
+        },
+        "cb_pace_walk_share": {
+          "hi": 0.991,
+          "lo": 0.9889,
+          "pairs": 1000,
+          "r": 0.99
+        },
+        "cb_speed_far": {
+          "hi": 0.9945,
+          "lo": 0.9932,
+          "pairs": 1000,
+          "r": 0.9939
+        },
+        "cb_speed_near": {
+          "hi": 0.9923,
+          "lo": 0.9905,
+          "pairs": 1000,
+          "r": 0.9914
+        },
+        "cb_sprints_back_per_min": {
+          "hi": 0.9281,
+          "lo": 0.9122,
+          "pairs": 1000,
+          "r": 0.9205
+        },
+        "cb_sprints_fwd_per_min": {
+          "hi": 0.8312,
+          "lo": 0.796,
+          "pairs": 1000,
+          "r": 0.8143
+        },
+        "cb_sprints_lat_per_min": {
+          "hi": 0.8557,
+          "lo": 0.8252,
+          "pairs": 1000,
+          "r": 0.8411
+        },
+        "cb_width_far_in": {
+          "hi": 0.9964,
+          "lo": 0.9956,
+          "pairs": 1000,
+          "r": 0.996
+        },
+        "cb_width_far_out": {
+          "hi": 0.9951,
+          "lo": 0.9939,
+          "pairs": 1000,
+          "r": 0.9945
+        },
+        "cb_width_near_in": {
+          "hi": 0.994,
+          "lo": 0.9926,
+          "pairs": 1000,
+          "r": 0.9933
+        },
+        "cb_width_near_out": {
+          "hi": 0.9903,
+          "lo": 0.9881,
+          "pairs": 1000,
+          "r": 0.9893
+        },
+        "cm_depth_in": {
+          "hi": 0.996,
+          "lo": 0.9951,
+          "pairs": 1000,
+          "r": 0.9956
+        },
+        "cm_depth_out": {
+          "hi": 0.9979,
+          "lo": 0.9974,
+          "pairs": 1000,
+          "r": 0.9977
+        },
+        "cm_pace_hs_share": {
+          "hi": 0.9916,
+          "lo": 0.9897,
+          "pairs": 1000,
+          "r": 0.9907
+        },
+        "cm_pace_jog_share": {
+          "hi": 0.9937,
+          "lo": 0.9923,
+          "pairs": 1000,
+          "r": 0.993
+        },
+        "cm_pace_run_share": {
+          "hi": 0.9953,
+          "lo": 0.9942,
+          "pairs": 1000,
+          "r": 0.9948
+        },
+        "cm_pace_sprint_share": {
+          "hi": 0.9898,
+          "lo": 0.9875,
+          "pairs": 1000,
+          "r": 0.9887
+        },
+        "cm_pace_stand_share": {
+          "hi": 0.9884,
+          "lo": 0.9858,
+          "pairs": 1000,
+          "r": 0.9872
+        },
+        "cm_pace_walk_share": {
+          "hi": 0.9976,
+          "lo": 0.9971,
+          "pairs": 1000,
+          "r": 0.9974
+        },
+        "cm_speed_far": {
+          "hi": 0.9943,
+          "lo": 0.9929,
+          "pairs": 1000,
+          "r": 0.9936
+        },
+        "cm_speed_near": {
+          "hi": 0.9946,
+          "lo": 0.9933,
+          "pairs": 1000,
+          "r": 0.994
+        },
+        "cm_sprints_back_per_min": {
+          "hi": 0.9704,
+          "lo": 0.9637,
+          "pairs": 1000,
+          "r": 0.9672
+        },
+        "cm_sprints_fwd_per_min": {
+          "hi": 0.9906,
+          "lo": 0.9884,
+          "pairs": 1000,
+          "r": 0.9896
+        },
+        "cm_sprints_lat_per_min": {
+          "hi": 0.9858,
+          "lo": 0.9826,
+          "pairs": 1000,
+          "r": 0.9843
+        },
+        "cm_width_far_in": {
+          "hi": 0.9966,
+          "lo": 0.9958,
+          "pairs": 1000,
+          "r": 0.9962
+        },
+        "cm_width_far_out": {
+          "hi": 0.998,
+          "lo": 0.9975,
+          "pairs": 1000,
+          "r": 0.9977
+        },
+        "cm_width_near_in": {
+          "hi": 0.9944,
+          "lo": 0.9932,
+          "pairs": 1000,
+          "r": 0.9938
+        },
+        "cm_width_near_out": {
+          "hi": 0.996,
+          "lo": 0.9951,
+          "pairs": 1000,
+          "r": 0.9955
+        },
+        "corners_per_team": {
+          "hi": 0.9617,
+          "lo": 0.953,
+          "pairs": 1000,
+          "r": 0.9576
+        },
+        "dead_ball_calm_share": {
+          "hi": 0.9788,
+          "lo": 0.9739,
+          "pairs": 1000,
+          "r": 0.9765
+        },
+        "distance_per_minute": {
+          "hi": 0.972,
+          "lo": 0.9656,
+          "pairs": 1000,
+          "r": 0.969
+        },
+        "far_gain_10s_30_45": {
+          "hi": 0.99,
+          "lo": 0.9877,
+          "pairs": 1000,
+          "r": 0.9889
+        },
+        "far_gain_10s_gt45": {
+          "hi": 0.9854,
+          "lo": 0.9821,
+          "pairs": 1000,
+          "r": 0.9838
+        },
+        "far_gain_1s_30_45": {
+          "hi": 0.9937,
+          "lo": 0.9923,
+          "pairs": 1000,
+          "r": 0.9931
+        },
+        "far_gain_1s_gt45": {
+          "hi": 0.9859,
+          "lo": 0.9827,
+          "pairs": 1000,
+          "r": 0.9844
+        },
+        "fb_depth_in": {
+          "hi": 0.9963,
+          "lo": 0.9954,
+          "pairs": 1000,
+          "r": 0.9959
+        },
+        "fb_depth_out": {
+          "hi": 0.9975,
+          "lo": 0.9969,
+          "pairs": 1000,
+          "r": 0.9972
+        },
+        "fb_pace_hs_share": {
+          "hi": 0.9695,
+          "lo": 0.9626,
+          "pairs": 1000,
+          "r": 0.9662
+        },
+        "fb_pace_jog_share": {
+          "hi": 0.9901,
+          "lo": 0.9878,
+          "pairs": 1000,
+          "r": 0.989
+        },
+        "fb_pace_run_share": {
+          "hi": 0.9821,
+          "lo": 0.9781,
+          "pairs": 1000,
+          "r": 0.9802
+        },
+        "fb_pace_sprint_share": {
+          "hi": 0.958,
+          "lo": 0.9485,
+          "pairs": 1000,
+          "r": 0.9535
+        },
+        "fb_pace_stand_share": {
+          "hi": 0.9895,
+          "lo": 0.9871,
+          "pairs": 1000,
+          "r": 0.9883
+        },
+        "fb_pace_walk_share": {
+          "hi": 0.9898,
+          "lo": 0.9874,
+          "pairs": 1000,
+          "r": 0.9886
+        },
+        "fb_speed_far": {
+          "hi": 0.988,
+          "lo": 0.9853,
+          "pairs": 1000,
+          "r": 0.9867
+        },
+        "fb_speed_near": {
+          "hi": 0.9802,
+          "lo": 0.9756,
+          "pairs": 1000,
+          "r": 0.978
+        },
+        "fb_sprints_back_per_min": {
+          "hi": 0.9266,
+          "lo": 0.9103,
+          "pairs": 1000,
+          "r": 0.9189
+        },
+        "fb_sprints_fwd_per_min": {
+          "hi": 0.9281,
+          "lo": 0.9122,
+          "pairs": 1000,
+          "r": 0.9205
+        },
+        "fb_sprints_lat_per_min": {
+          "hi": 0.9008,
+          "lo": 0.8792,
+          "pairs": 1000,
+          "r": 0.8905
+        },
+        "fb_width_far_in": {
+          "hi": 0.9937,
+          "lo": 0.9923,
+          "pairs": 1000,
+          "r": 0.993
+        },
+        "fb_width_far_out": {
+          "hi": 0.9833,
+          "lo": 0.9795,
+          "pairs": 1000,
+          "r": 0.9815
+        },
+        "fb_width_near_in": {
+          "hi": 0.9963,
+          "lo": 0.9955,
+          "pairs": 1000,
+          "r": 0.9959
+        },
+        "fb_width_near_out": {
+          "hi": 0.9887,
+          "lo": 0.986,
+          "pairs": 1000,
+          "r": 0.9874
+        },
+        "fouls_per_team": {
+          "hi": 0.8888,
+          "lo": 0.8648,
+          "pairs": 1000,
+          "r": 0.8773
+        },
+        "goal_kicks_per_match": {
+          "hi": 0.982,
+          "lo": 0.9778,
+          "pairs": 1000,
+          "r": 0.98
+        },
+        "goalless_share": {
+          "hi": 0.8606,
+          "lo": 0.831,
+          "pairs": 1000,
+          "r": 0.8464
+        },
+        "goals_corner_share": {
+          "hi": 0.8234,
+          "lo": 0.7869,
+          "pairs": 1000,
+          "r": 0.8059
+        },
+        "goals_open_play_share": {
+          "hi": 0.8477,
+          "lo": 0.8157,
+          "pairs": 1000,
+          "r": 0.8324
+        },
+        "goals_per_match": {
+          "hi": 0.9269,
+          "lo": 0.9107,
+          "pairs": 1000,
+          "r": 0.9192
+        },
+        "goals_per_xg": {
+          "hi": 0.8653,
+          "lo": 0.8367,
+          "pairs": 1000,
+          "r": 0.8516
+        },
+        "goals_poisson_ratio": {
+          "hi": 0.8862,
+          "lo": 0.8617,
+          "pairs": 1000,
+          "r": 0.8745
+        },
+        "high_speed_share": {
+          "hi": 0.994,
+          "lo": 0.9927,
+          "pairs": 1000,
+          "r": 0.9934
+        },
+        "home_goal_difference": {
+          "hi": 1.0,
+          "lo": 1.0,
+          "pairs": 1000,
+          "r": 1.0
+        },
+        "offsides_per_team": {
+          "hi": 0.8896,
+          "lo": 0.8658,
+          "pairs": 1000,
+          "r": 0.8782
+        },
+        "pass_accuracy_pct": {
+          "hi": 0.9868,
+          "lo": 0.9838,
+          "pairs": 1000,
+          "r": 0.9854
+        },
+        "pass_completion_chip_gt25": {
+          "hi": 0.9842,
+          "lo": 0.9806,
+          "pairs": 1000,
+          "r": 0.9825
+        },
+        "pass_completion_cross_10_25": {
+          "hi": 0.8549,
+          "lo": 0.8242,
+          "pairs": 1000,
+          "r": 0.8402
+        },
+        "pass_completion_cross_gt25": {
+          "hi": 0.8933,
+          "lo": 0.8702,
+          "pairs": 1000,
+          "r": 0.8823
+        },
+        "pass_completion_ground_10_25": {
+          "hi": 0.9902,
+          "lo": 0.988,
+          "pairs": 1000,
+          "r": 0.9892
+        },
+        "pass_completion_ground_lt10": {
+          "hi": 0.9805,
+          "lo": 0.9761,
+          "pairs": 1000,
+          "r": 0.9784
+        },
+        "passes_per_team": {
+          "hi": 0.9894,
+          "lo": 0.9869,
+          "pairs": 1000,
+          "r": 0.9882
+        },
+        "peak_speed_mean": {
+          "hi": 0.9141,
+          "lo": 0.8953,
+          "pairs": 1000,
+          "r": 0.9051
+        },
+        "possession_away_pct": {
+          "hi": 0.9909,
+          "lo": 0.9888,
+          "pairs": 1000,
+          "r": 0.9899
+        },
+        "possession_final_third_share": {
+          "hi": 0.9941,
+          "lo": 0.9928,
+          "pairs": 1000,
+          "r": 0.9935
+        },
+        "possession_home_pct": {
+          "hi": 0.9909,
+          "lo": 0.9888,
+          "pairs": 1000,
+          "r": 0.9899
+        },
+        "possession_middle_third_share": {
+          "hi": 0.9954,
+          "lo": 0.9943,
+          "pairs": 1000,
+          "r": 0.9949
+        },
+        "possession_own_third_share": {
+          "hi": 0.9966,
+          "lo": 0.9958,
+          "pairs": 1000,
+          "r": 0.9962
+        },
+        "sending_off_share": {
+          "hi": 0.8187,
+          "lo": 0.7813,
+          "pairs": 1000,
+          "r": 0.8008
+        },
+        "shot_distance_mean": {
+          "hi": 0.9877,
+          "lo": 0.9849,
+          "pairs": 1000,
+          "r": 0.9864
+        },
+        "shots_on_target_share": {
+          "hi": 0.9316,
+          "lo": 0.9165,
+          "pairs": 1000,
+          "r": 0.9244
+        },
+        "shots_per_team": {
+          "hi": 0.9919,
+          "lo": 0.99,
+          "pairs": 1000,
+          "r": 0.991
+        },
+        "slide_across_in": {
+          "hi": 0.9899,
+          "lo": 0.9876,
+          "pairs": 1000,
+          "r": 0.9888
+        },
+        "slide_across_out": {
+          "hi": 0.9866,
+          "lo": 0.9835,
+          "pairs": 1000,
+          "r": 0.9852
+        },
+        "slide_up_in": {
+          "hi": 0.9879,
+          "lo": 0.9851,
+          "pairs": 1000,
+          "r": 0.9866
+        },
+        "slide_up_out": {
+          "hi": 0.9892,
+          "lo": 0.9867,
+          "pairs": 1000,
+          "r": 0.988
+        },
+        "speed_hi_share": {
+          "hi": 0.9937,
+          "lo": 0.9922,
+          "pairs": 1000,
+          "r": 0.993
+        },
+        "speed_jog_share": {
+          "hi": 0.9879,
+          "lo": 0.9852,
+          "pairs": 1000,
+          "r": 0.9866
+        },
+        "speed_run_share": {
+          "hi": 0.9899,
+          "lo": 0.9876,
+          "pairs": 1000,
+          "r": 0.9888
+        },
+        "speed_sprint_share": {
+          "hi": 0.9921,
+          "lo": 0.9902,
+          "pairs": 1000,
+          "r": 0.9912
+        },
+        "speed_walk_share": {
+          "hi": 0.9907,
+          "lo": 0.9886,
+          "pairs": 1000,
+          "r": 0.9897
+        },
+        "st_depth_in": {
+          "hi": 0.9872,
+          "lo": 0.9842,
+          "pairs": 1000,
+          "r": 0.9858
+        },
+        "st_depth_out": {
+          "hi": 0.9884,
+          "lo": 0.9857,
+          "pairs": 1000,
+          "r": 0.9871
+        },
+        "st_pace_hs_share": {
+          "hi": 0.9945,
+          "lo": 0.9933,
+          "pairs": 1000,
+          "r": 0.9939
+        },
+        "st_pace_jog_share": {
+          "hi": 0.9935,
+          "lo": 0.992,
+          "pairs": 1000,
+          "r": 0.9928
+        },
+        "st_pace_run_share": {
+          "hi": 0.9948,
+          "lo": 0.9936,
+          "pairs": 1000,
+          "r": 0.9943
+        },
+        "st_pace_sprint_share": {
+          "hi": 0.992,
+          "lo": 0.9901,
+          "pairs": 1000,
+          "r": 0.9911
+        },
+        "st_pace_stand_share": {
+          "hi": 0.9938,
+          "lo": 0.9924,
+          "pairs": 1000,
+          "r": 0.9931
+        },
+        "st_pace_walk_share": {
+          "hi": 0.9928,
+          "lo": 0.9912,
+          "pairs": 1000,
+          "r": 0.9921
+        },
+        "st_speed_far": {
+          "hi": 0.9963,
+          "lo": 0.9954,
+          "pairs": 1000,
+          "r": 0.9959
+        },
+        "st_speed_near": {
+          "hi": 0.9924,
+          "lo": 0.9906,
+          "pairs": 1000,
+          "r": 0.9915
+        },
+        "st_sprints_back_per_min": {
+          "hi": 0.9073,
+          "lo": 0.8871,
+          "pairs": 1000,
+          "r": 0.8977
+        },
+        "st_sprints_fwd_per_min": {
+          "hi": 0.9958,
+          "lo": 0.9949,
+          "pairs": 1000,
+          "r": 0.9954
+        },
+        "st_sprints_lat_per_min": {
+          "hi": 0.8545,
+          "lo": 0.8238,
+          "pairs": 1000,
+          "r": 0.8398
+        },
+        "st_width_far_in": {
+          "hi": 0.9896,
+          "lo": 0.9872,
+          "pairs": 1000,
+          "r": 0.9885
+        },
+        "st_width_far_out": {
+          "hi": 0.9957,
+          "lo": 0.9948,
+          "pairs": 1000,
+          "r": 0.9953
+        },
+        "st_width_near_in": {
+          "hi": 0.9978,
+          "lo": 0.9973,
+          "pairs": 1000,
+          "r": 0.9976
+        },
+        "st_width_near_out": {
+          "hi": 0.997,
+          "lo": 0.9963,
+          "pairs": 1000,
+          "r": 0.9967
+        },
+        "stoppages_corner_per_match": {
+          "hi": 0.9617,
+          "lo": 0.953,
+          "pairs": 1000,
+          "r": 0.9576
+        },
+        "stoppages_free_kick_per_match": {
+          "hi": 0.7955,
+          "lo": 0.754,
+          "pairs": 1000,
+          "r": 0.7756
+        },
+        "stoppages_goal_kick_per_match": {
+          "hi": 0.982,
+          "lo": 0.9778,
+          "pairs": 1000,
+          "r": 0.98
+        },
+        "stoppages_kick_off_per_match": {
+          "hi": 0.9269,
+          "lo": 0.9107,
+          "pairs": 1000,
+          "r": 0.9192
+        },
+        "stoppages_penalty_per_match": {
+          "hi": 0.7758,
+          "lo": 0.7309,
+          "pairs": 1000,
+          "r": 0.7542
+        },
+        "stoppages_throw_in_per_match": {
+          "hi": 0.991,
+          "lo": 0.989,
+          "pairs": 1000,
+          "r": 0.9901
+        },
+        "ten_plus_goals_share": {
+          "hi": 0.8958,
+          "lo": 0.8732,
+          "pairs": 1000,
+          "r": 0.8851
+        },
+        "throw_ins_per_match": {
+          "hi": 0.991,
+          "lo": 0.989,
+          "pairs": 1000,
+          "r": 0.9901
+        },
+        "w_depth_in": {
+          "hi": 0.9977,
+          "lo": 0.9972,
+          "pairs": 1000,
+          "r": 0.9975
+        },
+        "w_depth_out": {
+          "hi": 0.9985,
+          "lo": 0.9982,
+          "pairs": 1000,
+          "r": 0.9984
+        },
+        "w_pace_hs_share": {
+          "hi": 0.9787,
+          "lo": 0.9738,
+          "pairs": 1000,
+          "r": 0.9763
+        },
+        "w_pace_jog_share": {
+          "hi": 0.9943,
+          "lo": 0.9929,
+          "pairs": 1000,
+          "r": 0.9936
+        },
+        "w_pace_run_share": {
+          "hi": 0.991,
+          "lo": 0.9889,
+          "pairs": 1000,
+          "r": 0.99
+        },
+        "w_pace_sprint_share": {
+          "hi": 0.9724,
+          "lo": 0.9661,
+          "pairs": 1000,
+          "r": 0.9694
+        },
+        "w_pace_stand_share": {
+          "hi": 0.9908,
+          "lo": 0.9887,
+          "pairs": 1000,
+          "r": 0.9898
+        },
+        "w_pace_walk_share": {
+          "hi": 0.9939,
+          "lo": 0.9925,
+          "pairs": 1000,
+          "r": 0.9933
+        },
+        "w_speed_far": {
+          "hi": 0.9903,
+          "lo": 0.988,
+          "pairs": 1000,
+          "r": 0.9892
+        },
+        "w_speed_near": {
+          "hi": 0.9881,
+          "lo": 0.9853,
+          "pairs": 1000,
+          "r": 0.9868
+        },
+        "w_sprints_back_per_min": {
+          "hi": 0.9611,
+          "lo": 0.9524,
+          "pairs": 1000,
+          "r": 0.957
+        },
+        "w_sprints_fwd_per_min": {
+          "hi": 0.9647,
+          "lo": 0.9567,
+          "pairs": 1000,
+          "r": 0.9609
+        },
+        "w_sprints_lat_per_min": {
+          "hi": 0.827,
+          "lo": 0.7911,
+          "pairs": 1000,
+          "r": 0.8098
+        },
+        "w_width_far_in": {
+          "hi": 0.9974,
+          "lo": 0.9968,
+          "pairs": 1000,
+          "r": 0.9971
+        },
+        "w_width_far_out": {
+          "hi": 0.9946,
+          "lo": 0.9934,
+          "pairs": 1000,
+          "r": 0.994
+        },
+        "w_width_near_in": {
+          "hi": 0.9975,
+          "lo": 0.997,
+          "pairs": 1000,
+          "r": 0.9973
+        },
+        "w_width_near_out": {
+          "hi": 0.9956,
+          "lo": 0.9945,
+          "pairs": 1000,
+          "r": 0.9951
+        },
+        "yellow_cards_per_team": {
+          "hi": 0.8175,
+          "lo": 0.7799,
+          "pairs": 1000,
+          "r": 0.7995
+        }
+      }
+    }
+  ],
   "report_only": [
     {
       "group": "facing",

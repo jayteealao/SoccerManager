@@ -3,7 +3,8 @@
 //! kind's set, and the release kind plays its own count with the normal rare-band margins;
 //! a band worse against the old engine that passes against real football leaves the joint
 //! word a pass; the headline names the count and what stayed open; and a count edited
-//! without its CHANGELOG line fails the count check.
+//! without its CHANGELOG line fails the count check; and the shipped counts are the
+//! computed ones, each with its CHANGELOG line.
 
 mod common;
 
@@ -65,6 +66,13 @@ fn fixture(change: u32, others: u32, rare: bool) -> (tempfile::TempDir, PathBuf)
         doc["kinds"]["change"]["count"] = counts(change);
         doc["kinds"]["milestone"]["count"] = counts(others);
         doc["kinds"]["release"]["count"] = counts(others);
+        // Counts set by hand, not computed: the computation goes with them.
+        for kind in ["change", "milestone", "release"] {
+            doc["kinds"][kind]
+                .as_object_mut()
+                .unwrap()
+                .remove("computed");
+        }
     });
     let content = tmp.path().join("content");
     let path = content.join("tuning.json");
@@ -287,4 +295,31 @@ fn a_count_edited_without_its_changelog_line_fails_the_check() {
         missing_count_lines(&bands, &changelog),
         vec!["fixed count release: equal 4, strength 3, formations 3, red-card 3".to_string()]
     );
+}
+
+/// Every kind's count in the shipped band file has its CHANGELOG line, so a count edited
+/// without its entry fails here.
+#[test]
+fn every_kinds_shipped_count_has_its_changelog_line() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    assert_eq!(
+        missing_count_lines(
+            &root.join("content/realism-bands.json"),
+            &root.join("CHANGELOG.md")
+        ),
+        Vec::<String>::new()
+    );
+}
+
+/// The shipped counts equal what `calibrate count` computes from the band file.
+#[test]
+fn the_shipped_counts_are_the_computed_counts() {
+    let data = tempfile::TempDir::new().unwrap();
+    let out = bin(data.path())
+        .args(["calibrate", "count"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}{}", stderr(&out));
+    assert!(!stdout.contains("the band file holds"), "{stdout}");
 }
