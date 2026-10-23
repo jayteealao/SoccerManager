@@ -928,9 +928,9 @@
             }
           },
           "calib.headline": {
-            "description": "Since version 11: a change run's one headline line: kind, fixed count per suite, not-sure gating bands, accepted rows and dropped pairs.",
+            "description": "Since version 11: a change run's one headline line: kind, fixed count per suite, not-sure gating bands, accepted rows and dropped pairs. Since version 12 it ends with the open surprises and run unfinished, or with the bug notes, if any, and run finished.",
             "type": "string",
-            "pattern": "^kind (change|milestone|release): fixed count equal [0-9]+, strength [0-9]+, formations [0-9]+ per pairing, red-card [0-9]+ per arm; not sure: [0-9]+ of [0-9]+ gating bands; accepted: [0-9]+; dropped pairs: [0-9]+$"
+            "pattern": "^kind (change|milestone|release): fixed count equal [0-9]+, strength [0-9]+, formations [0-9]+ per pairing, red-card [0-9]+ per arm; not sure: [0-9]+ of [0-9]+ gating bands; accepted: [0-9]+; dropped pairs: [0-9]+(; open surprises: [0-9]+; run unfinished|(; bug notes: [0-9]+)?; run finished)?$"
           },
           "calib.real": {
             "description": "The real-data folder the run read (--real-data, or the main checkout's .scratch/out), whether it exists, the bands without a real value (not read here, or migrated without a record), the bands with no real counterpart (engine experiments, never counted as missing), the folder when it does not exist, and one entry per band with its real value, standard error, record and confidence words.",
