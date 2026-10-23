@@ -34,6 +34,7 @@ fn calibrate_on(seed: &str, data: &Path, content: &Path, out: &Path, args: &[&st
             .arg("calibrate")
             .args(["--seed", seed, "--suite", "equal", "--minutes", "5"])
             .args(["--jobs", "4"])
+            .args(common::change_intent(data, args))
             .args(args)
             .arg("--out")
             .arg(out)
@@ -177,7 +178,7 @@ fn a_short_change_run_never_passes_and_reports_its_stages_and_rules() {
         "{headline}"
     );
     assert!(
-        headline.ends_with("accepted: 0; dropped pairs: 0"),
+        headline.ends_with("accepted: 0; dropped pairs: 0; run finished"),
         "{headline}"
     );
     assert!(text.contains(headline), "{text}");
@@ -210,16 +211,27 @@ fn a_short_change_run_never_passes_and_reports_its_stages_and_rules() {
         "{text}"
     );
 
-    // The rules stage runs; this build has no rule (see `calibrate_rules.rs` for the rows).
+    // The rules stage runs; this build has no rule (see `calibrate_rules.rs` for the rows). A
+    // ready old engine with no revision has nothing to compare with, so every rule counts as
+    // touched.
     assert_eq!(
         report["calib.rules"],
         json!({
+            "kind": "change", "matches": 0,
+            "touched": {
+                "reason": "no-base", "why": "a ready old engine with no revision named",
+                "settings": [], "unruled": [], "rules": [], "setting_rules": [], "all": true
+            },
             "checked": 0, "levels": 0, "failed": 0, "not_sure": 0,
             "built": false, "ms": 0, "rows": []
         })
     );
     assert!(
-        text.contains("rules stage: this build has no sensitivity rules; build engine-cli with --features sensitivity to check them"),
+        text.contains(
+            "rules stage (kind change): no revision to compare with: a ready old engine with no \
+             revision named; this build has no sensitivity rules; build engine-cli with \
+             --features sensitivity to check them"
+        ),
         "{text}"
     );
     let _ = std::fs::remove_dir_all(&data);
@@ -513,7 +525,12 @@ fn formations_on(seed: &str, data: &Path, content: &Path, out: &Path, args: &[&s
         for p in PAIRINGS {
             cmd.args(["--pairing", p]);
         }
-        cmd.args(args).arg("--out").arg(out).output().unwrap()
+        cmd.args(common::change_intent(data, args))
+            .args(args)
+            .arg("--out")
+            .arg(out)
+            .output()
+            .unwrap()
     })
 }
 

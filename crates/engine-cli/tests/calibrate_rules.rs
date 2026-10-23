@@ -25,6 +25,8 @@ fn change_run(data: &Path, content: &Path, out: &Path) -> Output {
         .arg("calibrate")
         .args(["--seed", "9", "--suite", "equal", "--minutes", "5"])
         .args(["--jobs", "4", "--base-binary", exe()])
+        .arg("--intent")
+        .arg(common::intent_file(data, &[]))
         .arg("--out")
         .arg(out)
         .output()
@@ -91,7 +93,11 @@ fn a_change_run_reports_one_row_per_sensitivity_rule_and_the_five_match_rule() {
     let stage = &report["calib.rules"];
     assert_eq!(stage["built"], true);
     assert_eq!(stage["checked"], 64);
-    assert_eq!(stage["levels"], 128);
+    // Three levels per job rule, the five-match rule's two copies.
+    assert_eq!(stage["levels"], 63 * 3 + 2);
+    // A ready old engine with no revision: nothing to compare with, so every rule plays.
+    assert_eq!(stage["touched"]["reason"], "no-base", "{stage}");
+    assert_eq!(stage["touched"]["all"], true, "{stage}");
     let rows = stage["rows"].as_array().unwrap();
     let names: Vec<&str> = rows.iter().map(|r| r["job"].as_str().unwrap()).collect();
     assert_eq!(
@@ -99,6 +105,12 @@ fn a_change_run_reports_one_row_per_sensitivity_rule_and_the_five_match_rule() {
         jobs.iter().map(String::as_str).collect::<Vec<_>>()[..]
     );
     assert_eq!(names[63], "five-match");
+    assert!(
+        rows[..63]
+            .iter()
+            .all(|r| r["levels"].as_array().unwrap().len() == 3 && r["mid"].is_number()),
+        "every job rule has a low, a middle and a high level"
+    );
 
     let five = &rows[63];
     assert_eq!(five["levels"], json!([10.0, 16.0]));
@@ -118,8 +130,11 @@ fn a_change_run_reports_one_row_per_sensitivity_rule_and_the_five_match_rule() {
     assert_eq!(stage["failed"], count("fail"));
     assert_eq!(stage["not_sure"], count("not_sure"));
     assert!(
-        text.contains(&format!(
-            "rules stage: 64 touched sensitivity rules checked at 128 levels, {} failed, {} not sure",
+        text.contains(
+            "rules stage (kind change): 64 touched rules checked at 191 levels (no revision to \
+             compare with"
+        ) && text.contains(&format!(
+            "), {} failed, {} not sure (",
             count("fail"),
             count("not_sure")
         )),
@@ -153,4 +168,72 @@ fn a_refused_rules_file_stops_the_change_run_before_play() {
     assert!(text.contains("job vision has no rule"), "{text}");
     assert!(!run.join("report.json").exists(), "no run was made");
     let _ = std::fs::remove_dir_all(&data);
+}
+
+/// The settings a change touched select the rules that play: an edit of one stage table
+/// plays only the rules of that stage's attributes, each at three levels; a change to engine
+/// code plays every rule.
+#[test]
+fn a_change_plays_only_the_rules_of_the_settings_it_touched() {
+    let repo = common::fixture_repo(|_| {});
+    let content = repo.path().join("content");
+    let path = content.join("sensitivity.json");
+    let mut rules: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    small(&mut rules);
+    std::fs::write(&path, serde_json::to_string_pretty(&rules).unwrap()).unwrap();
+    set_counts(&content, 4);
+    common::git(repo.path(), &["commit", "-q", "-am", "a small design"]);
+    let path = content.join("attributes.json");
+    let mut attributes: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    attributes["actions"]["pass"]["execute"]["main"]["weight"] = json!(0.9);
+    std::fs::write(&path, serde_json::to_string_pretty(&attributes).unwrap()).unwrap();
+    let data = tempfile::TempDir::new().unwrap();
+    let intent = common::intent_file(data.path(), &[]);
+    let run_into = |out: &Path| {
+        let out_ = bin(data.path())
+            .arg("--content-dir")
+            .arg(&content)
+            .arg("calibrate")
+            .args(["--seed", "9", "--suite", "equal", "--minutes", "5"])
+            .args(["--jobs", "4", "--base-binary", exe(), "--base-rev", "HEAD"])
+            .arg("--intent")
+            .arg(&intent)
+            .arg("--out")
+            .arg(out)
+            .output()
+            .unwrap();
+        let text = stderr(&out_);
+        assert!(matches!(out_.status.code(), Some(0 | 2)), "{text}");
+        let report = record(&std::fs::read_to_string(out.join("report.json")).unwrap());
+        RecordSchemas::load()
+            .report(&report)
+            .unwrap_or_else(|e| panic!("{e}\n{report}"));
+        report["calib.rules"].clone()
+    };
+
+    let stage = run_into(&data.path().join("table"));
+    assert_eq!(stage["touched"]["reason"], "content", "{stage}");
+    let jobs: Vec<&str> = stage["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["job"].as_str().unwrap())
+        .collect();
+    assert_eq!(jobs, ["passing", "technique", "vision"], "{stage}");
+    assert!(
+        stage["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|r| r["levels"].as_array().unwrap().len() == 3),
+        "{stage}"
+    );
+    assert_eq!(stage["checked"], 3);
+
+    // An untracked file under crates/ is engine code: every rule plays.
+    std::fs::create_dir_all(repo.path().join("crates/x")).unwrap();
+    std::fs::write(repo.path().join("crates/x/lib.rs"), "").unwrap();
+    let stage = run_into(&data.path().join("code"));
+    assert_eq!(stage["touched"]["reason"], "code", "{stage}");
+    assert_eq!(stage["checked"], 64);
 }

@@ -454,6 +454,128 @@ pub fn set_counts(content: &Path, n: u32) {
     panic!("the margins of {} stay under their floor", path.display());
 }
 
+/// Writes `intent.json` into `dir`, an intent naming `bands` (each a band and `up` or `down`),
+/// and returns its path; it makes no folder.
+pub fn intent_file(dir: &Path, bands: &[(&str, &str)]) -> PathBuf {
+    let bands: Vec<Value> = bands
+        .iter()
+        .map(|(band, direction)| serde_json::json!({ "band": band, "direction": direction }))
+        .collect();
+    write_intent(
+        dir,
+        &serde_json::json!({ "schema_version": 1, "change": "a test change", "bands": bands }),
+    )
+}
+
+/// Writes `intent` as `intent.json` into `dir` and returns its path.
+pub fn write_intent(dir: &Path, intent: &Value) -> PathBuf {
+    let path = dir.join("intent.json");
+    std::fs::write(&path, serde_json::to_string_pretty(intent).unwrap()).unwrap();
+    path
+}
+
+/// `--intent <data>/intent.json`, an intent naming no band, when `args` start a change run
+/// (`--base` or `--base-binary` without `--pair`); nothing for any other run.
+pub fn change_intent(data: &Path, args: &[&str]) -> Vec<std::ffi::OsString> {
+    let change =
+        args.iter().any(|a| *a == "--base" || *a == "--base-binary") && !args.contains(&"--pair");
+    if !change {
+        return Vec::new();
+    }
+    vec!["--intent".into(), intent_file(data, &[]).into_os_string()]
+}
+
+/// The small fixture band file's bands: four means with wide margins, all of the equal suite.
+pub const FEW_BANDS: [&str; 4] = [
+    "goals_per_match",
+    "corners_per_team",
+    "fouls_per_team",
+    "yellow_cards_per_team",
+];
+
+/// The fixture's rare share, beside [`FEW_BANDS`] when a test asks for it.
+pub const FEW_RARE: &str = "ten_plus_goals_share";
+/// The rare band's margin in the fixture band file; a change run does not judge the band.
+pub const FEW_RARE_MARGIN: f64 = 0.25;
+/// The rare band's minimum exposure: above every count of the fixture, so it reads not sure,
+/// and high enough for its margin to hold the floor.
+pub const FEW_RARE_EXPOSURE: f64 = 40.0;
+
+/// Edits the band file `doc` to the small fixture: the bands of [`FEW_BANDS`] only, and
+/// [`FEW_RARE`] when `rare`, each with a design target its five-minute matches meet and wide
+/// margins, the goals with a small noticeable error, no report-only group or figure, the
+/// change kind at `change` matches per suite unit and the other kinds at `others`, the counts
+/// set by hand.
+pub fn few_bands(doc: &mut Value, change: u32, others: u32, rare: bool) {
+    use serde_json::json;
+    doc["bands"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|b| FEW_BANDS.iter().any(|n| b["band"] == *n) || (rare && b["band"] == FEW_RARE));
+    for b in doc["bands"].as_array_mut().unwrap() {
+        b["suites"] = json!(["equal"]);
+        if b["band"] == FEW_RARE {
+            set_design(b, 0.0, FEW_RARE_MARGIN);
+            b["min_exposure"]["value"] = json!(FEW_RARE_EXPOSURE);
+        } else {
+            set_design(b, 0.0, 50.0);
+        }
+        if b["band"] == "goals_per_match" {
+            // A small noticeable error: a move of the goals is a move, never equivalent.
+            b["margin"]["noticeable_error"] = json!(0.01);
+            b["margin"]["league_spread"] = json!(49.99);
+        }
+    }
+    doc["report_only"] = json!([]);
+    doc["figures"] = json!([]);
+    let counts = |n: u32| json!({"equal": n, "strength": n, "formations": n, "red-card": n});
+    doc["kinds"]["change"]["count"] = counts(change);
+    doc["kinds"]["milestone"]["count"] = counts(others);
+    doc["kinds"]["release"]["count"] = counts(others);
+    // Counts set by hand, not computed: the computation goes with them.
+    for kind in ["change", "milestone", "release"] {
+        doc["kinds"][kind]
+            .as_object_mut()
+            .unwrap()
+            .remove("computed");
+    }
+}
+
+/// Runs git in `dir` with a fixed author and no line-ending conversion; panics on failure.
+pub fn git(dir: &Path, args: &[&str]) {
+    let out = Command::new("git")
+        .current_dir(dir)
+        .args([
+            "-c",
+            "user.name=test",
+            "-c",
+            "user.email=test@example.com",
+            "-c",
+            "core.autocrlf=false",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// A git checkout in a fresh temporary folder whose one commit holds `content/`, a copy of
+/// the shipped content with its band file edited by `edit`; the folder is removed when the
+/// returned value drops.
+pub fn fixture_repo(edit: impl FnOnce(&mut Value)) -> tempfile::TempDir {
+    let tmp = content_with_registry(edit);
+    git(tmp.path(), &["init", "-q"]);
+    git(tmp.path(), &["add", "content"]);
+    git(tmp.path(), &["commit", "-q", "-m", "content"]);
+    tmp
+}
+
 /// A copy of the shipped content in a fresh temporary folder, its band file edited by `edit`;
 /// the folder is removed when the returned value drops, so the test keeps it until every
 /// child it runs there has been waited on.

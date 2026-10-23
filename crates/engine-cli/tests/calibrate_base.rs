@@ -8,7 +8,7 @@ mod common;
 use std::path::Path;
 use std::process::Output;
 
-use common::{RecordSchemas, bin, edited_content, record, set_counts, temp};
+use common::{RecordSchemas, bin, edited_content, intent_file, record, set_counts, temp};
 use serde_json::Value;
 
 /// A change run of two paired matches of the equal suite, on a copy of the shipped content
@@ -24,6 +24,8 @@ fn calibrate(data: &Path, run: &Path, args: &[&str]) -> Output {
         .arg("calibrate")
         .args(["--seed", "9", "--minutes", "3"])
         .args(["--suite", "equal", "--jobs", "2"])
+        .arg("--intent")
+        .arg(intent_file(data, &[]))
         .args(args)
         .arg("--out")
         .arg(run)

@@ -146,6 +146,8 @@ fn a_change_run_adds_a_styles_sample_the_old_engine_never_plays() {
         .args(["--seed", "9", "--minutes", "3"])
         .args(["--suite", "equal", "--jobs", "4"])
         .args(["--base-binary", env!("CARGO_BIN_EXE_engine-cli")])
+        .arg("--intent")
+        .arg(common::intent_file(&data, &[]))
         .arg("--out")
         .arg(&run)
         .output()

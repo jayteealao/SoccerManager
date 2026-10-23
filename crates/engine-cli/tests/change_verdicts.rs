@@ -11,24 +11,16 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::process::Output;
 
-use common::{RecordSchemas, bin, content_with_registry, read_rows, record, set_design};
+use common::{RecordSchemas, bin, content_with_registry, read_rows, record};
 use serde_json::{Value, json};
 
-/// The fixture's bands: four means with wide margins, all of the equal suite.
-const BANDS: [&str; 4] = [
-    "goals_per_match",
-    "corners_per_team",
-    "fouls_per_team",
-    "yellow_cards_per_team",
-];
+/// The fixture's bands.
+const BANDS: [&str; 4] = common::FEW_BANDS;
 
-/// The fixture's rare share, beside [`BANDS`] when a test asks for it.
-const RARE: &str = "ten_plus_goals_share";
+/// The fixture's rare share.
+const RARE: &str = common::FEW_RARE;
 /// The rare band's margin in the band file; a change run does not judge the band.
-const RARE_MARGIN: f64 = 0.25;
-/// The rare band's minimum exposure: above every count here, so it reads not sure, and high
-/// enough for its margin to hold the floor.
-const RARE_EXPOSURE: f64 = 40.0;
+const RARE_MARGIN: f64 = common::FEW_RARE_MARGIN;
 
 const FLAG: &str = "open_goal";
 
@@ -41,39 +33,7 @@ fn exe() -> &'static str {
 /// `change` matches per suite unit and the other kinds at `others`; and a flag with which
 /// keepers save nothing.
 fn fixture(change: u32, others: u32, rare: bool) -> (tempfile::TempDir, PathBuf) {
-    let tmp = content_with_registry(|doc| {
-        doc["bands"]
-            .as_array_mut()
-            .unwrap()
-            .retain(|b| BANDS.iter().any(|n| b["band"] == *n) || (rare && b["band"] == RARE));
-        for b in doc["bands"].as_array_mut().unwrap() {
-            b["suites"] = json!(["equal"]);
-            if b["band"] == RARE {
-                set_design(b, 0.0, RARE_MARGIN);
-                b["min_exposure"]["value"] = json!(RARE_EXPOSURE);
-            } else {
-                set_design(b, 0.0, 50.0);
-            }
-            if b["band"] == "goals_per_match" {
-                // A small noticeable error: a move of the goals is a move, never equivalent.
-                b["margin"]["noticeable_error"] = json!(0.01);
-                b["margin"]["league_spread"] = json!(49.99);
-            }
-        }
-        doc["report_only"] = json!([]);
-        doc["figures"] = json!([]);
-        let counts = |n: u32| json!({"equal": n, "strength": n, "formations": n, "red-card": n});
-        doc["kinds"]["change"]["count"] = counts(change);
-        doc["kinds"]["milestone"]["count"] = counts(others);
-        doc["kinds"]["release"]["count"] = counts(others);
-        // Counts set by hand, not computed: the computation goes with them.
-        for kind in ["change", "milestone", "release"] {
-            doc["kinds"][kind]
-                .as_object_mut()
-                .unwrap()
-                .remove("computed");
-        }
-    });
+    let tmp = content_with_registry(|doc| common::few_bands(doc, change, others, rare));
     let content = tmp.path().join("content");
     let path = content.join("tuning.json");
     let mut tuning: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
@@ -102,6 +62,8 @@ fn change_run(data: &Path, content: &Path, out: &Path, seed: &str, args: &[&str]
         .arg("calibrate")
         .args(["--seed", seed, "--suite", "equal", "--minutes", "5"])
         .args(["--jobs", "4", "--base-binary", exe()])
+        .arg("--intent")
+        .arg(common::intent_file(data, &[]))
         .args(args)
         .arg("--out")
         .arg(out)
@@ -163,7 +125,8 @@ fn a_change_run_plays_exactly_its_count_and_refuses_matches() {
     // not one of the gating bands the headline counts.
     let headline = format!(
         "kind change: fixed count equal 6, strength 6, formations 6 per pairing, red-card 6 \
-         per arm; not sure: {not_sure} of {} gating bands; accepted: 0; dropped pairs: 0",
+         per arm; not sure: {not_sure} of {} gating bands; accepted: 0; dropped pairs: 0; \
+         run finished",
         BANDS.len()
     );
     assert_eq!(row(&r, RARE)["word"], "not judged", "{r}");

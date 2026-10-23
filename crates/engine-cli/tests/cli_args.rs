@@ -524,7 +524,12 @@ fn the_test_seams_stay_out_of_the_help() {
     for flag in ["-h", "--help"] {
         let out = bin().args(["calibrate", flag]).output().unwrap();
         let stdout = String::from_utf8_lossy(&out.stdout);
-        for hidden in ["--inject-failure", "--stop-after-units", "--base-binary"] {
+        for hidden in [
+            "--inject-failure",
+            "--stop-after-units",
+            "--base-binary",
+            "--base-rev",
+        ] {
             assert!(!stdout.contains(hidden), "calibrate {flag} shows {hidden}");
         }
     }

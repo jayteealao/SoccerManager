@@ -26,6 +26,7 @@ fn calibrate(data: &Path, content: &Path, out: &Path, args: &[&str]) -> Output {
             .arg("calibrate")
             .args(["--seed", "9", "--suite", "equal", "--minutes", "5"])
             .args(["--jobs", "4"])
+            .args(common::change_intent(data, args))
             .args(args)
             .arg("--out")
             .arg(out)
