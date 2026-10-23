@@ -1558,6 +1558,8 @@ impl RunCtx<'_> {
             commit: old.commit,
             build_id: old.build_id,
             content_hash: old.content_hash,
+            features: old.features,
+            missing_features: old.missing_features,
             cache: BaseCache {
                 hits: old.hits,
                 played: old.played,

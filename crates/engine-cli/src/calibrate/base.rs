@@ -9,6 +9,10 @@
 //! built and run, and then it resumes its folder and plays only the missing fixtures. `v2`
 //! is the cache format: `v1` folders (statistics files, no rows) are never read and can be
 //! deleted.
+//!
+//! A revision builds with this build's features (`measures`, `sensitivity`) where its own
+//! `crates/engine-cli/Cargo.toml` declares them, so both engines record the same things; a
+//! revision that lacks a feature builds without it, and the report names it.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -72,6 +76,10 @@ pub struct BaseRun {
     pub hits: u32,
     /// Planned fixtures the old engine played now.
     pub played: u32,
+    /// The features the old engine was built with, comma-joined; empty for a ready binary.
+    pub features: String,
+    /// This build's features the old revision does not declare, so it was built without.
+    pub missing_features: Vec<String>,
 }
 
 /// A revision, resolved without building it.
@@ -79,6 +87,56 @@ struct Revision {
     repo: PathBuf,
     cache_root: PathBuf,
     key: CacheKey,
+    /// This build's features the revision does not declare.
+    missing: Vec<String>,
+}
+
+/// The cargo features of this build that the old engine should share.
+pub fn this_build_features() -> Vec<&'static str> {
+    let mut out = Vec::new();
+    if cfg!(feature = "measures") {
+        out.push("measures");
+    }
+    if cfg!(feature = "sensitivity") {
+        out.push("sensitivity");
+    }
+    out
+}
+
+/// The features a `Cargo.toml` declares in its `[features]` table.
+pub fn declared_features(manifest: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut inside = false;
+    for line in manifest.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            inside = line == "[features]";
+            continue;
+        }
+        if !inside || line.starts_with('#') {
+            continue;
+        }
+        if let Some((name, _)) = line.split_once('=') {
+            let name = name.trim().trim_matches('"');
+            if !name.is_empty() {
+                out.push(name.to_string());
+            }
+        }
+    }
+    out
+}
+
+/// The features to build an old revision with: each of `wanted` that its manifest declares,
+/// as the cache key holds them, and the ones it does not.
+pub fn features_for(wanted: &[&str], manifest: &str) -> (String, Vec<String>) {
+    let declared = declared_features(manifest);
+    let (have, missing): (Vec<&str>, Vec<&str>) = wanted
+        .iter()
+        .partition(|f| declared.iter().any(|d| d == *f));
+    (
+        cache::features_key(&have.join(",")),
+        missing.into_iter().map(str::to_string).collect(),
+    )
 }
 
 /// Finds or plays the old engine's result of every planned fixture. Any failure comes
@@ -130,10 +188,28 @@ pub fn run(req: &Request<'_>) -> anyhow::Result<BaseRun> {
             );
         }
     }
+    if let Some(r) = revision.as_ref().filter(|r| !r.missing.is_empty()) {
+        eprintln!(
+            "old engine {}: its revision declares no {} feature, so it builds without it; \
+             the bands that read it get no old-engine word",
+            rev.as_deref().unwrap_or("?"),
+            r.missing.join(", ")
+        );
+    }
+    let features = revision
+        .as_ref()
+        .map(|r| r.key.features.clone())
+        .unwrap_or_default();
+    let missing_features = revision
+        .as_ref()
+        .map(|r| r.missing.clone())
+        .unwrap_or_default();
     Ok(BaseRun {
         source,
         rev,
         commit: revision.map(|r| r.key.commit),
+        features,
+        missing_features,
         build_id,
         content_hash,
         dir,
@@ -168,6 +244,18 @@ fn resolve(rev: &str) -> anyhow::Result<Revision> {
     let commit = cache::resolve_commit(&repo, rev).map_err(anyhow::Error::msg)?;
     let (toolchain, target) =
         cache::toolchain_of(&repo, &commit, &cache_root).map_err(anyhow::Error::msg)?;
+    // The old engine builds with this build's features where its revision declares them.
+    let manifest = Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args(["show", &format!("{commit}:crates/engine-cli/Cargo.toml")])
+        .stdin(Stdio::null())
+        .output()
+        .context("cannot run git to read the old engine's manifest")?;
+    let (features, missing) = features_for(
+        &this_build_features(),
+        &String::from_utf8_lossy(&manifest.stdout),
+    );
     Ok(Revision {
         repo,
         cache_root,
@@ -176,8 +264,9 @@ fn resolve(rev: &str) -> anyhow::Result<Revision> {
             toolchain,
             target,
             profile: "release".into(),
-            features: String::new(),
+            features,
         },
+        missing,
     })
 }
 
@@ -485,6 +574,24 @@ pub fn folder_hash(dir: &Path) -> anyhow::Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_old_engine_builds_with_the_features_its_revision_declares() {
+        let manifest = "[package]\nname = \"engine-cli\"\n\n[features]\n# a comment\n\
+                        sensitivity = [\"engine/sensitivity\"]\nmeasures = [\"engine/measures\"]\n\n\
+                        [dependencies]\nmeasures2 = \"1\"\n";
+        assert_eq!(declared_features(manifest), ["sensitivity", "measures"]);
+        let (key, missing) = features_for(&["measures"], manifest);
+        assert_eq!((key.as_str(), missing.len()), ("measures", 0));
+        let (key, missing) = features_for(&["sensitivity", "measures"], manifest);
+        assert_eq!(key, "measures,sensitivity");
+        assert!(missing.is_empty());
+        // A revision from before the measures feature builds without it, and says so.
+        let old = "[features]\nsensitivity = []\n";
+        let (key, missing) = features_for(&["measures"], old);
+        assert_eq!(key, "");
+        assert_eq!(missing, ["measures"]);
+    }
     use crate::calibrate::run_folder::{Done, LedgerWriter, UnitLine};
 
     fn temp(name: &str) -> PathBuf {
@@ -614,6 +721,7 @@ mod tests {
                 profile: "release".into(),
                 features: String::new(),
             },
+            missing: Vec::new(),
         };
         let err = build("main", &revision, true).unwrap_err().to_string();
         assert!(

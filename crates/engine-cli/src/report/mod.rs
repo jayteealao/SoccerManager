@@ -1760,6 +1760,12 @@ pub struct BaseReport {
     pub build_id: String,
     #[serde(rename = "content.hash")]
     pub content_hash: String,
+    /// The cargo features the old engine was built with, comma-joined; empty for none.
+    pub features: String,
+    /// This build's features the old revision does not declare: its bands that read them
+    /// get no old-engine word.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub missing_features: Vec<String>,
     pub cache: BaseCache,
     #[serde(rename = "calib.bands")]
     pub bands: Vec<BandCheck>,
