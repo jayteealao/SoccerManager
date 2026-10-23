@@ -30,7 +30,7 @@ fn a_calibrate_report_of_any_later_version_needs_its_registry_and_stages() {
         schemas.report(&report).err().unwrap_or_default()
     };
     assert!(!refusal("1").contains("calib.registry"), "{}", refusal("1"));
-    for version in ["2", "7", "8", "9", "10", "11"] {
+    for version in ["2", "7", "8", "9", "10", "11", "12"] {
         let text = refusal(version);
         assert!(
             text.contains("calib.registry") && text.contains("calib.stages"),

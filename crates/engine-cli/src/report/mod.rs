@@ -1781,9 +1781,12 @@ pub struct RuleInterval {
 /// match counts (`calib.counts`), and how each verdict row was judged (`judged`, `note`,
 /// `accepted`); 6 since the whole-distribution bands (`upper` and `noise_floor` on a
 /// verdict row); 7 since the formation field rating (`calib.nash`); 8 since the registry's
-/// figures (`calib.figures`); 9 since a change run's styles sample (`calib.styles`). Every
+/// figures (`calib.figures`); 9 since a change run's styles sample (`calib.styles`); 12 since
+/// a change run's intent (`calib.intent`), surprises (`calib.surprises`, `calib.finished`),
+/// draft setting rules (`calib.drafts`), the matches a call played (`calib.played`) and the
+/// touched rules at three levels (`calib.rules.touched`, `mid`, `steps`, `setting`). Every
 /// key of an older version stays.
-pub const REPORT_SCHEMA_VERSION: &str = "11";
+pub const REPORT_SCHEMA_VERSION: &str = "12";
 
 /// The matches a run judged: every engine's rows, the fixtures both engines of a change run
 /// played, and the matches of each engine.

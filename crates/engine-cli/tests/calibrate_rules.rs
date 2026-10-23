@@ -86,7 +86,7 @@ fn a_change_run_reports_one_row_per_sensitivity_rule_and_the_five_match_rule() {
     RecordSchemas::load()
         .report(&report)
         .unwrap_or_else(|e| panic!("{e}\n{report}"));
-    assert_eq!(report["schema.version"], "11");
+    assert_eq!(report["schema.version"], "12");
 
     let stage = &report["calib.rules"];
     assert_eq!(stage["built"], true);
