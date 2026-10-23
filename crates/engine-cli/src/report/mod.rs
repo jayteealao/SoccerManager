@@ -1434,6 +1434,12 @@ pub struct CalibrationReport {
     /// The run's kind: change, milestone or release.
     #[serde(rename = "calib.kind")]
     pub kind: &'static str,
+    /// A change run: its pairs planned, kept and dropped.
+    #[serde(rename = "calib.dropped", skip_serializing_if = "Option::is_none")]
+    pub dropped: Option<Dropped>,
+    /// A change run: the one headline line the console prints.
+    #[serde(rename = "calib.headline", skip_serializing_if = "Option::is_none")]
+    pub headline: Option<String>,
     /// A change run: the fixed count of its kind it played, per suite unit, by suite code.
     #[serde(rename = "calib.count", skip_serializing_if = "BTreeMap::is_empty")]
     pub count: BTreeMap<String, u32>,
@@ -1669,7 +1675,7 @@ pub struct RuleInterval {
 /// verdict row); 7 since the formation field rating (`calib.nash`); 8 since the registry's
 /// figures (`calib.figures`); 9 since a change run's styles sample (`calib.styles`). Every
 /// key of an older version stays.
-pub const REPORT_SCHEMA_VERSION: &str = "10";
+pub const REPORT_SCHEMA_VERSION: &str = "11";
 
 /// The matches a run judged: every engine's rows, the fixtures both engines of a change run
 /// played, and the matches of each engine.
@@ -1678,6 +1684,55 @@ pub struct Counts {
     pub total_matches: u32,
     pub pairs: u32,
     pub observations: Vec<Observations>,
+}
+
+/// `calib.dropped`: a change run's planned pairs, the pairs both engines finished, and the
+/// pairs dropped because a match failed, by the engine that failed it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct Dropped {
+    pub planned: u32,
+    pub kept: u32,
+    pub dropped: u32,
+    /// Pairs whose changed engine's match failed and whose old engine's did not.
+    pub changed: u32,
+    /// Pairs whose old engine's match failed and whose changed engine's did not.
+    pub old: u32,
+    /// Pairs whose matches failed on both engines, or that one engine never played.
+    pub both: u32,
+}
+
+impl Dropped {
+    /// The pairs of `planned` fixtures: kept when both engines finished the match, dropped
+    /// otherwise, by which engine `changed_ok` and `old_ok` say finished it.
+    pub fn of(planned: impl Iterator<Item = (Option<bool>, Option<bool>)>) -> Dropped {
+        let mut d = Dropped::default();
+        for (c, o) in planned {
+            d.planned += 1;
+            match (c, o) {
+                (Some(true), Some(true)) => d.kept += 1,
+                (Some(false), Some(true)) => d.changed += 1,
+                (Some(true), Some(false)) => d.old += 1,
+                _ => d.both += 1,
+            }
+        }
+        d.dropped = d.changed + d.old + d.both;
+        d
+    }
+}
+
+/// The run's one headline line: the kind's counts, the not-sure gating bands, the accepted
+/// rows and the dropped pairs.
+pub fn headline(
+    count: &str,
+    not_sure: usize,
+    gating: usize,
+    accepted: usize,
+    dropped: u32,
+) -> String {
+    format!(
+        "{count}; not sure: {not_sure} of {gating} gating bands; accepted: {accepted}; dropped \
+         pairs: {dropped}"
+    )
 }
 
 /// One engine's matches in a run: `changed` and `old` in a change run, `this` otherwise.
@@ -1877,6 +1932,52 @@ impl Record for CalibrationReport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dropped_pairs_are_counted_by_the_engine_that_failed_them() {
+        let d = Dropped::of(
+            [
+                (Some(true), Some(true)),
+                (Some(true), Some(true)),
+                (Some(false), Some(true)),
+                (Some(true), Some(false)),
+                (None, Some(true)),
+                (Some(false), Some(false)),
+            ]
+            .into_iter(),
+        );
+        assert_eq!(
+            d,
+            Dropped {
+                planned: 6,
+                kept: 2,
+                dropped: 4,
+                changed: 1,
+                old: 1,
+                both: 2
+            }
+        );
+    }
+
+    #[test]
+    fn the_headline_names_the_counts_and_what_stayed_open() {
+        let mut kind: kinds::KindDef =
+            serde_json::from_value(kinds::design_kinds()["change"].clone()).unwrap();
+        kind.count.insert("formations".into(), 40);
+        kind.count.insert("red-card".into(), 500);
+        let line = headline(
+            &kinds::headline_count(kinds::Kind::Change, &kind),
+            3,
+            41,
+            1,
+            2,
+        );
+        assert_eq!(
+            line,
+            "kind change: fixed count equal 1000, strength 1000, formations 40 per pairing, \
+             red-card 500 per arm; not sure: 3 of 41 gating bands; accepted: 1; dropped pairs: 2"
+        );
+    }
     use engine::observe::{LawStats, MatchFigures, TacticsStats, TeamRef};
     use std::path::Path;
 

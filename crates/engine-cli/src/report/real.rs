@@ -2193,6 +2193,7 @@ A,0,0
             false_alarm: 0.03,
             pairs: 10,
             guards: Vec::new(),
+            reason: None,
         };
         let mut rows = vec![
             row("goals_per_match", Word::Pass),

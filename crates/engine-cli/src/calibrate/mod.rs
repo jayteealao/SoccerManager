@@ -502,8 +502,14 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     let Judged {
         mut verdicts,
         mut reported,
-        joint,
+        mut joint,
     } = ctx.judge_run(first, old.as_ref().map(|(_, f)| f), change);
+    // A change run judges the pairs both engines finished; more than one percent dropped is
+    // never a pass.
+    let dropped = old.as_ref().map(|(_, f)| dropped_pairs(first, f));
+    if let (Some(d), Some(j)) = (&dropped, joint.as_mut()) {
+        verdict::under_count(j, d.planned, d.dropped);
+    }
     // The real values, read in place at each judgement; the old engine's own quiet run
     // leaves them to the parent.
     if let Some(info) = &real_info {
@@ -557,6 +563,26 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     }
     if !verdicts.is_empty() && !quiet {
         eprint!("{}", verdict::render_table(&verdicts, joint.as_ref()));
+    }
+    // The headline of a change run: its kind's counts and what stayed open.
+    let headline = joint.as_ref().map(|_| {
+        let gating: Vec<&verdict::VerdictRow> = verdicts
+            .iter()
+            .filter(|r| r.report_only.is_none())
+            .collect();
+        crate::report::headline(
+            &crate::report::kinds::headline_count(kind, &kind_def),
+            gating
+                .iter()
+                .filter(|r| r.word == verdict::Word::NotSure)
+                .count(),
+            gating.len(),
+            accepted::count(&verdicts),
+            dropped.map_or(0, |d| d.dropped),
+        )
+    });
+    if let (Some(h), false) = (&headline, quiet) {
+        eprintln!("{h}");
     }
     // The formation field rating: report only, read by nothing that decides the verdict.
     // It describes the same arm as `calib.formations`, and needs every pairing.
@@ -710,6 +736,8 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         verdicts,
         joint,
         kind: kind.code(),
+        dropped,
+        headline,
         count: if change {
             ctx.matches
                 .iter()
@@ -1050,6 +1078,20 @@ fn mark_accepted(rows: &mut [verdict::VerdictRow], a: &accepted::AcceptedInfo) {
             ));
         }
     }
+}
+
+/// The pairs of a change run: every fixture either engine planned, kept when both finished
+/// its match.
+fn dropped_pairs(changed: &Arm, old: &Folded) -> crate::report::Dropped {
+    let ok = |rows: &BTreeMap<FixtureKey, Row>, k: &FixtureKey| {
+        rows.get(k).map(|r| r.outcome == rows::Outcome::Success)
+    };
+    let keys: std::collections::BTreeSet<&FixtureKey> =
+        changed.rows.keys().chain(old.rows.keys()).collect();
+    crate::report::Dropped::of(
+        keys.into_iter()
+            .map(|k| (ok(&changed.rows, k), ok(&old.rows, k))),
+    )
 }
 
 /// The matches a run judged: every engine's rows, the pairs of a change run, and each

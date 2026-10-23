@@ -558,6 +558,20 @@ pub fn changelog_line(kind: Kind, def: &KindDef) -> String {
     format!("fixed count {}: {}", kind.code(), parts.join(", "))
 }
 
+/// The headline's words for a kind's counts: `kind change: fixed count equal N, strength N,
+/// formations N per pairing, red-card N per arm`.
+pub fn headline_count(kind: Kind, def: &KindDef) -> String {
+    format!(
+        "kind {}: fixed count equal {}, strength {}, formations {} per pairing, red-card {} per \
+         arm",
+        kind.code(),
+        def.count_for(Suite::Equal),
+        def.count_for(Suite::Strength),
+        def.count_for(Suite::Formations),
+        def.count_for(Suite::RedCard)
+    )
+}
+
 /// Every kind's count line that `changelog` lacks; empty when each kind's counts have their
 /// line, so a count changed without its CHANGELOG entry is named.
 pub fn missing_changelog_lines(table: &KindTable, changelog: &str) -> Vec<String> {

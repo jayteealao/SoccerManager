@@ -25,7 +25,7 @@
     },
     "schema.version": {
       "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows; 4 for a calibrate run that reports each band's real value (calib.real, calib.realism, and the real columns of each verdict); 5 for a calibrate run that reports the bands that only report apart (calib.reported), the developer's acceptances (calib.accepted), the match counts (calib.counts), and how each verdict row was judged; 6 for a calibrate run with the whole-distribution bands (upper and noise_floor on a verdict row); 7 for a calibrate run with the formation field rating (calib.nash); 8 for a calibrate run with the registry's figures (calib.figures); 9 for a calibrate run whose change run reports a styles sample (calib.styles); 10 for a calibrate run with a version 6 band file, whose verdict rows carry the pass rule's word, interval and margin (pass_rule), with the provisional margins (calib.provisional_margins) and the report-only bands against their floor (calib.report_only_floor). Every key of an older version stays.",
-      "enum": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+      "enum": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"]
     },
     "calib.substitutions": {
       "description": "The substitutions of the run's matches (per team a match, the share of team matches by count, the minute quartiles, the reasons, the out-of-position share) beside the real era of the rule pack's substitution limit from the signature table; report only.",
@@ -154,16 +154,23 @@
         "diff": { "type": "number" },
         "se": { "type": "number", "minimum": 0 },
         "smallest_shift": { "type": "number", "exclusiveMinimum": 0 },
-        "power": { "type": "boolean" },
-        "needed": { "type": "integer", "minimum": 0 },
         "outside_by": {
           "description": "A change run: how far the changed engine's value is outside its range, when its range check fails.",
           "type": "number",
           "minimum": 0
         },
-        "no_target": {
-          "description": "A change run: the band was outside its range by more than its noise at the pilot (beyond the joint threshold times its own error), so it set no power target. Its word is judged as for any band.",
-          "const": true
+        "old_word": {
+          "description": "Since version 11: a change or paired run's word against the old engine (the off arm of a paired run): better or worse when the change is beyond the joint threshold times its error and the changed engine sits closer to or farther from the band's target; equivalent when the change and its one-sided error sit inside the band's noticeable error; not sure otherwise. It never decides the run.",
+          "enum": ["better", "worse", "equivalent", "not sure"]
+        },
+        "old_reason": {
+          "description": "Since version 11: why the row has no word against the old engine, or why that word is not sure.",
+          "type": "string",
+          "minLength": 1
+        },
+        "moved": {
+          "description": "Since version 11: the direction of a change beyond the joint threshold times its error.",
+          "enum": ["up", "down"]
         },
         "real": {
           "description": "The band's real value, read in place from the real-data folder; absent when the band has none here. It never changes the word.",
@@ -875,32 +882,41 @@
               "resamples": { "type": "integer", "minimum": 1 },
               "false_alarm": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 },
               "pairs": { "type": "integer", "minimum": 0 },
-              "guards": { "type": "array", "items": { "type": "string" } }
-            }
-          },
-          "calib.power": {
-            "description": "A change run, per suite: the pilot's matches per suite unit, the power target played, the cap (--matches), whether every band of the suite reached its power, the band that set the target, and the bands that set none because they were outside their range by more than their noise at the pilot.",
-            "type": "object",
-            "additionalProperties": {
-              "type": "object",
-              "required": ["target", "cap", "reached"],
-              "properties": {
-                "pilot": { "type": "integer", "minimum": 1 },
-                "target": { "type": "integer", "minimum": 1 },
-                "cap": { "type": "integer", "minimum": 1 },
-                "reached": { "type": "boolean" },
-                "driver": {
-                  "description": "The band whose power needed the most matches at the pilot, which set the target. Absent when the pilot gave every band power.",
-                  "type": "string",
-                  "minLength": 1
-                },
-                "no_target": {
-                  "description": "The bands outside their range by more than their noise at the pilot, which set no target (band, or band/label for a row of one arm). Absent when every band set the target.",
-                  "type": "array",
-                  "items": { "type": "string", "minLength": 1 }
-                }
+              "guards": { "type": "array", "items": { "type": "string" } },
+              "reason": {
+                "description": "Since version 11: why the joint word is not sure although no band says so: more than one percent of the planned pairs dropped (pairs under the fixed count).",
+                "type": "string",
+                "minLength": 1
               }
             }
+          },
+          "calib.kind": {
+            "description": "Since version 11: the run's kind, which picks its seed set, its rare-band margins and, in a change run, its fixed count.",
+            "enum": ["change", "milestone", "release"]
+          },
+          "calib.count": {
+            "description": "Since version 11: a change run's fixed count of its kind, in matches per suite unit (per formation pairing, per red-card arm), by suite.",
+            "type": "object",
+            "additionalProperties": { "type": "integer", "minimum": 1 }
+          },
+          "calib.dropped": {
+            "description": "Since version 11: a change run's planned pairs, the pairs both engines finished, and the pairs dropped because a match failed, by the engine that failed it (both: both failed, or one never played it). More than one percent dropped makes the joint word not sure, never pass.",
+            "type": "object",
+            "required": ["planned", "kept", "dropped", "changed", "old", "both"],
+            "additionalProperties": false,
+            "properties": {
+              "planned": { "type": "integer", "minimum": 0 },
+              "kept": { "type": "integer", "minimum": 0 },
+              "dropped": { "type": "integer", "minimum": 0 },
+              "changed": { "type": "integer", "minimum": 0 },
+              "old": { "type": "integer", "minimum": 0 },
+              "both": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "calib.headline": {
+            "description": "Since version 11: a change run's one headline line: kind, fixed count per suite, not-sure gating bands, accepted rows and dropped pairs.",
+            "type": "string",
+            "pattern": "^kind (change|milestone|release): fixed count equal [0-9]+, strength [0-9]+, formations [0-9]+ per pairing, red-card [0-9]+ per arm; not sure: [0-9]+ of [0-9]+ gating bands; accepted: [0-9]+; dropped pairs: [0-9]+$"
           },
           "calib.real": {
             "description": "The real-data folder the run read (--real-data, or the main checkout's .scratch/out), whether it exists, the bands without a real value (not read here, or migrated without a record), the bands with no real counterpart (engine experiments, never counted as missing), the folder when it does not exist, and one entry per band with its real value, standard error, record and confidence words.",
@@ -1125,7 +1141,9 @@
           ],
           "calib.joint": [
             "calib.verdicts",
-            "calib.power",
+            "calib.count",
+            "calib.dropped",
+            "calib.headline",
             "calib.rules",
             "calib.base"
           ]

@@ -223,6 +223,30 @@ pub struct Joint {
     /// Why a fail comes from outside the bands: panics, dark paths, rule violations.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub guards: Vec<String>,
+    /// Why the joint word is not sure although no band says so: too many pairs dropped.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+/// The share of planned pairs a run may drop and still be judged on the pairs it kept.
+pub const DROPPED_LIMIT: f64 = 0.01;
+/// The reason of a joint word that more dropped pairs than [`DROPPED_LIMIT`] made not sure.
+pub const UNDER_COUNT: &str = "pairs under the fixed count";
+
+/// The joint word of a run that dropped `dropped` of `planned` pairs: a pass of a run that
+/// dropped more than [`DROPPED_LIMIT`] of its pairs is not sure, with [`UNDER_COUNT`] as its
+/// reason; a fail stays a fail. At or under the limit the run is judged on its kept pairs.
+pub fn under_count(joint: &mut Joint, planned: u32, dropped: u32) {
+    if planned > 0 && f64::from(dropped) > DROPPED_LIMIT * f64::from(planned) {
+        if joint.word == Word::Pass {
+            joint.word = Word::NotSure;
+        }
+        if joint.word == Word::NotSure {
+            joint.reason = Some(format!(
+                "{UNDER_COUNT}: {dropped} of {planned} planned pairs dropped"
+            ));
+        }
+    }
 }
 
 /// The note of a row whose band reads measures the run's matches do not carry.
@@ -749,6 +773,7 @@ pub fn judge(
         false_alarm: FALSE_ALARM,
         pairs: u32::try_from(pairs).unwrap_or(u32::MAX),
         guards,
+        reason: None,
     };
     (out, joint)
 }
@@ -836,6 +861,9 @@ pub fn render_table(rows: &[VerdictRow], joint: Option<&Joint>) -> String {
         ));
         for g in &j.guards {
             out.push_str(&format!("  fails: {g}\n"));
+        }
+        if let Some(r) = &j.reason {
+            out.push_str(&format!("  not sure: {r}\n"));
         }
     }
     out
@@ -950,6 +978,33 @@ fn range_cell(lo: f64, hi: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn more_than_one_percent_of_pairs_dropped_is_never_a_pass() {
+        let joint = |word| Joint {
+            word,
+            critical: 2.5,
+            resamples: 10,
+            false_alarm: FALSE_ALARM,
+            pairs: 0,
+            guards: Vec::new(),
+            reason: None,
+        };
+        // At the limit the run is judged on its kept pairs.
+        let mut j = joint(Word::Pass);
+        under_count(&mut j, 1000, 10);
+        assert_eq!((j.word, j.reason.as_deref()), (Word::Pass, None));
+        let mut j = joint(Word::Pass);
+        under_count(&mut j, 1000, 11);
+        assert_eq!(j.word, Word::NotSure);
+        assert_eq!(
+            j.reason.as_deref(),
+            Some("pairs under the fixed count: 11 of 1000 planned pairs dropped")
+        );
+        let mut j = joint(Word::Fail);
+        under_count(&mut j, 1000, 500);
+        assert_eq!((j.word, j.reason), (Word::Fail, None));
+    }
 
     #[test]
     fn an_open_range_prints_no_largest_number() {
