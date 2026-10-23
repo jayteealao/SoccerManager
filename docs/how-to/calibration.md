@@ -132,6 +132,26 @@ The last line of the table is the joint verdict. It passes only when every gatin
 
 To judge a finished run again, for example after editing a band in `realism-bands.json`, run the same command into the same folder. Nothing plays; the run says `judged again from <n> stored rows; 0 matches played` and names the bands that changed since it was last judged.
 
+## State the intent and answer the surprises
+
+A change run asks what the change should do before any match plays, so that every band it moves against that intent is caught.
+
+1. State the intent. At a terminal, answer `What does this change do?` with one line, then one band per line, `<band> up` or `<band> down`, and an empty line to end; name no band for a change that should move none. Or write the answers to a file and pass it, which a script must do:
+
+   ```json
+   { "schema_version": 1, "change": "fouls are called more often", "bands": [ { "band": "fouls_per_team", "direction": "up" } ] }
+   ```
+
+   ```bash
+   target/release/engine-cli calibrate --base main --suite equal --seed 9 --intent intent.json --out runs/fouls
+   ```
+
+   The run keeps the intent in its folder as `intent.json`.
+2. Read the surprises after the verdict table: each band that moved unintended, an intended band that did not move (missed), and one that moved the other way (wrong-way). The headline ends `; open surprises: <n>; run unfinished` until each has a note.
+3. Write one note per surprise into the intent file's `notes`: `side effect` when the move is a true effect of the change, with the `setting` it comes from, or `bug` when it should not happen. Then run the same command into the same folder. Nothing plays (`matches played by this call: 0`, then the count by source), and the headline ends `; run finished`.
+4. A side-effect note writes a draft setting rule into `content/sensitivity.json`, and `calib.drafts` gives its id. Read the draft; when the band truly moves that way as the setting rises, add its id to the intent's `confirm` and run again. A confirmed rule sets the band's expected move in later change runs of its setting, and plays at its three levels in them. Commit the confirmed rule with the change.
+5. A change that pushes a band out of its margin is fixed or reverted. Do not move another setting to pull the band back: that hides the change's effect behind a second one.
+
 ## Read the real values beside the verdict
 
 Every run reads each band's real value from the measured real data and prints it beside the verdict. The line before the table says which folder it read and how many bands have no real value:
@@ -492,7 +512,7 @@ cargo build --release -p engine-cli --features sensitivity
 target/release/engine-cli calibrate --base main --suite equal
 ```
 
-The stage adds the rules' 6,400 matches to the change run, a few minutes on an 8-core machine. It prints the same table, with `report` after the word of a report-only rule, and the line `rules stage: 62 touched sensitivity rules checked at 124 levels, <failed> failed, <not sure> not sure`, and writes the rows to `calib.rules` in `report.json`. The words are information and do not change the joint verdict. A build without the feature prints that it has no sensitivity rules.
+The stage plays only the rules of the settings the change touched against the revision: an edit of a stage table plays the rules of that stage's attributes, a change to engine code plays every rule, and so does `--base-binary` with no revision. Each job rule plays at three levels, low, middle and high, in thirds of the design matches; a rise that turns back between levels fails or is not sure. Every rule adds the rules' 6,400 matches to the change run, a few minutes on an 8-core machine. It prints the same table with a middle column, with `report` after the word of a report-only rule, and the line `rules stage (kind change): <n> touched rules checked at <levels> levels (<why>), <failed> failed, <not sure> not sure`, and writes the rows and what the change touched to `calib.rules` in `report.json`. The words are information and do not change the joint verdict. A build without the feature prints that it has no sensitivity rules. The confirmed setting rules of the touched settings play too, in any build (see "State the intent and answer the surprises").
 
 A change that moves play still needs the full suites below: a tuning that passes the rules must keep the bands.
 
