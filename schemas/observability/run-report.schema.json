@@ -913,6 +913,20 @@
               "both": { "type": "integer", "minimum": 0 }
             }
           },
+          "calib.pair_agreement": {
+            "description": "Since version 11: a change or paired run's agreement of the two sides' matches: each gating scalar band's correlation over the kept pairs of each match's part in the band's value, with its 90 percent Fisher interval, and the median over the bands with a 90 percent interval from resampling the bands. It never decides the run.",
+            "type": "object",
+            "required": ["median", "lo", "hi", "pairs", "bands"],
+            "additionalProperties": false,
+            "properties": {
+              "median": { "type": "number", "minimum": -1, "maximum": 1 },
+              "lo": { "type": "number", "minimum": -1, "maximum": 1 },
+              "hi": { "type": "number", "minimum": -1, "maximum": 1 },
+              "pairs": { "type": "integer", "minimum": 0 },
+              "bands": { "type": "object", "additionalProperties": { "type": "object", "required": ["r", "lo", "hi", "pairs"], "additionalProperties": false, "properties": { "r": { "type": "number", "minimum": -1, "maximum": 1 }, "lo": { "type": "number", "minimum": -1, "maximum": 1 }, "hi": { "type": "number", "minimum": -1, "maximum": 1 }, "pairs": { "type": "integer", "minimum": 0 } } } },
+              "without": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } }
+            }
+          },
           "calib.headline": {
             "description": "Since version 11: a change run's one headline line: kind, fixed count per suite, not-sure gating bands, accepted rows and dropped pairs.",
             "type": "string",

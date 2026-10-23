@@ -503,6 +503,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         mut verdicts,
         mut reported,
         mut joint,
+        agreement,
     } = ctx.judge_run(first, old.as_ref().map(|(_, f)| f), change);
     // A change run judges the pairs both engines finished; more than one percent dropped is
     // never a pass.
@@ -738,6 +739,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         kind: kind.code(),
         dropped,
         headline,
+        pair_agreement: agreement,
         count: if change {
             ctx.matches
                 .iter()
@@ -1080,6 +1082,73 @@ fn mark_accepted(rows: &mut [verdict::VerdictRow], a: &accepted::AcceptedInfo) {
     }
 }
 
+/// `engine-cli calibrate count`: each kind's count computed from the band file, the real
+/// errors read here and the head pair agreement, beside the count the band file holds.
+/// Exit 0 when every computed count equals the committed one, 1 when one differs, 2 when a
+/// band's floor no count meets.
+pub fn count(
+    content_dir: Option<&Path>,
+    opts: &CalibrateOpts,
+    only: Option<Kind>,
+) -> anyhow::Result<i32> {
+    let dir = ContentDir::resolve(content_dir)?;
+    let loaded = crate::content::load(Some(dir.root()), None, None, None)?;
+    let registry = Registry::load(&dir)?;
+    let pairings = fixtures::pairings(loaded.content.tactics.formations.len()).len();
+    let folder = real::resolve(opts.real_data.as_deref(), dir.root());
+    let reference = {
+        let path = crate::real_targets::default_file(dir.root());
+        path.is_file()
+            .then(|| crate::real_targets::ReferenceFile::load(&path))
+            .transpose()?
+    };
+    let samples = real::samples(&folder, &registry);
+    let info = real::read_all_with(&folder, &registry, &samples, reference.as_ref());
+    let units = crate::report::kinds::units(pairings);
+    let computed = match crate::report::kinds::compute(&registry, &units, &|b| real_error(&info, b))
+    {
+        Ok(c) => c,
+        Err(refused) => {
+            for r in &refused {
+                eprintln!(
+                    "refused: {} {} {}: the {} test needs a margin of {:.5}, the band holds {:.5}",
+                    r.kind.code(),
+                    r.suite,
+                    r.band,
+                    r.which,
+                    r.needed,
+                    r.margin
+                );
+            }
+            return Ok(2);
+        }
+    };
+    let computed: BTreeMap<_, _> = computed
+        .into_iter()
+        .filter(|(k, _)| only.is_none_or(|o| o == *k))
+        .collect();
+    print!("{}", crate::report::kinds::render(&computed));
+    let table = registry
+        .kinds
+        .as_ref()
+        .context("the band file has no kinds table")?;
+    let mut differ = 0;
+    for (kind, suites) in &computed {
+        for (suite, c) in suites {
+            let held = table.get(*kind).count.get(suite).copied().unwrap_or(0);
+            if held != c.count {
+                differ += 1;
+                println!(
+                    "{} {suite}: the band file holds {held}, computed {}",
+                    kind.code(),
+                    c.count
+                );
+            }
+        }
+    }
+    Ok(i32::from(differ > 0))
+}
+
 /// The pairs of a change run: every fixture either engine planned, kept when both finished
 /// its match.
 fn dropped_pairs(changed: &Arm, old: &Folded) -> crate::report::Dropped {
@@ -1199,6 +1268,16 @@ struct Judged {
     verdicts: Vec<verdict::VerdictRow>,
     reported: Vec<verdict::VerdictRow>,
     joint: Option<verdict::Joint>,
+    agreement: Option<crate::report::agreement::RunAgreement>,
+}
+
+/// A paired judgement: the gating rows, the reported rows, the joint word, and the
+/// agreement of the two sides' matches.
+struct PairedJudged {
+    rows: Vec<verdict::VerdictRow>,
+    reported: Vec<verdict::VerdictRow>,
+    joint: verdict::Joint,
+    agreement: Option<crate::report::agreement::RunAgreement>,
 }
 
 /// What every arm of a run shares.
@@ -1880,30 +1959,29 @@ impl RunCtx<'_> {
                 verdicts,
                 reported,
                 joint: None,
+                agreement: None,
             };
         }
         let old = old.map(|o| (&o.builder, &o.keys));
-        let (rows, reported, joint) = self.judge_paired(first, old);
+        let PairedJudged {
+            rows,
+            reported,
+            joint,
+            agreement,
+        } = self.judge_paired(first, old);
         self.log_verdict(&rows, &joint);
         Judged {
             verdicts: rows,
             reported,
             joint: Some(joint),
+            agreement,
         }
     }
 
     /// The rows of `first` judged against `old` on the fixtures both played: the gating
     /// rows, the reported rows and the joint word. The old side is the old engine of a change
     /// run or the off arm of a paired run.
-    fn judge_paired(
-        &self,
-        first: &Arm,
-        old: Option<Side<'_>>,
-    ) -> (
-        Vec<verdict::VerdictRow>,
-        Vec<verdict::VerdictRow>,
-        verdict::Joint,
-    ) {
+    fn judge_paired(&self, first: &Arm, old: Option<Side<'_>>) -> PairedJudged {
         let opts = self.opts;
         let why = |b: &str| self.bands.report_only(b);
         // The gating rows are judged exactly as if no band only reported: the reported
@@ -1916,6 +1994,7 @@ impl RunCtx<'_> {
         let (found, c) = verdict::bootstrap(&sets, &gating, opts.seed(), verdict::RESAMPLES);
         let (mut rows, mut joint) = verdict::judge(&sets, &gating, &found, c, first.guards());
         verdict::set_old_words(&mut rows, &gating, &found, c, alpha, &target);
+        let agreement = crate::report::agreement::of_rows(&gating, opts.seed());
         let (found_r, c_r) = verdict::bootstrap(&sets, &reported, opts.seed(), verdict::RESAMPLES);
         let (mut reported_rows, _) = verdict::judge(&sets, &reported, &found_r, c_r, Vec::new());
         verdict::set_old_words(&mut reported_rows, &reported, &found_r, c_r, alpha, &target);
@@ -1945,7 +2024,12 @@ impl RunCtx<'_> {
         verdict::set_rule_words(&mut reported, &first.reported);
         joint.word = verdict::joint_word(&rows, &joint.guards);
         verdict::mark_report_only(&mut reported, None, why);
-        (rows, reported, joint)
+        PairedJudged {
+            rows,
+            reported,
+            joint,
+            agreement,
+        }
     }
 
     /// A paired run's comparison of its two arms, into `report`: the on arm judged as a
@@ -1959,7 +2043,12 @@ impl RunCtx<'_> {
         off: &Arm,
         on: &Arm,
     ) -> i32 {
-        let (mut rows, _reported, joint) = self.judge_paired(on, Some((&off.builder, &off.keys)));
+        let PairedJudged {
+            mut rows,
+            joint,
+            agreement,
+            ..
+        } = self.judge_paired(on, Some((&off.builder, &off.keys)));
         rows.sort_by(|a, b| (&a.suite, &a.band, &a.pairing).cmp(&(&b.suite, &b.band, &b.pairing)));
         let pair = compare::verdict(&rows, joint.word, &off.guard(), &on.guard());
         let def = &written.flags[flag];
@@ -1989,6 +2078,10 @@ impl RunCtx<'_> {
             flag = %flag,
             verdict = pair.verdict.code()
         );
+        if let Some(a) = &agreement {
+            eprint!("{}", crate::report::agreement::render(a));
+        }
+        report.pair_agreement = agreement;
         report.compare = Some(rows);
         report.verdict = Some(pair.verdict);
         report.pair_verdict = Some(pair);

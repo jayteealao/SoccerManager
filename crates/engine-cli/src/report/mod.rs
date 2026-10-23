@@ -5,6 +5,7 @@
 //! check carries its sampling error.
 
 pub mod accepted;
+pub mod agreement;
 pub mod bands;
 pub mod baseline;
 pub mod compare;
@@ -1440,6 +1441,13 @@ pub struct CalibrationReport {
     /// A change run: the one headline line the console prints.
     #[serde(rename = "calib.headline", skip_serializing_if = "Option::is_none")]
     pub headline: Option<String>,
+    /// A change or paired run: how closely the matches of the two sides agree, band by band
+    /// and over the run. It never decides the run.
+    #[serde(
+        rename = "calib.pair_agreement",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub pair_agreement: Option<agreement::RunAgreement>,
     /// A change run: the fixed count of its kind it played, per suite unit, by suite code.
     #[serde(rename = "calib.count", skip_serializing_if = "BTreeMap::is_empty")]
     pub count: BTreeMap<String, u32>,

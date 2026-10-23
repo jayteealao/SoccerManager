@@ -1132,10 +1132,9 @@ pub struct CalibrateOpts {
                      The baseline must have the same seed, match count, and\n\
                      fixtures hash, or the run stops before it plays. A change\n\
                      inside two sampling errors is marked as noise.\n\n\
-                     With --base, the match count checked is --matches, the cap.\n\
-                     The run may stop growing below it, so the diff can set the\n\
-                     baseline's matches against fewer matches of this build; each\n\
-                     side's sampling error covers its own count."
+                     With --base, the match count checked is the largest count\n\
+                     of the run's kind over its suites; each side's sampling\n\
+                     error covers its own count."
     )]
     pub baseline: Option<PathBuf>,
     /// Run folder; default SM_DATA_DIR/runs/<run.id>.
@@ -1294,6 +1293,39 @@ pub enum CalibrateAction {
         /// The run folder whose report.json holds the band's row.
         #[arg(long, value_name = "DIR")]
         run: PathBuf,
+    },
+    /// Print each run kind's fixed count as the band file computes it.
+    #[command(
+        long_about = "Print each run kind's fixed count, suite by suite: the larger of\n\
+                      the real-test count (every gating band at its floor with the\n\
+                      kind's margins, every rare band at its exposure) and the\n\
+                      old-engine count (from the head pair agreement), and the band\n\
+                      that set it. Exit 1 when a count differs from the band file's,\n\
+                      2 when a band's floor no count meets."
+    )]
+    Count {
+        /// Only this kind: change, milestone or release.
+        #[arg(long, value_enum, hide_possible_values = true)]
+        kind: Option<crate::report::kinds::Kind>,
+    },
+    /// Measure how closely two run folders' matches agree.
+    #[command(
+        long_about = "Measure the agreement of two run folders of the same seed: each\n\
+                      figure's correlation over the matches both played, joined on\n\
+                      match seed, and the median over the figures with its 90 percent\n\
+                      interval. Reads each folder's statistics files: play both runs\n\
+                      with --keep-events all."
+    )]
+    Agreement {
+        /// The first run folder.
+        #[arg(long, value_name = "DIR")]
+        a: PathBuf,
+        /// The second run folder, played on the same seed.
+        #[arg(long, value_name = "DIR")]
+        b: PathBuf,
+        /// Also write the agreement to this file.
+        #[arg(long, value_name = "FILE")]
+        out: Option<PathBuf>,
     },
     /// Measure the gate: the engine against itself and four broken copies.
     #[command(
