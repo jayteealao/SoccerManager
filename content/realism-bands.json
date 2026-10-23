@@ -8,10 +8,60 @@
   "generalisation_floor": 2,
   "pass_rule": {
     "alpha": 0.05,
-    "sound_pass": 0.97,
-    "design_count": {
-      "matches": 1000,
+    "sound_pass": 0.97
+  },
+  "kinds": {
+    "change": {
+      "seeds": {
+        "from": 0,
+        "to": 999999
+      },
+      "rare_margin": {
+        "factor": 2.0,
+        "reason": "a change run judges each rare band on twice its own margin, so it catches only large errors; the normal margin judges milestone and release runs"
+      },
+      "count": {
+        "equal": 1000,
+        "strength": 1000,
+        "formations": 1000,
+        "red-card": 1000
+      },
       "leagues": 30
+    },
+    "milestone": {
+      "seeds": {
+        "from": 1000000,
+        "to": 1999999
+      },
+      "rare_margin": {
+        "factor": 1.0,
+        "reason": "milestone runs judge each rare band on its own margin"
+      },
+      "count": {
+        "equal": 1000,
+        "strength": 1000,
+        "formations": 1000,
+        "red-card": 1000
+      },
+      "leagues": 30
+    },
+    "release": {
+      "seeds": {
+        "from": 2000000,
+        "to": 2999999
+      },
+      "rare_margin": {
+        "factor": 1.0,
+        "reason": "release runs judge each rare band on its own margin"
+      },
+      "count": {
+        "equal": 1000,
+        "strength": 1000,
+        "formations": 1000,
+        "red-card": 1000
+      },
+      "leagues": 30,
+      "tuning": "refused"
     }
   },
   "report_only": [

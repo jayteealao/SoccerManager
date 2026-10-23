@@ -10,6 +10,7 @@ pub mod baseline;
 pub mod compare;
 pub mod distribution;
 pub mod history;
+pub mod kinds;
 pub mod measures;
 pub mod nash;
 pub mod proof;

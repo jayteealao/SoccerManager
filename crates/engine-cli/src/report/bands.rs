@@ -596,6 +596,13 @@ pub struct Registry {
     pub pass_rule: Option<PassRuleSettings>,
     /// The named groups of bands that only report.
     pub report_only_groups: Vec<ReportOnlyGroup>,
+    /// The run kinds: seed sets, rare-margin factors and fixed counts.
+    pub kinds: Option<super::kinds::KindTable>,
+    /// The measured agreement between paired matches the counts were computed from.
+    pub pair_agreement: Vec<super::kinds::AgreementRecord>,
+    /// The kind a run judges with: its rare bands' margins already carry the kind's factor.
+    /// `None` for the registry as the file holds it.
+    pub active_kind: Option<super::kinds::Kind>,
     /// SHA-256, as 12 hex characters, of the reference file of real targets read with the
     /// registry; `None` when no reference file was here. It joins the registry's digest, as
     /// a band that names a target is judged against that file.
@@ -1006,22 +1013,21 @@ fn record_rules(b: &Value, at: &dyn Fn(&str) -> String, out: &mut Vec<(String, S
 // ---------------------------------------------------------------------------------------
 
 /// The pass rule's settings, at file level: the error rate of each side of a band's
-/// interval, the chance a sound engine must have to pass every gating band at once, and the
-/// run the margin floor is set on.
+/// interval, and the chance a sound engine must have to pass every gating band at once. The
+/// run the margin floor is set on is each run kind's count ([`super::kinds`]).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PassRuleSettings {
     pub alpha: f64,
     pub sound_pass: f64,
-    pub design_count: DesignCount,
 }
 
-/// The run size the margin floor is set on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct DesignCount {
-    pub matches: u32,
-    pub leagues: u32,
+/// The run a floor is checked at: matches, leagues, and the factor of a rare band's margin.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct FloorAt {
+    matches: f64,
+    leagues: f64,
+    rare_factor: f64,
 }
 
 /// A named group of bands that only report: at most `most` bands of `group`, each with
@@ -1205,6 +1211,11 @@ struct RegistryV6 {
     generalisation_floor: u32,
     #[garde(skip)]
     pass_rule: PassRuleSettings,
+    #[garde(skip)]
+    kinds: super::kinds::KindTable,
+    #[serde(default)]
+    #[garde(skip)]
+    pair_agreement: Vec<super::kinds::AgreementRecord>,
     #[serde(default)]
     #[garde(skip)]
     report_only: Vec<ReportOnlyGroup>,
@@ -1315,6 +1326,9 @@ impl RegistryV6 {
             figures: self.figures,
             pass_rule: Some(self.pass_rule),
             report_only_groups: self.report_only,
+            kinds: Some(self.kinds),
+            pair_agreement: self.pair_agreement,
+            active_kind: None,
             reference: None,
             targets: BTreeMap::new(),
         }
@@ -1368,11 +1382,7 @@ const REMOVED_IN_V6: [(&str, &str); 2] = [
 /// rules of [`record_rules`].
 fn required(doc: &Value) -> Vec<(String, String)> {
     let mut out = Vec::new();
-    for field in [
-        "pass_rule.alpha",
-        "pass_rule.sound_pass",
-        "pass_rule.design_count",
-    ] {
+    for field in ["pass_rule.alpha", "pass_rule.sound_pass", "kinds"] {
         if field
             .split('.')
             .try_fold(doc, |v, k| v.get(k))
@@ -1547,12 +1557,24 @@ impl Registry {
     /// error: its margin, and a design band's cap. A distribution band's margin must exceed
     /// its noise floor; a rare band's margin must hold the exact interval's half-width at its
     /// minimum exposure.
-    fn floor_checks(&self, b: &BandDef, sigma_r: f64, gating: usize) -> Vec<FloorRefusal> {
+    fn floor_checks(
+        &self,
+        b: &BandDef,
+        sigma_r: f64,
+        gating: usize,
+        at: FloorAt,
+    ) -> Vec<FloorRefusal> {
         let (Some(settings), Some(rule)) = (self.pass_rule, &b.rule) else {
             return Vec::new();
         };
-        let matches = f64::from(settings.design_count.matches);
-        let leagues = f64::from(settings.design_count.leagues);
+        let FloorAt {
+            matches, leagues, ..
+        } = at;
+        let margin = if rule.rare {
+            rule.margin.value * at.rare_factor
+        } else {
+            rule.margin.value
+        };
         let spread = &rule.engine_spread;
         let one = |margin: f64, needed: f64, sigma_e: f64, sigma_r: f64, which| FloorRefusal {
             band: b.band.clone(),
@@ -1564,7 +1586,7 @@ impl Registry {
         };
         if b.is_distribution() {
             let floor = spread.noise_floor.unwrap_or(f64::INFINITY);
-            return vec![one(rule.margin.value, floor, floor, 0.0, "margin")];
+            return vec![one(margin, floor, floor, 0.0, "margin")];
         }
         let units = match rule.resampling.engine {
             EngineUnit::League => leagues,
@@ -1598,13 +1620,7 @@ impl Registry {
                 gating,
             )
         };
-        let mut out = vec![one(
-            rule.margin.value,
-            needed,
-            sigma_e,
-            to_target_r,
-            "margin",
-        )];
+        let mut out = vec![one(margin, needed, sigma_e, to_target_r, "margin")];
         if let Some(cap) = cap {
             let needed = pass_rule::floor::needed_margin(
                 sigma_e,
@@ -1625,12 +1641,70 @@ impl Registry {
     /// the floor covers: [`Self::report_only_floor`] shows it instead.
     pub fn floor_refusals(&self, real_se: &dyn Fn(&BandDef) -> Option<f64>) -> Vec<FloorRefusal> {
         let k = self.gating();
-        self.bands
-            .iter()
-            .filter(|b| b.gates)
-            .flat_map(|b| self.floor_checks(b, real_se(b).unwrap_or(0.0), k))
-            .filter(|f| !f.holds())
-            .collect()
+        let mut out: Vec<FloorRefusal> = Vec::new();
+        for b in self.bands.iter().filter(|b| b.gates) {
+            for at in self.floor_runs(b) {
+                for f in self.floor_checks(b, real_se(b).unwrap_or(0.0), k, at) {
+                    if f.holds() {
+                        continue;
+                    }
+                    // One refusal per band and margin: the run kind that needs the most.
+                    match out
+                        .iter_mut()
+                        .find(|o| o.band == f.band && o.which == f.which)
+                    {
+                        Some(o) if o.needed < f.needed => *o = f,
+                        Some(_) => {}
+                        None => out.push(f),
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// The runs a band's floor is checked at: the active kind's count alone once a run has
+    /// picked its kind (whose factor its margins already carry), else every kind's count and
+    /// margins.
+    fn floor_runs(&self, b: &BandDef) -> Vec<FloorAt> {
+        let Some(table) = &self.kinds else {
+            return Vec::new();
+        };
+        let at = |k: super::kinds::Kind, factor: Option<f64>| {
+            let def = table.get(k);
+            FloorAt {
+                matches: f64::from(def.floor_matches(b)),
+                leagues: f64::from(def.leagues),
+                rare_factor: factor.unwrap_or(def.rare_margin.factor),
+            }
+        };
+        match self.active_kind {
+            Some(k) => vec![at(k, Some(1.0))],
+            None => super::kinds::Kind::ALL
+                .into_iter()
+                .map(|k| at(k, None))
+                .collect(),
+        }
+    }
+
+    /// The registry a run of `kind` judges with: each rare band's margin widened by the
+    /// kind's factor, and the floor checked at the kind's count alone.
+    pub fn with_kind(&self, kind: super::kinds::Kind) -> Registry {
+        let mut out = self.clone();
+        let Some(factor) = self.kinds.as_ref().map(|t| t.get(kind).rare_margin.factor) else {
+            return out;
+        };
+        for b in &mut out.bands {
+            if let Some(rule) = b.rule.as_mut().filter(|r| r.rare) {
+                rule.margin.value *= factor;
+                if let Target::Design { value, .. } = rule.target {
+                    b.lo = value - rule.margin.value;
+                    b.hi = value + rule.margin.value;
+                }
+            }
+        }
+        out.active_kind = Some(kind);
+        out
     }
 
     /// Each band of a named report-only group against the floor it would need if it gated
@@ -1645,7 +1719,8 @@ impl Registry {
             .filter(|b| !b.gates)
             .filter_map(|b| {
                 let group = b.group.clone()?;
-                let checks = self.floor_checks(b, real_se(b).unwrap_or(0.0), k);
+                let at = *self.floor_runs(b).first()?;
+                let checks = self.floor_checks(b, real_se(b).unwrap_or(0.0), k, at);
                 let first = checks.first()?;
                 Some(ReportOnlyFloor {
                     band: b.band.clone(),
@@ -1678,8 +1753,8 @@ impl Registry {
                 format!("{} is not between 0 and 1", settings.sound_pass),
             ));
         }
-        if settings.design_count.matches == 0 || settings.design_count.leagues == 0 {
-            out.push(("pass_rule.design_count".into(), "must be above 0".into()));
+        if let Some(table) = &self.kinds {
+            out.extend(table.check());
         }
         for (i, g) in self.report_only_groups.iter().enumerate() {
             if g.reason.trim().is_empty() {
@@ -2399,7 +2474,8 @@ mod tests {
             "wall_minutes_per_sample": 30.0,
             "stronger_team": {"attribute_boost": 1.15},
             "generalisation_floor": 2,
-            "pass_rule": {"alpha": 0.05, "sound_pass": 0.97, "design_count": {"matches": 1000, "leagues": 30}},
+            "pass_rule": {"alpha": 0.05, "sound_pass": 0.97},
+            "kinds": super::super::kinds::design_kinds(),
             "report_only": [{"group": "facing", "most": 2, "reason": "body facing is measured on two pose matches only"}],
             "bands": [
                 v6_band("goals_per_match", 0.4, serde_json::json!({"real": {}}), pointer()),
@@ -2549,6 +2625,73 @@ mod tests {
             let err = refusal(&v6_edited(edit));
             assert!(err.contains(named), "{what}: {err}");
         }
+    }
+
+    #[test]
+    fn a_kind_count_under_a_band_floor_is_refused_naming_the_band() {
+        // At 100 matches per suite the engine error of goals_per_match (1.7 per match) needs
+        // more than its margin of 0.4, in the change kind.
+        let err = refusal(&v6_edited(|d| {
+            d["kinds"]["change"]["count"]["equal"] = 100.into();
+        }));
+        assert!(
+            err.contains(
+                "(goals_per_match).margin.value: margin 0.4000 is below the 97 percent floor"
+            ),
+            "{err}"
+        );
+        let err = refusal(&v6_edited(|d| {
+            d["kinds"]["milestone"]["seeds"]["from"] = 5.into();
+        }));
+        assert!(
+            err.contains("kinds.milestone.seeds: overlaps the change seeds"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn a_rare_band_judges_on_the_kind_factor_times_its_margin() {
+        let mut doc = v6_doc();
+        doc["bands"][0]["rare"] = true.into();
+        doc["bands"][0]["engine_spread"]["per_match_sd"] = 0.2.into();
+        doc["bands"][0]["min_exposure"]["value"] = 1000.0.into();
+        let r = Registry::from_bytes(doc.to_string().as_bytes()).unwrap();
+        let own = r
+            .band("goals_per_match")
+            .unwrap()
+            .rule
+            .as_ref()
+            .unwrap()
+            .margin
+            .value;
+        let margin = |k| {
+            r.with_kind(k)
+                .band("goals_per_match")
+                .unwrap()
+                .rule
+                .as_ref()
+                .unwrap()
+                .margin
+                .value
+        };
+        assert_eq!(margin(super::super::kinds::Kind::Change), 2.0 * own);
+        assert_eq!(margin(super::super::kinds::Kind::Milestone), own);
+        assert_eq!(margin(super::super::kinds::Kind::Release), own);
+        // The other bands keep their own margins in every kind.
+        let design = |k| {
+            r.with_kind(k)
+                .band("stronger_team_win_rate")
+                .unwrap()
+                .rule
+                .as_ref()
+                .unwrap()
+                .margin
+                .value
+        };
+        assert_eq!(
+            design(super::super::kinds::Kind::Change),
+            design(super::super::kinds::Kind::Release)
+        );
     }
 
     #[test]

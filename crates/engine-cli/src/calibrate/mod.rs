@@ -2318,7 +2318,8 @@ mod tests {
             "wall_minutes_per_sample": 30.0,
             "stronger_team": {"attribute_boost": 1.15},
             "generalisation_floor": 2,
-            "pass_rule": {"alpha": 0.05, "sound_pass": 0.97, "design_count": {"matches": 1000, "leagues": 30}},
+            "pass_rule": {"alpha": 0.05, "sound_pass": 0.97},
+            "kinds": crate::report::kinds::design_kinds(),
             "bands": [{
                 "band": "goals_per_match",
                 "suites": ["equal"],
