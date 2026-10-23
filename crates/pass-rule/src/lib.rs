@@ -8,6 +8,7 @@
 
 pub mod bounds;
 pub mod change;
+pub mod count;
 pub mod floor;
 pub mod interval;
 pub mod limits;
