@@ -557,7 +557,8 @@ fn change(
     let value = |s: [f64; 4]| (s[1] > 0.0 && s[2] > 0.0).then(|| s[0] / s[1] * (s[3] / s[2]));
     let (vc, vo) = (value(sc)?, value(so)?);
     let part = |t: &[Vec<f64>; 4], s: [f64; 4], v: f64, i: usize| {
-        let term = |k: usize| if s[k] > 0.0 { t[k][i] / s[k] } else { 0.0 };
+        // A difference band's numerator sum can be negative: only a zero sum has no term.
+        let term = |k: usize| if s[k] != 0.0 { t[k][i] / s[k] } else { 0.0 };
         v * (term(0) - term(1) + term(3) - term(2))
     };
     let mut var = 0.0;
@@ -1070,6 +1071,22 @@ mod tests {
 
     fn set(n: usize) -> SuiteSet {
         SuiteSet { strata: vec![0; n] }
+    }
+
+    /// A band whose values sum below zero, as a home-minus-away difference can, has the
+    /// same paired error as the same values moved above zero: its error is never zero.
+    #[test]
+    fn a_negative_sum_keeps_its_paired_error() {
+        let changed = vec![-1.0, -3.0, 0.0, -2.0, -4.0, -1.0];
+        let old = vec![-2.0, -1.0, -1.0, -2.0, -2.0, 0.0];
+        let up = |v: &[f64]| v.iter().map(|x| x + 10.0).collect::<Vec<f64>>();
+        let strata = BTreeMap::from([(0u32, (0..6).collect::<Vec<usize>>())]);
+        let ones = vec![1u32; 6];
+        let (d, se) = change(&row(0, changed.clone(), old.clone(), 1.0), &ones, &strata).unwrap();
+        let (d_up, se_up) = change(&row(0, up(&changed), up(&old), 1.0), &ones, &strata).unwrap();
+        assert!(se > 0.0, "{se}");
+        assert!((d - d_up).abs() < 1e-12, "{d} {d_up}");
+        assert!((se - se_up).abs() < 1e-12, "{se} {se_up}");
     }
 
     /// A deterministic normal draw (Box-Muller) from the engine's stream.
