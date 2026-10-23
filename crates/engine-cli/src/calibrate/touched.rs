@@ -402,7 +402,9 @@ impl Touched {
     }
 
     /// Whether the job rule (or `five-match`) `job` is selected.
-    // sdlc-debt: only the sensitivity build's rules stage asks; a default build has no job rule to select
+    // sdlc-debt: only the sensitivity build's rules stage asks; a default build has no job rule to select,
+    // so the method is allowed dead there. Upgrade: put it behind `#[cfg(feature = "sensitivity")]` once
+    // the default build's rules stage no longer needs the type.
     #[cfg_attr(not(feature = "sensitivity"), allow(dead_code))]
     pub fn selects(&self, job: &str) -> bool {
         self.all || self.rules.iter().any(|r| r == job)
