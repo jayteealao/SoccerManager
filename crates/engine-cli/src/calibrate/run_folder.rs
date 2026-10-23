@@ -46,7 +46,7 @@ pub const TARGET_FILE: &str = "target.json";
 /// The version of [`Target`] this program writes and reads.
 pub const TARGET_VERSION: u32 = 2;
 /// The files and folders a run owns in its folder.
-const OWNED: [&str; 8] = [
+const OWNED: [&str; 13] = [
     RUN_FILE,
     "ledger",
     "rows",
@@ -55,7 +55,35 @@ const OWNED: [&str; 8] = [
     "arms",
     "report.json",
     TARGET_FILE,
+    super::intent::INTENT_FILE,
+    BENCH_FILE,
+    STYLES_FILE,
+    RULES_FILE,
+    "rules",
 ];
+
+/// The single-thread figures of each arm, written by the call that finishes the arms.
+pub const BENCH_FILE: &str = "bench.json";
+/// A change run's styles sample, written by the call that finishes the arms.
+pub const STYLES_FILE: &str = "styles.json";
+/// A change run's rules stage, written by the call that finishes the arms.
+pub const RULES_FILE: &str = "rules.json";
+
+/// Writes `value` as `name` in the run folder `dir`, whole, through a partial file and a
+/// rename.
+pub fn write_json<T: Serialize>(dir: &Path, name: &str, value: &T) -> anyhow::Result<()> {
+    let path = dir.join(name);
+    let partial = dir.join(format!("{name}.partial"));
+    fs::write(&partial, serde_json::to_vec_pretty(value)?)
+        .and_then(|()| fs::rename(&partial, &path))
+        .with_context(|| format!("cannot write {}", path.display()))
+}
+
+/// The value stored as `name` in the run folder `dir`; `None` when there is none or it
+/// cannot be read.
+pub fn read_json<T: serde::de::DeserializeOwned>(dir: &Path, name: &str) -> Option<T> {
+    serde_json::from_slice(&fs::read(dir.join(name)).ok()?).ok()
+}
 
 /// What makes a run's results what they are.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

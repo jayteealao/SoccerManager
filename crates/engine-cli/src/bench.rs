@@ -74,7 +74,7 @@ pub fn run(content_dir: Option<&Path>, opts: &BenchOpts) -> anyhow::Result<i32> 
 }
 
 /// What `measure` timed.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub(crate) struct BenchFigures {
     /// The median wall time of one match, in milliseconds.
     pub match_wall_ms: u64,

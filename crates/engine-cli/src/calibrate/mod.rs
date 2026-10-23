@@ -48,6 +48,7 @@
 //! closely two run folders' matches agree.
 
 pub mod base;
+pub mod drafts;
 pub mod fixtures;
 pub mod gate_proof;
 pub mod intent;
@@ -59,10 +60,12 @@ pub mod rows;
 pub mod rules;
 pub mod run_folder;
 pub mod runner;
+pub mod setting_rules;
 #[cfg(test)]
 mod spread;
 pub mod stages;
 pub mod styles;
+pub mod surprises;
 pub mod touched;
 pub mod worker;
 
@@ -294,10 +297,20 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     } else {
         None
     };
+    // The setting rules of the rules file, checked; only the confirmed ones count.
+    let setting_rules_file = if change {
+        drafts::read(dir.root(), &bands)?
+    } else {
+        Vec::new()
+    };
     // The settings the change touched against the base revision select the rules it plays.
     let touched = if change {
         let rev = opts.base.as_deref().or(opts.base_rev.as_deref());
-        Some(touched::find(dir.root(), rev, &[])?)
+        Some(touched::find(
+            dir.root(),
+            rev,
+            &drafts::confirmed(&setting_rules_file),
+        )?)
     } else {
         None
     };
@@ -474,12 +487,32 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
             })
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
+    // A call on a finished folder of the same identity plays nothing: it reads back what the
+    // call that finished the arms stored (the single-thread figures, the styles sample and the
+    // rules stage), or reports each as not stored for a folder written before they were kept.
+    let finished_folder = session.opened == Opened::Resumed && finished_before == total;
+    let mut played_now = crate::report::Played::default();
     // The single-thread figure is taken before the threads play: they share this process,
     // so its peak memory afterwards would hold every thread's matches.
-    let benches = arms
-        .iter()
-        .map(|(_, s)| ctx.bench(s))
-        .collect::<anyhow::Result<Vec<_>>>()?;
+    let stored_bench: Option<Vec<BenchFigures>> = finished_folder
+        .then(|| run_folder::read_json(&run_dir, run_folder::BENCH_FILE))
+        .flatten()
+        .filter(|b: &Vec<BenchFigures>| b.len() == arms.len());
+    let benches = match stored_bench {
+        Some(b) => b,
+        None if finished_folder => {
+            if !quiet {
+                eprintln!("single-thread figures: not stored in this run folder");
+            }
+            vec![BenchFigures::default(); arms.len()]
+        }
+        None => {
+            played_now.bench = (BENCH_MATCHES + 1) * arms.len() as u32;
+            arms.iter()
+                .map(|(_, s)| ctx.bench(s))
+                .collect::<anyhow::Result<Vec<_>>>()?
+        }
+    };
     // The real values, with the pass rule's real sides, are read before any match of the
     // changed engine plays: a band whose margin is under its floor with the real error read
     // here stops the run now. They are read after the single-thread figure, whose process
@@ -513,6 +546,9 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     let Some(played) = ctx.play_all(&arms, &arm_dirs, &inputs, &benches, &owner_id)? else {
         return stopped();
     };
+    if !finished_folder {
+        run_folder::write_json(&run_dir, run_folder::BENCH_FILE, &benches)?;
+    }
     let first = &played[0];
     let (total, finished_after) = ctx.progress(&arm_dirs)?;
     let units = Units {
@@ -520,6 +556,8 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         finished_before,
         played: finished_after.saturating_sub(finished_before),
     };
+    played_now.changed = units.played;
+    played_now.old = old.as_ref().map_or(0, |(b, _)| b.cache.played);
     let rejudged =
         session.opened == Opened::Resumed && units.played == 0 && finished_before == total;
     if rejudged {
@@ -609,6 +647,42 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     if !verdicts.is_empty() && !quiet {
         eprint!("{}", verdict::render_table(&verdicts, joint.as_ref()));
     }
+    // A change run's surprises against its intent; the side-effect notes write draft setting
+    // rules and the confirmations confirm them, both before the surprises are read again with
+    // the moves the confirmed rules expect.
+    let judged_intent = match (&intent, &touched) {
+        (Some((intent, _)), Some(touched)) => {
+            let all: Vec<&verdict::VerdictRow> = verdicts.iter().chain(&reported).collect();
+            let expected_of = |rules: &[drafts::SettingRule]| {
+                let ids: Vec<String> = rules
+                    .iter()
+                    .filter(|r| {
+                        touched
+                            .changed
+                            .iter()
+                            .any(|c| touched::under(&c.key, &r.setting))
+                    })
+                    .map(|r| r.id.clone())
+                    .collect();
+                drafts::expected(rules, &ids, touched)
+            };
+            let first_look =
+                surprises::flag(&all, intent, &expected_of(&setting_rules_file), &ctx.bands);
+            let (after, notes) = drafts::write_drafts(
+                dir.root(),
+                &ctx.bands,
+                &first_look,
+                touched,
+                intent,
+                &run_id,
+                &crate::report::history::date_of(millis),
+                setting_rules_file.clone(),
+            )?;
+            let found = surprises::flag(&all, intent, &expected_of(&after), &ctx.bands);
+            Some((found, notes, after))
+        }
+        _ => None,
+    };
     // The headline of a change run: its kind's counts and what stayed open.
     let headline = joint.as_ref().map(|_| {
         let gating: Vec<&verdict::VerdictRow> = verdicts
@@ -624,8 +698,25 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
             gating.len(),
             accepted::count(&verdicts),
             dropped.map_or(0, |d| d.dropped),
-        )
+        ) + judged_intent
+            .as_ref()
+            .map_or_else(String::new, |(s, _, _)| s.headline_part())
+            .as_str()
     });
+    if let (Some((s, notes, _)), false) = (&judged_intent, quiet) {
+        eprint!("{}", s.render());
+        for d in notes {
+            eprintln!(
+                "setting rule {}: {} ({}{})",
+                d.id.as_deref().unwrap_or("-"),
+                d.action,
+                d.band,
+                d.reason
+                    .as_deref()
+                    .map_or_else(String::new, |r| format!("; {r}"))
+            );
+        }
+    }
     if let (Some(h), false) = (&headline, quiet) {
         eprintln!("{h}");
     }
@@ -687,11 +778,46 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
             crate::report::render_report_only_floor(&report_only_floor)
         );
     }
-    let rules = rule_set
-        .zip(touched.as_ref())
-        .map(|(set, touched)| rules::run(&loaded.content, &set, touched, kind.code()));
+    let rules = match (rule_set, touched.as_ref()) {
+        (Some(set), Some(touched)) => {
+            let stored: Option<rules::RulesReport> = finished_folder
+                .then(|| run_folder::read_json(&run_dir, run_folder::RULES_FILE))
+                .flatten();
+            let now: Vec<drafts::SettingRule> = judged_intent
+                .as_ref()
+                .map_or_else(|| setting_rules_file.clone(), |(_, _, after)| after.clone());
+            Some(match stored {
+                Some(mut r) => {
+                    list_unplayed(&mut r, &now, touched);
+                    r
+                }
+                None if finished_folder => {
+                    let mut r = rules::run_stored_none(touched, kind.code());
+                    list_unplayed(&mut r, &now, touched);
+                    r
+                }
+                None => {
+                    let mut r = rules::run(&loaded.content, &set, touched, kind.code());
+                    let (rows, matches) = ctx.play_setting_rules(
+                        &setting_rules_file,
+                        &touched.setting_rules,
+                        &run_dir,
+                        &arms[0].1,
+                        &owner_id,
+                    )?;
+                    r.setting = rows;
+                    played_now.rules = r.matches;
+                    played_now.setting_rules = matches;
+                    list_unplayed(&mut r, &now, touched);
+                    run_folder::write_json(&run_dir, run_folder::RULES_FILE, &r)?;
+                    r
+                }
+            })
+        }
+        _ => None,
+    };
     if let Some(r) = &rules {
-        if !quiet && !r.rows.is_empty() {
+        if !quiet && (!r.rows.is_empty() || !r.setting.is_empty()) {
             eprint!("{}", rules::render_table(r));
         }
         eprintln!("{}", rules::line(r));
@@ -699,7 +825,13 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     ctx.write_target(&run_dir, change)?;
     // A change run's styles sample: one match per ordered pairing on the changed engine, and
     // never on the old one; report only.
-    let styles_sample = if change {
+    let stored_styles: Option<serde_json::Value> = (change && finished_folder)
+        .then(|| run_folder::read_json(&run_dir, run_folder::STYLES_FILE))
+        .flatten();
+    if change && finished_folder && stored_styles.is_none() && !quiet {
+        eprintln!("styles sample: not stored in this run folder");
+    }
+    let styles_sample = if change && !finished_folder {
         let content = loaded.content.with_flags(&arms[0].1)?;
         let sample = styles::play(&styles::SuiteInput {
             content: &content,
@@ -797,6 +929,10 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         reported,
         figures: first.figure_rows.clone(),
         intent: intent_info,
+        finished: judged_intent.as_ref().map(|(s, _, _)| s.finished()),
+        surprises: judged_intent.as_ref().map(|(s, _, _)| s.clone()),
+        drafts: judged_intent.as_ref().map(|(_, d, _)| d.clone()),
+        played: crate::report::Played::default(),
         accepted: acceptances,
         counts,
         registry: RegistryInfo {
@@ -821,7 +957,21 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
                 peak_mb: None,
             },
         );
-        report.styles = Some(sample);
+        played_now.styles = sample.matches;
+        let value = serde_json::to_value(&sample)?;
+        run_folder::write_json(&run_dir, run_folder::STYLES_FILE, &value)?;
+        report.styles = Some(value);
+    } else if let Some(value) = stored_styles {
+        report.styles = Some(value);
+    }
+    report.played = played_now.summed();
+    if !quiet && change {
+        let p = report.played;
+        eprintln!(
+            "matches played by this call: {} (this engine {}, old engine {}, benchmark {}, \
+             styles {}, rules {}, setting rules {})",
+            p.total, p.changed, p.old, p.bench, p.styles, p.rules, p.setting_rules
+        );
     }
     // The substitutions of the first arm's matches against the real era of the rule pack's
     // limit; report only.
@@ -879,6 +1029,36 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         code,
     );
     Ok(code)
+}
+
+/// Lists each setting rule of `rules` whose setting the change touched and that did not play
+/// in this run: a draft counts once it is confirmed, and a rule confirmed after the run was
+/// played plays in the next change run.
+fn list_unplayed(
+    r: &mut rules::RulesReport,
+    rules: &[drafts::SettingRule],
+    touched: &touched::Touched,
+) {
+    const DRAFT: &str = "draft: it counts once its id is confirmed in the intent file";
+    for rule in rules.iter().filter(|x| {
+        touched.all
+            || touched
+                .changed
+                .iter()
+                .any(|c| touched::under(&c.key, &x.setting))
+    }) {
+        let note = match rule.status {
+            drafts::RuleStatus::Confirmed => setting_rules::CONFIRMED_LATE,
+            drafts::RuleStatus::Draft => DRAFT,
+        };
+        match r.setting.iter_mut().find(|row| row.id == rule.id) {
+            Some(row) if row.word == "not_played" => row.note = Some(note.to_string()),
+            Some(_) => {}
+            None => r
+                .setting
+                .push(setting_rules::SettingRuleRow::not_played(rule, note)),
+        }
+    }
 }
 
 /// Adds this run's band rows to the band history and reads the drifts back. A run whose
@@ -1589,6 +1769,113 @@ struct Folded {
 }
 
 impl RunCtx<'_> {
+    /// A context that plays the first `n` fixtures of the equal suite alone, for a setting
+    /// rule's level; it reads no real data.
+    fn setting_ctx(&self, n: u32) -> RunCtx<'_> {
+        RunCtx {
+            dir: self.dir,
+            opts: self.opts,
+            loaded: self.loaded,
+            bands: self.bands.clone(),
+            jobs: self.jobs.clamp(1, n.max(1)),
+            selection: Selection {
+                suites: vec![Suite::Equal.code().to_string()],
+                pairings: Vec::new(),
+                bands: Vec::new(),
+            },
+            suites: vec![Suite::Equal],
+            pairings: self.pairings.clone(),
+            formation_names: self.formation_names.clone(),
+            selected: self.selected.clone(),
+            matches: BTreeMap::from([(Suite::Equal, n)]),
+            kind: self.kind,
+            millis: self.millis,
+            run_id: self.run_id.clone(),
+            session: self.session.clone(),
+            real_folder: self.real_folder.clone(),
+            quiet: true,
+            samples: std::sync::OnceLock::new(),
+            sides: std::sync::OnceLock::new(),
+        }
+    }
+
+    /// Plays each confirmed setting rule of `rules` that `selected` names at its levels: for
+    /// each level a copy of the run's content with the rule's setting at that value, on the
+    /// first fixtures of the equal suite, into stored rows under `rules/<id>/l<k>/` of
+    /// `run_dir`; then judges the band from those rows. Returns the rows and the matches
+    /// played.
+    fn play_setting_rules(
+        &self,
+        rules: &[drafts::SettingRule],
+        selected: &[String],
+        run_dir: &Path,
+        states: &FlagStates,
+        owner_id: &str,
+    ) -> anyhow::Result<(Vec<setting_rules::SettingRuleRow>, u32)> {
+        use crate::report::measures::{Scope, terms};
+        let playing: Vec<&drafts::SettingRule> = rules
+            .iter()
+            .filter(|r| setting_rules::plays(r, selected))
+            .collect();
+        if playing.is_empty() {
+            return Ok((Vec::new(), 0));
+        }
+        let n = setting_rules::setting_matches(self.dir.root());
+        let sub = self.setting_ctx(n);
+        let mut rows = Vec::new();
+        let mut played = 0u32;
+        for rule in playing {
+            let Some(def) = self.bands.band(&rule.band) else {
+                continue;
+            };
+            let mut per_level = Vec::new();
+            for (k, value) in rule.level_values().iter().enumerate() {
+                let level = setting_rules::level_dir(run_dir, &rule.id, k);
+                let content_dir = level.join("content");
+                setting_rules::patched_content(
+                    self.dir.root(),
+                    &content_dir,
+                    &rule.setting,
+                    value,
+                )?;
+                let loaded = crate::content::load(Some(&content_dir), None, None, None)?;
+                let input = runner::ArmInput {
+                    dir: &level,
+                    content: loaded.content.with_flags(states)?,
+                };
+                std::fs::create_dir_all(&level)
+                    .with_context(|| format!("cannot create {}", level.display()))?;
+                let (_, before) = sub.progress(std::slice::from_ref(&level))?;
+                runner::run_arms(&sub, std::slice::from_ref(&input), owner_id)?;
+                let (_, after) = sub.progress(std::slice::from_ref(&level))?;
+                played += after.saturating_sub(before);
+                let folded = sub.fold_rows(&level, false)?;
+                let obs = folded.builder.observations(Suite::Equal);
+                per_level.push(terms(def, &obs, Scope::All).per_match());
+            }
+            let (values, change, steps, word) = setting_rules::judge(
+                &per_level,
+                rule.direction,
+                self.opts.seed() ^ u64::from_str_radix(&rule.id[3..], 16).unwrap_or(0),
+            );
+            rows.push(setting_rules::SettingRuleRow {
+                id: rule.id.clone(),
+                setting: rule.setting.clone(),
+                band: rule.band.clone(),
+                direction: rule.direction,
+                levels: rule.level_values(),
+                values,
+                matches: n,
+                change,
+                steps,
+                word: word.to_string(),
+                note: (def.needs_measures() && !cfg!(feature = "measures"))
+                    .then(|| NO_MEASURES.to_string()),
+            });
+        }
+        Ok((rows, played))
+    }
+
     /// Every match `suite` plays, in fixture order, with its key and engine seed.
     fn keyed(&self, suite: Suite) -> Vec<Keyed> {
         fixtures::keyed(

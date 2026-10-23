@@ -350,17 +350,6 @@ pub enum Reason {
     None,
 }
 
-impl Reason {
-    pub fn code(self) -> &'static str {
-        match self {
-            Reason::Code => "code",
-            Reason::Content => "content",
-            Reason::NoBase => "no-base",
-            Reason::None => "none",
-        }
-    }
-}
-
 /// `calib.rules.touched`: what the change touched and the rules it selected.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Touched {
@@ -413,6 +402,8 @@ impl Touched {
     }
 
     /// Whether the job rule (or `five-match`) `job` is selected.
+    // sdlc-debt: only the sensitivity build's rules stage asks; a default build has no job rule to select
+    #[cfg_attr(not(feature = "sensitivity"), allow(dead_code))]
     pub fn selects(&self, job: &str) -> bool {
         self.all || self.rules.iter().any(|r| r == job)
     }

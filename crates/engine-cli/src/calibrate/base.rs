@@ -640,6 +640,15 @@ pub fn folder_hash(dir: &Path) -> anyhow::Result<String> {
         }
         let mut bytes =
             fs::read(&path).with_context(|| format!("cannot read {}", path.display()))?;
+        if name == super::drafts::FILE {
+            // The setting rules are calibrate's bookkeeping: they decide no match.
+            if let Ok(mut v) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+                if let Some(o) = v.as_object_mut() {
+                    o.remove("setting_rules");
+                }
+                bytes = serde_json::to_vec(&v)?;
+            }
+        }
         if name == crate::report::bands::BANDS_FILE {
             let boost = serde_json::from_slice::<serde_json::Value>(&bytes)
                 .ok()

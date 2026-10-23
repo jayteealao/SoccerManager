@@ -1467,6 +1467,19 @@ pub struct CalibrationReport {
     /// names.
     #[serde(rename = "calib.intent", skip_serializing_if = "Option::is_none")]
     pub intent: Option<IntentInfo>,
+    /// A change run's surprises against its intent, and the rows not checked against it.
+    #[serde(rename = "calib.surprises", skip_serializing_if = "Option::is_none")]
+    pub surprises: Option<crate::calibrate::surprises::Surprises>,
+    /// A change run: `true` once every surprise has its note.
+    #[serde(rename = "calib.finished", skip_serializing_if = "Option::is_none")]
+    pub finished: Option<bool>,
+    /// A change run: each draft setting rule written, found already there, confirmed or
+    /// skipped at this judgement, with its reason.
+    #[serde(rename = "calib.drafts", skip_serializing_if = "Option::is_none")]
+    pub drafts: Option<Vec<crate::calibrate::drafts::DraftInfo>>,
+    /// The matches this call played, by source, and their total.
+    #[serde(rename = "calib.played")]
+    pub played: Played,
     /// The developer's acceptances of not-sure bands in the run folder; absent without an
     /// `accepted.json`.
     #[serde(rename = "calib.accepted", skip_serializing_if = "Option::is_none")]
@@ -1509,7 +1522,7 @@ pub struct CalibrationReport {
     /// A change run's sample of the styles suite, one match per ordered pairing of styles on
     /// the changed engine; report only. Absent in other runs and without a styles file.
     #[serde(rename = "calib.styles", skip_serializing_if = "Option::is_none")]
-    pub styles: Option<styles::StylesReport>,
+    pub styles: Option<serde_json::Value>,
     /// The substitutions of the first arm's matches against the real era of the rule pack's
     /// limit; absent in the old engine's own quiet run and when no row holds a match.
     #[serde(
@@ -1517,6 +1530,34 @@ pub struct CalibrationReport {
         skip_serializing_if = "Option::is_none"
     )]
     pub substitutions: Option<substitutions::SubstitutionReport>,
+}
+
+/// `calib.played`: the matches one call of calibrate played, by source. A call on a finished
+/// run folder plays none.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct Played {
+    /// This engine's matches of the run (each arm's).
+    pub changed: u32,
+    /// The old engine's matches it played now (its cache held the rest).
+    pub old: u32,
+    /// The single-thread benchmark's matches, its warm-up included.
+    pub bench: u32,
+    /// A change run's styles sample.
+    pub styles: u32,
+    /// The rules stage's job rules and five-match rule.
+    pub rules: u32,
+    /// The confirmed setting rules' levels.
+    pub setting_rules: u32,
+    pub total: u32,
+}
+
+impl Played {
+    /// `self` with its total summed.
+    pub fn summed(mut self) -> Self {
+        self.total =
+            self.changed + self.old + self.bench + self.styles + self.rules + self.setting_rules;
+        self
+    }
 }
 
 /// `calib.intent`: the intent file in the run folder, its SHA-256 and what it names.
@@ -1658,6 +1699,16 @@ pub struct RulesReport {
     /// What the change touched, and the rules it selected.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub touched: Option<crate::calibrate::touched::Touched>,
+    /// Why the stage has no rows of its own, when it was not stored in a run folder written
+    /// before the stage was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    /// The confirmed setting rules, each at its levels.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub setting: Vec<crate::calibrate::setting_rules::SettingRuleRow>,
+    /// Matches the stage played: the job rules' design and arms and the five-match rule.
+    #[serde(default)]
+    pub matches: u32,
     /// Touched rules checked.
     pub checked: u32,
     /// Levels checked, over every rule.
