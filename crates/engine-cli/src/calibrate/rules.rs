@@ -53,7 +53,9 @@ pub fn run(content: &Content, set: &RuleSet, touched: &Touched, kind: &str) -> R
         .filter(|j| touched.selects(j))
         .collect();
     let mut rows: Vec<RuleRow> = Vec::new();
+    let mut matches = 0u32;
     if !jobs.is_empty() {
+        matches += file.design.matches + 2 * file.design.arm_matches;
         let only = (!touched.all).then_some(jobs.as_slice());
         let (_, results) = sensitivity::run_levels(content, &set.clubs, file, only, Size::of(file));
         for r in &results {
@@ -84,6 +86,8 @@ pub fn run(content: &Content, set: &RuleSet, touched: &Touched, kind: &str) -> R
         }
     }
     if touched.selects(FIVE_MATCH) {
+        let fm = &file.five_match;
+        matches += fm.roles.len() as u32 * fm.runs * fm.matches_per_run * 2;
         let five = five_match::run(
             content,
             &set.clubs,
@@ -112,7 +116,9 @@ pub fn run(content: &Content, set: &RuleSet, touched: &Touched, kind: &str) -> R
             report_only: false,
         });
     }
-    report(rows, true, started.elapsed(), touched, kind)
+    let mut r = report(rows, true, started.elapsed(), touched, kind);
+    r.matches = matches;
+    r
 }
 
 /// A build without the `sensitivity` feature checks no job rule; it still reports what the
@@ -121,6 +127,24 @@ pub fn run(content: &Content, set: &RuleSet, touched: &Touched, kind: &str) -> R
 pub fn run(_content: &Content, _set: &RuleSet, touched: &Touched, kind: &str) -> RulesReport {
     report(Vec::new(), false, std::time::Duration::ZERO, touched, kind)
 }
+
+/// The stage of a finished run folder written before the stage was kept: nothing is played
+/// again, and the report says so.
+pub fn run_stored_none(touched: &Touched, kind: &str) -> RulesReport {
+    let mut r = report(
+        Vec::new(),
+        cfg!(feature = "sensitivity"),
+        std::time::Duration::ZERO,
+        touched,
+        kind,
+    );
+    r.note = Some(NOT_STORED.to_string());
+    r
+}
+
+/// Why a judged-again run has no rules stage of its own.
+pub const NOT_STORED: &str = "not stored: this run folder was written before the rules stage \
+                              was kept, and a judgement again plays no match";
 
 #[cfg(feature = "sensitivity")]
 /// The interval of `i`, or none when a bound is not finite: the arms' outcome did not move,
@@ -158,6 +182,9 @@ fn report(
     RulesReport {
         kind: kind.to_string(),
         touched: Some(touched.clone()),
+        note: None,
+        setting: Vec::new(),
+        matches: 0,
         checked: rows.len() as u32,
         levels: rows.iter().map(|r| r.levels.len() as u32).sum(),
         failed: count("fail"),
@@ -174,6 +201,9 @@ pub fn line(r: &RulesReport) -> String {
         .touched
         .as_ref()
         .map_or_else(|| "every rule".to_string(), Touched::why_line);
+    if let Some(note) = &r.note {
+        return format!("rules stage (kind {}): {why}; {note}", r.kind);
+    }
     if !r.built {
         return format!(
             "rules stage (kind {}): {why}; this build has no sensitivity rules; build \
@@ -231,6 +261,32 @@ pub fn render_table(r: &RulesReport) -> String {
             } else {
                 row.word.replace('_', " ")
             }
+        ));
+    }
+    for s in &r.setting {
+        let levels = s
+            .levels
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(" | ");
+        let values = s
+            .values
+            .iter()
+            .map(|v| v.map_or("-".to_string(), |v| format!("{v:.4}")))
+            .collect::<Vec<_>>()
+            .join(" | ");
+        out.push_str(&format!(
+            "setting rule {} ({} {} as {} rises): levels {levels}; band {values}; change {}; {}{}\n",
+            s.id,
+            s.band,
+            s.direction.code(),
+            s.setting,
+            iv(s.change),
+            s.word.replace('_', " "),
+            s.note
+                .as_deref()
+                .map_or_else(String::new, |n| format!(" ({n})"))
         ));
     }
     out
