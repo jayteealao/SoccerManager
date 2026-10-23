@@ -63,6 +63,7 @@ pub mod runner;
 mod spread;
 pub mod stages;
 pub mod styles;
+pub mod touched;
 pub mod worker;
 
 use std::collections::BTreeMap;
