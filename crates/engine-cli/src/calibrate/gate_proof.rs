@@ -168,6 +168,12 @@ impl Child<'_> {
     ) -> anyhow::Result<Value> {
         let run_dir = self.out.join(&meta.name);
         let log = self.out.join(format!("{}.log", meta.name));
+        // Each run states an intent that names no band: the proof reads the joint words
+        // only, and its runs have no terminal to ask at.
+        let intent = self.out.join(super::intent::INTENT_FILE);
+        if !intent.is_file() {
+            super::intent::write_into(self.out, &super::intent::Intent::empty())?;
+        }
         let mut cmd = Command::new(self.exe);
         // The proof's runs are experiments on the engine, not points of its history.
         cmd.env(crate::report::history::HISTORY_ENV, "off");
@@ -176,6 +182,8 @@ impl Child<'_> {
             .arg("calibrate")
             .args(["--seed", &meta.seed.to_string()])
             .args(["--kind", "change"])
+            .arg("--intent")
+            .arg(&intent)
             .args(["--minutes", &self.opts.minutes.to_string()])
             .arg("--base-binary")
             .arg(self.exe)
