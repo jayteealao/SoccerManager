@@ -1128,6 +1128,15 @@
               "commit": { "type": "string" },
               "build.id": { "type": "string", "minLength": 1 },
               "content.hash": { "type": "string" },
+              "features": {
+                "description": "Since version 11: the cargo features the old engine was built with, comma-joined: this build's features that its revision declares. Empty for a ready binary or none.",
+                "type": "string"
+              },
+              "missing_features": {
+                "description": "Since version 11: this build's features the old revision does not declare, so it was built without them; the bands that read them get no word against the old engine.",
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 }
+              },
               "cache": {
                 "type": "object",
                 "required": ["hits", "played"],

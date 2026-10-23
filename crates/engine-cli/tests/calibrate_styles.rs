@@ -7,7 +7,7 @@ mod common;
 use std::path::Path;
 use std::process::Output;
 
-use common::{RecordSchemas, bin, record, temp};
+use common::{RecordSchemas, bin, edited_content, record, set_counts, temp};
 use serde_json::Value;
 
 /// The shipped styles and their ordered pairings.
@@ -136,10 +136,14 @@ fn the_styles_suite_refuses_a_base_or_a_pair() {
 #[test]
 fn a_change_run_adds_a_styles_sample_the_old_engine_never_plays() {
     let data = temp("engine-cli-styles", "change");
+    let content = edited_content(&data, "tuning.json", |_| {});
+    set_counts(&content, 2);
     let run = data.join("run");
     let out = bin(&data)
+        .arg("--content-dir")
+        .arg(&content)
         .arg("calibrate")
-        .args(["--seed", "9", "--matches", "2", "--minutes", "3"])
+        .args(["--seed", "9", "--minutes", "3"])
         .args(["--suite", "equal", "--jobs", "4"])
         .args(["--base-binary", env!("CARGO_BIN_EXE_engine-cli")])
         .arg("--out")

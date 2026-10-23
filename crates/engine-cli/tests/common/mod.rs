@@ -421,3 +421,44 @@ pub fn equal_gating_bands() -> usize {
         .filter(|b| b["suites"].as_array().unwrap().iter().any(|s| s == "equal"))
         .count()
 }
+
+/// Sets every run kind of the band file in `content` to `n` matches per suite unit, so a
+/// change run there plays `n` paired matches of each suite, and widens each margin the
+/// shorter count puts under its 97 percent floor, as [`hold_floor`] does for a run.
+pub fn set_counts(content: &Path, n: u32) {
+    let path = content.join("realism-bands.json");
+    let mut doc: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    for kind in ["change", "milestone", "release"] {
+        doc["kinds"][kind]["count"] = serde_json::json!({
+            "equal": n, "strength": n, "formations": n, "red-card": n
+        });
+        if let Some(c) = doc["kinds"][kind].as_object_mut() {
+            c.remove("computed");
+        }
+    }
+    std::fs::write(&path, serde_json::to_string_pretty(&doc).unwrap()).unwrap();
+    // The band file's own check at the new count, until no margin is under its floor.
+    let scratch = tempfile::TempDir::new().unwrap();
+    for _ in 0..4 {
+        let out = bin(scratch.path())
+            .arg("--content-dir")
+            .arg(content)
+            .args(["calibrate", "count", "--real-data"])
+            .arg(scratch.path())
+            .output()
+            .unwrap();
+        if !hold_floor(content, &String::from_utf8_lossy(&out.stderr)) {
+            return;
+        }
+    }
+    panic!("the margins of {} stay under their floor", path.display());
+}
+
+/// A copy of the shipped content in a fresh temporary folder, its band file edited by `edit`;
+/// the folder is removed when the returned value drops, so the test keeps it until every
+/// child it runs there has been waited on.
+pub fn content_with_registry(edit: impl FnOnce(&mut Value)) -> tempfile::TempDir {
+    let tmp = tempfile::TempDir::new().unwrap();
+    edited_content(tmp.path(), "realism-bands.json", edit);
+    tmp
+}

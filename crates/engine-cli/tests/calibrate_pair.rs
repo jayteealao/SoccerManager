@@ -192,6 +192,10 @@ fn a_paired_run_plays_both_arms_on_the_same_seeds_and_compares_every_band() {
                 .unwrap()["value"]
                 .clone()
         };
+        // A band judged on a whole distribution carries no single value of either side.
+        if row.get("base_value").is_none() {
+            continue;
+        }
         if row["old_word"].is_string() {
             assert_eq!(row["base_value"], band("off"), "{row}");
         }

@@ -10,7 +10,7 @@ mod common;
 use std::path::Path;
 use std::process::Output;
 
-use common::{RecordSchemas, bin, edited_content, hold_floor, record, temp, test_band};
+use common::{RecordSchemas, bin, edited_content, hold_floor, record, set_counts, temp, test_band};
 use serde_json::{Value, json};
 
 fn exe() -> &'static str {
@@ -138,8 +138,9 @@ fn verdict_of(r: &Value) -> Value {
 fn a_reported_band_never_moves_the_verdict_of_a_change_run() {
     let data = temp("engine-cli-reported", "verdict");
     let content = edited_content(&data, "tuning.json", |_| {});
+    set_counts(&content, 4);
     let run = data.join("run");
-    let args = ["--matches", "4", "--base-binary", exe()];
+    let args = ["--base-binary", exe()];
     let first = calibrate(&data, &content, &run, &args);
     let before = report(&first, &run);
     assert!(row(&before, "calib.reported", "probe_fail").is_none());
@@ -159,7 +160,7 @@ fn a_reported_band_never_moves_the_verdict_of_a_change_run() {
     let after = report(&again, &run);
     assert_eq!(again.status.code(), first.status.code(), "{text}");
     assert_eq!(verdict_of(&after), verdict_of(&before));
-    assert_eq!(after["calib.power"], before["calib.power"]);
+    assert_eq!(after["calib.count"], before["calib.count"]);
     let probe = row(&after, "calib.reported", "probe_fail").expect("a reported row");
     assert!(
         probe["report_only"].as_str().unwrap().contains(FACING),
@@ -367,14 +368,13 @@ fn a_not_sure_band_is_accepted_and_marked_but_never_passes() {
 fn a_base_without_measures_judges_a_measures_band_by_its_range() {
     let data = temp("engine-cli-reported", "base-measures");
     let content = edited_content(&data, "tuning.json", |_| {});
+    set_counts(&content, 4);
     let run = data.join("run");
     let out = calibrate(
         &data,
         &content,
         &run,
         &[
-            "--matches",
-            "4",
             "--base-binary",
             exe(),
             "--inject-failure",
@@ -385,6 +385,14 @@ fn a_base_without_measures_judges_a_measures_band_by_its_range() {
     let shot = row(&r, "calib.reported", "shot_distance_mean").expect("a shot distance row");
     assert_eq!(shot["judged"], "range", "{shot}");
     assert_eq!(shot["note"], "range only: base has no measures");
+    // No word against an old engine without the measures, and the reason names it.
+    assert!(shot.get("old_word").is_none(), "{shot}");
+    assert!(
+        shot["old_reason"]
+            .as_str()
+            .is_some_and(|r| r.ends_with("has no measures feature")),
+        "{shot}"
+    );
     let counts = &r["calib.counts"];
     assert_eq!(counts["pairs"], 4);
     let engines: Vec<&str> = counts["observations"]

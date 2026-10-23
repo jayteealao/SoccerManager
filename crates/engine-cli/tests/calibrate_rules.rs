@@ -8,21 +8,23 @@ mod common;
 use std::path::Path;
 use std::process::Output;
 
-use common::{RecordSchemas, bin, edited_content, record, temp};
+use common::{RecordSchemas, bin, edited_content, record, set_counts, temp};
 use serde_json::{Value, json};
 
 fn exe() -> &'static str {
     env!("CARGO_BIN_EXE_engine-cli")
 }
 
-/// A short change run of the equal suite into `out`, on `content`, against this build.
+/// A short change run of the equal suite into `out`, on `content`, against this build: four
+/// paired matches.
 fn change_run(data: &Path, content: &Path, out: &Path) -> Output {
+    set_counts(content, 4);
     bin(data)
         .arg("--content-dir")
         .arg(content)
         .arg("calibrate")
         .args(["--seed", "9", "--suite", "equal", "--minutes", "5"])
-        .args(["--jobs", "4", "--matches", "4", "--base-binary", exe()])
+        .args(["--jobs", "4", "--base-binary", exe()])
         .arg("--out")
         .arg(out)
         .output()
