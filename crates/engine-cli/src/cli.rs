@@ -1042,16 +1042,28 @@ pub struct CalibrateOpts {
                      Required for a run; not taken by calibrate accept."
     )]
     pub seed_arg: Option<u64>,
-    /// Matches per suite or pairing.
+    /// Matches per suite or pairing (default 1000); refused in a change run.
+    #[arg(
+        long = "matches",
+        value_name = "N",
+        long_help = "Matches in each suite and in each formation pairing; default 1000.\n\n\
+                     A change run (--base) refuses it: it plays the fixed count of\n\
+                     its kind from the band file."
+    )]
+    pub matches_arg: Option<u32>,
+    /// The run's kind: its seed set, rare-band margins and fixed count.
     #[arg(
         long,
-        default_value_t = 1000,
-        long_help = "Matches in each suite and in each formation pairing.\n\n\
-                     In a change run (--base) it is the cap: the run plays a pilot,\n\
-                     sizes each suite for the power to see each band's smallest\n\
-                     shift, and plays at most this many."
+        value_enum,
+        default_value = "change",
+        hide_possible_values = true,
+        long_help = "The run's kind: change (default), milestone or release.\n\n\
+                     The kind picks the seed set the run's seed must come from,\n\
+                     the rare-band margins (wider in a change run) and, in a change\n\
+                     run, the fixed count of paired matches per suite unit. The\n\
+                     three seed sets do not overlap."
     )]
-    pub matches: u32,
+    pub kind: crate::report::kinds::Kind,
     /// Minutes of play per match.
     #[arg(long, default_value_t = 90)]
     pub minutes: u32,
@@ -1185,13 +1197,15 @@ pub struct CalibrateOpts {
         long_help = "Make it a change run: compare this build with the old engine\n\
                      of REV (a branch, tag or commit of this repository), built once\n\
                      and cached with its results.\n\n\
-                     Both engines play the same fixtures. A pilot sizes each suite\n\
-                     for 80 percent power to see each band's smallest shift, the\n\
-                     run grows to it (at most --matches), and each band reports\n\
-                     pass, fail or not sure, with one joint verdict. Needs a git\n\
-                     checkout of this repository as the working folder.\n\n\
-                     --baseline still works here: its match count must equal\n\
-                     --matches, and its diff uses the matches this run played."
+                     Both engines play the same fixtures, the fixed count of the\n\
+                     run's kind. Each band gets its word against real football\n\
+                     (pass, fail or not sure), which alone sets the joint verdict,\n\
+                     and its word against the old engine (better, worse,\n\
+                     equivalent or not sure). The old engine builds with this\n\
+                     build's features. Needs a git checkout of this repository as\n\
+                     the working folder.\n\n\
+                     --baseline still works here: its match count must equal the\n\
+                     largest count the run plays."
     )]
     pub base: Option<String>,
     /// The measured real data the bands read.
@@ -1209,9 +1223,6 @@ pub struct CalibrateOpts {
                      real value."
     )]
     pub real_data: Option<PathBuf>,
-    /// A change run's pilot, in matches per suite unit; a test seam (default 200).
-    #[arg(long, hide = true, value_name = "N", default_value_t = 200)]
-    pub pilot: u32,
     /// The old engine of a change run: a ready executable, played on the run's content.
     #[arg(long, hide = true, value_name = "EXE", conflicts_with = "pair")]
     pub base_binary: Option<PathBuf>,
@@ -1235,6 +1246,11 @@ impl CalibrateOpts {
     /// The run's seed; clap requires it whenever no subcommand runs.
     pub fn seed(&self) -> u64 {
         self.seed_arg.unwrap_or_default()
+    }
+
+    /// Matches per suite unit of a run that is not a change run.
+    pub fn matches(&self) -> u32 {
+        self.matches_arg.unwrap_or(1000)
     }
 }
 
@@ -1283,7 +1299,8 @@ pub enum CalibrateAction {
     #[command(
         long_about = "Measure the gate's pass and fail rates and write them to gate-proof.json.
 
-                      Plays about 30 change runs of this build against itself: 10 with new
+                      Plays about 30 change runs of the change kind's fixed count, this
+                      build against itself: 10 with new
                       match seeds on the changed side, and 5 of each broken copy that
                       gate-proof.json declares (a content flag turned on). It takes hours
                       on a full machine; run the same command again to resume. Needs a
@@ -1295,9 +1312,6 @@ pub enum CalibrateAction {
         /// The first run seed: self run i plays SEED+i, copy run j plays SEED+j.
         #[arg(long, value_name = "SEED")]
         seed: u64,
-        /// The cap of each change run, as calibrate --matches.
-        #[arg(long, default_value_t = 1000)]
-        matches: u32,
         /// Folder of the proof's runs; default SM_DATA_DIR/proofs/<registry>-<verdict code>.
         #[arg(long, value_name = "DIR")]
         out: Option<PathBuf>,
@@ -1409,7 +1423,6 @@ mod tests {
         match proof.action {
             Some(CalibrateAction::Proof {
                 seed,
-                matches,
                 out,
                 write,
                 real_data,
@@ -1417,10 +1430,7 @@ mod tests {
                 copy_runs,
                 minutes,
             }) => {
-                assert_eq!(
-                    (seed, matches, self_runs, copy_runs, minutes),
-                    (2027, 1000, 10, 5, 90)
-                );
+                assert_eq!((seed, self_runs, copy_runs, minutes), (2027, 10, 5, 90));
                 assert_eq!((out, write, real_data), (None, None, None));
             }
             other => panic!("{other:?}"),

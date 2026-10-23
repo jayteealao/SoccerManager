@@ -1426,10 +1426,12 @@ pub struct CalibrationReport {
     /// A change run's joint verdict.
     #[serde(rename = "calib.joint", skip_serializing_if = "Option::is_none")]
     pub joint: Option<verdict::Joint>,
-    /// A change run: each suite's pilot, power target and cap, and whether every band of
-    /// the suite reached its power.
-    #[serde(rename = "calib.power", skip_serializing_if = "Option::is_none")]
-    pub power: Option<BTreeMap<String, PowerInfo>>,
+    /// The run's kind: change, milestone or release.
+    #[serde(rename = "calib.kind")]
+    pub kind: &'static str,
+    /// A change run: the fixed count of its kind it played, per suite unit, by suite code.
+    #[serde(rename = "calib.count", skip_serializing_if = "BTreeMap::is_empty")]
+    pub count: BTreeMap<String, u32>,
     /// The bands that only report: each row's word, judged as a gating band's is, but never
     /// in the joint word, `calib.pass` or `calib.bands`. Absent when no band only reports.
     #[serde(rename = "calib.reported", skip_serializing_if = "Vec::is_empty")]
@@ -1697,26 +1699,6 @@ impl Counts {
             per.join(", ")
         )
     }
-}
-
-/// One suite's run length in a change run.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct PowerInfo {
-    /// Matches per suite unit of the pilot; absent when the run resumed to a target.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pilot: Option<u32>,
-    /// Matches per suite unit played: the power target, at most the cap.
-    pub target: u32,
-    pub cap: u32,
-    /// Every band of the suite has the power to see its smallest shift.
-    pub reached: bool,
-    /// The band whose power needed the most matches at the pilot, which set the target;
-    /// absent when the pilot gave every band power.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub driver: Option<String>,
-    /// The bands outside their range beyond their noise at the pilot, which set no target.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub no_target: Vec<String>,
 }
 
 /// The band registry a run was judged with.

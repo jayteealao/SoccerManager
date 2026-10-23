@@ -101,7 +101,6 @@ fn main() {
             }
             Some(cli::CalibrateAction::Proof {
                 seed,
-                matches,
                 out,
                 write,
                 real_data,
@@ -112,7 +111,6 @@ fn main() {
                 content_dir,
                 &calibrate::gate_proof::Opts {
                     seed: *seed,
-                    matches: *matches,
                     out: out.clone(),
                     write: write.clone(),
                     real_data: real_data.clone(),

@@ -26,7 +26,6 @@ use crate::report::real;
 #[derive(Debug, Clone)]
 pub struct Opts {
     pub seed: u64,
-    pub matches: u32,
     pub out: Option<PathBuf>,
     pub write: Option<PathBuf>,
     pub real_data: Option<PathBuf>,
@@ -122,7 +121,11 @@ pub fn run(content_dir: Option<&Path>, o: &Opts) -> anyhow::Result<i32> {
             measures: true,
         },
         seed: o.seed,
-        matches: o.matches,
+        // The change kind's count of the equal suite: every run plays the kind's counts.
+        matches: registry
+            .kinds
+            .as_ref()
+            .map_or(0, |t| t.change.count_for(crate::report::Suite::Equal)),
         minutes: o.minutes,
         self_runs,
         copies,
@@ -172,7 +175,7 @@ impl Child<'_> {
             .arg(self.content)
             .arg("calibrate")
             .args(["--seed", &meta.seed.to_string()])
-            .args(["--matches", &self.opts.matches.to_string()])
+            .args(["--kind", "change"])
             .args(["--minutes", &self.opts.minutes.to_string()])
             .arg("--base-binary")
             .arg(self.exe)

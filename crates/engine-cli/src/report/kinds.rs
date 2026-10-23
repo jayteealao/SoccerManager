@@ -172,14 +172,6 @@ impl KindTable {
         }
     }
 
-    pub fn get_mut(&mut self, kind: Kind) -> &mut KindDef {
-        match kind {
-            Kind::Change => &mut self.change,
-            Kind::Milestone => &mut self.milestone,
-            Kind::Release => &mut self.release,
-        }
-    }
-
     /// The kind whose seed set holds `seed`.
     pub fn kind_of(&self, seed: u64) -> Option<Kind> {
         Kind::ALL
