@@ -50,6 +50,7 @@
 pub mod base;
 pub mod fixtures;
 pub mod gate_proof;
+pub mod intent;
 #[cfg(feature = "measures")]
 pub mod physical;
 #[cfg(feature = "measures")]
