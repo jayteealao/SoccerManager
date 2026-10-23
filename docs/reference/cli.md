@@ -719,6 +719,27 @@ engine-cli real-targets build [--data <DIR>] [--out <FILE>]
 
 Exit codes: `check-data` 0 when every file is there and as recorded, 1 otherwise; `build` 0 when the file is written, 1 when a raw file cannot be read.
 
+## world-database
+
+Build the world database, `content/world.json`, from local snapshots. The snapshots are read in place, by default from `.scratch/data` in the main checkout (found as `real-targets` finds it); the build makes no network request.
+
+```text
+engine-cli world-database build [--data <DIR>] [--out <FILE>] [--gate <DIR>] [--hand-fills <FILE>]
+```
+
+`build` reads the openfootball repositories (`openfootball/`), the newest ClubElo snapshot `clubelo/clubelo-<date>.csv`, the Wikidata clubs, leagues, associations and ClubElo match files (`wikidata/`), and the UEFA association order, the competition formats and the top-30 domestic structure (`competitions/`). It writes the world file: every country, keyed by its FIFA code, with its region and, for the 55 UEFA associations, the 2025 rank, coefficient, real top-division club count and 2026/27 places; every league that holds a club, with its tier when a source states it (the Wikidata level, an openfootball league code, the domestic structure, a hand fill, or the Wikidata level chain from a league above or below) and its real club count with the count's source; every club with a current league, with a facsimile name and short name and an Elo strength with its source (`clubelo`, `league-median`, `tier-step` or `floor`); and the continental, intercontinental and domestic cup competitions as structure (scope, region, level, season, entrants and stages). The file holds no real name: countries are codes, leagues and cups are named from the code ("ENG tier 1", "ENG cup 1"), and each club's name comes from the game's club-name generator, seeded per club and drawn again while it equals any real name of the sources or of the `gate/real-names/` lists. Before writing, the build loads the file back and scans it with the packaging check's rule; a hit writes nothing.
+
+In the gate folder, which never ships, it writes `real-names/world.json` (the real club names the packaging check keeps out of the shipped content), `world/name-map.json` (every real name compared against, by content id where there is one), `world/gaps.csv` (one row per gap: kind, entity, content id, real name, country, missing field, reason and sources tried) and `world/coverage.json` (the countries and tiers covered, the ClubElo accounting, the Wikipedia pages and openfootball commits read, every input with its sha256, and the scan exceptions). It prints the counts of countries, leagues, clubs by strength source, competitions and gap rows by kind. Two builds of the same inputs write the same bytes.
+
+| Flag | Value | Default | Meaning |
+|---|---|---|---|
+| `--data` | folder | the main checkout's `.scratch/data` | The snapshot folder. |
+| `--out` | file | `world.json` in the content folder | The world file to write. |
+| `--gate` | folder | `gate/` beside the content folder | Where the real names, the gap list and the coverage record go. |
+| `--hand-fills` | file | `world/hand-fills.json` in the gate folder (none when absent) | Facts filled by hand from public pages, and ClubElo links refused at a spot-check. |
+
+Exit codes: 0 when the files are written; 1 when a snapshot is missing or malformed (the error names the file and line), a facsimile name cannot be drawn, or the world file would hold a real name.
+
 ## primitives
 
 Check or fit a tactical primitive from played matches. Only a build with the `measures` cargo feature has this command.

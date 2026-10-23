@@ -53,7 +53,7 @@ pub enum Command {
     Calibrate(Box<CalibrateOpts>),
     /// Replay the 22 gate matches and compare with the golden file.
     Gate(GateOpts),
-    /// Check each commit's golden-file change against the ledger rules.
+    /// Check each commit's golden-file change by the ledger rules.
     Guard(GuardOpts),
     /// Fit the fast model, check it, or refuse a stale fit.
     FastModel(FastModelOpts),
@@ -63,6 +63,8 @@ pub enum Command {
     Signatures(SignaturesOpts),
     /// Check the raw real data, or build the real-targets file.
     RealTargets(RealTargetsOpts),
+    /// Build the world database from local snapshots.
+    WorldDatabase(WorldDatabaseOpts),
     /// Check or fit a tactical primitive from played matches.
     #[cfg(feature = "measures")]
     Primitives(PrimitivesOpts),
@@ -149,6 +151,63 @@ pub enum RealTargetsAction {
                          beside the content folder."
         )]
         out: Option<PathBuf>,
+    },
+}
+
+/// The world database command.
+#[derive(Debug, Args)]
+pub struct WorldDatabaseOpts {
+    #[command(subcommand)]
+    pub action: WorldDatabaseAction,
+}
+
+/// What `world-database` does.
+#[derive(Debug, Subcommand)]
+pub enum WorldDatabaseAction {
+    /// Build the world database from local snapshots.
+    #[command(
+        long_about = "Build the world database from the local openfootball, ClubElo,\n\
+                      Wikidata and competitions snapshots, read in place, with no\n\
+                      network request. Writes world.json in the content folder:\n\
+                      every country (by code) and tier the sources cover, each club\n\
+                      with a facsimile name and an Elo strength with its source, and\n\
+                      the competitions as structure. In the gate folder, which never\n\
+                      ships, it writes the real names (real-names/world.json and\n\
+                      world/name-map.json), the gap list (world/gaps.csv) and the\n\
+                      coverage record (world/coverage.json)."
+    )]
+    Build {
+        /// The snapshot folder.
+        #[arg(
+            long,
+            value_name = "DIR",
+            long_help = "The snapshot folder; default the main checkout's .scratch/data."
+        )]
+        data: Option<PathBuf>,
+        /// The world file to write.
+        #[arg(
+            long,
+            value_name = "FILE",
+            long_help = "The world file to write; default world.json in the content\n\
+                         folder."
+        )]
+        out: Option<PathBuf>,
+        /// The gate folder for the real names, gap list and coverage.
+        #[arg(
+            long,
+            value_name = "DIR",
+            long_help = "The gate folder for the real names, the gap list and the\n\
+                         coverage record; default gate/ beside the content folder."
+        )]
+        gate: Option<PathBuf>,
+        /// The hand-fill file.
+        #[arg(
+            long = "hand-fills",
+            value_name = "FILE",
+            long_help = "The hand-fill file of facts filled from public pages; default\n\
+                         world/hand-fills.json in the gate folder (none when absent)."
+        )]
+        hand_fills: Option<PathBuf>,
     },
 }
 

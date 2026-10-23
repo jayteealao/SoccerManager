@@ -33,6 +33,7 @@ mod stats;
 mod stream_run;
 mod trace_file;
 mod web;
+mod world_build;
 
 use std::io::IsTerminal;
 use std::time::Instant;
@@ -133,6 +134,7 @@ fn main() {
         cli::Command::RestartWaits(opts) => restart_waits::run(content_dir, &opts),
         cli::Command::Signatures(opts) => signatures::run(content_dir, &opts),
         cli::Command::RealTargets(opts) => real_targets::run(content_dir, &opts),
+        cli::Command::WorldDatabase(opts) => world_build::run(content_dir, &opts),
         #[cfg(feature = "measures")]
         cli::Command::Primitives(opts) => calibrate::primitives::run(content_dir, &opts),
         cli::Command::MatchdayTiming(opts) => matchday::timing::run(content_dir, &opts),
