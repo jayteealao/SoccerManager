@@ -1673,13 +1673,26 @@ impl Registry {
                 rare_factor: factor.unwrap_or(def.rare_margin.factor),
             }
         };
+        // A kind that judges no rare band checks no rare band's floor.
+        let judges = |k: super::kinds::Kind| table.get(k).judges(b);
         match self.active_kind {
-            Some(k) => vec![at(k, Some(1.0))],
+            Some(k) if judges(k) => vec![at(k, Some(1.0))],
+            Some(_) => Vec::new(),
             None => super::kinds::Kind::ALL
                 .into_iter()
+                .filter(|&k| judges(k))
                 .map(|k| at(k, None))
                 .collect(),
         }
+    }
+
+    /// Whether the run's kind leaves the band `name` unjudged: a rare band in a run whose
+    /// kind judges no rare band (the change kind).
+    pub fn not_judged(&self, name: &str) -> bool {
+        let (Some(k), Some(table)) = (self.active_kind, &self.kinds) else {
+            return false;
+        };
+        self.band(name).is_some_and(|b| !table.get(k).judges(b))
     }
 
     /// The registry a run of `kind` judges with: each rare band's margin widened by the
@@ -2687,6 +2700,38 @@ mod tests {
             design(super::super::kinds::Kind::Change),
             design(super::super::kinds::Kind::Release)
         );
+    }
+
+    #[test]
+    fn a_change_kind_that_judges_no_rare_band_leaves_it_out_of_its_count_and_floor() {
+        use super::super::kinds::{Kind, compute, units};
+        let mut doc = v6_doc();
+        doc["bands"][0]["rare"] = true.into();
+        doc["bands"][0]["engine_spread"]["per_match_sd"] = 0.2.into();
+        // An exposure far beyond every count: a kind that judges the band needs it.
+        doc["bands"][0]["min_exposure"]["value"] = 50_000.0.into();
+        for k in ["change", "milestone", "release"] {
+            doc["kinds"][k]["count"]["equal"] = 50_000.into();
+        }
+        doc["kinds"]["change"]["judges_rare"] = false.into();
+        let r = Registry::from_bytes(doc.to_string().as_bytes()).unwrap();
+        assert!(r.with_kind(Kind::Change).not_judged("goals_per_match"));
+        assert!(!r.with_kind(Kind::Milestone).not_judged("goals_per_match"));
+        assert!(
+            !r.with_kind(Kind::Change)
+                .not_judged("stronger_team_win_rate")
+        );
+        assert!(!r.not_judged("goals_per_match"), "no kind picked yet");
+        let counts = compute(&r, &units(1), &|_| None).unwrap();
+        let equal = |k: Kind| counts[&k]["equal"].real.clone();
+        assert_eq!(equal(Kind::Milestone).matches, 50_000);
+        assert_eq!(equal(Kind::Milestone).band, "goals_per_match");
+        assert!(
+            equal(Kind::Change).matches < 50_000,
+            "{:?}",
+            equal(Kind::Change)
+        );
+        assert_ne!(equal(Kind::Change).band, "goals_per_match");
     }
 
     #[test]

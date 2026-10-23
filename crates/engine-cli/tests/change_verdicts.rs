@@ -24,7 +24,7 @@ const BANDS: [&str; 4] = [
 
 /// The fixture's rare share, beside [`BANDS`] when a test asks for it.
 const RARE: &str = "ten_plus_goals_share";
-/// The rare band's margin in the band file; a change run doubles it.
+/// The rare band's margin in the band file; a change run does not judge the band.
 const RARE_MARGIN: f64 = 0.25;
 /// The rare band's minimum exposure: above every count here, so it reads not sure, and high
 /// enough for its margin to hold the floor.
@@ -159,12 +159,15 @@ fn a_change_run_plays_exactly_its_count_and_refuses_matches() {
         .iter()
         .filter(|v| v["word"] == "not sure")
         .count();
+    // A change run judges no rare band: it reads not judged, neither pass nor fail, and is
+    // not one of the gating bands the headline counts.
     let headline = format!(
         "kind change: fixed count equal 6, strength 6, formations 6 per pairing, red-card 6 \
          per arm; not sure: {not_sure} of {} gating bands; accepted: 0; dropped pairs: 0",
-        BANDS.len() + 1
+        BANDS.len()
     );
-    assert!(not_sure >= 1, "the rare band is under its exposure: {r}");
+    assert_eq!(row(&r, RARE)["word"], "not judged", "{r}");
+    assert_eq!(row(&r, RARE)["note"], "not judged in a change run", "{r}");
     assert_eq!(r["calib.headline"], headline.as_str());
     assert!(text.contains(&headline), "{text}");
     // Every band has its word against the old engine; the same engine is never moved.
@@ -215,6 +218,8 @@ fn a_kind_refuses_another_kinds_seed_and_the_release_kind_plays_its_own_count() 
     assert_eq!(read_rows(&release).len(), 3);
     let margin = |r: &Value| row(r, RARE)["pass_rule"]["margin"].as_f64();
     assert_eq!(margin(&r), Some(RARE_MARGIN), "the normal margin");
+    // A release run judges the rare band: under its exposure it is not sure.
+    assert_eq!(row(&r, RARE)["word"], "not sure", "{r}");
 
     let change = data.path().join("change");
     let r = report(
@@ -222,9 +227,9 @@ fn a_kind_refuses_another_kinds_seed_and_the_release_kind_plays_its_own_count() 
         &change,
     );
     assert_eq!(
-        margin(&r),
-        Some(2.0 * RARE_MARGIN),
-        "a change run doubles it"
+        row(&r, RARE)["word"],
+        "not judged",
+        "a change run judges no rare band"
     );
 }
 

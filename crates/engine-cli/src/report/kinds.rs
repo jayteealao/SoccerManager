@@ -27,7 +27,8 @@ pub const OLD_POWER: f64 = 0.8;
 )]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
-    /// A change of the engine or its content: one fixed count, rare bands on a wider margin.
+    /// A change of the engine or its content: one fixed count sized on the bands that are not
+    /// rare; no rare band is judged.
     Change,
     /// A milestone: the normal margins on the milestone seeds.
     Milestone,
@@ -110,9 +111,32 @@ pub struct KindDef {
     /// `refused` on the release kind: no tuning command may use its seeds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tuning: Option<String>,
+    /// `false` on the change kind: a run of the kind judges no rare band (each reads
+    /// [`NOT_JUDGED`], neither pass nor fail), and its count is sized on the other bands.
+    /// Milestone and release runs judge every rare band at their full count.
+    #[serde(default = "judged", skip_serializing_if = "is_judged")]
+    pub judges_rare: bool,
+}
+
+/// What a rare band reads in a run whose kind judges no rare band.
+pub const NOT_JUDGED: &str = "not judged in a change run";
+
+fn judged() -> bool {
+    true
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_judged(v: &bool) -> bool {
+    *v
 }
 
 impl KindDef {
+    /// Whether a run of this kind judges the band `b`: every band, except a rare band in a
+    /// kind that judges no rare band.
+    pub fn judges(&self, b: &BandDef) -> bool {
+        self.judges_rare || !b.rule.as_ref().is_some_and(|r| r.rare)
+    }
+
     /// Matches per suite unit of `suite`.
     pub fn count_for(&self, suite: Suite) -> u32 {
         self.count.get(suite.code()).copied().unwrap_or(0)
@@ -360,7 +384,7 @@ fn floor_inputs(
     for b in registry
         .bands
         .iter()
-        .filter(|b| b.gates && b.judged_in(suite) && !b.is_distribution())
+        .filter(|b| b.gates && b.judged_in(suite) && !b.is_distribution() && def.judges(b))
     {
         let (Some(rule), Some(margin)) = (&b.rule, def.margin_for(b)) else {
             continue;
@@ -399,9 +423,11 @@ fn floor_inputs(
     out
 }
 
-/// The old-engine inputs of each gating scalar band `suite` judges with a head agreement.
+/// The old-engine inputs of each gating scalar band `suite` judges in `def`'s kind with a
+/// head agreement.
 fn old_inputs(
     registry: &Registry,
+    def: &KindDef,
     suite: Suite,
     head: Option<&AgreementRecord>,
 ) -> Vec<pass_rule::count::OldInput> {
@@ -411,7 +437,7 @@ fn old_inputs(
     registry
         .bands
         .iter()
-        .filter(|b| b.gates && b.judged_in(suite) && !b.is_distribution())
+        .filter(|b| b.gates && b.judged_in(suite) && !b.is_distribution() && def.judges(b))
         .filter_map(|b| {
             let rule = b.rule.as_ref()?;
             let a = head.bands.get(&b.band)?;
@@ -442,8 +468,9 @@ pub fn units(pairings: usize) -> BTreeMap<Suite, u32> {
 }
 
 /// Every kind's count, computed per suite: the larger of the real-test count (every gating
-/// band of the suite at its floor with the kind's margins and leagues, every rare band at its
-/// minimum exposure) and the old-engine count at the head agreement's lower bounds, in
+/// band of the suite the kind judges at its floor with the kind's margins and leagues, every
+/// rare band it judges at its minimum exposure; a change run judges no rare band) and the
+/// old-engine count at the head agreement's lower bounds, in
 /// pooled matches, then per suite unit. Every band whose floor no count meets is refused.
 pub fn compute(
     registry: &Registry,
@@ -483,7 +510,7 @@ pub fn compute(
                     continue;
                 }
             };
-            let olds = old_inputs(registry, suite, head);
+            let olds = old_inputs(registry, def, suite, head);
             let old = (!olds.is_empty())
                 .then(|| pass_rule::count::old_count_over(&olds, settings.alpha, OLD_POWER));
             let pooled = old
@@ -622,6 +649,7 @@ mod tests {
             leagues: 30,
             computed: BTreeMap::new(),
             tuning: None,
+            judges_rare: true,
         }
     }
 

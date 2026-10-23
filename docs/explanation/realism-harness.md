@@ -112,7 +112,7 @@ The field rating is a share of wins, like the win rate, so the two compare on on
 
 ## Why a rare event can set a run's length
 
-A rare band can pass only once the run has seen enough matches for its exact count bound to fit inside its margin: its minimum exposure. For a share of rare matches, that exposure grows as the square of the bound's width over the margin. The ten-goals-or-more share is the clearest case: its exposure is tens of thousands of matches, far more than any other band needs, so it sets the real-test count of the suites that judge it. `calibrate count` names the band that sets each count and why. Lowering that need means a wider margin, a band judged in another suite, or a longer run. Each is a decision about what the test must detect, not a speed-up, so the harness does not take one on its own.
+A rare band can pass only once the run has seen enough matches for its exact count bound to fit inside its margin: its minimum exposure. For a share of rare matches, that exposure grows as the square of the bound's width over the margin. The ten-goals-or-more share is the clearest case: its exposure is tens of thousands of matches, far more than any other band needs, so it sets the real-test count of the milestone and release runs that judge it. A change run judges no rare band, so its count is sized on the other bands; the rare bands are judged at milestones and releases. `calibrate count` names the band that sets each count and why. Lowering that need means a wider margin, a band judged in another suite, or a longer run. Each is a decision about what the test must detect, not a speed-up, so the harness does not take one on its own.
 
 ## How long the runs take
 

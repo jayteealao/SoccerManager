@@ -146,7 +146,7 @@
         "band": { "type": "string", "minLength": 1 },
         "suite": { "enum": ["equal", "strength", "formations", "red-card"] },
         "pairing": { "type": "string" },
-        "word": { "enum": ["pass", "fail", "not sure"] },
+        "word": { "description": "Since version 11 also not judged: a rare band in a change run, which judges no rare band; neither pass nor fail, and out of the joint word.", "enum": ["pass", "fail", "not sure", "not judged"] },
         "value": { "type": "number" },
         "lo": { "type": "number" },
         "hi": { "type": "number" },

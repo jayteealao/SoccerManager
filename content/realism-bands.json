@@ -17,13 +17,14 @@
         "to": 999999
       },
       "rare_margin": {
-        "factor": 2.0,
-        "reason": "a change run judges each rare band on twice its own margin, so it catches only large errors; the normal margin judges milestone and release runs"
+        "factor": 1.0,
+        "reason": "a change run judges no rare band (each reads not judged in a change run); milestone and release runs judge them on their own margin at their full count"
       },
+      "judges_rare": false,
       "count": {
-        "equal": 36842,
+        "equal": 6342,
         "strength": 115,
-        "formations": 670,
+        "formations": 19,
         "red-card": 248
       },
       "leagues": 30,
@@ -31,31 +32,31 @@
         "equal": {
           "units": 1,
           "real": {
-            "matches": 36842,
-            "band": "ten_plus_goals_share",
-            "why": "its minimum exposure"
+            "matches": 1000,
+            "band": "goals_per_match",
+            "why": "its margin floor"
           },
           "old": {
-            "matches": 10928,
-            "band": "ten_plus_goals_share",
-            "why": "told from its noticeable error 0.00125 at agreement 0.8732"
+            "matches": 6342,
+            "band": "pass_completion_cross_gt25",
+            "why": "told from its noticeable error 0.0325 at agreement 0.8702"
           },
-          "count": 36842,
-          "driver": "real"
+          "count": 6342,
+          "driver": "old"
         },
         "formations": {
           "units": 55,
           "real": {
-            "matches": 36842,
-            "band": "ten_plus_goals_share",
-            "why": "its minimum exposure"
+            "matches": 1000,
+            "band": "goals_per_match",
+            "why": "its margin floor"
           },
           "old": {
-            "matches": 10928,
-            "band": "ten_plus_goals_share",
-            "why": "told from its noticeable error 0.00125 at agreement 0.8732"
+            "matches": 805,
+            "band": "goalless_share",
+            "why": "told from its noticeable error 0.02 at agreement 0.8310"
           },
-          "count": 670,
+          "count": 19,
           "driver": "real"
         },
         "red-card": {

@@ -211,7 +211,18 @@ fn a_paired_run_plays_both_arms_on_the_same_seeds_and_compares_every_band() {
         .iter()
         .map(|w| words[*w].as_u64().unwrap())
         .sum();
-    assert_eq!(counted, rows.len() as u64, "{words}");
+    // The counts cover the rows that gate; a rare band is not judged in a change-kind run.
+    let gating = rows
+        .iter()
+        .filter(|r| r.get("report_only").is_none())
+        .count();
+    assert_eq!(counted, gating as u64, "{words}");
+    assert!(
+        rows.iter()
+            .filter(|r| r.get("report_only").is_some())
+            .all(|r| r["word"] == "not judged"),
+        "{rows:?}"
+    );
     assert!(stderr.contains("verdict: "), "{stderr}");
     assert!(stderr.contains("goals_per_match"), "{stderr}");
     // Each arm names its failing bands before the table.

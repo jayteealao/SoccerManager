@@ -1298,7 +1298,8 @@ pub enum CalibrateAction {
     #[command(
         long_about = "Print each run kind's fixed count, suite by suite: the larger of\n\
                       the real-test count (every gating band at its floor with the\n\
-                      kind's margins, every rare band at its exposure) and the\n\
+                      kind's margins, every rare band it judges at its exposure;\n\
+                      a change run judges no rare band) and the\n\
                       old-engine count (from the head pair agreement), and the band\n\
                       that set it. Exit 1 when a count differs from the band file's,\n\
                       2 when a band's floor no count meets."

@@ -2037,8 +2037,13 @@ impl RunCtx<'_> {
         };
         verdict::set_rule_words(&mut rows, &with_pooled(&first.checks));
         verdict::set_rule_words(&mut reported, &with_pooled(&first.reported));
+        // A kind that judges no rare band (the change kind) leaves each rare band unjudged:
+        // neither pass nor fail, and out of the joint word.
+        let skip = |b: &str| self.bands.not_judged(b);
+        verdict::mark_not_judged(&mut rows, skip);
         joint.word = verdict::joint_word(&rows, &joint.guards);
         verdict::mark_report_only(&mut reported, None, why);
+        verdict::mark_not_judged(&mut reported, skip);
         PairedJudged {
             rows,
             reported,

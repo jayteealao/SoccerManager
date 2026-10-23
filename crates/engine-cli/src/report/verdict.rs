@@ -52,6 +52,10 @@ pub enum Word {
     Fail,
     #[serde(rename = "not sure")]
     NotSure,
+    /// A rare band in a run whose kind judges no rare band: neither pass nor fail, and never
+    /// part of the joint word.
+    #[serde(rename = "not judged")]
+    NotJudged,
 }
 
 impl Word {
@@ -60,7 +64,19 @@ impl Word {
             Word::Pass => "pass",
             Word::Fail => "fail",
             Word::NotSure => "not sure",
+            Word::NotJudged => "not judged",
         }
+    }
+}
+
+/// Marks each row whose band `skip` names as not judged in this run's kind: its word is
+/// [`Word::NotJudged`], its note says why, and it is left out of the joint word.
+pub fn mark_not_judged(rows: &mut [VerdictRow], skip: impl Fn(&str) -> bool) {
+    for r in rows.iter_mut().filter(|r| skip(&r.band)) {
+        r.word = Word::NotJudged;
+        r.report_only = Some(super::kinds::NOT_JUDGED.to_string());
+        r.note = Some(super::kinds::NOT_JUDGED.to_string());
+        r.accepted = None;
     }
 }
 
@@ -155,7 +171,7 @@ impl VerdictRow {
         match self.word {
             Word::Pass => true,
             Word::Fail => false,
-            Word::NotSure => {
+            Word::NotSure | Word::NotJudged => {
                 let valueless = self
                     .note
                     .as_deref()
@@ -1557,6 +1573,37 @@ mod tests {
                 .as_deref()
                 .unwrap()
                 .contains("no target here")
+        );
+    }
+
+    #[test]
+    fn a_rare_band_not_judged_in_a_change_run_is_neither_pass_nor_fail_and_leaves_the_joint_word() {
+        let mut rng = EngineRng::from_seed(5);
+        let n = 100;
+        let base: Vec<f64> = (0..n).map(|_| 5.0 + normal(&mut rng)).collect();
+        let sets = [set(n)];
+        let rows = [
+            row(0, base.clone(), base.clone(), 0.5),
+            row(0, base.clone(), base, 0.5),
+        ];
+        let (found, c) = bootstrap(&sets, &rows, 3, 199);
+        let (mut judged, joint) = judge(&sets, &rows, &found, c, Vec::new());
+        judged[0].word = Word::Pass;
+        judged[1].band = "rare_share".into();
+        judged[1].word = Word::Fail;
+        assert_eq!(joint_word(&judged, &joint.guards), Word::Fail);
+        mark_not_judged(&mut judged, |b| b == "rare_share");
+        assert_eq!(judged[1].word, Word::NotJudged);
+        assert_eq!(judged[1].word.code(), "not judged");
+        assert_eq!(
+            judged[1].note.as_deref(),
+            Some(crate::report::kinds::NOT_JUDGED)
+        );
+        assert_eq!(judged[0].word, Word::Pass);
+        assert_eq!(joint_word(&judged, &joint.guards), Word::Pass);
+        assert_eq!(
+            serde_json::to_value(judged[1].word).unwrap(),
+            serde_json::json!("not judged")
         );
     }
 

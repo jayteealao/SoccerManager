@@ -109,7 +109,7 @@ A baseline diff marks a change as `noise` or `change`, but it does not say wheth
 target/release/engine-cli calibrate --suite equal --seed 42 --base main --out runs/change-42
 ```
 
-1. Pick the kind. A change run is `--kind change` by default, with a seed from 0 to 999999. A milestone run takes `--kind milestone` and a seed from 1000000 to 1999999; a release run `--kind release` and a seed from 2000000 to 2999999. A seed of another kind's set is refused before anything plays. The change kind doubles the margins of the rare bands, so a change run catches only large errors in rare events; the milestone and release kinds judge them at their own margins.
+1. Pick the kind. A change run is `--kind change` by default, with a seed from 0 to 999999. A milestone run takes `--kind milestone` and a seed from 1000000 to 1999999; a release run `--kind release` and a seed from 2000000 to 2999999. A seed of another kind's set is refused before anything plays. The change kind judges no rare band: each rare band reads `not judged in a change run`, neither pass nor fail, and the change count is sized on the other bands. The milestone and release kinds judge every rare band at its own margin and their full count.
 2. Let the run play its count. The count comes from the `kinds` table of `content/realism-bands.json`; `--matches` is refused in a change run. The old engine is built once, with this build's features, and its results are cached, so the next change run against the same revision plays only the new engine's matches.
 3. Read the headline after the table:
 

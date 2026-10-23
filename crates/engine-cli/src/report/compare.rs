@@ -116,7 +116,7 @@ pub fn verdict(rows: &[VerdictRow], joint: Word, off: &Guard, on: &Guard) -> Pai
         match joint {
             Word::Pass => Verdict::Pass,
             Word::Fail => Verdict::Fail,
-            Word::NotSure => Verdict::NotSure,
+            Word::NotSure | Word::NotJudged => Verdict::NotSure,
         }
     };
     PairVerdict {

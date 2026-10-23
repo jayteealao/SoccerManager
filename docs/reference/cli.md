@@ -401,7 +401,7 @@ The last line after the tables counts the matches judged: `matches: <total> in t
 
 ### Run kinds
 
-The `kinds` table of `realism-bands.json` holds three kinds, each with its seed set (`seeds`, `from` to `to`, inclusive), its rare-band margin factor (`rare_margin`, `factor` with its `reason`), its fixed count (`count`, matches per suite unit, by suite), the leagues its floor assumes (`leagues`) and what the count was computed from (`computed`):
+The `kinds` table of `realism-bands.json` holds three kinds, each with its seed set (`seeds`, `from` to `to`, inclusive), its rare-band margin factor (`rare_margin`, `factor` with its `reason`), whether it judges the rare bands (`judges_rare`, `true` when absent; the change kind's `false` leaves each rare band `not judged in a change run`, neither pass nor fail, and sizes its count on the other bands), its fixed count (`count`, matches per suite unit, by suite), the leagues its floor assumes (`leagues`) and what the count was computed from (`computed`):
 
 | Kind | Seeds | Rare-band margin | Use |
 |---|---|---|---|
@@ -409,7 +409,7 @@ The `kinds` table of `realism-bands.json` holds three kinds, each with its seed 
 | `milestone` | 1000000 to 1999999 | the band's margin | A run at a milestone. |
 | `release` | 2000000 to 2999999 | the band's margin | A release run. Tuning never sees these seeds: `primitives fit` refuses one before any match plays. |
 
-A seed outside the run's kind's set is refused before anything plays, naming the kind it belongs to. The band file's load checks the 97 percent floor of every gating band at each kind's count and margins, and `calibrate` checks it again before play with the real errors it read. A kind's count per suite is the larger of two counts over the suite's pooled matches (per formation pairing, per red-card arm, divided by the units it pools): the real-test count, the fewest matches at which every gating band of the suite holds its floor with the kind's margins and every rare band reaches its minimum exposure; and the old-engine count, `max over gating scalar bands of ceil(2 (1 - r) sd^2 (z(0.95) + z(0.80))^2 / e^2)`, with `sd` the band's per-match spread, `e` its noticeable error and `r` the lower bound of its head pair agreement (`pair_agreement`, measure `head`). `calibrate count` prints the computation. `pair_agreement` also records the agreement measured before and after the random streams were split, with their intervals.
+A seed outside the run's kind's set is refused before anything plays, naming the kind it belongs to. The band file's load checks the 97 percent floor of every gating band at each kind's count and margins, and `calibrate` checks it again before play with the real errors it read. A kind's count per suite is the larger of two counts over the suite's pooled matches (per formation pairing, per red-card arm, divided by the units it pools): the real-test count, the fewest matches at which every gating band of the suite the kind judges holds its floor with the kind's margins and every rare band it judges reaches its minimum exposure; and the old-engine count, `max over gating scalar bands of ceil(2 (1 - r) sd^2 (z(0.95) + z(0.80))^2 / e^2)`, with `sd` the band's per-match spread, `e` its noticeable error and `r` the lower bound of its head pair agreement (`pair_agreement`, measure `head`). `calibrate count` prints the computation. `pair_agreement` also records the agreement measured before and after the random streams were split, with their intervals.
 
 ### Count the matches
 
