@@ -49,6 +49,8 @@ pub struct Request<'a> {
     /// The run's content folder: the content of a ready binary.
     pub content_dir: &'a Path,
     pub seed: u64,
+    /// The run's kind: the old engine plays the same kind, so it accepts the run's seed.
+    pub kind: crate::report::kinds::Kind,
     pub minutes: u32,
     /// Matches per suite unit, by suite.
     pub matches: &'a std::collections::BTreeMap<Suite, u32>,
@@ -456,6 +458,11 @@ fn play(
         .args(["--jobs", &req.jobs.to_string()])
         .arg("--out")
         .arg(dir);
+    // The change kind is the default, so an old engine from before kinds plays a change
+    // run's seeds; a milestone or release seed needs an old engine that knows its kind.
+    if req.kind != crate::report::kinds::Kind::Change {
+        cmd.args(["--kind", req.kind.code()]);
+    }
     if suite == Suite::Formations {
         for name in req.pairings {
             cmd.arg("--pairing").arg(name);

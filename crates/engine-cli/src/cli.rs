@@ -1042,7 +1042,7 @@ pub struct CalibrateOpts {
                      Required for a run; not taken by calibrate accept."
     )]
     pub seed_arg: Option<u64>,
-    /// Matches per suite or pairing (default 1000); refused in a change run.
+    /// Matches per suite or pairing (default 1000).
     #[arg(
         long = "matches",
         value_name = "N",
@@ -1051,7 +1051,7 @@ pub struct CalibrateOpts {
                      its kind from the band file."
     )]
     pub matches_arg: Option<u32>,
-    /// The run's kind: its seed set, rare-band margins and fixed count.
+    /// Run kind: seed set, count.
     #[arg(
         long,
         value_enum,
@@ -1277,7 +1277,7 @@ pub enum CalibrateAction {
         )]
         targets: Option<PathBuf>,
     },
-    /// Accept a not-sure band of a run folder: accepted, not shown equivalent.
+    /// Accept a not-sure band of a run: accepted, not shown equivalent.
     #[command(
         long_about = "Accept a band that reads not sure in a run folder's last judgement.\n\n\
                       The acceptance is written to accepted.json in the folder. Run the\n\
@@ -1307,6 +1307,9 @@ pub enum CalibrateAction {
         /// Only this kind: change, milestone or release.
         #[arg(long, value_enum, hide_possible_values = true)]
         kind: Option<crate::report::kinds::Kind>,
+        /// Real data whose errors the floors read.
+        #[arg(long = "real-data", value_name = "DIR")]
+        real_data: Option<PathBuf>,
     },
     /// Measure how closely two run folders' matches agree.
     #[command(

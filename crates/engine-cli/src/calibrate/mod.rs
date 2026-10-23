@@ -38,12 +38,14 @@
 //! verdict with its distance from the run's value; it never changes a verdict. A band that
 //! only reports (`gates: false`, a real sample under its floor, or a generalisation under
 //! the floor) is judged by the same rules in a second table, "reported bands", and in
-//! `calib.reported`, apart from the gating bands: it never moves the joint threshold, a
-//! suite's power target, the joint word or `calib.pass`. A band that reads the realism
-//! measures, or a per-club spread, is judged on its range alone when the old engine's rows
-//! do not carry what it reads. `calibrate accept <band> --run <dir>` records the developer's
-//! acceptance of a not-sure band in the folder; the next judgement marks it "accepted, not
-//! shown equivalent", and its word stays not sure.
+//! `calib.reported`, apart from the gating bands: it never moves the joint threshold, the
+//! joint word or `calib.pass`. A band that reads the realism measures, or a per-club spread,
+//! is judged on its range alone, with no word against the old engine, when the old engine's
+//! rows do not carry what it reads. `calibrate accept <band> --run <dir>` records the
+//! developer's acceptance of a not-sure band in the folder; the next judgement marks it
+//! "accepted, not shown equivalent", and its word stays not sure. `calibrate count` prints
+//! each kind's count as the band file computes it, and `calibrate agreement` measures how
+//! closely two run folders' matches agree.
 
 pub mod base;
 pub mod fixtures;
@@ -1088,14 +1090,14 @@ fn mark_accepted(rows: &mut [verdict::VerdictRow], a: &accepted::AcceptedInfo) {
 /// band's floor no count meets.
 pub fn count(
     content_dir: Option<&Path>,
-    opts: &CalibrateOpts,
+    real_data: Option<&Path>,
     only: Option<Kind>,
 ) -> anyhow::Result<i32> {
     let dir = ContentDir::resolve(content_dir)?;
     let loaded = crate::content::load(Some(dir.root()), None, None, None)?;
     let registry = Registry::load(&dir)?;
     let pairings = fixtures::pairings(loaded.content.tactics.formations.len()).len();
-    let folder = real::resolve(opts.real_data.as_deref(), dir.root());
+    let folder = real::resolve(real_data, dir.root());
     let reference = {
         let path = crate::real_targets::default_file(dir.root());
         path.is_file()
@@ -1616,6 +1618,7 @@ impl RunCtx<'_> {
             data,
             content_dir: self.dir.root(),
             seed: opts.seed(),
+            kind: opts.kind,
             minutes: opts.minutes,
             matches: &self.matches,
             jobs: self.jobs,
@@ -2020,8 +2023,20 @@ impl RunCtx<'_> {
         }
         // A version 6 band's word is its word against real football by the pass rule on the
         // changed engine; the paired test fills the change columns only.
-        verdict::set_rule_words(&mut rows, &first.checks);
-        verdict::set_rule_words(&mut reported, &first.reported);
+        // A formations band is judged pooled over every pairing, so its word comes from its
+        // pooled check; the per-pairing checks stay information only.
+        let pooled: Vec<BandCheck> = first
+            .builder
+            .row_specs(true)
+            .iter()
+            .filter(|s| s.suite == crate::report::Suite::Formations)
+            .map(|s| first.builder.check(s))
+            .collect();
+        let with_pooled = |checks: &[BandCheck]| -> Vec<BandCheck> {
+            checks.iter().chain(&pooled).cloned().collect()
+        };
+        verdict::set_rule_words(&mut rows, &with_pooled(&first.checks));
+        verdict::set_rule_words(&mut reported, &with_pooled(&first.reported));
         joint.word = verdict::joint_word(&rows, &joint.guards);
         verdict::mark_report_only(&mut reported, None, why);
         PairedJudged {

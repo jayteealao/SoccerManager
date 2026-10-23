@@ -96,8 +96,8 @@ fn main() {
         cli::Command::Resume(opts) => resume::run(content_dir, &opts),
         cli::Command::Calibrate(opts) => match &opts.action {
             Some(cli::CalibrateAction::Accept { band, run }) => report::accepted::accept(band, run),
-            Some(cli::CalibrateAction::Count { kind }) => {
-                calibrate::count(content_dir, &opts, *kind)
+            Some(cli::CalibrateAction::Count { kind, real_data }) => {
+                calibrate::count(content_dir, real_data.as_deref(), *kind)
             }
             Some(cli::CalibrateAction::Agreement { a, b, out }) => {
                 report::agreement::command(a, b, out.as_deref())
