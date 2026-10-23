@@ -729,67 +729,39 @@
             }
           },
           "calib.compare": {
+            "description": "Since version 11: a paired run's rows, the on arm judged as a change run judges its engine with the off arm in the old engine's place: value is the on arm's, base_value the off arm's, word the on arm's word against real football and old_word its word against the off arm.",
             "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "suite",
-                "band",
-                "lo",
-                "hi",
-                "off",
-                "on",
-                "delta",
-                "off_pass",
-                "on_pass"
-              ],
-              "properties": {
-                "suite": {
-                  "enum": [
-                    "equal",
-                    "strength",
-                    "formations",
-                    "red-card"
-                  ]
-                },
-                "band": {
-                  "type": "string"
-                },
-                "pairing": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "lo": {
-                  "type": "number"
-                },
-                "hi": {
-                  "type": "number"
-                },
-                "off": {
-                  "type": "number"
-                },
-                "on": {
-                  "type": "number"
-                },
-                "delta": {
-                  "type": "number"
-                },
-                "off_pass": {
-                  "type": "boolean"
-                },
-                "on_pass": {
-                  "type": "boolean"
+            "items": { "$ref": "#/$defs/verdictRow" }
+          },
+          "calib.verdict": {
+            "description": "Since version 11: on-rejected when the on arm broke a guardrail, else the on arm's joint word against real football.",
+            "enum": [
+              "on-rejected",
+              "pass",
+              "fail",
+              "not-sure"
+            ]
+          },
+          "calib.pair_verdict": {
+            "description": "Since version 11: the guardrails the on arm broke and the counts of its words against the off arm over the bands that gate.",
+            "type": "object",
+            "required": ["verdict", "words"],
+            "additionalProperties": false,
+            "properties": {
+              "verdict": { "enum": ["on-rejected", "pass", "fail", "not-sure"] },
+              "rejected": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+              "words": {
+                "type": "object",
+                "required": ["better", "worse", "equivalent", "not_sure"],
+                "additionalProperties": false,
+                "properties": {
+                  "better": { "type": "integer", "minimum": 0 },
+                  "worse": { "type": "integer", "minimum": 0 },
+                  "equivalent": { "type": "integer", "minimum": 0 },
+                  "not_sure": { "type": "integer", "minimum": 0 }
                 }
               }
             }
-          },
-          "calib.verdict": {
-            "enum": [
-              "on-rejected",
-              "on-better",
-              "off-better",
-              "no-difference"
-            ]
           },
           "calib.units": {
             "description": "The run's fixtures over every arm and suite, those an earlier session of the run had finished, and those this session played.",
@@ -1148,7 +1120,8 @@
           "calib.pair": [
             "calib.arms",
             "calib.compare",
-            "calib.verdict"
+            "calib.verdict",
+            "calib.pair_verdict"
           ],
           "calib.joint": [
             "calib.verdicts",

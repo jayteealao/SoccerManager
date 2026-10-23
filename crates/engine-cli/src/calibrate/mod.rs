@@ -703,6 +703,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         arms: None,
         compare: None,
         verdict: None,
+        pair_verdict: None,
         units,
         results_digest,
         base: old.map(|(b, _)| b),
@@ -780,7 +781,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     }
 
     let code = match (&opts.pair, played.as_slice()) {
-        (Some(flag), [off, on]) => compare_arms(&mut report, (flag, written), &states, off, on),
+        (Some(flag), [off, on]) => ctx.compare_arms(&mut report, (flag, written), &states, off, on),
         // A change run passes only on a joint pass, any other run on its range checks: a
         // fail or a not sure exits 2.
         _ => i32::from(!report.pass) * 2,
@@ -1002,45 +1003,6 @@ fn flag_entries(
             }
         })
         .collect())
-}
-
-/// A paired run's comparison of its two arms, into `report`. The verdict is the
-/// comparison's answer; the exit code says whether both arms can be trusted.
-fn compare_arms(
-    report: &mut CalibrationReport,
-    (flag, written): (&String, &engine::data::TuningFile),
-    states: &FlagStates,
-    off: &Arm,
-    on: &Arm,
-) -> i32 {
-    let rows = compare::compare(&off.checks, &on.checks);
-    let verdict = compare::verdict(&rows, &off.guard(), &on.guard());
-    let def = &written.flags[flag];
-    report.pair = Some(PairInfo {
-        flag: flag.clone(),
-        owner: def.owner.clone(),
-        hypothesis: def.hypothesis.clone(),
-        removal_condition: def.removal_condition.clone(),
-        pinned: states
-            .0
-            .iter()
-            .map(|(n, s)| (n.clone(), s.code()))
-            .collect(),
-    });
-    report.arms = Some(BTreeMap::from([
-        ("off".to_string(), off.report()),
-        ("on".to_string(), on.report()),
-    ]));
-    eprint!("{}", compare::render_table(flag, &rows, verdict));
-    tracing::info!(
-        signal = "calibrate.pair",
-        run.id = %report.run_id,
-        flag = %flag,
-        verdict = verdict.code()
-    );
-    report.compare = Some(rows);
-    report.verdict = Some(verdict);
-    if off.trusted() && on.trusted() { 0 } else { 2 }
 }
 
 /// The rows of every arm: their files, and the matches with a full recording.
@@ -1445,6 +1407,9 @@ impl Arm {
 }
 
 /// The finished matches of a run folder, folded.
+/// The old side of a paired judgement: its folded matches and their fixture keys by suite.
+type Side<'a> = (&'a RunBuilder, &'a BTreeMap<Suite, Vec<u64>>);
+
 struct Folded {
     builder: RunBuilder,
     /// The fixture key of each match in the builder, by suite, in the builder's order.
@@ -1875,11 +1840,35 @@ impl RunCtx<'_> {
                 joint: None,
             };
         }
+        let old = old.map(|o| (&o.builder, &o.keys));
+        let (rows, reported, joint) = self.judge_paired(first, old);
+        self.log_verdict(&rows, &joint);
+        Judged {
+            verdicts: rows,
+            reported,
+            joint: Some(joint),
+        }
+    }
+
+    /// The rows of `first` judged against `old` on the fixtures both played: the gating
+    /// rows, the reported rows and the joint word. The old side is the old engine of a change
+    /// run or the off arm of a paired run.
+    fn judge_paired(
+        &self,
+        first: &Arm,
+        old: Option<Side<'_>>,
+    ) -> (
+        Vec<verdict::VerdictRow>,
+        Vec<verdict::VerdictRow>,
+        verdict::Joint,
+    ) {
+        let opts = self.opts;
+        let why = |b: &str| self.bands.report_only(b);
         // The gating rows are judged exactly as if no band only reported: the reported
         // rows get a bootstrap and a threshold of their own, so they never move `c`.
         let (sets, mut rows) = self.paired(first, old);
         keep_bands(&mut rows, &opts.bands);
-        let (gating, reported) = self.split_paired(rows, first, old);
+        let (gating, reported) = self.split_paired(rows, first, old.map(|o| o.0));
         let alpha = self.bands.pass_rule.map_or(0.05, |p| p.alpha);
         let target = |band: &str| self.target_of(band);
         let (found, c) = verdict::bootstrap(&sets, &gating, opts.seed(), verdict::RESAMPLES);
@@ -1890,7 +1879,7 @@ impl RunCtx<'_> {
         verdict::set_old_words(&mut reported_rows, &reported, &found_r, c_r, alpha, &target);
         let mut reported = reported_rows;
         // The rows a paired test cannot judge: their range alone, on the changed engine.
-        if let Some(old) = old {
+        if let Some((old, _)) = old {
             for spec in first.builder.row_specs(true) {
                 let selected = opts.bands.is_empty() || opts.bands.contains(&spec.def.band);
                 let Some(note) = self.range_reason(spec.def, spec.suite, first, old) else {
@@ -1914,12 +1903,54 @@ impl RunCtx<'_> {
         verdict::set_rule_words(&mut reported, &first.reported);
         joint.word = verdict::joint_word(&rows, &joint.guards);
         verdict::mark_report_only(&mut reported, None, why);
-        self.log_verdict(&rows, &joint);
-        Judged {
-            verdicts: rows,
-            reported,
-            joint: Some(joint),
-        }
+        (rows, reported, joint)
+    }
+
+    /// A paired run's comparison of its two arms, into `report`: the on arm judged as a
+    /// change run judges its engine, with the off arm in the old engine's place. The verdict
+    /// is the comparison's answer; the exit code says whether both arms can be trusted.
+    fn compare_arms(
+        &self,
+        report: &mut CalibrationReport,
+        (flag, written): (&String, &engine::data::TuningFile),
+        states: &FlagStates,
+        off: &Arm,
+        on: &Arm,
+    ) -> i32 {
+        let (mut rows, _reported, joint) = self.judge_paired(on, Some((&off.builder, &off.keys)));
+        rows.sort_by(|a, b| (&a.suite, &a.band, &a.pairing).cmp(&(&b.suite, &b.band, &b.pairing)));
+        let pair = compare::verdict(&rows, joint.word, &off.guard(), &on.guard());
+        let def = &written.flags[flag];
+        report.pair = Some(PairInfo {
+            flag: flag.clone(),
+            owner: def.owner.clone(),
+            hypothesis: def.hypothesis.clone(),
+            removal_condition: def.removal_condition.clone(),
+            pinned: states
+                .0
+                .iter()
+                .map(|(n, s)| (n.clone(), s.code()))
+                .collect(),
+        });
+        report.arms = Some(BTreeMap::from([
+            ("off".to_string(), off.report()),
+            ("on".to_string(), on.report()),
+        ]));
+        eprint!(
+            "paired run of flag {flag}\n{}{}",
+            verdict::render_table(&rows, Some(&joint)),
+            compare::render_verdict(flag, &pair)
+        );
+        tracing::info!(
+            signal = "calibrate.pair",
+            run.id = %report.run_id,
+            flag = %flag,
+            verdict = pair.verdict.code()
+        );
+        report.compare = Some(rows);
+        report.verdict = Some(pair.verdict);
+        report.pair_verdict = Some(pair);
+        if off.trusted() && on.trusted() { 0 } else { 2 }
     }
 
     /// The target a band's old-engine word measures closeness to: its design value, or the
@@ -1958,7 +1989,7 @@ impl RunCtx<'_> {
         def: &BandDef,
         suite: Suite,
         first: &Arm,
-        old: &Folded,
+        old: &RunBuilder,
     ) -> Option<&'static str> {
         if matches!(def.measure, Measure::ClubRange { .. }) {
             Some(verdict::PER_CLUB)
@@ -1966,7 +1997,7 @@ impl RunCtx<'_> {
             None
         } else if !first.builder.has_measures(suite) {
             Some(verdict::NO_MEASURES_NOTE)
-        } else if !old.builder.has_measures(suite) {
+        } else if !old.has_measures(suite) {
             Some(verdict::BASE_WITHOUT_MEASURES)
         } else {
             None
@@ -1979,7 +2010,7 @@ impl RunCtx<'_> {
         &self,
         rows: Vec<verdict::PairedRow>,
         first: &Arm,
-        old: Option<&Folded>,
+        old: Option<&RunBuilder>,
     ) -> (Vec<verdict::PairedRow>, Vec<verdict::PairedRow>) {
         let Some(old) = old else {
             return (Vec::new(), Vec::new());
@@ -2030,16 +2061,12 @@ impl RunCtx<'_> {
     fn paired(
         &self,
         changed: &Arm,
-        old: Option<&Folded>,
+        old: Option<Side<'_>>,
     ) -> (Vec<verdict::SuiteSet>, Vec<verdict::PairedRow>) {
         let Some(old) = old else {
             return (Vec::new(), Vec::new());
         };
-        verdict::paired(
-            (&changed.builder, &changed.keys),
-            (&old.builder, &old.keys),
-            &self.matches,
-        )
+        verdict::paired((&changed.builder, &changed.keys), old, &self.matches)
     }
 
     /// Writes the run's `target.json`: its kind, its matches per suite, and the registry the

@@ -53,11 +53,6 @@ impl Band {
     pub fn contains(&self, value: f64) -> bool {
         (self.lo..=self.hi).contains(&value)
     }
-
-    /// A floor band starts at 0, so only a value above `hi` is a miss.
-    pub fn is_floor(&self) -> bool {
-        self.lo == 0.0 && self.hi > 0.0
-    }
 }
 
 /// The strength suite's setting: the stronger club has every attribute times

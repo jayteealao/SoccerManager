@@ -1404,11 +1404,16 @@ pub struct CalibrationReport {
     /// A paired run: the figures of each arm, under `off` and `on`.
     #[serde(rename = "calib.arms", skip_serializing_if = "Option::is_none")]
     pub arms: Option<BTreeMap<String, ArmReport>>,
-    /// A paired run: one row per suite and realism band, both arms side by side.
+    /// A paired run: one row per suite and band, the on arm's value and word against real
+    /// football beside the off arm's value and the on arm's word against it.
     #[serde(rename = "calib.compare", skip_serializing_if = "Option::is_none")]
-    pub compare: Option<Vec<compare::CompareRow>>,
+    pub compare: Option<Vec<verdict::VerdictRow>>,
     #[serde(rename = "calib.verdict", skip_serializing_if = "Option::is_none")]
     pub verdict: Option<compare::Verdict>,
+    /// A paired run: the guardrails the on arm broke and the counts of its words against
+    /// the off arm.
+    #[serde(rename = "calib.pair_verdict", skip_serializing_if = "Option::is_none")]
+    pub pair_verdict: Option<compare::PairVerdict>,
     /// The fixtures of the run, those an earlier session finished, and those played now.
     #[serde(rename = "calib.units")]
     pub units: Units,
