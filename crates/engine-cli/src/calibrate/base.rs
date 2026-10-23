@@ -62,6 +62,9 @@ pub struct Request<'a> {
     pub planned: &'a [(FixtureKey, u64)],
     /// A test seam: the build fails as a broken base branch would.
     pub fail_build: bool,
+    /// The revision a ready binary was built from (`--base-rev`): the binary plays that
+    /// revision's content instead of the run's.
+    pub base_rev: Option<&'a str>,
 }
 
 /// The old engine's results for a run.
@@ -149,11 +152,22 @@ pub fn run(req: &Request<'_>) -> anyhow::Result<BaseRun> {
             let path = std::path::absolute(path)?;
             let sha = cache::file_sha256(&path)
                 .with_context(|| format!("the old engine {} cannot be read", path.display()))?;
-            ("binary", None, None, sha, req.content_dir.to_path_buf())
+            let content = match req.base_rev {
+                Some(rev) => content_at(req.content_dir, rev)?.content,
+                None => req.content_dir.to_path_buf(),
+            };
+            (
+                "binary",
+                req.base_rev.map(str::to_string),
+                None,
+                sha,
+                content,
+            )
         }
         Source::Rev(rev) => {
             let revision = resolve(rev)?;
-            let content = extract_content(&revision)?;
+            let content =
+                extract_content(&revision.repo, &revision.cache_root, &revision.key.commit)?;
             let id = revision.key.id();
             ("rev", Some(rev.clone()), Some(revision), id, content)
         }
@@ -230,34 +244,114 @@ fn hits(dir: &Path, planned: &[(FixtureKey, u64)]) -> anyhow::Result<u32> {
     Ok(u32::try_from(n).unwrap_or(u32::MAX))
 }
 
-/// The cache key of `rev` in the repository this command runs in, with the release profile.
-fn resolve(rev: &str) -> anyhow::Result<Revision> {
+/// Runs git with `args` in `repo`, standard input closed, and returns its standard output; a
+/// failure names the command and git's own error.
+fn git(repo: &Path, args: &[&str]) -> anyhow::Result<Vec<u8>> {
     let out = Command::new("git")
-        .args(["rev-parse", "--show-toplevel"])
+        .arg("-C")
+        .arg(repo)
+        .args(args)
         .stdin(Stdio::null())
         .output()
-        .context("cannot run git to find the repository of the old engine")?;
-    let top = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if !out.status.success() || top.is_empty() {
-        anyhow::bail!("--base {rev} needs a git checkout of this repository as the working folder");
+        .context("cannot run git")?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "git {} failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
     }
-    let repo = std::path::absolute(PathBuf::from(top))?;
+    Ok(out.stdout)
+}
+
+/// The top folder of the git checkout that holds `dir`, when there is one.
+fn top_of(dir: &Path) -> Option<PathBuf> {
+    let out = git(dir, &["rev-parse", "--show-toplevel"]).ok()?;
+    let top = String::from_utf8_lossy(&out).trim().to_string();
+    if top.is_empty() {
+        return None;
+    }
+    std::path::absolute(PathBuf::from(top)).ok()
+}
+
+/// A revision's content folder and the checkout it came from.
+pub struct RevContent {
+    /// The top folder of the checkout.
+    pub repo: PathBuf,
+    /// The full commit the revision names.
+    pub commit: String,
+    /// The revision's `content/` folder, written once under the checkout's build cache.
+    pub content: PathBuf,
+}
+
+/// The `content/` folder of `rev` in the checkout whose `content/` folder `content_dir` is;
+/// written once under that checkout's build cache.
+pub fn content_at(content_dir: &Path, rev: &str) -> anyhow::Result<RevContent> {
+    let repo = checkout_of(content_dir).with_context(|| {
+        format!(
+            "{rev}: the content folder {} is not the content folder of a git checkout",
+            content_dir.display()
+        )
+    })?;
+    let commit = cache::resolve_commit(&repo, rev).map_err(anyhow::Error::msg)?;
+    let content = extract_content(&repo, &repo.join("target").join("bisect"), &commit)?;
+    Ok(RevContent {
+        repo,
+        commit,
+        content,
+    })
+}
+
+/// The checkout whose `content/` folder `content_dir` is, when it is one.
+pub fn checkout_of(content_dir: &Path) -> Option<PathBuf> {
+    let top = top_of(content_dir)?;
+    let same = |a: &Path, b: &Path| match (fs::canonicalize(a), fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    };
+    same(&top.join("content"), content_dir).then_some(top)
+}
+
+/// Every path of the checkout `repo` that differs from `commit`: changed, added or removed
+/// since it, staged or not, and every untracked file git does not ignore; with `/` separators,
+/// relative to the checkout.
+pub fn changed_paths(repo: &Path, commit: &str) -> anyhow::Result<Vec<String>> {
+    let mut out: Vec<String> = Vec::new();
+    for args in [
+        vec!["diff", "--name-only", "--no-renames", commit],
+        vec!["ls-files", "--others", "--exclude-standard"],
+    ] {
+        let bytes = git(repo, &args)?;
+        out.extend(
+            String::from_utf8_lossy(&bytes)
+                .lines()
+                .map(|l| l.trim().replace('\\', "/"))
+                .filter(|l| !l.is_empty()),
+        );
+    }
+    out.sort();
+    out.dedup();
+    Ok(out)
+}
+
+/// The cache key of `rev` in the repository this command runs in, with the release profile.
+fn resolve(rev: &str) -> anyhow::Result<Revision> {
+    let Some(repo) = top_of(Path::new(".")) else {
+        anyhow::bail!("--base {rev} needs a git checkout of this repository as the working folder");
+    };
     let cache_root = repo.join("target").join("bisect");
     let commit = cache::resolve_commit(&repo, rev).map_err(anyhow::Error::msg)?;
     let (toolchain, target) =
         cache::toolchain_of(&repo, &commit, &cache_root).map_err(anyhow::Error::msg)?;
     // The old engine builds with this build's features where its revision declares them.
-    let manifest = Command::new("git")
-        .arg("-C")
-        .arg(&repo)
-        .args(["show", &format!("{commit}:crates/engine-cli/Cargo.toml")])
-        .stdin(Stdio::null())
-        .output()
-        .context("cannot run git to read the old engine's manifest")?;
-    let (features, missing) = features_for(
-        &this_build_features(),
-        &String::from_utf8_lossy(&manifest.stdout),
-    );
+    // A revision without the manifest declares no feature.
+    let manifest = git(
+        &repo,
+        &["show", &format!("{commit}:crates/engine-cli/Cargo.toml")],
+    )
+    .unwrap_or_default();
+    let (features, missing) =
+        features_for(&this_build_features(), &String::from_utf8_lossy(&manifest));
     Ok(Revision {
         repo,
         cache_root,
@@ -272,31 +366,15 @@ fn resolve(rev: &str) -> anyhow::Result<Revision> {
     })
 }
 
-/// The `content/` folder of the revision, written once under the build cache.
-fn extract_content(revision: &Revision) -> anyhow::Result<PathBuf> {
-    let commit = &revision.key.commit;
-    let dir = revision.cache_root.join("content").join(commit);
+/// The `content/` folder of `commit` in `repo`, written once under the build cache
+/// `cache_root`.
+fn extract_content(repo: &Path, cache_root: &Path, commit: &str) -> anyhow::Result<PathBuf> {
+    let dir = cache_root.join("content").join(commit);
     let done = dir.join(".complete");
     if done.is_file() {
         return Ok(dir);
     }
-    let git = |args: &[&str]| -> anyhow::Result<Vec<u8>> {
-        let out = Command::new("git")
-            .arg("-C")
-            .arg(&revision.repo)
-            .args(args)
-            .stdin(Stdio::null())
-            .output()
-            .context("cannot run git")?;
-        if !out.status.success() {
-            anyhow::bail!(
-                "git {} failed: {}",
-                args.join(" "),
-                String::from_utf8_lossy(&out.stderr).trim()
-            );
-        }
-        Ok(out.stdout)
-    };
+    let git = |args: &[&str]| git(repo, args);
     let list = git(&["ls-tree", "-r", "--name-only", commit, "--", "content"])?;
     let _ = fs::remove_dir_all(&dir);
     for path in String::from_utf8_lossy(&list).lines() {

@@ -66,6 +66,7 @@ pub mod styles;
 pub mod worker;
 
 use std::collections::BTreeMap;
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -87,7 +88,7 @@ use crate::report::compare::{self, Guard};
 use crate::report::kinds::Kind;
 use crate::report::measures::Extras;
 use crate::report::{
-    ArmReport, BandCheck, BaseCache, BaseReport, CalibrationReport, Counts, FlagEntry,
+    ArmReport, BandCheck, BaseCache, BaseReport, CalibrationReport, Counts, FlagEntry, IntentInfo,
     MEASURES_VERSION, Observations, PairInfo, PairingFigures, RED_CARD_ARMS, Recorded,
     RedCardFigures, RegistryInfo, RowsInfo, RunBuilder, Selection, Suite, SuiteFigures, Units,
 };
@@ -256,17 +257,42 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         &fixtures_hash,
         &bands,
     )?;
+    let fresh_id = format!("calib-{:016x}-{millis}", opts.seed());
+    let run_dir = opts
+        .out
+        .clone()
+        .unwrap_or_else(|| data.join("runs").join(&fresh_id));
+    // The change's intent comes after every check the band file alone can make and before
+    // the rules file, the old engine and any match: from --intent, from the folder of a
+    // played run, or from the prompt at a terminal; else the run stops here.
+    let intent = if change {
+        let stored = if run_folder::holds(&run_dir, &identity) {
+            intent::stored(&run_dir, &bands)?
+        } else {
+            None
+        };
+        let terminal = std::io::stdin().is_terminal();
+        let (intent, source) =
+            intent::resolve(opts.intent.as_deref(), stored, terminal, &bands, || {
+                let stdin = std::io::stdin();
+                intent::prompt(&mut stdin.lock(), &mut std::io::stderr(), &bands)
+            })?;
+        if source != intent::Source::Prompt && std::env::var_os(QUIET_ENV).is_none() {
+            eprintln!("{}", intent::summary(&intent));
+        }
+        Some((intent, source))
+    } else {
+        if opts.intent.is_some() {
+            anyhow::bail!("--intent: only a change run (--base) takes an intent");
+        }
+        None
+    };
     // A change run checks the sensitivity rules last; a refused rules file stops it here.
     let rule_set = if change {
         Some(rules::load(&loaded.content, &dir)?)
     } else {
         None
     };
-    let fresh_id = format!("calib-{:016x}-{millis}", opts.seed());
-    let run_dir = opts
-        .out
-        .clone()
-        .unwrap_or_else(|| data.join("runs").join(&fresh_id));
     // A run folder of the same identity keeps the bands it was last judged with, which
     // name what a re-judgement changed.
     let known = run_folder::holds(&run_dir, &identity)
@@ -317,6 +343,13 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     let old = ctx.old_engine(&data)?;
 
     let session = run_folder::open(&run_dir, &identity, &fresh_id, millis)?;
+    // The intent is in the run folder before the changed engine plays its first match.
+    let intent_info = intent
+        .as_ref()
+        .map(|(i, source)| {
+            intent::write_into(&run_dir, i).map(|sha256| IntentInfo::of(i, *source, sha256))
+        })
+        .transpose()?;
     ctx.millis = session.millis;
     ctx.run_id = session.run_id.clone();
     let run_id = session.run_id.clone();
@@ -753,6 +786,7 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
         },
         reported,
         figures: first.figure_rows.clone(),
+        intent: intent_info,
         accepted: acceptances,
         counts,
         registry: RegistryInfo {
@@ -1627,6 +1661,7 @@ impl RunCtx<'_> {
             pairings: &self.selection.pairings,
             planned: &planned,
             fail_build: opts.inject_failure == Some(InjectFailure::BaseBuild),
+            base_rev: opts.base_rev.as_deref(),
         })?;
         eprintln!(
             "old engine {}: {} results from the cache, {} played",

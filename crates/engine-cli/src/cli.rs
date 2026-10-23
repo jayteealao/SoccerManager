@@ -1207,6 +1207,20 @@ pub struct CalibrateOpts {
                      largest count the run plays."
     )]
     pub base: Option<String>,
+    /// The change's intent: bands it should move.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "The intent of a change run: a JSON file naming the bands the\n\
+                     change should move and which way (up or down), and later one\n\
+                     note per surprise and the draft rules to confirm.\n\n\
+                     It is copied into the run folder before any match plays.\n\
+                     Without it a change run asks at a terminal, reads the run\n\
+                     folder's own intent.json, or stops before play. A played\n\
+                     run's bands and directions cannot change; only its notes\n\
+                     and confirmations."
+    )]
+    pub intent: Option<PathBuf>,
     /// The measured real data the bands read.
     #[arg(
         long = "real-data",
@@ -1225,6 +1239,10 @@ pub struct CalibrateOpts {
     /// The old engine of a change run: a ready executable, played on the run's content.
     #[arg(long, hide = true, value_name = "EXE", conflicts_with = "pair")]
     pub base_binary: Option<PathBuf>,
+    /// The revision a ready old engine (`--base-binary`) was built from: its content is the
+    /// old engine's, and the change's touched settings are diffed against it.
+    #[arg(long, hide = true, value_name = "REV", requires = "base_binary")]
+    pub base_rev: Option<String>,
     /// The changed engine plays every match on a new engine seed derived with SALT; the old
     /// engine keeps the planned seeds. A test seam of the gate proof's self runs.
     #[arg(long, hide = true, value_name = "SALT")]

@@ -1463,6 +1463,10 @@ pub struct CalibrationReport {
         skip_serializing_if = "Vec::is_empty"
     )]
     pub figures: Vec<FigureRow>,
+    /// A change run's intent: the file in the run folder, where it came from, and what it
+    /// names.
+    #[serde(rename = "calib.intent", skip_serializing_if = "Option::is_none")]
+    pub intent: Option<IntentInfo>,
     /// The developer's acceptances of not-sure bands in the run folder; absent without an
     /// `accepted.json`.
     #[serde(rename = "calib.accepted", skip_serializing_if = "Option::is_none")]
@@ -1513,6 +1517,38 @@ pub struct CalibrationReport {
         skip_serializing_if = "Option::is_none"
     )]
     pub substitutions: Option<substitutions::SubstitutionReport>,
+}
+
+/// `calib.intent`: the intent file in the run folder, its SHA-256 and what it names.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct IntentInfo {
+    /// The file's name inside the run folder.
+    pub file: &'static str,
+    /// Where the intent came from: `file` (--intent), `run folder` or `prompt`.
+    pub source: &'static str,
+    pub sha256: String,
+    pub change: String,
+    pub bands: Vec<crate::calibrate::intent::IntentBand>,
+    pub notes: u32,
+    pub confirm: Vec<String>,
+}
+
+impl IntentInfo {
+    pub fn of(
+        intent: &crate::calibrate::intent::Intent,
+        source: crate::calibrate::intent::Source,
+        sha256: String,
+    ) -> Self {
+        IntentInfo {
+            file: crate::calibrate::intent::INTENT_FILE,
+            source: source.code(),
+            sha256,
+            change: intent.change.clone(),
+            bands: intent.bands.clone(),
+            notes: u32::try_from(intent.notes.len()).unwrap_or(u32::MAX),
+            confirm: intent.confirm.clone(),
+        }
+    }
 }
 
 /// `calib.provisional_margins`: how many margins hold a provisional widening, and each one.
