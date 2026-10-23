@@ -133,6 +133,42 @@ pub fn balanced(factors: usize, matches: usize, seed: u64) -> Vec<Vec<bool>> {
         .collect()
 }
 
+/// For `matches` matches, the level of each of `factors`: 0 low, 1 middle, 2 high. Each level
+/// takes a third of the matches per factor (the three sizes differ by at most one), by a
+/// seeded permutation of its own, so the factors stay independent of each other.
+pub fn thirds(factors: usize, matches: usize, seed: u64) -> Vec<Vec<u8>> {
+    let columns: Vec<Vec<u8>> = (0..factors)
+        .map(|f| {
+            let mut rng = EngineRng::from_seed(
+                seed ^ 0x5851_F42D_4C95_7F2D
+                    ^ (0x9E37_79B9_7F4A_7C15u64.wrapping_mul(f as u64 + 1)),
+            );
+            let mut order: Vec<usize> = (0..matches).collect();
+            for i in (1..matches).rev() {
+                let j = rng.range_usize(i + 1);
+                order.swap(i, j);
+            }
+            let mut column = vec![0u8; matches];
+            for (i, &m) in order.iter().enumerate() {
+                column[m] = (i % 3) as u8;
+            }
+            column
+        })
+        .collect();
+    (0..matches)
+        .map(|m| columns.iter().map(|c| c[m]).collect())
+        .collect()
+}
+
+/// The value of `factor` at `level`: 0 its low level, 1 its middle, 2 its high level.
+pub fn level_value(factor: &Factor, level: u8) -> f64 {
+    match level {
+        0 => factor.levels[0],
+        1 => factor.middle(),
+        _ => factor.levels[1],
+    }
+}
+
 /// One match of the measured side: the statistic parts of every measure, the goal
 /// difference, and each player's match rating.
 #[derive(Debug, Clone, PartialEq)]
@@ -412,6 +448,30 @@ pub fn play_design(
     })
 }
 
+/// Plays the three-level design over `varied` (indices into `all`), holding every other factor
+/// of `all` at its middle level: `matches` matches from `seed`. Returns each match's levels of
+/// the varied factors, in order, beside its row; a row's `high` marks the high level.
+pub fn play_levels(
+    content: &Content,
+    clubs: &Clubs,
+    all: &[Factor],
+    varied: &[usize],
+    matches: usize,
+    seed: u64,
+) -> (Vec<Vec<u8>>, Vec<MatchRow>) {
+    let plan = thirds(varied.len(), matches, seed);
+    let rows = parallel(matches, |m| {
+        let mut values: Vec<f64> = all.iter().map(Factor::middle).collect();
+        for (k, &f) in varied.iter().enumerate() {
+            values[f] = level_value(&all[f], plan[m][k]);
+        }
+        let file = measured_file(clubs, content, all, &values);
+        let high = plan[m].iter().map(|&l| l == 2).collect();
+        play_side(content, clubs, &file, m, seed, high)
+    });
+    (plan, rows)
+}
+
 /// Plays one arm: every factor of `all` at its low (`high` false) or its high level,
 /// `matches` matches from `seed`.
 pub fn play_arm(
@@ -468,5 +528,51 @@ mod tests {
         }
         assert!(worst < 0.1, "largest correlation {worst}");
         assert_eq!(plan, balanced(factors, matches, 42), "the plan is seeded");
+    }
+
+    #[test]
+    fn each_factor_takes_each_level_in_a_third_and_the_factors_are_unrelated() {
+        let (factors, matches) = (40, 2001);
+        let plan = thirds(factors, matches, 42);
+        for f in 0..factors {
+            let sizes: Vec<usize> = (0..3u8)
+                .map(|l| plan.iter().filter(|m| m[f] == l).count())
+                .collect();
+            let (lo, hi) = (sizes.iter().min().unwrap(), sizes.iter().max().unwrap());
+            assert!(hi - lo <= 1, "factor {f}: {sizes:?}");
+            assert_eq!(sizes.iter().sum::<usize>(), matches);
+        }
+        let x = |m: &Vec<u8>, f: usize| f64::from(m[f]) - 1.0;
+        let mut worst: f64 = 0.0;
+        for a in 0..factors {
+            for b in a + 1..factors {
+                let (mut ab, mut aa, mut bb) = (0.0, 0.0, 0.0);
+                for m in &plan {
+                    ab += x(m, a) * x(m, b);
+                    aa += x(m, a) * x(m, a);
+                    bb += x(m, b) * x(m, b);
+                }
+                worst = worst.max((ab / (aa * bb).sqrt()).abs());
+            }
+        }
+        assert!(worst < 0.1, "largest correlation {worst}");
+        assert_eq!(plan, thirds(factors, matches, 42), "the plan is seeded");
+        let sizes: Vec<usize> = (0..3u8)
+            .map(|l| thirds(1, 7, 1).iter().filter(|m| m[0] == l).count())
+            .collect();
+        assert_eq!(sizes, [3, 2, 2]);
+    }
+
+    #[test]
+    fn the_middle_level_is_the_stored_middle() {
+        let f = Factor {
+            job: "passing".into(),
+            target: Target::Attribute(0),
+            levels: [8.0, 16.0],
+        };
+        assert_eq!(
+            [level_value(&f, 0), level_value(&f, 1), level_value(&f, 2)],
+            [8.0, 12.0, 16.0]
+        );
     }
 }
