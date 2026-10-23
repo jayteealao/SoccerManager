@@ -103,21 +103,32 @@ A targeted run is an inner loop. Before a change is accepted, run the full gate:
 
 ## Judge a change against the old engine
 
-A baseline diff marks a change as `noise` or `change`, but it does not say whether the run had enough matches to see a change that matters. A change run does: it plays this build and the old engine of a revision on the same fixtures, sizes the run for each band, and judges every band `pass`, `fail`, or `not sure`. Run it from your git checkout:
+A baseline diff marks a change as `noise` or `change`, but it does not say whether the change moved a band a player would notice. A change run does: it plays this build and the old engine of a revision on the same fixtures, a fixed count of paired matches, and gives every band two words. Run it from your git checkout:
 
 ```bash
-target/release/engine-cli calibrate --suite equal --seed 42 --matches 2000 --base main --out runs/change-42
+target/release/engine-cli calibrate --suite equal --seed 42 --base main --out runs/change-42
 ```
 
-The old engine is built once and its results are cached, so the next change run against the same revision plays only the new engine's matches. The run plays a pilot of 200 matches, then grows each suite to the matches that give every band the power to see its smallest shift, at most `--matches`.
+1. Pick the kind. A change run is `--kind change` by default, with a seed from 0 to 999999. A milestone run takes `--kind milestone` and a seed from 1000000 to 1999999; a release run `--kind release` and a seed from 2000000 to 2999999. A seed of another kind's set is refused before anything plays. The change kind doubles the margins of the rare bands, so a change run catches only large errors in rare events; the milestone and release kinds judge them at their own margins.
+2. Let the run play its count. The count comes from the `kinds` table of `content/realism-bands.json`; `--matches` is refused in a change run. The old engine is built once, with this build's features, and its results are cached, so the next change run against the same revision plays only the new engine's matches.
+3. Read the headline after the table:
 
-Read the table at the end of standard error:
+   ```text
+   kind change: fixed count equal 1000, strength 1000, formations 18 per pairing, red-card 250 per arm; not sure: 3 of 41 gating bands; accepted: 0; dropped pairs: 0
+   ```
 
-- `pass`: the band is in its range, and the run could have seen a change of the band's smallest shift but found none.
-- `fail`: the band left its range, or it moved: the change is too large to be chance. A move is a fail even inside the range; if the move was meant, widen the band or accept the change by review.
-- `not sure`: the band is in its range and did not move, but the run had too few matches to tell. The row says about how many matches per suite would give it power: run again into the same folder with that `--matches`.
+   It names the counts played, how many gating bands stayed `not sure`, how many of them you accepted, and the pairs dropped because a match failed on either engine.
 
-The last line is the joint verdict. It passes only when every band passes and no match panicked, lost its result, or broke a rule. The exit code is 0 for a joint `pass` and 2 for `fail` or `not sure`. Over every band at once, an engine that did not change fails at most 3 percent of change runs.
+4. Read each band's two words in the table. The word column is the band's word against real football (see "Read a band's word"): only it decides. The `old engine` column says what the change did to the band:
+
+   - `better`: the band moved, and the new engine sits closer to the band's target.
+   - `worse`: the band moved, and the new engine sits farther from it.
+   - `equivalent`: the change and its error sit inside the band's noticeable error: no player would notice it.
+   - `not sure`: neither could be shown on these matches; `old_reason` in the row says why.
+
+   A `worse` band that still passes against real football does not fail the run, and a `better` band that fails does. Read the `worse` bands before you merge.
+
+The last line of the table is the joint verdict. It passes only when every gating band passes, no match panicked, lost its result, or broke a rule, and no more than 1 percent of the pairs were dropped. The exit code is 0 for a joint `pass` and 2 for `fail` or `not sure`.
 
 To judge a finished run again, for example after editing a band in `realism-bands.json`, run the same command into the same folder. Nothing plays; the run says `judged again from <n> stored rows; 0 matches played` and names the bands that changed since it was last judged.
 
@@ -362,7 +373,7 @@ cargo build --release -p engine-cli --features measures
 target/release/engine-cli calibrate proof --seed 2027
 ```
 
-It plays about 30 change runs of this build against itself: 10 self runs on new seeds, and 5 runs of each of the four broken copies that `content/gate-proof.json` declares. On an 8-thread machine it takes several hours. Each run's log is in `<out>/<run>.log`, and the default `<out>` is `SM_DATA_DIR/proofs/<registry>-<verdict code>`. If the proof stops, run the same command again: each finished run is judged again from its stored rows, and nothing plays twice. When it ends, it writes the rates into `content/gate-proof.json`. Commit that file, with a Content entry in `CHANGELOG.md`.
+It plays about 30 change runs of the change kind's fixed count, this build against itself: 10 self runs on new seeds, and 5 runs of each of the four broken copies that `content/gate-proof.json` declares. On an 8-thread machine it takes several hours. Each run's log is in `<out>/<run>.log`, and the default `<out>` is `SM_DATA_DIR/proofs/<registry>-<verdict code>`. If the proof stops, run the same command again: each finished run is judged again from its stored rows, and nothing plays twice. When it ends, it writes the rates into `content/gate-proof.json`. Commit that file, with a Content entry in `CHANGELOG.md`.
 
 A build without the measures refuses the proof with `this build has no measures`, because only the measures build judges every whole-distribution band.
 
@@ -425,33 +436,37 @@ Read `calib.pass` and the band table at the end of standard error. Read the stag
 3. Read the `total` row of the stage table at the end of standard error, or `calib.stages.total.ms` in `report.json`. It is the time of the whole command in milliseconds, for every kind of run.
 4. Note the number of logical processors. `--jobs` defaults to all of them.
 
-Do not use `calib.wall_ms.total` as the time of a run. It is only the time the threads took to play the last list of matches. It leaves out the single-thread benchmark and the judging. In a change run, it also leaves out the old engine and the pilot when the run grows to its power target. In a resumed run, it holds only the matches that this command played.
+Do not use `calib.wall_ms.total` as the time of a run. It is only the time the threads took to play the last list of matches. It leaves out the single-thread benchmark and the judging. In a change run, it also leaves out the old engine. In a resumed run, it holds only the matches that this command played.
 
 To compare your time with the measured and projected times of each run, see [How long the runs take](../explanation/realism-harness.md#how-long-the-runs-take).
 
 ## Read why a change run plays so many matches
 
-A change run names, for each suite, the band that set its power target. Read it in one of three places:
+A change run plays its kind's count, the larger of two counts per suite: the fewest matches at which every gating band holds its 97 percent floor and every rare band reaches its minimum exposure, and the matches the old-engine test needs to show a band equivalent. See the computation, and the band that sets each count:
 
-- the `calibrate.power_target` line on standard error after the pilot, in its `driver` field;
-- `drivers` in `target.json` in the run folder;
-- `calib.power.<suite>.driver` in `report.json`.
+```bash
+target/release/engine-cli calibrate count
+```
 
-A suite with no driver reached power at its pilot. A driver at the cap (`target` equal to `cap`, `reached` false) is the band to look at when a change run is long: its smallest shift, measured on how rare its event is, decides the run's length. On the default content the equal suite's driver is `goals_per_xg`, at the cap, and the formations suite has no driver: its pooled bands have power at the pilot once the bands far outside their range set no target.
+A line ends `set by the real test` or `set by the old test`, and names the band and why. A count that differs from the band file's is printed below; exit code 1 says the band file is out of date.
 
-## Read a band that set no target
+## Change the count
 
-A band that was already outside its range at the pilot by more than its noise sets no power target. Find it in the same places as the driver:
+The count changes only by an edit of the band file with its CHANGELOG line:
 
-- `no_target` on the `calibrate.power_target` line;
-- `no_target` in `target.json`, by suite code;
-- `calib.power.<suite>.no_target` in `report.json`;
-- its row in `calib.verdicts`, with `no_target: true` and `outside_by`, its distance from its range;
-- its line in the verdict table, which ends with `(outside its range by <distance>, beyond its noise at the pilot: set no power target)`.
+1. Run `engine-cli calibrate count` and copy each kind's counts into `kinds.<kind>.count` in `content/realism-bands.json`.
+2. Add a line to `CHANGELOG.md` for each kind whose counts changed, of the form `fixed count change: equal N, strength N, formations N, red-card N`. A test fails until every kind's counts have their line.
+3. Commit the band file and the CHANGELOG together.
 
-Such a band fails while it is outside its range. Read its distance first: the change run says the engine is far from that band, whatever the change did to it. Its `needed` note still says how many matches it would need once it is back inside.
+## Measure the agreement of two runs
 
-When a change brings the band back inside its range, the next change run's pilot lets it set a target again. The run can then grow, up to the cap, and the band appears as the suite's `driver`. On today's engine the pooled ten-goals-or-more share is the band to watch: inside its range, it needs about 880 matches per pairing.
+The old-engine count reads how closely a change run's matches follow the old engine's: the more they agree, the fewer pairs a band needs. Every change run and paired run records it in `calib.pair_agreement`. To measure two run folders of the same seed, played with `--keep-events all`:
+
+```bash
+target/release/engine-cli calibrate agreement --a runs/agree-a --b runs/agree-b
+```
+
+It prints the median correlation over the figures with its 90 percent interval, and one line per figure.
 
 ## Run the sensitivity rules
 

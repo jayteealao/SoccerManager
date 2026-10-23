@@ -24,11 +24,11 @@ Earlier, a run numbered its fixtures and derived seeds from the numbers. A large
 
 A run folder also records the run's identity: the build, the content, the flags, the seed, the minutes, the random-number scheme, the fixture scheme, the measure definitions and the registry version. A run with another identity does not resume the folder; it starts again and names what differs. The band ranges are not part of the identity: a changed range is judged again from the stored rows, with no match played.
 
-## A band that has not reached its power is not sure
+## A change run plays one fixed count
 
-Each band in the registry names its smallest shift: the smallest change of the band that matters. A change run plays a pilot of every suite, measures how much each band varies from match to match, and works out how many matches each suite needs to see a band's smallest shift with 80 percent power. It then grows each suite to that count, at most the cap the person sets.
+A change run plays one fixed count of paired matches per suite unit, set in the band file for its kind, never a count it works out as it goes. The count is the larger of two needs. The real-test count is the fewest matches at which every gating band holds its 97 percent floor with the kind's margins, and every rare band reaches its minimum exposure: below it, some band could never pass. The old-engine count is the fewest pairs at which each band's paired change and its error could be shown inside the band's noticeable error with 80 percent power, given how closely the two engines' matches agree. Both are computed by `engine-cli calibrate count`, and the count changes only by an edit of the band file with its CHANGELOG line, so every change run of a kind asks the same question with the same certainty.
 
-A band that reaches its power and shows no move can pass. A band that does not reach its power reports **not sure**, never **pass**. This is the rule that makes the 10-minute change run honest: when time or the cap runs out before a band has its power, the answer is "not sure", and the report says how many matches the band would need. No speed method may reach the limit by cutting this certainty.
+Each band then gets two words. Its word against real football decides: a band passes only when its whole interval sits inside its margin, so a run that is too short for a band reads **not sure**, never **pass**. Its word against the old engine (better, worse, equivalent or not sure) says what the change did, and never decides. No speed method may reach a time limit by cutting the count.
 
 ## One joint test for all bands
 
@@ -54,7 +54,7 @@ A promoted distribution band joins the joint test as one more coordinate. Its ch
 
 ## Why new bands report first
 
-A new band starts with `gates: false`. It is judged in every run, by the same rules as a gating band, but in a table of its own, and it never changes the joint word, its threshold, a suite's power target, `calib.pass` or the exit code. Two things are unknown about a new band until it has run for a while. Its range may be wrong: a range set from a real value can still sit where the engine cannot reach, and a band that fails every run teaches nothing but to ignore the verdict. And the gate's error rates with the band in it are unmeasured: each new coordinate in the joint test changes how often an unchanged engine fails. A report-first band shows how it would judge before it can block a change.
+A new band starts with `gates: false`. It is judged in every run, by the same rules as a gating band, but in a table of its own, and it never changes the joint word, its threshold, `calib.pass` or the exit code. Two things are unknown about a new band until it has run for a while. Its range may be wrong: a range set from a real value can still sit where the engine cannot reach, and a band that fails every run teaches nothing but to ignore the verdict. And the gate's error rates with the band in it are unmeasured: each new coordinate in the joint test changes how often an unchanged engine fails. A report-first band shows how it would judge before it can block a change.
 
 A band moves into the gate only when the person promotes it, by editing the band file with a recorded decision. A developer who sees `not sure` on a reported band can accept it for one run folder. The acceptance records "accepted, not shown equivalent", and it is never counted as a pass: a run too small to show a band equivalent has shown nothing, and calling that a pass would hide the gap.
 
@@ -112,21 +112,7 @@ The field rating is a share of wins, like the win rate, so the two compare on on
 
 ## Why a rare event can set a run's length
 
-A band sets a suite's power target only while the band is inside its range, or outside the range by no more than its noise. A band far outside its range sets no target, as [the next section](#why-a-band-far-outside-its-range-sets-no-target) explains. Within that condition, a rare event can set the length of a whole run.
-
-A band needs matches in proportion to the square of its error divided by its smallest shift. For a share of rare matches, the error of the share is about the square root of the share over the matches. So a small shift on a rare event needs many matches. The ten-goals-or-more share is the clearest case. Its range is 0 to 0.5 percent, and its smallest shift is 0.125 percentage points. At a realistic 0.4 percent, inside its range, the band needs about 880 matches per pairing, even when pooled. The cap of 1,000 holds every other formations band many times over.
-
-In the pilot of a measured change run, the engine produced such matches at 2.5 percent. At that share the band would need about 5,000 matches per pairing. But 2.5 percent is far outside the band's range, so a band at that share sets no target.
-
-The band that sets a suite's target is named beside the target, in `calib.power`, in `target.json`, and on the `calibrate.power_target` line. A change run that plays far more matches than expected shows which band asked for them. Lowering that need means a different smallest shift, a band judged in another suite, a different rule for which bands set a target, or a longer run. Each is a decision about what the test must detect, not a speed-up, so the harness does not take one on its own.
-
-## Why a band far outside its range sets no target
-
-A band's power target asks how many matches it needs to see its smallest shift. That question matters only while the band could pass. A band whose value is outside its range fails, whatever its change, so playing more matches to measure its change precisely buys nothing for its word. When that band is also the one with the largest need, it alone would set the run's length. So in every suite of a change run, a band already outside its range by more than its noise sets no target.
-
-"More than its noise" uses the run's own measure of a real move. At the pilot, the band's distance from its range must be more than `c` times the band's own standard error, where `c` is the max-t threshold the run already uses to call a change real (at least 2.17). So the rule adds no new constant, and a band that is only just outside, where the pilot's noise could have put it there, still sets a target.
-
-The rule changes how long the run is, never a word. A band that set no target is judged like every other: it fails while it is outside its range, and a band without power never passes. If the pilot's noise made a band look far outside when it is not, the worst outcome is `not sure` for that band, never a false `pass`. The run reports the band, its distance, and the mark, so a person sees which bands did not size the run, and the driver shows when such a band comes back inside its range and sets the target again.
+A rare band can pass only once the run has seen enough matches for its exact count bound to fit inside its margin: its minimum exposure. For a share of rare matches, that exposure grows as the square of the bound's width over the margin. The ten-goals-or-more share is the clearest case: its exposure is tens of thousands of matches, far more than any other band needs, so it sets the real-test count of the suites that judge it. `calibrate count` names the band that sets each count and why. Lowering that need means a wider margin, a band judged in another suite, or a longer run. Each is a decision about what the test must detect, not a speed-up, so the harness does not take one on its own.
 
 ## How long the runs take
 
@@ -144,7 +130,7 @@ Every figure below comes from the 8-thread reference machine: an AMD Ryzen 7 980
 
 The loaded projection of the realistic evaluation uses the measured rate of about 13 matches per second. The idle projections use about a third of a second of thread time per match over 8 threads. The lower idle figure assumes perfect scaling over the threads, and the higher figure assumes 85 percent scaling.
 
-A change run on a warm cache plays only the changed engine's matches. It plays a pilot of 11,400 matches, then grows each suite to its power target. On today's engine and the default content, the pilot sets three targets: equal 1,000, formations 200 per pairing, and strength 278. The formations suite stays at its pilot because the run judges it pooled over every pairing. The formations bands far outside their range also set no target. So a change run plays 12,278 of the changed engine's matches.
+A change run on a warm cache plays only the changed engine's matches. The measured runs in the table played 12,278 of them under the earlier sizing by a pilot run; a change run now plays its kind's fixed count from the band file, which `calibrate count` prints.
 
 The measured change run of the `measures` build took about 13.3 minutes (799,352 and 804,890 ms). That is within the 15-minute limit of the `measures` build and over its 10-minute aim. It played the same 12,278 matches at about 0.5 s of thread time per match, against about a third of a second in the projection: the running rule checker took almost a third of that time, so later speed work starts there.
 
@@ -152,6 +138,6 @@ On the reference machine, two other builds gave the same figures as the release 
 
 ## What the time limits mean
 
-The two time limits are a change run within 10 minutes and the full evaluation (every default suite at 1,000 matches, 57,000 matches) within its measured median time, which must be at most 46 minutes. Later speed work keeps 15 minutes as the evaluation's target, at about 63 matches per second. A build with the `measures` feature records more for every match, so its change run has a limit of 15 minutes (900,000 ms in `calib.stages.total.ms`); its aim stays 10 minutes. Both limits apply to a run on an idle machine with every logical processor, after the old engine's results are cached. A change run plays only the changed engine: a pilot of 200 matches per suite unit, then growth to the power target.
+The two time limits are a change run within 10 minutes and the full evaluation (every default suite at 1,000 matches, 57,000 matches) within its measured median time, which must be at most 46 minutes. Later speed work keeps 15 minutes as the evaluation's target, at about 63 matches per second. A build with the `measures` feature records more for every match, so its change run has a limit of 15 minutes (900,000 ms in `calib.stages.total.ms`); its aim stays 10 minutes. Both limits apply to a run on an idle machine with every logical processor, after the old engine's results are cached. A change run plays only the changed engine, its kind's fixed count of each suite unit.
 
 When a limit is missed, the harness does not relax a rule to meet it. The measured times and the gap go to the person, who decides between more speed work, more threads or machines, or a changed limit.
