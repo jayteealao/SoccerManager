@@ -14,5 +14,6 @@ pub mod floor;
 pub mod interval;
 pub mod limits;
 pub mod rule;
+pub mod sequential;
 pub mod shift;
 pub mod special;
