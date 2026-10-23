@@ -6,6 +6,7 @@
 //! and the engine's slow tests can judge a band with it. Randomness comes in as a closure
 //! that returns uniform draws, so the caller keeps its own seeded stream.
 
+pub mod agreement;
 pub mod bounds;
 pub mod change;
 pub mod count;
