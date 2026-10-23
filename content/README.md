@@ -172,3 +172,17 @@ Every calibrate run compares its gate with the proof's and prints `gate changed 
 ## Formations
 
 `tactics.json` ships ten formations. The first four keep their places, so a saved lineup keeps its shape: 4-4-2, 4-3-3, 4-2-3-1, 3-5-2. Six follow: 4-1-4-1, 4-4-1-1, 4-1-2-1-2 (the diamond), 3-4-3, 5-3-2, and 5-4-1. The computer manager starts in 4-4-2 and never changes formation during a match.
+
+## World database
+
+`world.json` is the world database: every country and league tier the open sources cover, each club with a generated name and an Elo strength, and the continental, intercontinental and domestic cup competitions as structure only (scope, level, season, entrants and stages, with no fixture, result or venue). No match reads it yet; the league fixtures of the calibration run and the later world features build on it.
+
+- A country is its FIFA code, with its ISO code, its region and, for the 55 UEFA associations, the 2025 rank and coefficient, the real club count of the top division and the 2026/27 places in the three continental competitions.
+- A league carries its country, its tier when a source states it, a group letter for parallel regional leagues, its real club count with the count's source, and a name built from the code ("ENG tier 1", "ENG tier 3 group B").
+- A club carries a generated name and short name, its country and league, and its Elo strength with the strength's source: `clubelo` (its own rating), `league-median` (the median of its league's rated clubs), `tier-step` (the nearest rated tier above, less the median drop per tier) or `floor` (the 10th percentile of all rated clubs).
+
+Nothing in the file names a real club, league, competition or country. A club's name comes from the game's own club-name generator, seeded per club and drawn again while it, folded, equals a real name of the sources or of the lists in `gate/real-names/`. The real names stay in `gate/`, which never ships: `gate/real-names/world.json` (the list the packaging check scans the shipped content against), `gate/world/name-map.json` (every real name compared against, by content id), `gate/world/gaps.csv` (the gap list: every missing strength or tier, club-count conflict, unlinked rating and link to review, with the sources tried) and `gate/world/coverage.json` (what the sources cover and every input with its sha256). Facts filled by hand from public pages go in `gate/world/hand-fills.json`, with the page and its revision.
+
+Rebuild it from the local snapshots with `engine-cli world-database build` (see [the command reference](../docs/reference/cli.md#world-database)); the build makes no network request, and two builds of the same snapshots write the same bytes. Never edit the file by hand.
+
+Sources, facts only: openfootball (CC0 1.0, each repository and commit in the file's `sources`), ClubElo ratings by Lars Schiefler (clubelo.com, the snapshot date in `sources`), Wikidata (CC0 1.0) and Wikipedia (CC BY-SA 4.0; the page revisions in `sources`, the page titles in `gate/world/coverage.json`).
