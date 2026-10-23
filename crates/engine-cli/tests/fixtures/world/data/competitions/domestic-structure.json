@@ -1,0 +1,17 @@
+{
+  "note": "Invented structure for the builder tests.",
+  "associations": [
+    {
+      "code": "TST",
+      "rank": 1,
+      "cups": [
+        {"name": "Testland Shield", "season": "2026-27", "entrants": "64 (incl. 8 qualifiers)", "rounds": "six rounds", "legs": "single match", "notes": "final at Mount Venue Stadium", "sources": [{"page": "Testland Shield", "revid": 333}]}
+      ],
+      "tiers": [
+        {"tier": 1, "name": "Testland Premier Circuit", "clubs": 4, "format": null, "sources": [{"page": "Testland Premier Circuit", "revid": 111}]},
+        {"tier": 3, "name": "Testland Third Circuit West", "clubs": 10, "format": null, "sources": []},
+        {"tier": 4, "name": "Testland Fourth Circuit", "clubs": 16, "format": null, "sources": []}
+      ]
+    }
+  ]
+}

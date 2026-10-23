@@ -1,0 +1,8 @@
+{
+  "fills": [
+    {"entity": "club:Q22", "field": "home_nation", "value": "Northland", "source": "wikipedia", "page": "Dill Saints", "revision": 444}
+  ],
+  "link_overrides": [
+    {"clubelo": "Fennel", "wikidata": "Q7", "reason": "a different club of the same town"}
+  ]
+}

@@ -1,0 +1,17 @@
+clubelo_club,clubelo_country,clubelo_level,wikidata_qid,wikidata_label,method
+Brisket,TST,1,Q1,Brisket Athletic,name/alias (exact or token-prefix)
+Mallow,TST,1,Q2,Mallow Rovers F.C.,name/alias (exact or token-prefix)
+Quince,TST,1,Q3,Quince Town,ClubElo URL slug
+Tamarind,TST,2,Q5,Tamarind City,"exact name, other country"
+Juniper,TST,2,Q6,Juniper Albion,name/alias (exact or token-prefix)
+Fennel,TST,2,Q7,Fennel Wanderers,name/alias (exact or token-prefix)
+Sumac,TST,2,Q12,Sumac Athletic,name/alias (exact or token-prefix)
+Ghost Club,TST,1,,,unmatched
+Twin Club,TST,2,,,ambiguous:Q4|Q8
+Brisket Reserves,TST,3,,,reserve team
+Newcomer,TST,3,,,unmatched
+Mallow Duplicate,TST,1,Q4,Sorrel United,name/alias (exact or token-prefix)
+Sorrel,TST,1,Q4,Sorrel United,name/alias (exact or token-prefix)
+Lovage Comets,,,Q30,Lovage Comets,"exact name, no ClubElo country"
+Anise �,TST,2,Q13,Anise Reserves,name/alias (exact or token-prefix)
+Borage,NTL,1,Q20,Borage Harriers,name/alias (exact or token-prefix)

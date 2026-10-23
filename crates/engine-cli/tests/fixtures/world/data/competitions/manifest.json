@@ -1,0 +1,7 @@
+{
+  "fetch_window_utc": {"first": "2026-01-01T10:00:00Z", "last": "2026-01-01T11:00:00Z"},
+  "pages_used": [
+    {"page": "Testland Premier Circuit", "revid": 111, "lang": "en"},
+    {"page": "Grand Continental Trophy", "revid": 222, "lang": "en"}
+  ]
+}

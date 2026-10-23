@@ -1,0 +1,45 @@
+{
+  "note": "Invented structure for the builder tests.",
+  "competitions": [
+    {
+      "id": "uefa-champions-league",
+      "name": "Grand Continental Trophy",
+      "confederation": "UEFA",
+      "season": "2026-27",
+      "entrants_total": 40,
+      "qualifying_rounds": [
+        {"round": "First qualifying round", "teams": 8, "legs": 2, "teams_entering": 8, "note": "champions only"}
+      ],
+      "league_phase": {"format": "single table", "teams": 36, "matches_per_team": 8, "progression": "1st-8th to round of 16"},
+      "knockout_rounds": [{"round": "Round of 16", "teams": 16, "legs": 2, "note": "seeded"}],
+      "final": {"legs": 1, "venue": "neutral (2027: Mount Venue Stadium)"},
+      "access": {"basis": "invented ranking"},
+      "sources": [{"page": "Grand Continental Trophy", "revid": 222}]
+    },
+    {
+      "id": "uefa-europa-league",
+      "name": "Lesser Continental Trophy",
+      "confederation": "UEFA",
+      "season": "2026 (played in August)",
+      "entrants_total": 24,
+      "knockout_rounds": [{"round": "Semi-finals", "teams": 4, "legs": 2}],
+      "final": {"legs": 1}
+    },
+    {
+      "id": "world-club-trophy",
+      "name": "Globe Club Trophy",
+      "confederation": "FIFA",
+      "season": "2025 (somewhere)",
+      "entrants_total": 8,
+      "group_stage": {"groups": 2, "teams_per_group": 4, "teams": 8, "matches_per_team": 3, "format": "single round-robin"},
+      "final": {"legs": 1}
+    },
+    {
+      "id": "world-club-trophy-2029",
+      "name": "Globe Club Trophy 2029",
+      "confederation": "FIFA",
+      "season": "2029",
+      "status": "not announced"
+    }
+  ]
+}

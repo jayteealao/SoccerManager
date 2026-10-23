@@ -1,0 +1,9 @@
+qid,label_en,native_label,official_name,country_qid,home_nation,level,n_teams,level_above_qid,level_below_qid
+Q500,Testland Premier Circuit,,,Q100,,1,4,,Q501
+Q501,Testland Second Circuit,,,Q100,,,,Q500,
+Q502,Testland Third Circuit East,,,Q100,,,,Q501,
+Q503,Testland Third Circuit West,,,Q100,,,,,
+Q509,Testland Sunday Circuit,,,Q100,,,,,
+Q600,Northland Senior Circuit,,,Q900,Northland,1,,,
+Q601,Isle Combination,,,Q900,,,,,
+Q700,"Farland Major Circuit, ""Top""",,,Q200,,1|2,,,
