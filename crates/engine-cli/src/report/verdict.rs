@@ -34,6 +34,7 @@ use serde::Serialize;
 use super::distribution::PairedHist;
 use super::measures;
 use super::{BandCheck, RuleWord, RunBuilder, Suite};
+pub use pass_rule::change::{Moved, OldWord};
 
 /// Resamples of the bootstrap.
 pub const RESAMPLES: usize = 1999;
@@ -154,6 +155,16 @@ pub struct VerdictRow {
     /// interval and the margin that set it. The row's word is this word.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pass_rule: Option<RuleWord>,
+    /// A change or pair run: the band's word against the old engine (better, worse,
+    /// equivalent or not sure). It says what the change moved and never decides the run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub old_word: Option<OldWord>,
+    /// Why the band has no word against the old engine, or why the word is not sure.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub old_reason: Option<String>,
+    /// A significant move against the old engine: up or down.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub moved: Option<Moved>,
 }
 
 impl VerdictRow {
@@ -272,6 +283,9 @@ fn plain_row(c: &BandCheck, word: Word) -> VerdictRow {
         note: None,
         accepted: None,
         pass_rule: c.rule.clone(),
+        old_word: None,
+        old_reason: None,
+        moved: None,
     }
 }
 
@@ -812,6 +826,9 @@ pub fn judge(
             note: None,
             accepted: None,
             pass_rule: None,
+            old_word: None,
+            old_reason: None,
+            moved: None,
         });
     }
     let word = joint_word(&out, &guards);
@@ -825,6 +842,55 @@ pub fn judge(
         guards,
     };
     (out, joint)
+}
+
+/// Sets each paired row's word against the old engine ([`pass_rule::change::old_word`]):
+/// the change and its error from the bootstrap, the joint threshold `critical`, the band's
+/// noticeable error (its smallest shift) and the pass rule's `alpha`. Better means the
+/// changed engine sits closer to the band's target, which `target` gives by band (the real
+/// value read here, or the design value); a whole-distribution band is closer when its
+/// distance from the real sample is smaller. The word never changes the row's word.
+pub fn set_old_words(
+    rows: &mut [VerdictRow],
+    paired: &[PairedRow],
+    found: &[Found],
+    critical: f64,
+    alpha: f64,
+    target: &dyn Fn(&str) -> Option<f64>,
+) {
+    for ((r, p), f) in rows.iter_mut().zip(paired).zip(found) {
+        let Some(diff) = f.diff else {
+            r.old_reason = Some("no value on one of the engines".into());
+            continue;
+        };
+        let (changed, old) = (p.value, p.base_value);
+        let toward = match (&p.dist, changed, old) {
+            (Some(_), Some(c), Some(o)) => pass_rule::change::toward(c, o, Some(0.0)),
+            (None, Some(c), Some(o)) => pass_rule::change::toward(c, o, target(&p.band)),
+            _ => None,
+        };
+        let (word, moved) =
+            pass_rule::change::old_word(diff, f.se, critical, p.shift, alpha, toward);
+        // A distribution's change is a distance, never negative: its direction is whether
+        // the changed engine sits farther from the real sample than the old one.
+        let moved = match (&p.dist, moved, changed, old) {
+            (Some(_), Some(_), Some(c), Some(o)) => {
+                Some(if c > o { Moved::Up } else { Moved::Down })
+            }
+            (_, m, _, _) => m,
+        };
+        r.old_word = Some(word);
+        r.moved = moved;
+        r.old_reason = match word {
+            OldWord::NotSure if moved.is_some() => {
+                Some("moved; no target here to say better or worse".into())
+            }
+            OldWord::NotSure => {
+                Some("not shown inside the noticeable error, and no move seen".into())
+            }
+            _ => None,
+        };
+    }
 }
 
 /// Sets the word of every row of a version 6 band to its word against real football by the
@@ -948,7 +1014,7 @@ fn table(rows: &[VerdictRow], change: bool) -> String {
     let mut out = String::new();
     if change {
         out.push_str(&format!(
-            "{:<24} {:<10} {:<14} {:>10} {:>10} {:>10} {:>9} {:>6} {:>19} {:>10}  {}\n",
+            "{:<24} {:<10} {:<14} {:>10} {:>10} {:>10} {:>9} {:>6} {:>10} {:>19} {:>10}  {}\n",
             "band",
             "suite",
             "pairing",
@@ -957,6 +1023,7 @@ fn table(rows: &[VerdictRow], change: bool) -> String {
             "change",
             "se",
             "power",
+            "old engine",
             "real",
             "distance",
             "verdict"
@@ -998,7 +1065,7 @@ fn table(rows: &[VerdictRow], change: bool) -> String {
         if change {
             let opt = |v: Option<f64>| v.map_or_else(|| "-".to_string(), |v| format!("{v}"));
             out.push_str(&format!(
-                "{:<24} {:<10} {:<14} {:>10} {:>10} {:>10} {:>9} {:>6} {:>19} {:>10}  {}{need}\n",
+                "{:<24} {:<10} {:<14} {:>10} {:>10} {:>10} {:>9} {:>6} {:>10} {:>19} {:>10}  {}{need}\n",
                 r.band,
                 r.suite,
                 pairing,
@@ -1007,6 +1074,7 @@ fn table(rows: &[VerdictRow], change: bool) -> String {
                 opt(r.diff),
                 opt(r.se),
                 if r.power == Some(true) { "yes" } else { "no" },
+                r.old_word.map_or("-", OldWord::as_str),
                 real,
                 distance,
                 r.word.code()
@@ -1821,6 +1889,50 @@ mod tests {
         set_rule_words(&mut rows, &[failing]);
         assert_eq!(rows[0].word, Word::Fail);
         assert!(rows[0].pass_rule.is_some());
+    }
+
+    #[test]
+    fn a_band_worse_against_the_old_engine_leaves_the_joint_word_to_real_football() {
+        let mut rng = EngineRng::from_seed(21);
+        let n = 300;
+        let base: Vec<f64> = (0..n).map(|_| 5.0 + normal(&mut rng)).collect();
+        let noise: Vec<f64> = (0..n).map(|_| 0.2 * normal(&mut rng)).collect();
+        // Moved up by 1 from the old engine, away from a target of 5.
+        let worse: Vec<f64> = base.iter().zip(&noise).map(|(b, e)| b + 1.0 + e).collect();
+        // Moved down by 1 from 6.5, toward the same target.
+        let old_high: Vec<f64> = base.iter().map(|b| b + 1.5).collect();
+        let better: Vec<f64> = base.iter().zip(&noise).map(|(b, e)| b + 0.5 + e).collect();
+        let same: Vec<f64> = base.iter().zip(&noise).map(|(b, e)| b + 0.01 * e).collect();
+        let sets = [set(n)];
+        let rows = [
+            row(0, worse, base.clone(), 0.5),
+            row(0, better, old_high, 0.5),
+            row(0, same, base, 0.5),
+        ];
+        let (found, c) = bootstrap(&sets, &rows, 11, 499);
+        let (mut judged, joint) = judge(&sets, &rows, &found, c, Vec::new(), &BTreeMap::new());
+        set_old_words(&mut judged, &rows, &found, c, 0.05, &|_| Some(5.0));
+        assert_eq!(judged[0].old_word, Some(OldWord::Worse));
+        assert_eq!(judged[0].moved, Some(Moved::Up));
+        assert_eq!(judged[1].old_word, Some(OldWord::Better));
+        assert_eq!(judged[1].moved, Some(Moved::Down));
+        assert_eq!(judged[2].old_word, Some(OldWord::Equivalent));
+        // Every row passes against real football: the worse row does not fail the run.
+        for r in &mut judged {
+            r.word = Word::Pass;
+        }
+        assert_eq!(joint_word(&judged, &joint.guards), Word::Pass);
+        // With no target here, a moved band is not sure and keeps its direction.
+        set_old_words(&mut judged, &rows, &found, c, 0.05, &|_| None);
+        assert_eq!(judged[0].old_word, Some(OldWord::NotSure));
+        assert_eq!(judged[0].moved, Some(Moved::Up));
+        assert!(
+            judged[0]
+                .old_reason
+                .as_deref()
+                .unwrap()
+                .contains("no target here")
+        );
     }
 
     #[test]

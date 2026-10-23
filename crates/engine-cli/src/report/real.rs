@@ -2097,6 +2097,9 @@ A,0,0
             note: None,
             accepted: None,
             pass_rule: None,
+            old_word: None,
+            old_reason: None,
+            moved: None,
         }
     }
 

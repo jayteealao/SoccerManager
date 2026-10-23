@@ -1912,12 +1912,23 @@ impl RunCtx<'_> {
         let (sets, mut rows) = self.paired(first, old);
         keep_bands(&mut rows, &opts.bands);
         let (gating, reported) = self.split_paired(rows, first, old);
+        let alpha = self.bands.pass_rule.map_or(0.05, |p| p.alpha);
+        let target = |band: &str| self.target_of(band);
         let (found, c) = verdict::bootstrap(&sets, &gating, opts.seed(), verdict::RESAMPLES);
         let (mut rows, mut joint) =
             verdict::judge(&sets, &gating, &found, c, first.guards(), &self.no_target);
-        let (found, c) = verdict::bootstrap(&sets, &reported, opts.seed(), verdict::RESAMPLES);
-        let (mut reported, _) =
-            verdict::judge(&sets, &reported, &found, c, Vec::new(), &BTreeMap::new());
+        verdict::set_old_words(&mut rows, &gating, &found, c, alpha, &target);
+        let (found_r, c_r) = verdict::bootstrap(&sets, &reported, opts.seed(), verdict::RESAMPLES);
+        let (mut reported_rows, _) = verdict::judge(
+            &sets,
+            &reported,
+            &found_r,
+            c_r,
+            Vec::new(),
+            &BTreeMap::new(),
+        );
+        verdict::set_old_words(&mut reported_rows, &reported, &found_r, c_r, alpha, &target);
+        let mut reported = reported_rows;
         // The rows a paired test cannot judge: their range alone, on the changed engine.
         if let Some(old) = old {
             for spec in first.builder.row_specs(true) {
@@ -1930,7 +1941,10 @@ impl RunCtx<'_> {
                 if !selected || (only && note == verdict::NO_MEASURES_NOTE) {
                     continue;
                 }
-                let row = verdict::range_rows(&[first.builder.check(&spec)], Some(note));
+                let mut row = verdict::range_rows(&[first.builder.check(&spec)], Some(note));
+                for r in &mut row {
+                    r.old_reason = Some(self.no_old_word(note));
+                }
                 if only { &mut reported } else { &mut rows }.extend(row);
             }
         }
@@ -1965,6 +1979,34 @@ impl RunCtx<'_> {
             reported,
             joint: Some(joint),
             power: Some(power),
+        }
+    }
+
+    /// The target a band's old-engine word measures closeness to: its design value, or the
+    /// real value read here before play.
+    fn target_of(&self, band: &str) -> Option<f64> {
+        let def = self.bands.band(band)?;
+        match def.rule.as_ref()?.target {
+            crate::report::bands::Target::Design { value, .. } => Some(value),
+            crate::report::bands::Target::Real => {
+                self.sides.get()?.get(band).map(|s| s.estimate().0)
+            }
+        }
+    }
+
+    /// Why a row judged on the changed engine alone has no word against the old engine.
+    fn no_old_word(&self, note: &str) -> String {
+        if note == verdict::BASE_WITHOUT_MEASURES {
+            let rev = self
+                .opts
+                .base
+                .clone()
+                .unwrap_or_else(|| "the base binary".to_string());
+            format!("the old engine of {rev} has no measures feature")
+        } else if note == verdict::PER_CLUB {
+            "a per-club spread has no paired test".to_string()
+        } else {
+            note.to_string()
         }
     }
 
