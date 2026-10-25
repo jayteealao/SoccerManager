@@ -629,6 +629,16 @@ Each side also has:
 
 Each match also has `ball_in_play_min`.
 
+The same build also measures each match with the shared shape report, the code that measures a real tracked match converted into the tick format (`engine-cli tracking`), and gives each side its figures, named `trk.<figure>.{side}`. The report reads every second tick from each half's start, 25 frames a second, as a tracking system records; a frame at an odd step is refused. A sample is a ball-in-play frame with a side in possession, and positions are read every frame. A player's speed is his displacement over the last 0.32 s (8 frames), over fewer frames in his first 0.32 s on the pitch; a step of more than 1 m from one frame to the next breaks his track (a tracking system's identity swap, or the engine placing him for a kick-off) and reads as no movement. The outfield groups and their figures are the team-shape sums' above, with `live_frames` for `live_ticks`; a sprint lasts at least 25 frames, and the far-player windows start every 5 frames. Each side also has:
+
+- `team.slide_*`, `team.far_*` and `team.stops_<kind>`, as the team-shape sums;
+- `team.dead_frames` and `team.calm_frames`, `team.live_frames` (the match's ball-in-play frames) and `team.frames` (every frame read);
+- `run.distance_m`, `run.frames_on`, `run.zone_<zone>` (ball-in-play frames in `walk`, `jog`, `run`, `hi` and `sprint`), `run.peak_sum` (each player's peak speed, summed) and `run.players_used`, over every player on the pitch, the keeper too;
+- `keeper.in_sum`, `keeper.in_n`, and the same with `out`: the keeper's metres from his own goal line with his side on the ball and without it;
+- `free.length_sum`, `free.width_sum`, `free.spread_sum` and `free.n`: over every frame with two or more outfield players, the side's length (deepest to highest outfield player along the pitch), width (across it) and spread (the outfield players' mean distance from their centre), the figures that need no ball.
+
+`trk.<group>.live_min` and `trk.team.live_min` are the ball-in-play frames in minutes, and `trk.run.minutes_on` the side's player-minutes on the pitch.
+
 - `{"kind": "mean", "per": "match", "of": [...]}`: the mean over matches of the sum of the fields, such as goals per match. With `"per": "team"` and `{side}` fields, the mean over each team of each match.
 - `{"kind": "share", "of": [...], "op": ">=", "value": 10}`: the share of matches whose sum of the fields holds against the value; `op` is `>=`, `==`, or `<=`.
 - `{"kind": "ratio", "num": [...], "den": [...]}`: the sum of the numerator fields over the sum of the denominator fields, pooled over the matches.
@@ -1195,6 +1205,15 @@ Each shipped style carries two rules. Chase: trailing by 1 or more with 20 minut
 A preset's tactics are the tactics file's defaults with each setting applied in turn, as a rule action applies it, then the drawn formation, each slot's first suitable role and the duty hints. A version 1 file (`"mentality"` and an `"instructions"` map in place of `"primitives"`, as replays recorded before version 2 carry it) converts on load: the mentality and each instruction become settings, so it plays the same tactics; it may hold no rule.
 
 A file with an unknown formation, primitive, level, choice, state, duty, position or attribute, a primitive set twice, a preset without a `mentality` setting, a preset with no rule or more rules than `max_rules`, an empty formation list, an identity list outside 2 to 3, an unknown identity statistic, a weight outside 0 to 1 or weights that sum to 0 is refused by field, for example `content refused: styles styles.json: styles[0].formations: 4-2-4 is not a formation`. A replay stores the file among its inputs (role `styles`) and plays with it.
+
+## Tracking files
+
+`engine-cli tracking` writes these files; none ships with the game.
+
+- `<match>.side.json` (schema 1), beside the `<match>.ticks` of a converted match: the source and its credit, the match id, the pitch's length and width, `frame_rate` (25), `tick_step` (2), `odd_ticks` (`absent`), `rotated` (the match was turned by 180 degrees), `halves` (each `section`, `first_frame`, `start_tick`, `end_tick` and `team0_attack`), `slots` (each holder's `team`, `slot`, `person` id, `group` and the ticks he holds it), `off_pitch` (each spell of a slot whose player is not on the pitch, with its `reason`: `not tracked`, `sent off` or `no player`), `ball` (runs of ticks with one `live` status and `possession` side), `ball_missing` (ticks whose frame had no ball), `events` (each placed event's `tick`, `kind`, `team` and how it was `placed`: `event-time` or `clock-offset`), `unplaced` and `clock_offset` (`ms`, `passes` and `iqr_ms`). Person keys are the provider's ids, never names. An unknown field or another schema is refused.
+- `gate/tracking/dfl-matches.json` (schema 1): the seven DFL matches measured by the shared shape report. Per match: `frames`, `live_minutes` per half, `clock_offset`, the converter's `checks` (`records`, `rotated`, `off_pitch_spells`, `ball_missing`, `events_placed`, `events_unplaced`), every figure of the report home and away under `figures`, and per half its `shape` (`length_m`, `width_m`, `spread_m`, `frames`) and `passes` (`ground`, `high`, `cross`). `engine-cli real-targets build` reads it for the `trk.dfl.<band>` targets: each tracked band's measure in each match, their mean, the jackknife error of the mean and the per-match values (`per_match`).
+- `gate/tracking/live-time-check.json` (schema 1): the event-data live-time rule against the tracked ball status: the `rule`, `tolerance_minutes` (2.0), per match `rule_minutes`, `tracked_minutes` and `difference`, the `verdict` (`pass` only when every match is within the tolerance) and `wyscout_rates` (`per live minute` on a pass, else `per match`). A test holds the band file to it.
+- The contrast file (schema 1, `.scratch/tracking-contrast/contrast.json` by default, never under `gate/`): `source` `SoccerTrack`, a `note`, the `amateur` and `elite` levels (each its `dataset`, `matches` with each half's `shape` and `pass_choice`, and the `mean` per half), and `absent`, what a level lacks.
 
 ## Generating clubs
 
