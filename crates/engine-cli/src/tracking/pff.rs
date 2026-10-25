@@ -51,6 +51,8 @@ pub struct Native {
     pub lines: u64,
     /// Kept frames without a ball position.
     pub ball_absent: u32,
+    /// Frame lines left out because they repeat an earlier frame of their half.
+    pub repeated: u32,
 }
 
 /// The folder that holds the PFF files.
@@ -428,6 +430,8 @@ pub struct Resampled {
     pub native_frames: usize,
     /// Kept native frames without a ball position.
     pub ball_absent: u32,
+    /// Frame lines left out because they repeat an earlier frame.
+    pub repeated: u32,
 }
 
 /// Reads match `id` of `data` and resamples it to 50 frames a second.
@@ -439,6 +443,7 @@ pub fn read(data: &Path, id: &str) -> anyhow::Result<Resampled> {
         lines: n.lines,
         native_frames: n.m.halves.iter().map(|h| h.frames.len()).sum(),
         ball_absent: n.ball_absent,
+        repeated: n.repeated,
     })
 }
 
@@ -584,6 +589,7 @@ pub fn read_native(data: &Path, id: &str) -> anyhow::Result<Native> {
     let mut times: Vec<Vec<f64>> = vec![Vec::new(), Vec::new()];
     let mut left: BTreeMap<String, u32> = BTreeMap::new();
     let (mut lines, mut rows, mut estimated, mut ball_absent) = (0u64, 0u64, 0u64, 0u32);
+    let mut repeated = 0u32;
     let mut text = String::new();
     loop {
         text.clear();
@@ -603,13 +609,14 @@ pub fn read_native(data: &Path, id: &str) -> anyhow::Result<Native> {
             *left.entry(period_word(&line.period)).or_insert(0) += 1;
             continue;
         };
-        if let Some(&last) = times[h].last() {
-            ensure!(
-                line.video_time_ms > last,
-                "{} line {lines}: frame {} is not later than the frame before it",
-                path.display(),
-                line.frame_num
-            );
+        // The files repeat a few frames, line for line with each player twice: a line no
+        // later than the frame before it is left out and counted.
+        if times[h]
+            .last()
+            .is_some_and(|&last| line.video_time_ms <= last)
+        {
+            repeated += 1;
+            continue;
         }
         let half = &mut halves[h];
         let ball = line
@@ -639,6 +646,10 @@ pub fn read_native(data: &Path, id: &str) -> anyhow::Result<Native> {
                 let Some(&p) = shirt.get(&(team, r.jersey.0.clone())) else {
                     continue;
                 };
+                // A player listed twice in one frame keeps his first row.
+                if half.positions[p].last().is_some_and(Option::is_some) {
+                    continue;
+                }
                 rows += 1;
                 if r.visibility.as_deref() == Some("ESTIMATED") {
                     estimated += 1;
@@ -691,6 +702,7 @@ pub fn read_native(data: &Path, id: &str) -> anyhow::Result<Native> {
         fps: meta.fps,
         lines,
         ball_absent,
+        repeated,
     })
 }
 
@@ -841,6 +853,45 @@ mod tests {
         // The 5 m/s player: x from -12 m at the half's first frame.
         let fast = person(&m, "90009");
         assert_eq!(m.halves[0].positions[fast][0], Some([-12.0, 5.0]));
+    }
+
+    /// A frame line that repeats the frame before it, each player listed twice, as the
+    /// files hold a few, is left out and counted; each player of a line keeps his first row.
+    #[test]
+    fn a_repeated_frame_line_is_left_out_and_counted() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let from = data().join(FOLDER);
+        let to = dir.path().join(FOLDER);
+        for (sub, name) in [
+            ("Metadata", "9001.json"),
+            ("Rosters", "9001.json"),
+            ("Event Data", "9001.json"),
+        ] {
+            std::fs::create_dir_all(to.join(sub)).unwrap();
+            std::fs::copy(from.join(sub).join(name), to.join(sub).join(name)).unwrap();
+        }
+        let text = std::fs::read_to_string(from.join("Tracking Data/9001.jsonl")).unwrap();
+        let mut lines: Vec<String> = text.lines().map(String::from).collect();
+        let mut twice: serde_json::Value = serde_json::from_str(&lines[11]).unwrap();
+        let rows = twice["homePlayersSmoothed"].as_array().unwrap().clone();
+        let mut doubled = Vec::new();
+        for r in rows {
+            let mut moved = r.clone();
+            moved["x"] = 0.0.into();
+            doubled.push(r);
+            doubled.push(moved);
+        }
+        twice["homePlayersSmoothed"] = doubled.into();
+        lines[11] = twice.to_string();
+        lines.insert(12, twice.to_string());
+        lines.insert(12, twice.to_string());
+        std::fs::create_dir_all(to.join("Tracking Data")).unwrap();
+        std::fs::write(to.join("Tracking Data/9001.jsonl"), lines.join("\n") + "\n").unwrap();
+        let n = read_native(dir.path(), "9001").unwrap();
+        let plain = fixture();
+        assert_eq!((n.lines, n.repeated), (184, 2));
+        assert_eq!(n.m.halves, plain.m.halves);
+        assert_eq!(n.m.notes.estimated_share, plain.m.notes.estimated_share);
     }
 
     fn live(m: &TrackedMatch, h: usize, i: usize) -> Option<bool> {

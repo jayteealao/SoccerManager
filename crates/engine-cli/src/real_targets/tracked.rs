@@ -1,17 +1,20 @@
-//! The tracked-match targets: each tracked band's real value from the DFL tracking file
-//! (`gate/tracking/dfl-matches.json`), measured by the shared shape report.
+//! The tracked-match targets: each tracked band's real value from a tracking file of the
+//! DFL matches (`gate/tracking/dfl-matches.json`) or the PFF World Cup matches
+//! (`gate/tracking/pff-matches.json`), measured by the shared shape report.
 //!
-//! A tracked band is one of the band file whose real side is the tracked matches: a
-//! `trk.dfl.<band>` target, or the earlier tracked-match files it replaces (the movement
-//! study's `shape3_real.json` and the player file `idsse_players.csv`). Its target is keyed
-//! `trk.dfl.<band>`: the band's own measure applied to each tracked match's figures, one
-//! value per match; the target's value is their mean, its error the jackknife error of the
-//! mean over the matches, and the per-match values go with it so a band may resample the
-//! matches. A match whose denominator is 0 gives no value. A band field is read by its own
+//! A tracked band is one of the band file whose real side is the tracked matches: a target
+//! whose key carries a provider's prefix (`trk.dfl.`, `trk.pff.`), or, for DFL, the earlier
+//! tracked-match files it replaces (the movement study's `shape3_real.json` and the player
+//! file `idsse_players.csv`, keyed `trk.dfl.<band>`). A tracking file sets the targets of its
+//! own provider's bands only, each keyed by the band's own key: the band's measure applied to
+//! each tracked match's figures, one value per match; the target's value is their mean, its
+//! error the jackknife error of the mean over the matches, and the per-match values go with
+//! it so a band may resample the matches. A PFF target carries the context "tournament,
+//! national teams": national teams at the FIFA World Cup 2022, not club league football. A match whose denominator is 0 gives no value. A band field is read by its own
 //! name: `trk.<figure>.<side>` as the shared report names it, and an earlier name
 //! (`shape.<sum>`, the running fields, `ball_in_play_min`) by the same figure.
 //!
-//! The intake reads only a tracking file whose source is on a closed list (DFL); a
+//! The intake reads only a tracking file whose source is on a closed list (DFL, PFF); a
 //! SoccerTrack contrast, or any other file, is refused: SoccerTrack data sets no target.
 
 use std::collections::BTreeMap;
@@ -24,12 +27,48 @@ use super::{EngineCount, Label, Layer, Target};
 use crate::report::tracked_shape::FRAMES_PER_SECOND;
 use crate::tracking::measure::{MatchFigures, TrackingFile};
 
+/// A source whose tracked matches may set a target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Provider {
+    pub name: &'static str,
+    /// The prefix of its targets' keys.
+    pub key_prefix: &'static str,
+    pub seasons: &'static [&'static str],
+    /// Its leagues, `None` for a tournament.
+    pub leagues: Option<&'static [&'static str]>,
+    /// What its matches are, when they are not club league football.
+    pub context: Option<&'static str>,
+    /// The licence its credit block names.
+    pub licence: &'static str,
+}
+
 /// The sources whose tracked matches may set a target.
-pub const PROVIDERS: [&str; 1] = ["DFL"];
-/// The real-source files the tracked targets replace.
+pub const PROVIDERS: [Provider; 2] = [
+    Provider {
+        name: "DFL",
+        key_prefix: "trk.dfl.",
+        seasons: &["2223"],
+        leagues: Some(&["D1", "D2"]),
+        context: None,
+        licence: "CC BY 4.0",
+    },
+    Provider {
+        name: "PFF",
+        key_prefix: crate::report::bands::PFF_KEY_PREFIX,
+        seasons: &["2223"],
+        leagues: None,
+        context: Some(crate::report::bands::PFF_LABEL),
+        licence: "no published licence; derived figures under the accepted risk for \
+                  StatsBomb and PFF, the game ships none of the data",
+    },
+];
+/// The real-source files the DFL tracked targets replace.
 pub const EARLIER_FILES: [&str; 2] = ["shape3_real.json", "idsse_players.csv"];
-/// The prefix of a tracked target's key.
-pub const KEY_PREFIX: &str = "trk.dfl.";
+
+/// The provider named `name`, when its tracked matches may set a target.
+pub fn provider(name: &str) -> Option<&'static Provider> {
+    PROVIDERS.iter().find(|p| p.name == name)
+}
 
 /// Reads the tracking file at `path` for the targets, refusing a source off the list.
 pub fn read_tracking(path: &Path) -> anyhow::Result<TrackingFile> {
@@ -44,10 +83,10 @@ pub fn read_tracking(path: &Path) -> anyhow::Result<TrackingFile> {
         path.display()
     );
     anyhow::ensure!(
-        PROVIDERS.contains(&source),
+        provider(source).is_some(),
         "{}: the source {source:?} sets no target; the tracked targets come from {}",
         path.display(),
-        PROVIDERS.join(", ")
+        PROVIDERS.map(|p| p.name).join(", ")
     );
     TrackingFile::read(path)
 }
@@ -155,30 +194,36 @@ pub fn mean_and_jackknife(values: &[f64]) -> (f64, f64) {
     (mean, ((n - 1.0) / n * ss).sqrt())
 }
 
-/// Whether a band's real side is the tracked matches.
-pub fn is_tracked(band: &Value) -> bool {
+/// The target key of a band whose real side is `p`'s tracked matches: its own key when that
+/// carries `p`'s prefix, or `trk.dfl.<band>` for a DFL band still naming an earlier file.
+fn key_for(band: &Value, p: &Provider) -> Option<String> {
     let source = &band["real"]["source"];
-    source["target"]
+    if let Some(t) = source["target"].as_str() {
+        return t.starts_with(p.key_prefix).then(|| t.to_string());
+    }
+    let earlier = source["file"]
         .as_str()
-        .is_some_and(|t| t.starts_with(KEY_PREFIX))
-        || source["file"]
-            .as_str()
-            .is_some_and(|f| EARLIER_FILES.contains(&f))
+        .is_some_and(|f| EARLIER_FILES.contains(&f));
+    let name = band["band"].as_str()?;
+    (earlier && p.name == "DFL").then(|| format!("{}{name}", p.key_prefix))
 }
 
-/// The tracked targets of every tracked band of the band file `registry`.
+/// The tracked targets of the bands of the band file `registry` whose real side is the
+/// provider of `file`; a file of a source off the list sets none.
 pub fn targets(
     file: &TrackingFile,
     registry: &Value,
     out: &mut BTreeMap<String, Target>,
     absent: &mut BTreeMap<String, String>,
 ) {
+    let Some(p) = provider(&file.source) else {
+        return;
+    };
     let bands = registry["bands"].as_array().cloned().unwrap_or_default();
-    for band in bands.iter().filter(|b| is_tracked(b)) {
-        let Some(name) = band["band"].as_str() else {
+    for band in &bands {
+        let (Some(name), Some(key)) = (band["band"].as_str(), key_for(band, p)) else {
             continue;
         };
-        let key = format!("{KEY_PREFIX}{name}");
         let values: Vec<f64> = file
             .matches
             .iter()
@@ -201,11 +246,11 @@ pub fn targets(
                 width: None,
                 se,
                 n: values.len() as u64,
-                seasons: vec!["2223".into()],
+                seasons: p.seasons.iter().map(|s| s.to_string()).collect(),
                 between_season_sd: None,
                 between_league_sd: None,
                 layer: Layer::Pooled,
-                leagues: Some(vec!["D1".into(), "D2".into()]),
+                leagues: p.leagues.map(|l| l.iter().map(|s| s.to_string()).collect()),
                 provider: file.source.clone(),
                 source_label: format!(
                     "{} tracked matches, measured at 25 frames a second by the shared shape \
@@ -221,7 +266,7 @@ pub fn targets(
                     band: Some(name.to_string()),
                     measure: Some(band["measure"].to_string()),
                 },
-                context: None,
+                context: p.context.map(String::from),
                 extrapolated: None,
                 formula: None,
                 per_match: Some(values),
@@ -349,6 +394,87 @@ mod tests {
             match_value(&ratio("trk.cb.depth_in_sum", "trk.cb.depth_in_n"), &zero),
             None
         );
+    }
+
+    fn file_of(source: &str, sums: &[[f64; 2]]) -> TrackingFile {
+        TrackingFile {
+            schema: 1,
+            source: source.into(),
+            credit: String::new(),
+            frame_rate: 25,
+            matches: sums
+                .iter()
+                .enumerate()
+                .map(|(i, s)| {
+                    figures(
+                        &format!("m{i}"),
+                        &[("cb.depth_in_sum", *s), ("cb.depth_in_n", [1.0, 1.0])],
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    /// A band whose real source names a `trk.pff.` key takes its target from the PFF
+    /// tracking file, keyed by that name, with the tournament context; a DFL band's target
+    /// comes only from the DFL file and is unchanged.
+    #[test]
+    fn a_pff_band_takes_its_target_from_the_pff_matches_by_its_own_key() {
+        let registry = serde_json::json!({ "bands": [
+            { "band": "cb_depth_in",
+              "measure": ratio("trk.cb.depth_in_sum", "trk.cb.depth_in_n"),
+              "real": { "source": { "target": "trk.dfl.cb_depth_in" } } },
+            { "band": "cb_depth_in_pff",
+              "measure": ratio("trk.cb.depth_in_sum", "trk.cb.depth_in_n"),
+              "real": { "source": { "target": "trk.pff.cb_depth_in" } } }
+        ]});
+        let pff = file_of("PFF", &[[10.0, 20.0], [20.0, 20.0], [30.0, 60.0]]);
+        let (mut out, mut absent) = (BTreeMap::new(), BTreeMap::new());
+        targets(&pff, &registry, &mut out, &mut absent);
+        assert_eq!(out.keys().collect::<Vec<_>>(), ["trk.pff.cb_depth_in"]);
+        let t = &out["trk.pff.cb_depth_in"];
+        assert_eq!(t.per_match.as_deref(), Some(&[15.0, 20.0, 45.0][..]));
+        assert!((t.value.unwrap() - 80.0 / 3.0).abs() < 1e-12);
+        let (_, se) = mean_and_jackknife(&[15.0, 20.0, 45.0]);
+        assert_eq!(t.se, se);
+        assert_eq!(t.n, 3);
+        assert_eq!(t.provider, "PFF");
+        assert_eq!(t.context.as_deref(), Some("tournament, national teams"));
+        assert_eq!(t.leagues, None);
+        assert_eq!(t.engine_count.band.as_deref(), Some("cb_depth_in_pff"));
+        let dfl = file_of("DFL", &[[10.0, 20.0], [20.0, 20.0], [30.0, 60.0]]);
+        let mut from_dfl = BTreeMap::new();
+        targets(&dfl, &registry, &mut from_dfl, &mut absent);
+        assert_eq!(from_dfl.keys().collect::<Vec<_>>(), ["trk.dfl.cb_depth_in"]);
+        let d = &from_dfl["trk.dfl.cb_depth_in"];
+        assert_eq!(d.context, None);
+        assert_eq!(d.leagues, Some(vec!["D1".to_string(), "D2".into()]));
+        assert!(absent.is_empty());
+        let credit = crate::real_targets::build::tracked_credit(&pff);
+        assert_eq!(credit.name, "PFF");
+        assert!(
+            credit.licence.starts_with("no published licence"),
+            "{}",
+            credit.licence
+        );
+        assert_eq!(
+            crate::real_targets::build::tracked_credit(&dfl).licence,
+            "CC BY 4.0"
+        );
+    }
+
+    /// Each provider names its own licence for the credit block.
+    #[test]
+    fn each_provider_names_its_own_licence() {
+        assert_eq!(provider("DFL").unwrap().licence, "CC BY 4.0");
+        let pff = provider("PFF").unwrap();
+        assert!(
+            pff.licence.starts_with("no published licence"),
+            "{}",
+            pff.licence
+        );
+        assert_eq!(pff.key_prefix, crate::report::bands::PFF_KEY_PREFIX);
+        assert!(provider("SoccerTrack").is_none());
     }
 
     /// A contrast file fed to the intake is refused, as is a tracking file of a source off

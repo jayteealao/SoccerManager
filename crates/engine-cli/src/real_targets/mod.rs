@@ -52,8 +52,9 @@ use crate::cli::{RealTargetsAction, RealTargetsOpts};
 pub const SCHEMA_VERSION: u32 = 1;
 /// The reference file's name in `gate/`.
 pub const FILE: &str = "real-targets.json";
-/// The tracking file of the tracked-match targets, in `gate/`.
-pub const TRACKING_FILE: &str = "tracking/dfl-matches.json";
+/// The tracking files of the tracked-match targets, in `gate/`: the DFL matches and the
+/// PFF World Cup matches; a build reads each one that is here.
+pub const TRACKING_FILES: [&str; 2] = ["tracking/dfl-matches.json", "tracking/pff-matches.json"];
 /// The folder of real-name lists in `gate/`; the packaging test scans the shipped content
 /// for every name of every list file there.
 pub const NAMES_DIR: &str = "real-names";
@@ -314,17 +315,18 @@ pub fn run(content_dir: Option<&Path>, opts: &RealTargetsOpts) -> anyhow::Result
         } => {
             let folder = data(flag)?;
             let out = out.clone().unwrap_or_else(|| default_file(dir.root()));
-            let tracking = gate_dir(dir.root()).join(TRACKING_FILE);
-            let tracked = if tracking.exists() {
-                Some(build::TrackedInput::read(
-                    &tracking,
-                    &format!("gate/{TRACKING_FILE}"),
-                    &dir.path("realism-bands.json"),
-                )?)
-            } else {
-                None
-            };
-            let built = build::build(&folder, tracked.as_ref(), &git_head(dir.root()))?;
+            let mut tracked = Vec::new();
+            for name in TRACKING_FILES {
+                let tracking = gate_dir(dir.root()).join(name);
+                if tracking.exists() {
+                    tracked.push(build::TrackedInput::read(
+                        &tracking,
+                        &format!("gate/{name}"),
+                        &dir.path("realism-bands.json"),
+                    )?);
+                }
+            }
+            let built = build::build(&folder, &tracked, &git_head(dir.root()))?;
             build::write(&built, &out)?;
             let side_folder = match side_dir {
                 Some(d) => d.clone(),

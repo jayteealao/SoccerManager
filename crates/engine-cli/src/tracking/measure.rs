@@ -347,6 +347,8 @@ pub struct PffCounts {
     pub native_frames: usize,
     /// Native frames of the two halves without a ball.
     pub ball_absent: u32,
+    /// Frame lines left out because they repeat an earlier frame.
+    pub repeated: u32,
     /// The share of the kept player rows estimated off camera.
     pub estimated_share: f64,
     /// The frames left out, by period.
@@ -375,6 +377,7 @@ fn measure_one_pff(data: &Path, id: &str) -> anyhow::Result<(MatchFigures, PffCo
         lines: r.lines,
         native_frames: r.native_frames,
         ball_absent: r.ball_absent,
+        repeated: r.repeated,
         estimated_share: r.m.notes.estimated_share.unwrap_or(0.0),
         left_out: r.m.notes.left_out.clone(),
         rotated: c.side.rotated,

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "builder": {
     "version": "0.2.0-dev",
-    "git_head": "31b7d9f79fae7eca1ad2519da12a590a458c37e2"
+    "git_head": "f47748d185574abc3917219ff06f6adf7e648a2e"
   },
   "built_from": [
     {
@@ -1296,6 +1296,11 @@
       "sha256": "0c636a5cea844bd3d073fde9f0687896dff9a04601bdb45c2209ef8fef46ef91"
     },
     {
+      "path": "gate/tracking/pff-matches.json",
+      "bytes": 1002425,
+      "sha256": "480231df118fda4a5a512a9602ac0e07adccb2a6c4579e0d269c8c2a64ed821f"
+    },
+    {
       "path": "sb/events/9_27",
       "bytes": 100037044,
       "sha256": "ffb2c982e4a4546c51652851cd72ce9ff387cabb06a83d6db287d3f34a3bb3f7"
@@ -1705,6 +1710,12 @@
       "source": "https://www.fotmob.com team accurate-pass tables (Opta data), read by hand",
       "licence": "FotMob terms: no scraping, bulk retrieval or commercial use without consent",
       "use_note": "measuring only, not commercial; the game ships none of the data"
+    },
+    "PFF": {
+      "name": "PFF",
+      "source": "PFF FC, FIFA World Cup 2022 broadcast tracking (data-request form)",
+      "licence": "no published licence; derived figures under the accepted risk for StatsBomb and PFF, the game ships none of the data",
+      "use_note": "derived figures with credit; the game ships none of the data"
     },
     "StatsBomb": {
       "name": "StatsBomb",

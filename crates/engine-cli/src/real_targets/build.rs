@@ -203,9 +203,21 @@ impl TrackedInput {
     }
 }
 
-/// Builds the reference file from the raw files of `data` and, when given, the tracked
-/// matches; `git_head` names the builder's commit.
-pub fn build(data: &Path, tracked: Option<&TrackedInput>, git_head: &str) -> anyhow::Result<Built> {
+/// The credit of a tracking file's provider, with the provider's own licence.
+pub fn tracked_credit(file: &crate::tracking::measure::TrackingFile) -> Credit {
+    Credit {
+        name: file.source.clone(),
+        source: file.credit.clone(),
+        licence: super::tracked::provider(&file.source)
+            .map_or("", |p| p.licence)
+            .into(),
+        use_note: "derived figures with credit; the game ships none of the data".into(),
+    }
+}
+
+/// Builds the reference file from the raw files of `data` and the tracked matches of each
+/// tracking file given; `git_head` names the builder's commit.
+pub fn build(data: &Path, tracked: &[TrackedInput], git_head: &str) -> anyhow::Result<Built> {
     let mut targets = BTreeMap::new();
     let mut absent = BTreeMap::new();
     let mut read: Vec<String> = Vec::new();
@@ -257,7 +269,7 @@ pub fn build(data: &Path, tracked: Option<&TrackedInput>, git_head: &str) -> any
     let (unpaired, opened) = duels::targets(data, &mut targets, &mut absent)?;
     read.extend(opened);
     read.extend(fotmob::targets(data, &mut targets, &mut absent)?);
-    if let Some(t) = tracked {
+    for t in tracked {
         super::tracked::targets(&t.file, &t.registry, &mut targets, &mut absent);
     }
 
@@ -365,21 +377,13 @@ pub fn build(data: &Path, tracked: Option<&TrackedInput>, git_head: &str) -> any
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
     let mut built_from = built_from;
-    if let Some(t) = tracked {
+    for t in tracked {
         built_from.push(t.record.clone());
     }
     built_from.extend(groups);
     let mut credits = credits();
-    if let Some(t) = tracked {
-        credits.insert(
-            t.file.source.clone(),
-            Credit {
-                name: t.file.source.clone(),
-                source: t.file.credit.clone(),
-                licence: "CC BY 4.0".into(),
-                use_note: "derived figures with credit; the game ships none of the data".into(),
-            },
-        );
+    for t in tracked {
+        credits.insert(t.file.source.clone(), tracked_credit(&t.file));
     }
     let file = ReferenceFile {
         schema_version: SCHEMA_VERSION,

@@ -285,13 +285,14 @@ fn print_pff(run: &measure::PffRun) {
             .map(|l| format!("period {} {} frames", l.period, l.frames))
             .collect();
         println!(
-            "{}: {} frames, ball in play {} minutes by half, {} frame lines, {:.1}% of \
-             player rows estimated, {} of {} frames without a ball, left out {}, direction \
-             checked{}",
+            "{}: {} frames, ball in play {} minutes by half, {} frame lines ({} repeated), \
+             {:.1}% of player rows estimated, {} of {} frames without a ball, left out {}, \
+             direction checked{}",
             m.match_id,
             m.frames,
             halves.join(" + "),
             c.lines,
+            c.repeated,
             100.0 * c.estimated_share,
             c.ball_absent,
             c.native_frames,
@@ -342,10 +343,11 @@ pub fn run(content_dir: Option<&Path>, opts: &TrackingOpts) -> anyhow::Result<i3
                 TrackSource::Pff => {
                     let r = pff::read(&folder, match_id)?;
                     println!(
-                        "{}: {} frame lines read, {} frames of the two halves resampled from \
-                         {} a second",
+                        "{}: {} frame lines read ({} repeated), {} frames of the two halves \
+                         resampled from {} a second",
                         r.m.match_id,
                         r.lines,
+                        r.repeated,
                         r.native_frames,
                         r.m.resampled_from.unwrap_or_default()
                     );
