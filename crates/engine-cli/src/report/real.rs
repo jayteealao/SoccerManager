@@ -1253,10 +1253,6 @@ fn target_sample(
         .rsplit_once(".dist.")
         .map(|(_, k)| k)
         .ok_or_else(|| format!("{key} is not a distribution target"))?;
-    let dist = DISTS
-        .iter()
-        .find(|d| d.name == kind)
-        .ok_or_else(|| format!("{key}: no reader of the distribution {kind}"))?;
     let (width, bins) = super::measures::hist_bins(&def.measure)
         .ok_or_else(|| "the band is not a whole distribution".to_string())?;
     if target.bins != Some(bins) || target.width != Some(width) {
@@ -1265,6 +1261,13 @@ fn target_sample(
             target.bins, target.width
         ));
     }
+    if key.starts_with("sb.") {
+        return statsbomb_sample(folder, key, target, kind, (width, bins));
+    }
+    let dist = DISTS
+        .iter()
+        .find(|d| d.name == kind)
+        .ok_or_else(|| format!("{key}: no reader of the distribution {kind}"))?;
     let data = data_folder(folder).ok_or_else(|| {
         "no real-data folder: the content folder is in no git checkout; pass --real-data"
             .to_string()
@@ -1303,6 +1306,109 @@ fn target_sample(
     }
     Ok(Sample {
         per_match,
+        bins,
+        width,
+    })
+}
+
+/// The local side folder beside a real-data folder: `.scratch/real-targets` beside the raw
+/// data in `.scratch/data`, where `engine-cli real-targets build` writes it.
+pub fn side_folder(folder: &RealFolder) -> Option<PathBuf> {
+    data_folder(folder)?
+        .parent()
+        .map(|p| p.join(crate::real_targets::side::DIR))
+}
+
+/// The whole real sample of a StatsBomb distribution target (`sb.<label>.dist.<kind>`):
+/// each match of the target's competition-seasons one histogram, read from the per-match
+/// histogram file of the side folder, each match weighing by its own events as the target
+/// pools them. The file must hold every season of the target and give the target's shares;
+/// otherwise the band has no real sample and the reason says to rebuild.
+fn statsbomb_sample(
+    folder: &RealFolder,
+    key: &str,
+    target: &crate::real_targets::Target,
+    kind: &str,
+    (width, bins): (f64, u32),
+) -> Result<Sample, String> {
+    use crate::real_targets::side::HISTOGRAM_FILE;
+    let rebuild = "run engine-cli real-targets build";
+    let dir = side_folder(folder).ok_or_else(|| {
+        format!(
+            "per-match StatsBomb histograms absent: the content folder is in no git checkout; \
+             {rebuild}"
+        )
+    })?;
+    let path = dir.join(HISTOGRAM_FILE);
+    let text = std::fs::read_to_string(&path).map_err(|_| {
+        format!(
+            "per-match StatsBomb histograms absent at {}: {rebuild}",
+            path.display()
+        )
+    })?;
+    let labels: BTreeSet<&str> = target.seasons.iter().map(String::as_str).collect();
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    let mut per: BTreeMap<(String, u64), BTreeMap<u32, f64>> = BTreeMap::new();
+    for (n, line) in text.lines().enumerate().skip(1) {
+        let cells: Vec<&str> = line.split(',').collect();
+        let [label, id, k, bin, count] = cells[..] else {
+            return Err(format!("{} line {}: not five cells", path.display(), n + 1));
+        };
+        if k != kind || !labels.contains(label) {
+            continue;
+        }
+        let bad = || format!("{} line {}: not a number", path.display(), n + 1);
+        let id: u64 = id.parse().map_err(|_| bad())?;
+        let bin: u32 = bin.parse().map_err(|_| bad())?;
+        let count: f64 = count.parse().map_err(|_| bad())?;
+        if bin >= bins {
+            return Err(format!(
+                "{} line {}: bin {bin} of {kind} is beyond the band's {bins} bins",
+                path.display(),
+                n + 1
+            ));
+        }
+        seen.insert(label.to_string());
+        *per.entry((label.to_string(), id))
+            .or_default()
+            .entry(bin)
+            .or_default() += count;
+    }
+    if seen.len() < labels.len() || per.len() as u64 > target.n {
+        return Err(format!(
+            "{} is short for {key}: it holds {} of the target's {} competition-seasons and {} \
+             of its {} matches; {rebuild}",
+            path.display(),
+            seen.len(),
+            labels.len(),
+            per.len(),
+            target.n
+        ));
+    }
+    let mut pooled = vec![0.0; bins as usize];
+    for h in per.values() {
+        for (b, c) in h {
+            pooled[*b as usize] += c;
+        }
+    }
+    let total: f64 = pooled.iter().sum();
+    let agrees = target.shares.as_ref().is_some_and(|want| {
+        total > 0.0
+            && want.len() == pooled.len()
+            && want
+                .iter()
+                .zip(&pooled)
+                .all(|(w, c)| (w - c / total).abs() < 1e-5)
+    });
+    if !agrees {
+        return Err(format!(
+            "{} does not give the shares of {key}: the reference file and the side folder \
+             were built apart; {rebuild}",
+            path.display()
+        ));
+    }
+    Ok(Sample {
+        per_match: per.into_values().map(|h| h.into_iter().collect()).collect(),
         bins,
         width,
     })
@@ -2624,6 +2730,113 @@ A,0,0
             read_with(&folder, &missing, None, Some(&file)).0,
             Outcome::NotHere { .. }
         ));
+    }
+
+    /// A StatsBomb distribution target: a band of 41 shot-distance bins over two seasons.
+    fn sb_target(shares: Vec<f64>, n: u64) -> crate::real_targets::Target {
+        serde_json::from_value(serde_json::json!({
+            "shares": shares, "bins": 41, "width": 1.0,
+            "se": 0.1, "n": n, "seasons": ["2_27", "55_43"], "layer": "pooled",
+            "provider": "StatsBomb", "source_label": "StatsBomb open data, test",
+            "event_definition": "e", "denominator": "d", "unit_of_observation": "match",
+            "label": "calibration", "engine_count": {"text": "t"}
+        }))
+        .unwrap()
+    }
+
+    fn sb_band() -> BandDef {
+        let mut def = band(
+            RealSource::Target(super::super::bands::TargetRef {
+                target: "sb.men.dist.shot_distance".into(),
+            }),
+            3,
+            0.1,
+        );
+        def.measure = crate::report::bands::Measure::Distribution {
+            of: crate::report::bands::Source::ShotDistance,
+            width: 1.0,
+            bins: 41,
+        };
+        def
+    }
+
+    #[test]
+    fn statsbomb_match_histograms_reach_the_sample_one_histogram_per_match() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("out");
+        std::fs::create_dir_all(&out).unwrap();
+        let side = tmp.path().join("real-targets");
+        std::fs::create_dir_all(&side).unwrap();
+        // Three matches: bins 7 7 | 14 | 7 21; another kind and a season outside the target.
+        std::fs::write(
+            side.join("statsbomb-match-histograms.csv"),
+            "label,match,kind,bin,count\n\
+             2_27,1,shot_distance,7,2\n\
+             2_27,1,chain_passes,3,9\n\
+             2_27,2,shot_distance,14,1\n\
+             55_43,3,shot_distance,7,1\n\
+             55_43,3,shot_distance,21,1\n\
+             37_90,4,shot_distance,40,5\n",
+        )
+        .unwrap();
+        let mut shares = vec![0.0; 41];
+        shares[7] = 0.6;
+        shares[14] = 0.2;
+        shares[21] = 0.2;
+        let target = sb_target(shares, 3);
+        let def = sb_band();
+        let s = target_sample(&at(&out), &def, "sb.men.dist.shot_distance", &target).unwrap();
+        assert_eq!(
+            s.per_match,
+            vec![vec![(7, 2.0)], vec![(14, 1.0)], vec![(7, 1.0), (21, 1.0)]]
+        );
+        assert_eq!((s.bins, s.width), (41, 1.0));
+        // The pooled shares are the target's.
+        let mut pooled = vec![0.0; 41];
+        for h in &s.per_match {
+            for (b, c) in h {
+                pooled[*b as usize] += c;
+            }
+        }
+        let total: f64 = pooled.iter().sum();
+        for (b, want) in target.shares.as_ref().unwrap().iter().enumerate() {
+            assert!((pooled[b] / total - want).abs() < 1e-12, "bin {b}");
+        }
+
+        // A file built apart from the reference file gives the reason, not a sample.
+        let mut other = vec![0.0; 41];
+        other[7] = 1.0;
+        let stale = sb_target(other, 3);
+        let e = target_sample(&at(&out), &def, "sb.men.dist.shot_distance", &stale).unwrap_err();
+        assert!(
+            e.contains("rebuild") || e.contains("real-targets build"),
+            "{e}"
+        );
+    }
+
+    #[test]
+    fn missing_statsbomb_histograms_give_the_reason_and_no_sample() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let out = tmp.path().join("out");
+        std::fs::create_dir_all(&out).unwrap();
+        let target = sb_target(vec![1.0 / 41.0; 41], 3);
+        let def = sb_band();
+        let e = target_sample(&at(&out), &def, "sb.men.dist.shot_distance", &target).unwrap_err();
+        assert!(
+            e.starts_with("per-match StatsBomb histograms absent at "),
+            "{e}"
+        );
+        assert!(e.ends_with("run engine-cli real-targets build"), "{e}");
+        // A file that misses a season of the target is short.
+        let side = tmp.path().join("real-targets");
+        std::fs::create_dir_all(&side).unwrap();
+        std::fs::write(
+            side.join("statsbomb-match-histograms.csv"),
+            "label,match,kind,bin,count\n2_27,1,shot_distance,7,2\n",
+        )
+        .unwrap();
+        let e = target_sample(&at(&out), &def, "sb.men.dist.shot_distance", &target).unwrap_err();
+        assert!(e.contains("is short for sb.men.dist.shot_distance"), "{e}");
     }
 
     /// A tracked-match target reads as its matches, resampled one left out at a time.
