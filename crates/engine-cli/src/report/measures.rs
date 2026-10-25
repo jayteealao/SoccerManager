@@ -211,9 +211,14 @@ fn shape_sum(shape: &[[f64; SHAPE_FIELDS]; 2], sum: &str, side: usize) -> Option
     Some(shape[side][shape_place(sum)?])
 }
 
-/// The shared shape report's figure `figure` of `side`: a kept figure by its name, or
-/// `<group>.live_min` and `team.live_min`, the ball-in-play frames in minutes.
+/// The shared shape report's figure `figure` of `side`: a kept figure by its name,
+/// `<group>.live_min` and `team.live_min`, the ball-in-play frames in minutes, or
+/// `run.minutes_on`, the side's player-minutes on the pitch.
 fn tracked_figure(v: &TrackedValues, figure: &str, side: usize) -> Option<f64> {
+    let per_minute = tracked_shape::FRAMES_PER_SECOND * 60.0;
+    if figure == "run.minutes_on" {
+        return Some(v[side][tracked_shape::place("run.frames_on")?] / per_minute);
+    }
     if let Some(of) = figure.strip_suffix(".live_min") {
         let frames = v[side][tracked_shape::place(&format!("{of}.live_frames"))?];
         return Some(frames / (tracked_shape::FRAMES_PER_SECOND * 60.0));
@@ -1266,6 +1271,8 @@ mod tests {
         assert_eq!(f("trk.run.distance_m.away"), Some(9000.0));
         assert_eq!(f("trk.team.live_min.away"), Some(1.0));
         assert_eq!(f("trk.team.live_min.home"), Some(0.0));
+        assert_eq!(f("trk.run.minutes_on.away"), Some(0.0));
+        assert!(is_measure_field("trk.run.minutes_on.home"));
         assert!(is_measure_field("trk.free.spread_sum.{side}"));
         assert!(!is_measure_field("trk.keeper.depth_in_sum.home"));
         assert!(!is_measure_field("trk.home"));

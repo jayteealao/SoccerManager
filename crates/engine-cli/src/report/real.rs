@@ -173,8 +173,18 @@ fn read_with(
         RealSource::Pointer(p) => p,
         RealSource::Target(t) => {
             let found = reference.and_then(|f| f.target(&t.target));
-            return match found.and_then(|x| x.value.map(|v| (v, x.se))) {
-                Some((value, se)) => (
+            return match found.and_then(|x| x.value.map(|v| (v, x.se, x.per_match.clone()))) {
+                // A tracked-match target carries its matches: the band resamples them, one
+                // left out at a time.
+                Some((value, se, Some(values))) if !values.is_empty() => (
+                    Outcome::Read {
+                        value,
+                        se: Some(se),
+                        file_date: None,
+                    },
+                    Some(Real::Tracked(values)),
+                ),
+                Some((value, se, _)) => (
                     Outcome::Read {
                         value,
                         se: Some(se),
@@ -2614,6 +2624,25 @@ A,0,0
             read_with(&folder, &missing, None, Some(&file)).0,
             Outcome::NotHere { .. }
         ));
+    }
+
+    /// A tracked-match target reads as its matches, resampled one left out at a time.
+    #[test]
+    fn a_tracked_match_target_reads_its_matches() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../gate/real-targets.json");
+        let file = ReferenceFile::load(&path).unwrap();
+        let key = "trk.dfl.cb_depth_in";
+        let want = file.target(key).unwrap();
+        let def = band(
+            RealSource::Target(super::super::bands::TargetRef { target: key.into() }),
+            7,
+            1.0,
+        );
+        let (outcome, side) = read_with(&at(Path::new(".")), &def, None, Some(&file));
+        assert_eq!(value(outcome), (want.value.unwrap(), Some(want.se)));
+        let values = want.per_match.clone().unwrap();
+        assert_eq!(values.len(), 7);
+        assert_eq!(side, Some(Real::Tracked(values)));
     }
 
     /// The slow tests read the reference file through the pass-rule crate's narrow view; it

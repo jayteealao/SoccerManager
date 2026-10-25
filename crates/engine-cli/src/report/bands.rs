@@ -1845,10 +1845,18 @@ impl Registry {
                 b.real.as_ref().map(|r| &r.source),
                 Some(RealSource::Target(_))
             );
-            if target_source != (rule.resampling.real == RealUnit::Target) {
+            // A reference-file target is resampled as a summary, or by its tracked matches
+            // when it holds them; any other real source is never a target.
+            let fits = match rule.resampling.real {
+                RealUnit::Target => target_source,
+                RealUnit::TrackedMatch => true,
+                _ => !target_source,
+            };
+            if !fits {
                 out.push((
                     at("resampling.real"),
-                    "is target exactly when the real source names a reference-file target".into(),
+                    "is target or tracked-match when the real source names a reference-file                      target, and neither target otherwise"
+                        .into(),
                 ));
             }
             if !b.gates {
@@ -2067,6 +2075,12 @@ mod tests {
                     assert_eq!(real.sample, 0, "{}", b.band);
                     assert_eq!(c.measurement.count, 0, "{}", b.band);
                     assert!(matches!(rule.target, Target::Design { .. }), "{}", b.band);
+                }
+                RealSource::Target(t) if t.target.starts_with("trk.dfl.") => {
+                    // A tracked band reads the tracked matches' own target of its name.
+                    assert_eq!(t.target, format!("trk.dfl.{}", b.band));
+                    assert_eq!(rule.resampling.real, RealUnit::TrackedMatch, "{}", b.band);
+                    assert_eq!(real.sample, 7, "{}", b.band);
                 }
                 RealSource::Target(t) => {
                     assert!(t.target.starts_with("tier.1.dist."), "{}", b.band);
