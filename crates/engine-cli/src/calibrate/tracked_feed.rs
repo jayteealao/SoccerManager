@@ -217,6 +217,9 @@ impl TickSink for TrackedFeed {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::report::tracked_shape::field_names;
+    use crate::tracking::measure::ENGINE_PLACED;
+    use crate::tracking::side::{BallRun, Placed, SCHEMA, Side, SideHalf, Spell};
 
     fn record(tick: u32) -> TickRecord {
         TickRecord {
@@ -266,6 +269,145 @@ mod tests {
                 (12, 0, Some(1))
             ]
         );
+    }
+
+    /// An engine side file of the frames a feed kept: the halves, each place's holders as
+    /// spells, the ball status and possession as runs, and each counted stoppage on the
+    /// frame that counted it.
+    fn engine_side(frames: &[Frame], pitch: [f64; 2]) -> Side {
+        let mut halves: Vec<SideHalf> = Vec::new();
+        let mut slots: Vec<Spell> = Vec::new();
+        let mut open: [Option<usize>; ROSTER] = [None; ROSTER];
+        let mut ball: Vec<BallRun> = Vec::new();
+        let mut events = Vec::new();
+        for f in frames {
+            if halves.len() == f.half + 1 {
+                if let Some(h) = halves.last_mut() {
+                    h.end_tick = f.tick;
+                }
+            } else {
+                halves.push(SideHalf {
+                    section: format!("half {}", f.half + 1),
+                    first_frame: 0,
+                    start_tick: f.tick,
+                    end_tick: f.tick,
+                    team0_attack: f.attack_x[0],
+                });
+            }
+            for (i, holder) in f.on.iter().enumerate() {
+                let same = open[i].is_some_and(|s| {
+                    let s = &slots[s];
+                    holder.is_some_and(|h| s.person == h.person.to_string() && s.group == h.group)
+                });
+                if same {
+                    slots[open[i].unwrap()].to_tick = f.tick;
+                    continue;
+                }
+                open[i] = holder.map(|h| {
+                    slots.push(Spell {
+                        team: i / engine::team::PLAYERS_PER_TEAM,
+                        slot: i % engine::team::PLAYERS_PER_TEAM,
+                        person: h.person.to_string(),
+                        group: h.group,
+                        from_tick: f.tick,
+                        to_tick: f.tick,
+                    });
+                    slots.len() - 1
+                });
+            }
+            match ball.last_mut() {
+                Some(b) if b.live == f.live && b.possession == f.possession => b.to_tick = f.tick,
+                _ => ball.push(BallRun {
+                    from_tick: f.tick,
+                    to_tick: f.tick,
+                    live: f.live,
+                    possession: f.possession,
+                }),
+            }
+            for &(r, team) in &f.restarts {
+                events.push(Placed {
+                    tick: f.tick,
+                    kind: r.word().into(),
+                    team: Some(team),
+                    placed: ENGINE_PLACED.into(),
+                });
+            }
+        }
+        Side {
+            schema: SCHEMA,
+            source: "engine".into(),
+            credit: String::new(),
+            match_id: "engine-42".into(),
+            pitch,
+            frame_rate: 25,
+            tick_step: 2,
+            odd_ticks: "recorded".into(),
+            rotated: false,
+            halves,
+            slots,
+            off_pitch: Vec::new(),
+            ball,
+            ball_missing: Vec::new(),
+            events,
+            unplaced: 0,
+            clock_offset: None,
+        }
+    }
+
+    /// A 10-minute engine match measured as it plays and measured again from its tick file
+    /// and an engine side file gives the same figures bit for bit: one code measures both.
+    /// Both read every second tick from each half's start, and the frame count is the
+    /// match's live and dead frames at 25 a second.
+    #[test]
+    fn an_engine_match_measured_from_its_files_gives_the_feeds_figures_bit_for_bit() {
+        let dir = engine::ContentDir::at(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content"),
+        );
+        let content = engine::Content::load(&dir).unwrap();
+        let teams = [engine::data::TEAM_A_FILE, engine::data::TEAM_B_FILE]
+            .map(|f| content.load_team(&dir, &dir.path(f)).unwrap().value);
+        let config = engine::MatchConfig::new(42, 10, &content, [&teams[0], &teams[1]]).unwrap();
+        let mut sim = Simulation::new(config).unwrap();
+        let pitch = [sim.config().pitch().length(), sim.config().pitch().width()];
+        let mut sink = engine::FanoutSink::new(
+            engine::VecSink::default(),
+            TrackedFeed::new(pitch[0]).keeping(),
+        );
+        sim.run(&mut sink).unwrap();
+        let (records, mut feed) = sink.into_parts();
+        let kept = feed.kept.take().unwrap();
+        let fed = feed.finish().unwrap();
+        // Every frame is an even step from its half's first frame.
+        let mut starts = std::collections::BTreeMap::new();
+        for f in &kept {
+            let start = *starts.entry(f.half).or_insert(f.tick);
+            assert!((f.tick - start).is_multiple_of(2), "tick {}", f.tick);
+        }
+        assert!(starts.len() >= 2, "both halves: {starts:?}");
+        let side = engine_side(&kept, pitch);
+        let out = tempfile::TempDir::new().unwrap();
+        let (ticks, side_file) = crate::tracking::convert::write(
+            &crate::tracking::convert::Converted {
+                records: records.records,
+                side,
+            },
+            out.path(),
+        )
+        .unwrap();
+        let read = crate::tracking::measure::measure_files(&ticks, &side_file).unwrap();
+        for (i, name) in field_names().iter().enumerate() {
+            for s in 0..2 {
+                assert_eq!(read[s][i].to_bits(), fed[s][i].to_bits(), "{name} side {s}");
+            }
+        }
+        let at = |n: &str| crate::report::tracked_shape::place(n).unwrap();
+        let frames = fed[0][at("team.frames")];
+        assert_eq!(frames, kept.len() as f64);
+        let dead = kept.iter().filter(|f| f.live == Some(false)).count() as f64;
+        assert_eq!(fed[0][at("team.live_frames")] + dead, frames);
+        // About 10 minutes of play at 25 frames a second, beside the stoppages.
+        assert!(frames >= 10.0 * 60.0 * 25.0, "{frames}");
+        assert!(fed[0][at("cm.live_frames")] > 0.0);
     }
 
     #[test]
