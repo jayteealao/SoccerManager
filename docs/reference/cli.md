@@ -757,6 +757,20 @@ engine-cli tracking convert --match <ID> --out <DIR> [--data <DIR>]
 | `--out` | folder | required | Where the tick file and the side file go. |
 
 Exit codes: 0 when both files are written; 1 when a file is missing or malformed, the pitch is outside the Laws, no keeper is tracked in a half, or the play direction does not change at half time.
+
+```text
+engine-cli tracking measure [--data <DIR>] [--out <FILE>]
+```
+
+`measure` converts every DFL match of the data folder and measures it with the shared shape report, the code that measures each engine match of a `measures` build, at 25 frames a second. It prints one line per match (frames, ball-in-play minutes of each half, the clock offset fitted on the passes) and writes one tracking file (schema 1) with each match's figures, home and away, its frames, ball-in-play minutes per half, clock offset and the converter's checks (records, turned or not, off-pitch spells, ticks without a ball, placed and unplaced events).
+
+| Flag | Value | Default | Meaning |
+|---|---|---|---|
+| `--data` | folder | the main checkout's `.scratch/data` | The raw data folder. |
+| `--out` | file | `gate/tracking/dfl-matches.json` of the checkout | The tracking file to write. |
+
+Exit codes: 0 when the file is written; 1 when the folder holds no DFL match or a match cannot be converted.
+
 ## primitives
 
 Check or fit a tactical primitive from played matches. Only a build with the `measures` cargo feature has this command.

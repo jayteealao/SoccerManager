@@ -243,6 +243,33 @@ pub fn run(content_dir: Option<&Path>, opts: &TrackingOpts) -> anyhow::Result<i3
             println!("wrote {}", side.display());
             Ok(0)
         }
+        TrackingAction::Measure { data, out } => {
+            let folder = data_folder(dir.root(), data.as_deref())?;
+            let file = measure::measure_dfl(&folder)?;
+            for m in &file.matches {
+                let halves: Vec<String> =
+                    m.live_minutes.iter().map(|v| format!("{v:.1}")).collect();
+                let offset = m.clock_offset.map_or("none".to_string(), |o| {
+                    format!(
+                        "{:.0} ms over {} passes (IQR {:.0} ms)",
+                        o.ms, o.passes, o.iqr_ms
+                    )
+                });
+                println!(
+                    "{}: {} frames, ball in play {} minutes by half, clock offset {}",
+                    m.match_id,
+                    m.frames,
+                    halves.join(" + "),
+                    offset
+                );
+            }
+            let path = out
+                .clone()
+                .unwrap_or_else(|| measure::default_out(dir.root()));
+            file.write(&path)?;
+            println!("wrote {}", path.display());
+            Ok(0)
+        }
     }
 }
 #[cfg(test)]

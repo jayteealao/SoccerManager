@@ -192,6 +192,32 @@ pub enum TrackingAction {
         #[arg(long, value_name = "DIR")]
         out: PathBuf,
     },
+    /// Measure every DFL tracked match with the shared shape report.
+    #[command(
+        long_about = "Convert every DFL tracked match of the data folder and measure it
+                      with the shared shape report, the code that measures an engine
+                      match, at 25 frames a second. Writes each match's figures, frames,
+                      ball-in-play minutes per half, clock offset and converter checks
+                      into one file, and prints one line per match."
+    )]
+    Measure {
+        /// The raw data folder.
+        #[arg(
+            long,
+            value_name = "DIR",
+            long_help = "The raw data folder holding idsse/ with the DFL files; default
+                         the main checkout's .scratch/data."
+        )]
+        data: Option<PathBuf>,
+        /// The tracking file to write.
+        #[arg(
+            long,
+            value_name = "FILE",
+            long_help = "The tracking file to write; default gate/tracking/dfl-matches.json
+                         of the checkout."
+        )]
+        out: Option<PathBuf>,
+    },
 }
 
 /// The world database command.

@@ -18,7 +18,10 @@
 //!   (his side the sign of his mean y over the half), on the far flank when more than 5 m to
 //!   the other side.
 //! - A player's speed is his displacement over the last 0.32 s (8 frames), over fewer frames
-//!   in his first 0.32 s on the pitch, 0 on his first frame. Pace levels: under 0.2, 2, 4,
+//!   in his first 0.32 s on the pitch, 0 on his first frame. A step of more than 1 m from one
+//!   frame to the next (25 m/s, beyond any run) breaks his track, as a gap does: a tracking
+//!   system's identity swap or jump, or the engine placing him for a kick-off, reads as no
+//!   movement, and his speed and far-player windows start again from that frame. Pace levels: under 0.2, 2, 4,
 //!   5.5 and 7 m/s, and 7 and over. A sprint is a run above 7 m/s for at least 1 s of play
 //!   (25 frames): forward when x gains more than 3 m in the attacking frame, back when it
 //!   loses more than 3 m, else lateral.
@@ -168,6 +171,8 @@ const SPRINT_RUN_M: f64 = 3.0;
 const FLANK_M: f64 = 5.0;
 /// The speed window: 0.32 s.
 const SMOOTH_FRAMES: usize = 8;
+/// A step longer than this from one frame to the next breaks a player's track, in metres.
+const BREAK_M: f64 = 1.0;
 /// Far-player windows start every this many frames: 0.2 s.
 const FAR_EVERY: u64 = 5;
 /// The far-player windows in starts: 1 s and 10 s.
@@ -615,7 +620,16 @@ impl TrackedShape {
 
     /// Place `i`'s speed: his displacement over the last 8 frames, over fewer at first.
     fn speed(&mut self, i: usize, pos: [f64; 2]) -> f64 {
-        let trail = &mut self.follow[i].trail;
+        let fo = &mut self.follow[i];
+        if fo
+            .trail
+            .back()
+            .is_some_and(|last| (pos[0] - last[0]).hypot(pos[1] - last[1]) > BREAK_M)
+        {
+            fo.trail.clear();
+            fo.ring.clear();
+        }
+        let trail = &mut fo.trail;
         trail.push_back(pos);
         if trail.len() > SMOOTH_FRAMES + 1 {
             trail.pop_front();
@@ -863,6 +877,25 @@ mod tests {
         // Place 10 (st): 0.1 m per 0.04 s is 2.5 m/s, a jog, from his second frame.
         assert_eq!(v[0][at("st.pace_jog")], 59.0);
         assert_eq!(v[0][at("st.pace_stand")], 1.0, "his first frame reads 0");
+    }
+
+    /// A step of more than 1 m in one frame breaks the track: the player who jumps 20 m reads
+    /// 0 on that frame, then his run again, and the jump adds no metres.
+    #[test]
+    fn a_jump_breaks_the_track() {
+        let frames = (0..30).map(|k| {
+            let mut p = still(0.0, 0.0);
+            let jump = if k >= 15 { 20.0 } else { 0.0 };
+            p[3] = [0.1 * k as f32 + jump, 0.0];
+            frame(2 * k, [0.0, 0.0], p)
+        });
+        let v = run(frames, Mode::Full);
+        // 2.5 m/s each frame but the first and the jump's.
+        assert_eq!(v[0][at("cb.pace_jog")], 28.0);
+        assert_eq!(v[0][at("cb.pace_stand")], 2.0 + 30.0 * 3.0);
+        let d = v[0][at("run.distance_m")];
+        assert!((d - 28.0 * 0.1).abs() < 1e-4, "{d}");
+        assert!((v[0][at("run.peak_sum")] - 2.5).abs() < 1e-4);
     }
 
     /// A run that reads over 7 m/s for 25 frames (32 frames at 7.5 m/s, smoothed over 8) is

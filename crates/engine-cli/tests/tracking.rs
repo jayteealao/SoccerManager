@@ -331,3 +331,47 @@ fn every_timed_event_is_placed_on_its_nearest_frame_and_the_offset_is_fitted() {
     assert_eq!(side["clock_offset"]["ms"], 480.0);
     assert_eq!(side["clock_offset"]["passes"], 2);
 }
+
+/// `tracking measure` converts and measures every match of the folder into one tracking
+/// file: every figure of the shared report home and away, a frame per record, the
+/// ball-in-play minutes of each half and the converter's checks; the line it prints names
+/// the frames.
+#[test]
+fn measure_writes_every_figure_of_every_match() {
+    let dir = TempDir::new().unwrap();
+    let file = dir.path().join("matches.json");
+    let out = bin()
+        .args(["tracking", "measure", "--data"])
+        .arg(fixtures().join("dfl"))
+        .arg("--out")
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", text(&out));
+    assert!(
+        text(&out).contains(&format!("{FIX}: 118 frames")),
+        "{}",
+        text(&out)
+    );
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(v["schema"], 1);
+    assert_eq!(v["source"], "DFL");
+    let m = &v["matches"][0];
+    assert_eq!(m["match_id"], FIX);
+    assert_eq!(m["frames"], 118);
+    assert_eq!(m["live_minutes"].as_array().unwrap().len(), 2);
+    assert_eq!(m["checks"]["off_pitch_spells"], 3);
+    let figures = m["figures"].as_object().unwrap();
+    assert_eq!(figures.len(), 173);
+    assert_eq!(figures["team.frames"], serde_json::json!([118.0, 118.0]));
+    // A folder without a DFL match is refused.
+    let empty = TempDir::new().unwrap();
+    let out = bin()
+        .args(["tracking", "measure", "--data"])
+        .arg(empty.path())
+        .arg("--out")
+        .arg(dir.path().join("none.json"))
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1), "{}", text(&out));
+}
