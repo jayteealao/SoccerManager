@@ -7,7 +7,8 @@ mod common;
 
 use common::{bin, record, temp};
 
-/// The real band of shots per team (`calib.bands`, `shots_per_team`).
+/// The real band of shots per team as the band file's version 5 set it; since version 6 the
+/// band is a margin around the real value, and this test keeps the old range as its floor.
 const REAL_BAND: (f64, f64) = (8.0, 16.0);
 
 /// The highest value this test accepts. The real band ends at 16, but the engine misses it:
@@ -56,8 +57,6 @@ fn twelve_full_equal_matches_keep_shots_per_team_inside_the_pinned_range() {
         .iter()
         .find(|b| b["suite"] == "equal" && b["band"] == "shots_per_team")
         .unwrap_or_else(|| panic!("no equal shots_per_team band in {report}"));
-    assert_eq!(band["lo"].as_f64(), Some(REAL_BAND.0), "{band}");
-    assert_eq!(band["hi"].as_f64(), Some(REAL_BAND.1), "{band}");
     let shots = band["value"].as_f64().unwrap();
     assert!(
         (REAL_BAND.0..=CEILING).contains(&shots),

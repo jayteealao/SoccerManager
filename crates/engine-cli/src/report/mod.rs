@@ -5,10 +5,13 @@
 //! check carries its sampling error.
 
 pub mod accepted;
+pub mod agreement;
 pub mod bands;
 pub mod baseline;
 pub mod compare;
 pub mod distribution;
+pub mod history;
+pub mod kinds;
 pub mod measures;
 pub mod nash;
 pub mod proof;
@@ -22,11 +25,20 @@ use std::collections::BTreeMap;
 use engine::observe::{MatchStats, Record, round_to};
 use serde::{Deserialize, Serialize};
 
-use bands::{BandDef, Registry};
+use bands::{BandDef, Registry, Rule, Target};
 use measures::{Extras, Obs, Scope};
+use pass_rule::interval::{Interval, RareKind, Real, Unit};
 
 /// Matches slower than this, in milliseconds, are outliers (the contract's slow threshold).
 pub const SLOW_MATCH_MS: u64 = 2000;
+
+/// A match whose possession of either side lies outside this range is an outlier, and its
+/// files are kept. The screen picks matches to keep; it judges no band (the band file's
+/// version 2 range, kept fixed since bands moved to margins around real football).
+pub const OUTLIER_POSSESSION_PCT: std::ops::RangeInclusive<f64> = 35.0..=65.0;
+
+/// A match in which either side's shots lie outside this range is an outlier.
+pub const OUTLIER_SHOTS_PER_TEAM: std::ops::RangeInclusive<u32> = 8..=16;
 
 /// The version of the measure definitions: how a match's figures are counted. A change to a
 /// measure raises it, so a run folder made under the old definitions is not resumed.
@@ -89,9 +101,6 @@ pub const RED_CARD_ARMS: [(&str, Option<usize>); 4] = [
 /// The full side may score at most this multiple of the control's home mean: the version 2
 /// migration's `full_over_control` top.
 pub const RED_CARD_LIMIT: f64 = 1.6;
-
-/// The lowest value a red-card `reduced_minus_full` row shows; only its top (0) is judged.
-const RED_CARD_FLOOR: f64 = -10.0;
 
 /// The rows a run judges for each band: one per suite that judges it, one per formation
 /// pairing in the formations suite (or one over every pairing, `pooled`), and one per arm
@@ -219,6 +228,65 @@ pub struct BandCheck {
     /// bounds and word.
     #[serde(skip)]
     pub dist: Option<distribution::DistCheck>,
+    /// A version 6 band: its word by the pass rule, with the interval and the margin that
+    /// set it.
+    #[serde(skip)]
+    pub rule: Option<RuleWord>,
+}
+
+/// A band's word against real football (or its design target) by the pass rule, with what
+/// decided it: the interval of engine minus the target, each side at `1 - alpha`, the margin,
+/// and the exposure. A whole-distribution band's interval is the bounds of its distance.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RuleWord {
+    pub word: pass_rule::rule::Word,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lo: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hi: Option<f64>,
+    /// The difference (or distance) on the unresampled data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub point: Option<f64>,
+    pub margin: f64,
+    /// `real`, or `design <value>`.
+    pub target: String,
+    /// A design band's most distance from the real value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cap: Option<f64>,
+    /// Matches or events judged, in the unit of the minimum exposure.
+    pub exposure: f64,
+    pub min_exposure: f64,
+    /// The engine's outer units resampled: leagues, or matches for fixed clubs.
+    pub units: usize,
+    /// Why the word is not sure, when a reason beyond the interval holds it there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+impl RuleWord {
+    fn set_interval(&mut self, iv: &Interval) {
+        self.lo = Some(round_to(iv.lo, 6));
+        self.hi = Some(round_to(iv.hi, 6));
+        self.point = Some(round_to(iv.point, 6));
+    }
+
+    /// The interval and the margin in words, as the console's note shows them.
+    pub fn note(&self) -> String {
+        let mut out = match (self.lo, self.hi) {
+            (Some(lo), Some(hi)) => format!(
+                "interval {lo} to {hi} against margin {} ({})",
+                self.margin, self.target
+            ),
+            _ => format!("margin {} ({})", self.margin, self.target),
+        };
+        if let Some(cap) = self.cap {
+            out.push_str(&format!(", cap {cap}"));
+        }
+        if let Some(why) = &self.reason {
+            out.push_str(&format!("; {why}"));
+        }
+        out
+    }
 }
 
 /// One arm of the red-card suite: mean goals per match of the full (home) side and the
@@ -266,6 +334,8 @@ struct SuiteAcc {
     arms: Vec<Option<usize>>,
     /// For each record: its extras, kept only in a suite that judges a band reading them.
     extras: Vec<Option<Box<Extras>>>,
+    /// For each record: its generated league, when the fold knew its fixture.
+    leagues: Vec<Option<u32>>,
     /// A record of the suite carries the realism measures.
     measures: bool,
     outliers: u32,
@@ -286,6 +356,8 @@ pub struct RunBuilder {
     /// seed their range tests draw from.
     real: std::sync::Arc<real::Samples>,
     seed: u64,
+    /// The pass rule's real side of each band, read before play, by band.
+    sides: std::sync::Arc<BTreeMap<String, Real>>,
 }
 
 impl RunBuilder {
@@ -298,6 +370,23 @@ impl RunBuilder {
             minutes: 90,
             real: std::sync::Arc::default(),
             seed: 0,
+            sides: std::sync::Arc::default(),
+        }
+    }
+
+    /// Gives the builder each band's real side for the pass rule, read before play.
+    pub fn set_real_sides(&mut self, sides: std::sync::Arc<BTreeMap<String, Real>>) {
+        self.sides = sides;
+    }
+
+    /// Gives the record of `suite` folded in last its generated league.
+    pub fn set_league(&mut self, suite: Suite, league: u32) {
+        if let Some(last) = self
+            .suites
+            .get_mut(&suite)
+            .and_then(|acc| acc.leagues.last_mut())
+        {
+            *last = Some(league);
         }
     }
 
@@ -360,6 +449,7 @@ impl RunBuilder {
         acc.pairings.push(pairing);
         acc.arms.push(arm);
         acc.extras.push(None);
+        acc.leagues.push(None);
         outlier
     }
 
@@ -401,17 +491,17 @@ impl RunBuilder {
     /// `true` for a failed match, a match with validator violations, a slow match, a
     /// dark-path hit, and a match with a possession or a team's shots outside its band.
     pub fn outlier(&self, s: &MatchStats) -> bool {
-        let outside = |band: &str, v: f64| self.bands.range(band).is_some_and(|r| !r.contains(v));
+        let possession = |v: f64| !OUTLIER_POSSESSION_PCT.contains(&v);
         s.outcome != "success"
             || s.validate_violations > 0
             || s.duration_ms > SLOW_MATCH_MS
             || s.tactics.change_never_applied > 0
-            || outside("possession_home_pct", s.figures.possession_pct[0])
-            || outside("possession_away_pct", s.figures.possession_pct[1])
+            || possession(s.figures.possession_pct[0])
+            || possession(s.figures.possession_pct[1])
             || s.tactics
                 .shots
                 .iter()
-                .any(|&n| outside("shots_per_team", f64::from(n)))
+                .any(|&n| !OUTLIER_SHOTS_PER_TEAM.contains(&n))
     }
 
     /// The aggregate figures of every planned suite.
@@ -689,6 +779,7 @@ impl RunBuilder {
                 pairing: acc.pairings[i].map(|(p, _)| p),
                 arm: acc.arms[i],
                 extras: acc.extras[i].as_deref(),
+                league: acc.leagues[i],
             })
             .collect()
     }
@@ -750,6 +841,11 @@ impl RunBuilder {
             measures::places(&spec.def.measure),
         );
         let unjudged = spec.def.needs_measures() && !self.has_measures(spec.suite);
+        let rule = spec
+            .def
+            .rule
+            .as_ref()
+            .map(|rule| self.rule_word(spec.def, rule, &obs, &terms, unjudged));
         BandCheck {
             band: spec.def.band.clone(),
             suite: spec.suite.code().to_string(),
@@ -757,14 +853,166 @@ impl RunBuilder {
             value,
             lo: spec.def.lo,
             hi: spec.def.hi,
-            pass: !unjudged && measures::passes(spec.def, value, &terms),
+            pass: match &rule {
+                Some(r) => r.word == pass_rule::rule::Word::Pass,
+                None => !unjudged && spec.def.range().contains(value),
+            },
             se: round_to(terms.se(), 5),
             informational: None,
             why_none: terms.why_none().map(str::to_string),
             unjudged,
             whole: false,
             dist: None,
+            rule,
         }
+    }
+
+    /// A version 6 band's word against real football (or its design target) by the pass
+    /// rule: the interval of the engine minus the target, resampled over whole leagues (or
+    /// whole matches for a band of fixed clubs) and over the real side read before play,
+    /// against the band's margin. A rare band takes exact count bounds; a pass below the
+    /// band's minimum exposure, or a band with no real value here, is not sure.
+    fn rule_word(
+        &self,
+        def: &BandDef,
+        rule: &Rule,
+        obs: &[Obs<'_>],
+        terms: &measures::Terms,
+        unjudged: bool,
+    ) -> RuleWord {
+        let alpha = self.bands.pass_rule.map_or(0.05, |p| p.alpha);
+        let [a, b, c, d] = terms.per_match();
+        let flags = terms.covered_flags();
+        let mut units: BTreeMap<u64, Unit> = BTreeMap::new();
+        let mut events = 0.0;
+        for (i, &covered) in flags.iter().enumerate() {
+            if !covered {
+                continue;
+            }
+            let key = match rule.resampling.engine {
+                bands::EngineUnit::League => u64::from(obs[i].league.unwrap_or(0)),
+                bands::EngineUnit::Match => i as u64,
+            };
+            let u = units.entry(key).or_insert(Unit {
+                num: 0.0,
+                den: 0.0,
+                scale_num: 0.0,
+                scale_den: 0.0,
+            });
+            u.num += a[i];
+            u.den += b[i];
+            u.scale_num += d[i];
+            u.scale_den += c[i];
+            events += a[i];
+        }
+        let matches = terms.covered() as f64;
+        let exposure = match rule.min_exposure.unit {
+            bands::ExposureUnit::Matches => matches,
+            bands::ExposureUnit::Events => events,
+        };
+        let units: Vec<Unit> = units.into_values().collect();
+        let mut out = RuleWord {
+            word: pass_rule::rule::Word::NotSure,
+            lo: None,
+            hi: None,
+            point: None,
+            margin: rule.margin.value,
+            target: match rule.target {
+                Target::Real => "real".into(),
+                Target::Design { value, .. } => format!("design {value}"),
+            },
+            cap: match rule.target {
+                Target::Design { cap, .. } => cap,
+                Target::Real => None,
+            },
+            exposure,
+            min_exposure: rule.min_exposure.value,
+            units: units.len(),
+            reason: None,
+        };
+        let real = self.sides.get(&def.band);
+        let why = if unjudged {
+            Some(verdict::NO_MEASURES_NOTE.to_string())
+        } else if let Some(w) = terms.why_none().filter(|_| terms.value().is_none()) {
+            Some(format!("no value: {w}"))
+        } else if matches!(def.measure, bands::Measure::ClubRange { .. }) {
+            Some("a per-club spread has no resampling units; judged when it has them".into())
+        } else {
+            None
+        };
+        if let Some(why) = why {
+            out.reason = Some(why);
+            return out;
+        }
+        let mut rng = engine::rng::EngineRng::from_seed(distribution::stream(self.seed, &def.band));
+        let mut draw = || rng.next_f64();
+        let interval = |to: &Real, draw: &mut dyn FnMut() -> f64| -> Result<Interval, String> {
+            if rule.rare {
+                let kind = match def.measure {
+                    bands::Measure::Share { .. } | bands::Measure::Scoreline { .. } => {
+                        RareKind::Share
+                    }
+                    _ => RareKind::Rate,
+                };
+                let (value, se) = to.estimate();
+                let bounds = pass_rule::interval::real_bounds(value, se, alpha);
+                Ok(pass_rule::interval::rare_interval(
+                    kind,
+                    events.round().max(0.0) as u64,
+                    matches,
+                    bounds,
+                    alpha,
+                ))
+            } else {
+                pass_rule::interval::interval(&units, to, alpha, verdict::RESAMPLES, draw)
+            }
+        };
+        let judged = match rule.target {
+            Target::Real => match real {
+                None => Err("no real value here; a band with no real value is never a pass".into()),
+                Some(side) => interval(side, &mut draw).map(|iv| {
+                    out.set_interval(&iv);
+                    pass_rule::rule::judge(&iv, rule.margin.value)
+                }),
+            },
+            Target::Design { value, cap } => {
+                interval(&Real::Fixed(value), &mut draw).and_then(|iv| {
+                    out.set_interval(&iv);
+                    match (cap, real) {
+                        (None, _) => {
+                            Ok(pass_rule::rule::judge_design(&iv, rule.margin.value, None))
+                        }
+                        (Some(cap), Some(side)) => {
+                            let to_real = interval(side, &mut draw)?;
+                            Ok(pass_rule::rule::judge_design(
+                                &iv,
+                                rule.margin.value,
+                                Some((&to_real, cap)),
+                            ))
+                        }
+                        // A cap with no real value here: never a pass.
+                        (Some(_), None) => {
+                            let w = pass_rule::rule::judge_design(&iv, rule.margin.value, None);
+                            Ok(if w == pass_rule::rule::Word::Pass {
+                                pass_rule::rule::Word::NotSure
+                            } else {
+                                w
+                            })
+                        }
+                    }
+                })
+            }
+        };
+        match judged {
+            Ok(word) => {
+                let (word, why) =
+                    pass_rule::rule::gate_exposure(word, exposure, rule.min_exposure.value);
+                out.word = word;
+                out.reason = why;
+            }
+            Err(why) => out.reason = Some(why),
+        }
+        out
     }
 
     /// A distribution band's row over the matches `obs`: its distance from the real sample,
@@ -788,18 +1036,51 @@ impl RunBuilder {
             unjudged,
             whole: true,
             dist: None,
+            rule: None,
+        };
+        let margin = def.rule.as_ref().map_or(def.hi, |r| r.margin.value);
+        let alpha = match (&def.rule, self.bands.pass_rule) {
+            (Some(_), Some(p)) => p.alpha,
+            _ => verdict::FALSE_ALARM,
+        };
+        let rule_word = |dist: Option<&distribution::DistCheck>, why: Option<String>| {
+            def.rule.as_ref().map(|r| RuleWord {
+                word: match dist {
+                    Some(d) if margin > d.floor => {
+                        pass_rule::rule::judge_distance(d.lower, d.upper, margin)
+                    }
+                    _ => pass_rule::rule::Word::NotSure,
+                },
+                lo: dist.map(|d| round_to(d.lower, 5)),
+                hi: dist.map(|d| round_to(d.upper, 5)),
+                point: dist.map(|d| round_to(d.distance, 5)),
+                margin,
+                target: "real".into(),
+                cap: None,
+                exposure: 0.0,
+                min_exposure: r.min_exposure.value,
+                units: 0,
+                reason: why.or_else(|| {
+                    dist.filter(|d| margin <= d.floor).map(|d| {
+                        format!("margin below noise floor (floor {})", round_to(d.floor, 5))
+                    })
+                }),
+            })
         };
         if unjudged {
+            c.rule = rule_word(None, Some(verdict::NO_MEASURES_NOTE.into()));
             return c;
         }
         let real = match self.real.get(&def.band) {
             Some(Ok(sample)) => sample,
             Some(Err(why)) => {
                 c.why_none = Some(format!("no real data here: {why}"));
+                c.rule = rule_word(None, c.why_none.clone());
                 return c;
             }
             None => {
                 c.why_none = Some("no real data here: the real sample was not read".into());
+                c.rule = rule_word(None, c.why_none.clone());
                 return c;
             }
         };
@@ -815,21 +1096,29 @@ impl RunBuilder {
             width,
         };
         let seed = distribution::stream(self.seed, &def.band);
-        match distribution::judge_to_real(
+        match distribution::judge_to_real_at(
             &engine,
             real,
             measures::metric(&def.measure),
-            def.hi,
+            margin,
             seed,
             verdict::RESAMPLES,
+            alpha,
         ) {
             Ok(d) => {
                 c.value = round_to(d.distance, 5);
-                c.pass = def.range().contains(c.value);
+                c.rule = rule_word(Some(&d), None);
+                c.pass = match &c.rule {
+                    Some(r) => r.word == pass_rule::rule::Word::Pass,
+                    None => def.range().contains(c.value),
+                };
                 c.se = round_to(d.se, 5);
                 c.dist = Some(d);
             }
-            Err(why) => c.why_none = Some(why),
+            Err(why) => {
+                c.rule = rule_word(None, Some(why.to_string()));
+                c.why_none = Some(why);
+            }
         }
         c
     }
@@ -902,6 +1191,7 @@ impl RunBuilder {
                 unjudged: false,
                 whole: false,
                 dist: None,
+                rule: None,
             });
         }
         out.extend(rest.iter().map(|s| self.check(s)));
@@ -1115,11 +1405,16 @@ pub struct CalibrationReport {
     /// A paired run: the figures of each arm, under `off` and `on`.
     #[serde(rename = "calib.arms", skip_serializing_if = "Option::is_none")]
     pub arms: Option<BTreeMap<String, ArmReport>>,
-    /// A paired run: one row per suite and realism band, both arms side by side.
+    /// A paired run: one row per suite and band, the on arm's value and word against real
+    /// football beside the off arm's value and the on arm's word against it.
     #[serde(rename = "calib.compare", skip_serializing_if = "Option::is_none")]
-    pub compare: Option<Vec<compare::CompareRow>>,
+    pub compare: Option<Vec<verdict::VerdictRow>>,
     #[serde(rename = "calib.verdict", skip_serializing_if = "Option::is_none")]
     pub verdict: Option<compare::Verdict>,
+    /// A paired run: the guardrails the on arm broke and the counts of its words against
+    /// the off arm.
+    #[serde(rename = "calib.pair_verdict", skip_serializing_if = "Option::is_none")]
+    pub pair_verdict: Option<compare::PairVerdict>,
     /// The fixtures of the run, those an earlier session finished, and those played now.
     #[serde(rename = "calib.units")]
     pub units: Units,
@@ -1137,10 +1432,25 @@ pub struct CalibrationReport {
     /// A change run's joint verdict.
     #[serde(rename = "calib.joint", skip_serializing_if = "Option::is_none")]
     pub joint: Option<verdict::Joint>,
-    /// A change run: each suite's pilot, power target and cap, and whether every band of
-    /// the suite reached its power.
-    #[serde(rename = "calib.power", skip_serializing_if = "Option::is_none")]
-    pub power: Option<BTreeMap<String, PowerInfo>>,
+    /// The run's kind: change, milestone or release.
+    #[serde(rename = "calib.kind")]
+    pub kind: &'static str,
+    /// A change run: its pairs planned, kept and dropped.
+    #[serde(rename = "calib.dropped", skip_serializing_if = "Option::is_none")]
+    pub dropped: Option<Dropped>,
+    /// A change run: the one headline line the console prints.
+    #[serde(rename = "calib.headline", skip_serializing_if = "Option::is_none")]
+    pub headline: Option<String>,
+    /// A change or paired run: how closely the matches of the two sides agree, band by band
+    /// and over the run. It never decides the run.
+    #[serde(
+        rename = "calib.pair_agreement",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub pair_agreement: Option<agreement::RunAgreement>,
+    /// A change run: the fixed count of its kind it played, per suite unit, by suite code.
+    #[serde(rename = "calib.count", skip_serializing_if = "BTreeMap::is_empty")]
+    pub count: BTreeMap<String, u32>,
     /// The bands that only report: each row's word, judged as a gating band's is, but never
     /// in the joint word, `calib.pass` or `calib.bands`. Absent when no band only reports.
     #[serde(rename = "calib.reported", skip_serializing_if = "Vec::is_empty")]
@@ -1153,6 +1463,23 @@ pub struct CalibrationReport {
         skip_serializing_if = "Vec::is_empty"
     )]
     pub figures: Vec<FigureRow>,
+    /// A change run's intent: the file in the run folder, where it came from, and what it
+    /// names.
+    #[serde(rename = "calib.intent", skip_serializing_if = "Option::is_none")]
+    pub intent: Option<IntentInfo>,
+    /// A change run's surprises against its intent, and the rows not checked against it.
+    #[serde(rename = "calib.surprises", skip_serializing_if = "Option::is_none")]
+    pub surprises: Option<crate::calibrate::surprises::Surprises>,
+    /// A change run: `true` once every surprise has its note.
+    #[serde(rename = "calib.finished", skip_serializing_if = "Option::is_none")]
+    pub finished: Option<bool>,
+    /// A change run: each draft setting rule written, found already there, confirmed or
+    /// skipped at this judgement, with its reason.
+    #[serde(rename = "calib.drafts", skip_serializing_if = "Option::is_none")]
+    pub drafts: Option<Vec<crate::calibrate::drafts::DraftInfo>>,
+    /// The matches this call played, by source, and their total.
+    #[serde(rename = "calib.played")]
+    pub played: Played,
     /// The developer's acceptances of not-sure bands in the run folder; absent without an
     /// `accepted.json`.
     #[serde(rename = "calib.accepted", skip_serializing_if = "Option::is_none")]
@@ -1170,7 +1497,23 @@ pub struct CalibrationReport {
     /// The realism claim, from validation bands with a real counterpart only.
     #[serde(rename = "calib.realism", skip_serializing_if = "Option::is_none")]
     pub realism: Option<real::Realism>,
+    /// The margins widened provisionally to hold their floor, until the floor is set again
+    /// on more leagues: their count and each band.
+    #[serde(rename = "calib.provisional_margins")]
+    pub provisional_margins: ProvisionalMargins,
+    /// Each band of a named report-only group against the floor it would need if it gated,
+    /// with whether it would hold now (with the real errors read here); absent in the old
+    /// engine's own quiet run.
+    #[serde(
+        rename = "calib.report_only_floor",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub report_only_floor: Vec<bands::ReportOnlyFloor>,
     /// The time and memory of each stage, and the run's total.
+    /// The band history this run added to and the bands whose history drifts; absent when
+    /// the run keeps no history.
+    #[serde(rename = "calib.drift", skip_serializing_if = "Option::is_none")]
+    pub drift: Option<history::DriftInfo>,
     #[serde(rename = "calib.stages")]
     pub stages: BTreeMap<String, StageCost>,
     /// A change run's rules stage.
@@ -1179,7 +1522,7 @@ pub struct CalibrationReport {
     /// A change run's sample of the styles suite, one match per ordered pairing of styles on
     /// the changed engine; report only. Absent in other runs and without a styles file.
     #[serde(rename = "calib.styles", skip_serializing_if = "Option::is_none")]
-    pub styles: Option<styles::StylesReport>,
+    pub styles: Option<serde_json::Value>,
     /// The substitutions of the first arm's matches against the real era of the rule pack's
     /// limit; absent in the old engine's own quiet run and when no row holds a match.
     #[serde(
@@ -1187,6 +1530,111 @@ pub struct CalibrationReport {
         skip_serializing_if = "Option::is_none"
     )]
     pub substitutions: Option<substitutions::SubstitutionReport>,
+}
+
+/// `calib.played`: the matches one call of calibrate played, by source. A call on a finished
+/// run folder plays none.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct Played {
+    /// This engine's matches of the run (each arm's).
+    pub changed: u32,
+    /// The old engine's matches it played now (its cache held the rest).
+    pub old: u32,
+    /// The single-thread benchmark's matches, its warm-up included.
+    pub bench: u32,
+    /// A change run's styles sample.
+    pub styles: u32,
+    /// The rules stage's job rules and five-match rule.
+    pub rules: u32,
+    /// The confirmed setting rules' levels.
+    pub setting_rules: u32,
+    pub total: u32,
+}
+
+impl Played {
+    /// `self` with its total summed.
+    pub fn summed(mut self) -> Self {
+        self.total =
+            self.changed + self.old + self.bench + self.styles + self.rules + self.setting_rules;
+        self
+    }
+}
+
+/// `calib.intent`: the intent file in the run folder, its SHA-256 and what it names.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct IntentInfo {
+    /// The file's name inside the run folder.
+    pub file: &'static str,
+    /// Where the intent came from: `file` (--intent), `run folder` or `prompt`.
+    pub source: &'static str,
+    pub sha256: String,
+    pub change: String,
+    pub bands: Vec<crate::calibrate::intent::IntentBand>,
+    pub notes: u32,
+    pub confirm: Vec<String>,
+}
+
+impl IntentInfo {
+    pub fn of(
+        intent: &crate::calibrate::intent::Intent,
+        source: crate::calibrate::intent::Source,
+        sha256: String,
+    ) -> Self {
+        IntentInfo {
+            file: crate::calibrate::intent::INTENT_FILE,
+            source: source.code(),
+            sha256,
+            change: intent.change.clone(),
+            bands: intent.bands.clone(),
+            notes: u32::try_from(intent.notes.len()).unwrap_or(u32::MAX),
+            confirm: intent.confirm.clone(),
+        }
+    }
+}
+
+/// `calib.provisional_margins`: how many margins hold a provisional widening, and each one.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ProvisionalMargins {
+    pub count: u32,
+    pub bands: Vec<bands::Provisional>,
+}
+
+impl ProvisionalMargins {
+    pub fn of(registry: &bands::Registry) -> Self {
+        let bands = registry.provisional();
+        ProvisionalMargins {
+            count: u32::try_from(bands.len()).unwrap_or(u32::MAX),
+            bands,
+        }
+    }
+
+    /// The console line, or nothing when no margin is provisional.
+    pub fn line(&self) -> String {
+        if self.count == 0 {
+            return String::new();
+        }
+        format!(
+            "margins: {} provisional, widened to hold the 97 percent floor on today's 3 \
+             generated leagues; the floor is set again on 30 leagues\n",
+            self.count
+        )
+    }
+}
+
+/// The console lines of the report-only bands against their floor.
+pub fn render_report_only_floor(rows: &[bands::ReportOnlyFloor]) -> String {
+    let mut out = String::new();
+    for r in rows {
+        out.push_str(&format!(
+            "report-only band {} (group {}): margin {} against a floor of {}; would hold now: {}\n",
+            r.band,
+            r.group,
+            round_to(r.margin, 6),
+            round_to(r.needed, 6),
+            if r.holds { "yes" } else { "no" }
+        ));
+    }
+    out
 }
 
 /// One figure's row: its value over a suite beside the value an earlier build gave.
@@ -1243,8 +1691,24 @@ pub struct StageCost {
 }
 
 /// What a change run's rules stage did.
-#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct RulesReport {
+    /// The run's kind; the selection of rules does not depend on it.
+    #[serde(default)]
+    pub kind: String,
+    /// What the change touched, and the rules it selected.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub touched: Option<crate::calibrate::touched::Touched>,
+    /// Why the stage has no rows of its own, when it was not stored in a run folder written
+    /// before the stage was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    /// The confirmed setting rules, each at its levels.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub setting: Vec<crate::calibrate::setting_rules::SettingRuleRow>,
+    /// Matches the stage played: the job rules' design and arms and the five-match rule.
+    #[serde(default)]
+    pub matches: u32,
     /// Touched rules checked.
     pub checked: u32,
     /// Levels checked, over every rule.
@@ -1262,41 +1726,48 @@ pub struct RulesReport {
 }
 
 /// One rule of the rules stage.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RuleRow {
     /// The job, or `five-match` for the five-match rule.
     pub job: String,
     pub statistic: String,
-    /// The low and the high level: ratings, centimetres, years or percent of adaptation;
-    /// for the five-match rule, the average and the top copy's rating.
-    pub levels: [f64; 2],
-    /// The statistic at the low and at the high level; absent for the five-match rule.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// The low, the middle and the high level: ratings, centimetres, years or percent of
+    /// adaptation; for the five-match rule, its two copies, the average and the top rating.
+    pub levels: Vec<f64>,
+    /// The statistic at the low, the middle and the high level; absent for the five-match
+    /// rule.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub low: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mid: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub high: Option<f64>,
+    /// The two steps, low to middle and middle to high, each a relative move in the job's
+    /// direction; absent for the five-match rule, or when one is not finite.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub steps: Option<[RuleInterval; 2]>,
     /// The relative move from low to high in the job's direction; absent for the five-match
     /// rule, or when it is not finite.
-    #[serde(rename = "move", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "move", default, skip_serializing_if = "Option::is_none")]
     pub mv: Option<RuleInterval>,
     /// The job's share of the outcome move; for the five-match rule, the pooled share of
     /// runs the top copy won. Absent when no arm was played, or when the arms' outcome did
     /// not move, so the share has no finite value.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub share: Option<RuleInterval>,
     /// The five-match rule's share of runs per role.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub roles: Option<BTreeMap<String, f64>>,
     /// `pass`, `fail` or `not_sure`.
-    pub word: &'static str,
+    pub word: String,
     /// The rule runs and reports: its word is information, and a full sensitivity run does
     /// not fail on it. Written only when set.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub report_only: bool,
 }
 
 /// An estimate and its 95 percent interval.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct RuleInterval {
     pub est: f64,
     pub lo: f64,
@@ -1310,9 +1781,12 @@ pub struct RuleInterval {
 /// match counts (`calib.counts`), and how each verdict row was judged (`judged`, `note`,
 /// `accepted`); 6 since the whole-distribution bands (`upper` and `noise_floor` on a
 /// verdict row); 7 since the formation field rating (`calib.nash`); 8 since the registry's
-/// figures (`calib.figures`); 9 since a change run's styles sample (`calib.styles`). Every
+/// figures (`calib.figures`); 9 since a change run's styles sample (`calib.styles`); 12 since
+/// a change run's intent (`calib.intent`), surprises (`calib.surprises`, `calib.finished`),
+/// draft setting rules (`calib.drafts`), the matches a call played (`calib.played`) and the
+/// touched rules at three levels (`calib.rules.touched`, `mid`, `steps`, `setting`). Every
 /// key of an older version stays.
-pub const REPORT_SCHEMA_VERSION: &str = "9";
+pub const REPORT_SCHEMA_VERSION: &str = "12";
 
 /// The matches a run judged: every engine's rows, the fixtures both engines of a change run
 /// played, and the matches of each engine.
@@ -1321,6 +1795,55 @@ pub struct Counts {
     pub total_matches: u32,
     pub pairs: u32,
     pub observations: Vec<Observations>,
+}
+
+/// `calib.dropped`: a change run's planned pairs, the pairs both engines finished, and the
+/// pairs dropped because a match failed, by the engine that failed it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct Dropped {
+    pub planned: u32,
+    pub kept: u32,
+    pub dropped: u32,
+    /// Pairs whose changed engine's match failed and whose old engine's did not.
+    pub changed: u32,
+    /// Pairs whose old engine's match failed and whose changed engine's did not.
+    pub old: u32,
+    /// Pairs whose matches failed on both engines, or that one engine never played.
+    pub both: u32,
+}
+
+impl Dropped {
+    /// The pairs of `planned` fixtures: kept when both engines finished the match, dropped
+    /// otherwise, by which engine `changed_ok` and `old_ok` say finished it.
+    pub fn of(planned: impl Iterator<Item = (Option<bool>, Option<bool>)>) -> Dropped {
+        let mut d = Dropped::default();
+        for (c, o) in planned {
+            d.planned += 1;
+            match (c, o) {
+                (Some(true), Some(true)) => d.kept += 1,
+                (Some(false), Some(true)) => d.changed += 1,
+                (Some(true), Some(false)) => d.old += 1,
+                _ => d.both += 1,
+            }
+        }
+        d.dropped = d.changed + d.old + d.both;
+        d
+    }
+}
+
+/// The run's one headline line: the kind's counts, the not-sure gating bands, the accepted
+/// rows and the dropped pairs.
+pub fn headline(
+    count: &str,
+    not_sure: usize,
+    gating: usize,
+    accepted: usize,
+    dropped: u32,
+) -> String {
+    format!(
+        "{count}; not sure: {not_sure} of {gating} gating bands; accepted: {accepted}; dropped \
+         pairs: {dropped}"
+    )
 }
 
 /// One engine's matches in a run: `changed` and `old` in a change run, `this` otherwise.
@@ -1349,35 +1872,12 @@ impl Counts {
     }
 }
 
-/// One suite's run length in a change run.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct PowerInfo {
-    /// Matches per suite unit of the pilot; absent when the run resumed to a target.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pilot: Option<u32>,
-    /// Matches per suite unit played: the power target, at most the cap.
-    pub target: u32,
-    pub cap: u32,
-    /// Every band of the suite has the power to see its smallest shift.
-    pub reached: bool,
-    /// The band whose power needed the most matches at the pilot, which set the target;
-    /// absent when the pilot gave every band power.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub driver: Option<String>,
-    /// The bands outside their range beyond their noise at the pilot, which set no target.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub no_target: Vec<String>,
-}
-
 /// The band registry a run was judged with.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RegistryInfo {
     pub version: u32,
     /// SHA-256 of the bands, 12 hex characters.
     pub digest: String,
-    /// The layout version the file was migrated from, when it was.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub migrated_from: Option<u32>,
 }
 
 /// The compact rows of a run, over every arm: the row format, the row files, the rows the
@@ -1431,6 +1931,12 @@ pub struct BaseReport {
     pub build_id: String,
     #[serde(rename = "content.hash")]
     pub content_hash: String,
+    /// The cargo features the old engine was built with, comma-joined; empty for none.
+    pub features: String,
+    /// This build's features the old revision does not declare: its bands that read them
+    /// get no old-engine word.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub missing_features: Vec<String>,
     pub cache: BaseCache,
     #[serde(rename = "calib.bands")]
     pub bands: Vec<BandCheck>,
@@ -1537,6 +2043,52 @@ impl Record for CalibrationReport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dropped_pairs_are_counted_by_the_engine_that_failed_them() {
+        let d = Dropped::of(
+            [
+                (Some(true), Some(true)),
+                (Some(true), Some(true)),
+                (Some(false), Some(true)),
+                (Some(true), Some(false)),
+                (None, Some(true)),
+                (Some(false), Some(false)),
+            ]
+            .into_iter(),
+        );
+        assert_eq!(
+            d,
+            Dropped {
+                planned: 6,
+                kept: 2,
+                dropped: 4,
+                changed: 1,
+                old: 1,
+                both: 2
+            }
+        );
+    }
+
+    #[test]
+    fn the_headline_names_the_counts_and_what_stayed_open() {
+        let mut kind: kinds::KindDef =
+            serde_json::from_value(kinds::design_kinds()["change"].clone()).unwrap();
+        kind.count.insert("formations".into(), 40);
+        kind.count.insert("red-card".into(), 500);
+        let line = headline(
+            &kinds::headline_count(kinds::Kind::Change, &kind),
+            3,
+            41,
+            1,
+            2,
+        );
+        assert_eq!(
+            line,
+            "kind change: fixed count equal 1000, strength 1000, formations 40 per pairing, \
+             red-card 500 per arm; not sure: 3 of 41 gating bands; accepted: 1; dropped pairs: 2"
+        );
+    }
     use engine::observe::{LawStats, MatchFigures, TacticsStats, TeamRef};
     use std::path::Path;
 
@@ -1669,16 +2221,27 @@ mod tests {
         let wall = BTreeMap::from([(Suite::Equal, 1_000)]);
         let checks = b.checks(&wall);
         let names: Vec<&str> = checks.iter().map(|c| c.band.as_str()).collect();
-        let mut expected = vec![
+        // Every band of the equal suite, in the band file's order, then the time budget.
+        let registry = bands();
+        let mut expected: Vec<&str> = registry
+            .names()
+            .into_iter()
+            .filter(|b| registry.suites_of(b).unwrap().contains(&Suite::Equal))
+            .filter(|b| registry.report_only(b).is_none())
+            .collect();
+        expected.push("wall_ms");
+        assert_eq!(names, expected);
+        assert!(names.starts_with(&[
             "goals_per_match",
             "shots_per_team",
             "possession_home_pct",
-            "possession_away_pct",
-        ];
-        expected.extend(V2);
-        expected.push("wall_ms");
-        assert_eq!(names, expected);
-        assert!(checks.iter().all(|c| c.pass), "{checks:?}");
+            "possession_away_pct"
+        ]));
+        // No real value is read in a unit test, so no band passes; each has its rule word.
+        for c in checks.iter().filter(|c| c.band != "wall_ms") {
+            assert!(!c.pass, "{c:?}");
+            assert!(c.rule.is_some(), "{c:?}");
+        }
         assert!(checks.iter().all(|c| c.pairing.is_none()));
     }
 
@@ -1763,21 +2326,23 @@ mod tests {
         assert_eq!(pairings[1].ten_plus_goals_share, 0.5);
         assert_eq!(pairings[1].goalless_share, 0.5);
         let checks = b.checks(&BTreeMap::new());
-        let rows: Vec<(&str, Option<&str>, bool)> = checks
+        let rows: Vec<(&str, Option<&str>, f64)> = checks
             .iter()
-            .map(|c| (c.band.as_str(), c.pairing.as_deref(), c.pass))
+            .map(|c| (c.band.as_str(), c.pairing.as_deref(), c.value))
             .collect();
         assert_eq!(
             rows,
             [
-                ("goals_per_match", Some("4-4-2 v 4-4-2"), true),
-                ("ten_plus_goals_share", Some("4-4-2 v 4-4-2"), true),
-                ("goalless_share", Some("4-4-2 v 4-4-2"), false),
-                ("goals_per_match", Some("4-4-2 v 4-3-3"), false),
-                ("ten_plus_goals_share", Some("4-4-2 v 4-3-3"), false),
-                ("goalless_share", Some("4-4-2 v 4-3-3"), false),
+                ("goals_per_match", Some("4-4-2 v 4-4-2"), 3.0),
+                ("ten_plus_goals_share", Some("4-4-2 v 4-4-2"), 0.0),
+                ("goalless_share", Some("4-4-2 v 4-4-2"), 0.0),
+                ("goals_per_match", Some("4-4-2 v 4-3-3"), 5.5),
+                ("ten_plus_goals_share", Some("4-4-2 v 4-3-3"), 0.5),
+                ("goalless_share", Some("4-4-2 v 4-3-3"), 0.5),
             ]
         );
+        // Two matches a pairing are under every band's minimum exposure: none passes.
+        assert!(checks.iter().all(|c| !c.pass && c.rule.is_some()));
         assert!(checks.iter().all(|c| c.suite == "formations"));
     }
 
@@ -1789,22 +2354,13 @@ mod tests {
         assert!(b.add(Suite::Equal, record([5, 1], [6, 6], [70.0, 30.0]), None));
         let figures = b.figures();
         let checks = b.checks(&BTreeMap::new());
-        let failed: Vec<&str> = checks
-            .iter()
-            .filter(|c| !c.pass)
-            .map(|c| c.band.as_str())
-            .collect();
-        // One match with no card red and a score: the two share floors miss as well.
-        assert_eq!(
-            failed,
-            [
-                "goals_per_match",
-                "shots_per_team",
-                "possession_home_pct",
-                "possession_away_pct",
-                "sending_off_share",
-                "goalless_share"
-            ]
+        // One match is far under every band's minimum exposure: no band passes.
+        assert!(
+            checks
+                .iter()
+                .filter(|c| c.band != "wall_ms")
+                .all(|c| !c.pass),
+            "{checks:?}"
         );
         assert_eq!(figures[&Suite::Equal].outliers, 1);
     }
@@ -1891,7 +2447,9 @@ mod tests {
         let mut b = RunBuilder::new(bands());
         b.plan(Suite::RedCard, 8);
         // Control 2-1 and 0-1: home mean 1. Keeper arm 2-0 and 1-0; centre-back 1-1 and
-        // 1-0; striker 1-0 and 3-2 (full side 2.0, above 1.6 x 1).
+        // 1-0; striker 1-0 and 3-2. The limit is the top of the band's pass region, design
+        // 0.8 plus its margin 0.48: the keeper's full side (1.5) and the striker's (2.0) sit
+        // above 1.28 x 1.
         let arms = [
             [[2, 1], [0, 1]],
             [[2, 0], [1, 0]],
@@ -1906,36 +2464,52 @@ mod tests {
         let f = b.red_card_figures().unwrap();
         assert_eq!(f.matches, 2);
         assert_eq!(f.control, [1.0, 1.0]);
-        assert_eq!(f.limit, 1.6);
+        assert!((f.limit - 1.28).abs() < 1e-9, "{}", f.limit);
         let arm = |name: &str| f.arms.iter().find(|a| a.arm == name).unwrap();
         assert_eq!((arm("keeper").full, arm("keeper").reduced), (1.5, 0.0));
-        assert!(arm("keeper").pass && arm("centre-back").pass);
-        assert!(!arm("striker").pass, "the full side scored 2.0 against 1.6");
+        assert!(arm("centre-back").pass);
+        assert!(!arm("keeper").pass, "the full side scored 1.5 against 1.28");
+        assert!(
+            !arm("striker").pass,
+            "the full side scored 2.0 against 1.28"
+        );
         assert!(!f.pass);
         let checks = b.checks(&BTreeMap::new());
-        let rows: Vec<(&str, Option<&str>, f64, bool)> = checks
+        let rows: Vec<(&str, Option<&str>, f64)> = checks
             .iter()
             .filter(|c| c.suite == "red-card")
-            .map(|c| (c.band.as_str(), c.pairing.as_deref(), c.value, c.pass))
+            .map(|c| (c.band.as_str(), c.pairing.as_deref(), c.value))
             .collect();
         assert_eq!(
             rows,
             [
-                ("reduced_minus_full", Some("keeper"), -1.5, true),
-                ("full_over_control", Some("keeper"), 1.5, true),
-                ("reduced_minus_full", Some("centre-back"), -0.5, true),
-                ("full_over_control", Some("centre-back"), 1.0, true),
-                ("reduced_minus_full", Some("striker"), -1.0, true),
-                ("full_over_control", Some("striker"), 2.0, false),
+                ("reduced_minus_full", Some("keeper"), -1.5),
+                ("full_over_control", Some("keeper"), 1.5),
+                ("reduced_minus_full", Some("centre-back"), -0.5),
+                ("full_over_control", Some("centre-back"), 1.0),
+                ("reduced_minus_full", Some("striker"), -1.0),
+                ("full_over_control", Some("striker"), 2.0),
             ]
+        );
+        // Two matches an arm are under the minimum exposure: the rule word is not a pass.
+        assert!(
+            checks
+                .iter()
+                .filter(|c| c.suite == "red-card")
+                .all(|c| !c.pass && c.rule.is_some())
         );
     }
 
     #[test]
     fn every_band_belongs_to_a_suite_and_the_red_card_suite_is_not_in_all() {
         let r = bands();
+        // A scenario band is judged by its slow test and plays in no suite.
         for band in r.names() {
-            assert!(!r.suites_of(band).unwrap().is_empty(), "{band}");
+            let scenario = matches!(
+                r.band(band).unwrap().measure,
+                bands::Measure::Scenario { .. }
+            );
+            assert_eq!(r.suites_of(band).unwrap().is_empty(), scenario, "{band}");
         }
         assert!(r.suites_of("no_such_band").is_none());
         assert!(!Suite::ALL.contains(&Suite::RedCard));
@@ -2067,22 +2641,17 @@ mod tests {
                 "{ratio} {arm:?}"
             );
         }
-        // Every row's pass is its range check, and its sampling error is a real one.
-        for c in &checks {
-            if ![
-                "stronger_team_win_rate",
-                "reduced_minus_full",
-                "full_over_control",
-            ]
-            .contains(&c.band.as_str())
-            {
-                assert_eq!(c.pass, (c.lo..=c.hi).contains(&c.value), "{c:?}");
-            }
+        // Every row's pass is its rule word, and its sampling error is a real one.
+        for c in checks.iter().filter(|c| c.band != "wall_ms") {
+            let word = c.rule.as_ref().map(|r| r.word);
+            assert_eq!(c.pass, word == Some(pass_rule::rule::Word::Pass), "{c:?}");
         }
+        // The record-backed bands carry a real error; a rare share with no event has none.
+        let record_backed = &V2;
         assert!(
             checks
                 .iter()
-                .filter(|c| c.suite == "equal")
+                .filter(|c| c.suite == "equal" && record_backed.contains(&c.band.as_str()))
                 .all(|c| c.se > 0.0 || c.band == "ten_plus_goals_share")
         );
     }

@@ -52,6 +52,11 @@ pub struct AcceptedInfo {
     pub ignored: Option<String>,
 }
 
+/// How many of `rows` an acceptance marks: not sure, accepted, not shown equivalent.
+pub fn count(rows: &[super::verdict::VerdictRow]) -> usize {
+    rows.iter().filter(|r| r.accepted == Some(true)).count()
+}
+
 /// The digest of a run identity, as `accepted.json` names it.
 pub fn identity_digest(identity: &Value) -> String {
     engine::data::hex12(&Sha256::digest(

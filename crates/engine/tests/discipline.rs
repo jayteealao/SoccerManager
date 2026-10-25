@@ -10,7 +10,7 @@
 
 mod common;
 
-use common::{calm_match, content, default_teams, run_many, spread};
+use common::{calm_match, content, default_teams, judge_band, limits, run_many, spread, units};
 use engine::math::{DVec2, DVec3};
 use engine::record::NullSink;
 use engine::rules::fouls::foul_chance;
@@ -169,11 +169,21 @@ fn discipline_is_realistic() {
         "second yellows per match {second:.3}, matches with a sending-off {:.1}%, same-tick pairs {twice}",
         sent_off * 100.0
     );
-    assert!(second <= 0.10, "second yellows per match {second:.3}");
-    assert!(
-        sent_off <= 0.25,
-        "matches with a sending-off {:.1}%",
-        sent_off * 100.0
-    );
+    // An invariant, not a band: no player is shown two cards on one tick.
     assert_eq!(twice, 0, "a player was shown two cards on one tick");
+    let limits = limits();
+    let failures: Vec<String> = [
+        (
+            "second_yellows_per_match",
+            units(rows.iter().map(|r| r.0 as f64)),
+        ),
+        (
+            "sending_off_share",
+            units(rows.iter().map(|r| f64::from(u8::from(r.1)))),
+        ),
+    ]
+    .iter()
+    .filter_map(|(band, sample)| judge_band(&limits, band, sample).err())
+    .collect();
+    assert!(failures.is_empty(), "{failures:#?}");
 }

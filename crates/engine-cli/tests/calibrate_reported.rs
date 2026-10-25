@@ -10,7 +10,7 @@ mod common;
 use std::path::Path;
 use std::process::Output;
 
-use common::{RecordSchemas, bin, edited_content, record, temp};
+use common::{RecordSchemas, bin, edited_content, hold_floor, record, set_counts, temp, test_band};
 use serde_json::{Value, json};
 
 fn exe() -> &'static str {
@@ -19,17 +19,29 @@ fn exe() -> &'static str {
 
 /// A short calibrate run of the equal suite into `out`, on `content`.
 fn calibrate(data: &Path, content: &Path, out: &Path, args: &[&str]) -> Output {
-    bin(data)
-        .arg("--content-dir")
-        .arg(content)
-        .arg("calibrate")
-        .args(["--seed", "9", "--suite", "equal", "--minutes", "5"])
-        .args(["--jobs", "4"])
-        .args(args)
-        .arg("--out")
-        .arg(out)
-        .output()
-        .unwrap()
+    let run = || {
+        bin(data)
+            .arg("--content-dir")
+            .arg(content)
+            .arg("calibrate")
+            .args(["--seed", "9", "--suite", "equal", "--minutes", "5"])
+            .args(["--jobs", "4"])
+            .args(common::change_intent(data, args))
+            .args(args)
+            .arg("--out")
+            .arg(out)
+            .output()
+            .unwrap()
+    };
+    // A test's real-data folder may put some margins under their floor: widen them.
+    let mut out = run();
+    for _ in 0..3 {
+        if !hold_floor(content, &String::from_utf8_lossy(&out.stderr)) {
+            break;
+        }
+        out = run();
+    }
+    out
 }
 
 /// `engine-cli calibrate accept <band> --run <run>`.
@@ -57,7 +69,7 @@ fn report(out: &Output, run: &Path) -> Value {
     RecordSchemas::load()
         .report(&report)
         .unwrap_or_else(|e| panic!("{e}\n{report}"));
-    assert_eq!(report["schema.version"], "9");
+    assert_eq!(report["schema.version"], "12");
     report
 }
 
@@ -85,27 +97,28 @@ fn edit_band(content: &Path, name: &str, edit: impl FnOnce(&mut Value)) {
     std::fs::write(&path, serde_json::to_string_pretty(&doc).unwrap()).unwrap();
 }
 
-/// A band of the equal suite no match can sit inside: passes per team between 0 and 0.1 (fouls per
-/// team until matches with no foul came in).
+/// A band of the equal suite no match can meet: passes per team against a design target of
+/// 0.05 with a margin of 0.05 (fouls per team until matches with no foul came in). A band
+/// that does not gate belongs to the band file's `facing` group, which holds none here.
 fn impossible_band(gates: bool) -> Value {
-    json!({
-        "band": "probe_fail",
-        "suites": ["equal"],
-        "measure": { "kind": "mean", "per": "team", "of": ["passes.{side}"] },
-        "design": { "lo": 0.0, "hi": 0.1, "smallest_shift": 0.05 },
-        "real": {
-            "source": { "none": "a test band with no real counterpart" },
-            "sample": 0,
-            "date": "2026-10-09"
-        },
-        "evidence": "calibration",
-        "confidence": {
-            "measurement": { "count": 0 },
-            "generalisation": { "competitions": 0, "seasons": 0, "clubs": 0 }
-        },
-        "condition": "dry",
-        "gates": gates
-    })
+    let measure = json!({ "kind": "mean", "per": "team", "of": ["passes.{side}"] });
+    let mut band = test_band("probe_fail", &["equal"], measure, 0.05, 0.05);
+    if !gates {
+        band["gates"] = false.into();
+        band["group"] = "facing".into();
+    }
+    band
+}
+
+/// The reason the band file gives the `facing` group, which a report-only row shows.
+const FACING: &str = "body facing is measured on two pose matches only";
+
+/// Edits the band list of the band file in `content`.
+fn edited_band_file(content: &Path, edit: impl FnOnce(&mut Vec<Value>)) {
+    let path = content.join("realism-bands.json");
+    let mut doc: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    edit(doc["bands"].as_array_mut().unwrap());
+    std::fs::write(&path, serde_json::to_string_pretty(&doc).unwrap()).unwrap();
 }
 
 /// What a verdict hangs on: the joint word, its threshold, the pass list and the gating rows.
@@ -126,8 +139,9 @@ fn verdict_of(r: &Value) -> Value {
 fn a_reported_band_never_moves_the_verdict_of_a_change_run() {
     let data = temp("engine-cli-reported", "verdict");
     let content = edited_content(&data, "tuning.json", |_| {});
+    set_counts(&content, 4);
     let run = data.join("run");
-    let args = ["--matches", "4", "--base-binary", exe()];
+    let args = ["--base-binary", exe()];
     let first = calibrate(&data, &content, &run, &args);
     let before = report(&first, &run);
     assert!(row(&before, "calib.reported", "probe_fail").is_none());
@@ -147,9 +161,12 @@ fn a_reported_band_never_moves_the_verdict_of_a_change_run() {
     let after = report(&again, &run);
     assert_eq!(again.status.code(), first.status.code(), "{text}");
     assert_eq!(verdict_of(&after), verdict_of(&before));
-    assert_eq!(after["calib.power"], before["calib.power"]);
+    assert_eq!(after["calib.count"], before["calib.count"]);
     let probe = row(&after, "calib.reported", "probe_fail").expect("a reported row");
-    assert_eq!(probe["report_only"], "gates: false in the band file");
+    assert!(
+        probe["report_only"].as_str().unwrap().contains(FACING),
+        "{probe}"
+    );
     assert_eq!(probe["word"], "fail", "{probe}");
     assert!(row(&after, "calib.verdicts", "probe_fail").is_none());
     assert!(
@@ -174,15 +191,16 @@ fn a_reported_band_never_moves_the_verdict_of_a_change_run() {
     let _ = std::fs::remove_dir_all(&data);
 }
 
-/// A band whose real sample is under its own floor only reports, with the reason; the
-/// counts of a plain run name its matches and its build; and the per-club spread of a run
-/// too short for its window reads no value, not sure, with the reason.
+/// A band of a report-only group only reports, with its group's reason; the counts of a
+/// plain run name its matches and its build; and the per-club spread of a run too short for
+/// its window reads no value, not sure, with the reason.
 #[test]
-fn a_real_sample_under_its_floor_only_reports_and_a_plain_run_counts_its_matches() {
+fn a_band_of_a_report_only_group_only_reports_and_a_plain_run_counts_its_matches() {
     let data = temp("engine-cli-reported", "floor");
     let content = edited_content(&data, "tuning.json", |_| {});
     edit_band(&content, "corners_per_team", |b| {
-        b["real"]["floor"] = 5000.into();
+        b["gates"] = false.into();
+        b["group"] = "facing".into();
     });
     let run = data.join("run");
     let out = calibrate(&data, &content, &run, &["--matches", "4"]);
@@ -190,26 +208,35 @@ fn a_real_sample_under_its_floor_only_reports_and_a_plain_run_counts_its_matches
     let r = report(&out, &run);
 
     let corners = row(&r, "calib.reported", "corners_per_team").expect("corners only report");
-    assert_eq!(
-        corners["report_only"],
-        "real sample too small to gate (sample 1826 under floor 5000)"
+    assert!(
+        corners["report_only"].as_str().unwrap().contains(FACING),
+        "{corners}"
     );
     assert!(row(&r, "calib.verdicts", "corners_per_team").is_none());
 
-    // The shipped reported bands of the equal suite are reported, each judged by its range.
+    // The shipped rare bands of the equal suite only report, each with its word; the goal
+    // shares by phase are read from the measures, so a build without them leaves them out.
+    let five_one = row(&r, "calib.reported", "five_one_share").expect("five_one_share reports");
+    assert!(five_one["word"].is_string(), "{five_one}");
     for band in [
-        "goals_poisson_ratio",
-        "five_one_share",
-        "worst_to_best_spread",
+        "goals_free_kick_share",
+        "goals_penalty_share",
+        "goals_throw_in_share",
     ] {
-        let row = row(&r, "calib.reported", band).unwrap_or_else(|| panic!("no {band}: {r}"));
-        assert!(row["word"].is_string(), "{row}");
+        let reported = row(&r, "calib.reported", band);
+        assert_eq!(reported.is_some(), cfg!(feature = "measures"), "{band}");
+        if let Some(row) = reported {
+            assert!(row["word"].is_string(), "{row}");
+        }
     }
-    let spread = row(&r, "calib.reported", "worst_to_best_spread").unwrap();
+    // The per-club spread gates now, and reads not sure with the reason.
+    let spread = row(&r, "calib.verdicts", "worst_to_best_spread").unwrap();
     assert_eq!(spread["word"], "not sure");
-    assert_eq!(
-        spread["note"],
-        "no value: no club has 34 matches in this run"
+    assert!(
+        spread["note"]
+            .as_str()
+            .is_some_and(|n| n.ends_with("no value: no club has 34 matches in this run")),
+        "{spread}"
     );
 
     let counts = &r["calib.counts"];
@@ -235,15 +262,18 @@ fn a_real_sample_under_its_floor_only_reports_and_a_plain_run_counts_its_matches
 fn a_not_sure_band_is_accepted_and_marked_but_never_passes() {
     let data = temp("engine-cli-reported", "accept");
     let content = edited_content(&data, "tuning.json", |_| {});
+    // A reported band that fails, beside the shipped rare bands, which read not sure.
+    edited_band_file(&content, |bands| bands.push(impossible_band(false)));
     let run = data.join("run");
-    let args = ["--matches", "2"];
+    // Six matches: enough for the bootstrap to judge the failing band, never too few units.
+    let args = ["--matches", "6"];
     let first = calibrate(&data, &content, &run, &args);
     let before = report(&first, &run);
     let reported = rows(&before, "calib.reported");
     let not_sure = reported
         .iter()
         .find(|r| r["word"] == "not sure")
-        .unwrap_or_else(|| panic!("a not-sure reported band in two matches: {reported:?}"))["band"]
+        .unwrap_or_else(|| panic!("a not-sure reported band in six matches: {reported:?}"))["band"]
         .as_str()
         .unwrap()
         .to_string();
@@ -339,14 +369,13 @@ fn a_not_sure_band_is_accepted_and_marked_but_never_passes() {
 fn a_base_without_measures_judges_a_measures_band_by_its_range() {
     let data = temp("engine-cli-reported", "base-measures");
     let content = edited_content(&data, "tuning.json", |_| {});
+    set_counts(&content, 4);
     let run = data.join("run");
     let out = calibrate(
         &data,
         &content,
         &run,
         &[
-            "--matches",
-            "4",
             "--base-binary",
             exe(),
             "--inject-failure",
@@ -357,6 +386,14 @@ fn a_base_without_measures_judges_a_measures_band_by_its_range() {
     let shot = row(&r, "calib.reported", "shot_distance_mean").expect("a shot distance row");
     assert_eq!(shot["judged"], "range", "{shot}");
     assert_eq!(shot["note"], "range only: base has no measures");
+    // No word against an old engine without the measures, and the reason names it.
+    assert!(shot.get("old_word").is_none(), "{shot}");
+    assert!(
+        shot["old_reason"]
+            .as_str()
+            .is_some_and(|r| r.ends_with("has no measures feature")),
+        "{shot}"
+    );
     let counts = &r["calib.counts"];
     assert_eq!(counts["pairs"], 4);
     let engines: Vec<&str> = counts["observations"]
@@ -386,14 +423,13 @@ fn shape_bands() -> Vec<(String, bool)> {
         .collect()
 }
 
-/// The team-shape bands and the figures report and never judge: each shape band sits in
-/// `calib.reported` and never in the gating rows or `calib.bands`; in a measures build it has
-/// a word, and a planted real value gives its real column and gap; a build without the
-/// measures says so and judges none of them. The figures sit in `calib.figures`, each beside its
+/// The team-shape bands gate and the figures report: each shape band sits in the gating rows
+/// and never in `calib.reported`; in a measures build it has a word, and a planted real value
+/// gives its real column and gap; a build without the measures says so. The figures sit in `calib.figures`, each beside its
 /// earlier build's value with the change, and without a value in a build without the
 /// measures. Runs in both builds.
 #[test]
-fn the_shape_bands_and_figures_report_with_their_real_values_and_never_judge() {
+fn the_shape_bands_gate_and_the_figures_report_with_their_real_values() {
     let data = temp("engine-cli-reported", "shape");
     let content = edited_content(&data, "tuning.json", |_| {});
     // Two planted matches: centre-back depth in possession 10 and 12 metres, calm 0.8 and 0.9.
@@ -424,15 +460,15 @@ fn the_shape_bands_and_figures_report_with_their_real_values_and_never_judge() {
         .collect();
     assert_eq!(bands.iter().filter(|(_, m)| !m).count(), 1);
     for (band, needs_measures) in &bands {
-        assert!(row(&r, "calib.verdicts", band).is_none(), "{band} gates");
-        assert!(!gating.contains(&band.as_str()), "{band} in calib.bands");
-        let reported = row(&r, "calib.reported", band);
+        assert!(
+            row(&r, "calib.reported", band).is_none(),
+            "{band} only reports"
+        );
+        assert!(gating.contains(&band.as_str()), "{band} not in calib.bands");
         if measured || !needs_measures {
-            let reported = reported.unwrap_or_else(|| panic!("no {band}: {r}"));
-            assert!(reported["word"].is_string(), "{reported}");
-        } else {
-            // A build without the measures judges no measures band, as it says as it starts.
-            assert!(reported.is_none(), "{band} in a build without the measures");
+            let verdict =
+                row(&r, "calib.verdicts", band).unwrap_or_else(|| panic!("no {band}: {r}"));
+            assert!(verdict["word"].is_string(), "{verdict}");
         }
     }
     assert_eq!(
@@ -442,7 +478,7 @@ fn the_shape_bands_and_figures_report_with_their_real_values_and_never_judge() {
     );
     if measured {
         for (band, real) in [("cb_depth_in", 11.0), ("dead_ball_calm_share", 0.85)] {
-            let reported = row(&r, "calib.reported", band).unwrap();
+            let reported = row(&r, "calib.verdicts", band).unwrap();
             assert!(
                 (reported["real"].as_f64().unwrap() - real).abs() < 1e-9,
                 "{reported}"

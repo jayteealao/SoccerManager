@@ -16,6 +16,7 @@ mod guard;
 mod launch;
 mod matchday;
 mod measure_rows;
+mod real_targets;
 mod record;
 mod replay;
 mod replay_inputs;
@@ -32,6 +33,7 @@ mod stats;
 mod stream_run;
 mod trace_file;
 mod web;
+mod world_build;
 
 use std::io::IsTerminal;
 use std::time::Instant;
@@ -95,9 +97,17 @@ fn main() {
         cli::Command::Resume(opts) => resume::run(content_dir, &opts),
         cli::Command::Calibrate(opts) => match &opts.action {
             Some(cli::CalibrateAction::Accept { band, run }) => report::accepted::accept(band, run),
+            Some(cli::CalibrateAction::Count { kind, real_data }) => {
+                calibrate::count(content_dir, real_data.as_deref(), *kind)
+            }
+            Some(cli::CalibrateAction::Agreement { a, b, out }) => {
+                report::agreement::command(a, b, out.as_deref())
+            }
+            Some(cli::CalibrateAction::Report { run, targets }) => {
+                real_targets::calibration::run(content_dir, run, targets.as_ref())
+            }
             Some(cli::CalibrateAction::Proof {
                 seed,
-                matches,
                 out,
                 write,
                 real_data,
@@ -108,7 +118,6 @@ fn main() {
                 content_dir,
                 &calibrate::gate_proof::Opts {
                     seed: *seed,
-                    matches: *matches,
                     out: out.clone(),
                     write: write.clone(),
                     real_data: real_data.clone(),
@@ -124,6 +133,8 @@ fn main() {
         cli::Command::FastModel(opts) => fast_model::run(content_dir, &opts),
         cli::Command::RestartWaits(opts) => restart_waits::run(content_dir, &opts),
         cli::Command::Signatures(opts) => signatures::run(content_dir, &opts),
+        cli::Command::RealTargets(opts) => real_targets::run(content_dir, &opts),
+        cli::Command::WorldDatabase(opts) => world_build::run(content_dir, &opts),
         #[cfg(feature = "measures")]
         cli::Command::Primitives(opts) => calibrate::primitives::run(content_dir, &opts),
         cli::Command::MatchdayTiming(opts) => matchday::timing::run(content_dir, &opts),

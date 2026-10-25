@@ -1,6 +1,6 @@
 //! `engine-cli calibrate --pair <flag>`: both arms play the same fixtures on the same match
-//! seeds, each into its own folder, and one run report shows every band of both arms side by
-//! side with a verdict. `--flag` sets a state for a whole run, and a bad name or state is
+//! seeds, each into its own folder, and one run report judges the on arm against real
+//! football and against the off arm, band by band, with a verdict. `--flag` sets a state for a whole run, and a bad name or state is
 //! refused before any match is played.
 
 mod common;
@@ -8,7 +8,7 @@ mod common;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use common::{RecordSchemas, bin, record, temp};
+use common::{RecordSchemas, bin, equal_gating_bands, record, temp};
 use serde_json::{Value, json};
 
 const FLAG: &str = "probe_short_range";
@@ -160,33 +160,29 @@ fn a_paired_run_plays_both_arms_on_the_same_seeds_and_compares_every_band() {
         json!([{ "name": FLAG, "owner": "engine team", "state": "paired", "source": "cli" }])
     );
 
-    // One row per realism band of the equal suite, sorted by name, each with both values
-    // side by side.
+    // One row per realism band of the equal suite, sorted by name, each with the on arm's
+    // value beside the off arm's, and both words.
     let rows = report["calib.compare"].as_array().unwrap();
     assert!(rows.iter().all(|r| r["suite"] == "equal"), "{rows:?}");
     let names: Vec<&str> = rows.iter().map(|r| r["band"].as_str().unwrap()).collect();
-    assert_eq!(
-        names,
-        [
-            "corners_per_team",
-            "goal_kicks_per_match",
-            "goalless_share",
-            "goals_per_match",
-            "goals_per_xg",
-            "pass_accuracy_pct",
-            "passes_per_team",
-            "possession_away_pct",
-            "possession_home_pct",
-            "sending_off_share",
-            "shots_on_target_share",
-            "shots_per_team",
-            "ten_plus_goals_share",
-            "throw_ins_per_match",
-            "yellow_cards_per_team",
-        ]
-    );
+    let mut sorted = names.clone();
+    sorted.sort_unstable();
+    assert_eq!(names, sorted, "sorted by name");
+    for band in [
+        "corners_per_team",
+        "goals_per_match",
+        "shots_per_team",
+        "yellow_cards_per_team",
+    ] {
+        assert!(names.contains(&band), "no {band} in {names:?}");
+    }
+    assert_eq!(names.len(), equal_gating_bands());
     for row in rows {
-        assert!(row["off"].is_number() && row["on"].is_number(), "{row}");
+        assert!(row["word"].is_string(), "{row}");
+        assert!(
+            row["old_word"].is_string() || row["old_reason"].is_string(),
+            "{row}"
+        );
         let band = |arm: &str| {
             report["calib.arms"][arm]["calib.bands"]
                 .as_array()
@@ -196,10 +192,37 @@ fn a_paired_run_plays_both_arms_on_the_same_seeds_and_compares_every_band() {
                 .unwrap()["value"]
                 .clone()
         };
-        assert_eq!(row["off"], band("off"), "{row}");
-        assert_eq!(row["on"], band("on"), "{row}");
+        // A band judged on a whole distribution carries no single value of either side.
+        if row.get("base_value").is_none() {
+            continue;
+        }
+        if row["old_word"].is_string() {
+            assert_eq!(row["base_value"], band("off"), "{row}");
+        }
+        assert_eq!(row["value"], band("on"), "{row}");
     }
     assert!(report["calib.verdict"].is_string());
+    assert_eq!(
+        report["calib.pair_verdict"]["verdict"],
+        report["calib.verdict"]
+    );
+    let words = &report["calib.pair_verdict"]["words"];
+    let counted: u64 = ["better", "worse", "equivalent", "not_sure"]
+        .iter()
+        .map(|w| words[*w].as_u64().unwrap())
+        .sum();
+    // The counts cover the rows that gate; a rare band is not judged in a change-kind run.
+    let gating = rows
+        .iter()
+        .filter(|r| r.get("report_only").is_none())
+        .count();
+    assert_eq!(counted, gating as u64, "{words}");
+    assert!(
+        rows.iter()
+            .filter(|r| r.get("report_only").is_some())
+            .all(|r| r["word"] == "not judged"),
+        "{rows:?}"
+    );
     assert!(stderr.contains("verdict: "), "{stderr}");
     assert!(stderr.contains("goals_per_match"), "{stderr}");
     // Each arm names its failing bands before the table.

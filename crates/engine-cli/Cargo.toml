@@ -32,6 +32,7 @@ required-features = ["measures"]
 
 [dependencies]
 engine = { path = "../engine" }
+pass-rule = { path = "../pass-rule" }
 protocol = { path = "../protocol" }
 script = { path = "../script" }
 stream = { path = "../stream" }
@@ -56,3 +57,4 @@ libc = { workspace = true }
 [dev-dependencies]
 # JSON Schema validation of the records in tests only; the release binary does not link it.
 boon = { workspace = true }
+tempfile = { workspace = true }

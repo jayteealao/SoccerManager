@@ -1605,7 +1605,10 @@ impl Simulation {
             if let Some(walk_on) = self.take_walk_on() {
                 sink.on_walk_on(&walk_on)?;
             }
-            sink.on_tick(&self.record())?;
+            // A sink that reads no record gets none: the record is not built.
+            if sink.reads_records() {
+                sink.on_tick(&self.record())?;
+            }
             if let Some(stoppage) = self.stoppage {
                 sink.on_stoppage(&stoppage, self)?;
             }

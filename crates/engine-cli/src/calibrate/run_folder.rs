@@ -44,9 +44,9 @@ pub const SUPERSEDED: &str = "superseded";
 /// The file that holds a run's match target and the registry it was last judged with.
 pub const TARGET_FILE: &str = "target.json";
 /// The version of [`Target`] this program writes and reads.
-pub const TARGET_VERSION: u32 = 1;
+pub const TARGET_VERSION: u32 = 2;
 /// The files and folders a run owns in its folder.
-const OWNED: [&str; 8] = [
+const OWNED: [&str; 13] = [
     RUN_FILE,
     "ledger",
     "rows",
@@ -55,7 +55,35 @@ const OWNED: [&str; 8] = [
     "arms",
     "report.json",
     TARGET_FILE,
+    super::intent::INTENT_FILE,
+    BENCH_FILE,
+    STYLES_FILE,
+    RULES_FILE,
+    "rules",
 ];
+
+/// The single-thread figures of each arm, written by the call that finishes the arms.
+pub const BENCH_FILE: &str = "bench.json";
+/// A change run's styles sample, written by the call that finishes the arms.
+pub const STYLES_FILE: &str = "styles.json";
+/// A change run's rules stage, written by the call that finishes the arms.
+pub const RULES_FILE: &str = "rules.json";
+
+/// Writes `value` as `name` in the run folder `dir`, whole, through a partial file and a
+/// rename.
+pub fn write_json<T: Serialize>(dir: &Path, name: &str, value: &T) -> anyhow::Result<()> {
+    let path = dir.join(name);
+    let partial = dir.join(format!("{name}.partial"));
+    fs::write(&partial, serde_json::to_vec_pretty(value)?)
+        .and_then(|()| fs::rename(&partial, &path))
+        .with_context(|| format!("cannot write {}", path.display()))
+}
+
+/// The value stored as `name` in the run folder `dir`; `None` when there is none or it
+/// cannot be read.
+pub fn read_json<T: serde::de::DeserializeOwned>(dir: &Path, name: &str) -> Option<T> {
+    serde_json::from_slice(&fs::read(dir.join(name)).ok()?).ok()
+}
 
 /// What makes a run's results what they are.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -302,64 +330,44 @@ pub fn move_superseded(dir: &Path, old_run_id: &str) -> anyhow::Result<PathBuf> 
     Ok(to)
 }
 
-/// `target.json`: how many matches each suite plays (per pairing, per arm), and what the
-/// run was last judged with. It is not part of the identity: a changed range or shift is
-/// judged again from the stored rows, and a resumed change run plays to the same target.
+/// `target.json`: the run's kind, how many matches each suite plays (per pairing, per arm),
+/// and what the run was last judged with. It is not part of the identity: a changed margin
+/// is judged again from the stored rows, and a resumed change run plays to the same count.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Target {
     pub version: u32,
-    /// `true` for a change run, whose target comes from its pilot's power.
+    /// `true` for a change run, which plays its kind's fixed count.
     pub change: bool,
+    /// The run's kind: change, milestone or release.
+    pub kind: String,
     /// Matches per suite unit, by suite code.
     pub target: BTreeMap<String, u32>,
-    /// A change run: the pilot's matches per suite unit.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pilot: Option<u32>,
-    /// `--matches`: a change run's cap.
-    pub cap: u32,
     /// The band registry's digest at the last judgement.
     pub registry: String,
     /// Each band's digest at the last judgement, by band.
     pub bands: BTreeMap<String, String>,
-    /// A change run: the band that set each suite's target at the pilot, by suite code;
-    /// a suite whose pilot gave every band power has none.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub drivers: BTreeMap<String, String>,
-    /// A change run: the rows outside their range beyond their noise at the pilot, which set
-    /// no target, by suite code.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub no_target: BTreeMap<String, Vec<String>>,
 }
 
-/// The target of the run in `dir`, or `None` when it has none or it cannot be read (a
-/// change run then plays its pilot again, which finds its matches done).
+/// The target of the run in `dir`, or `None` when it has none, it cannot be read, or an
+/// earlier version wrote it (a run then names no changed bands).
 pub fn read_target(dir: &Path) -> Option<Target> {
     let text = fs::read_to_string(dir.join(TARGET_FILE)).ok()?;
     let target: Target = serde_json::from_str(&text).ok()?;
     (target.version == TARGET_VERSION).then_some(target)
 }
 
-/// Matches per suite unit the first phase of a run plays: `cap` (`--matches`) for a plain
-/// run; for a change run, the target a finished pilot left in `known`, at most `cap`, or
-/// else the pilot.
+/// Matches per suite unit a run plays: `matches` (`--matches`) for a run that is not a
+/// change run; for a change run, exactly its kind's fixed count of each suite.
 pub fn phase_matches(
     suites: &[Suite],
     change: bool,
-    known: Option<&Target>,
-    pilot: u32,
-    cap: u32,
+    kind: &crate::report::kinds::KindDef,
+    matches: u32,
 ) -> BTreeMap<Suite, u32> {
     suites
         .iter()
-        .map(|&s| {
-            let n = match (change, known) {
-                (true, Some(t)) => t.target.get(s.code()).copied().unwrap_or(pilot).min(cap),
-                (true, None) => pilot,
-                (false, _) => cap,
-            };
-            (s, n)
-        })
+        .map(|&s| (s, if change { kind.count_for(s) } else { matches }))
         .collect()
 }
 
@@ -688,26 +696,16 @@ mod tests {
     }
 
     #[test]
-    fn a_change_run_plays_its_pilot_then_its_kept_target_and_a_plain_run_its_cap() {
+    fn a_change_run_plays_its_kind_count_and_a_plain_run_its_matches() {
         let suites = [Suite::Equal, Suite::Formations];
-        let plain = phase_matches(&suites, false, None, 200, 1000);
-        assert_eq!(plain.values().copied().collect::<Vec<_>>(), [1000, 1000]);
-        let pilot = phase_matches(&suites, true, None, 200, 1000);
-        assert_eq!(pilot.values().copied().collect::<Vec<_>>(), [200, 200]);
-        let kept = Target {
-            version: TARGET_VERSION,
-            change: true,
-            target: BTreeMap::from([("equal".into(), 600), ("formations".into(), 5000)]),
-            pilot: Some(200),
-            cap: 1000,
-            registry: String::new(),
-            bands: BTreeMap::new(),
-            drivers: BTreeMap::new(),
-            no_target: BTreeMap::new(),
-        };
-        let resumed = phase_matches(&suites, true, Some(&kept), 200, 1000);
-        assert_eq!(resumed[&Suite::Equal], 600);
-        assert_eq!(resumed[&Suite::Formations], 1000, "never above the cap");
+        let mut kind: crate::report::kinds::KindDef =
+            serde_json::from_value(crate::report::kinds::design_kinds()["change"].clone()).unwrap();
+        kind.count.insert("formations".into(), 12);
+        let plain = phase_matches(&suites, false, &kind, 40);
+        assert_eq!(plain.values().copied().collect::<Vec<_>>(), [40, 40]);
+        let change = phase_matches(&suites, true, &kind, 40);
+        assert_eq!(change[&Suite::Equal], 1000);
+        assert_eq!(change[&Suite::Formations], 12);
     }
 
     #[test]

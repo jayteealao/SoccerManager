@@ -20,15 +20,15 @@
 use std::collections::VecDeque;
 
 use super::{
-    BallRest, JOB_NEAR_M, MAX_BALL_REST_S, MAX_BALL_SPEED, MIN_SEPARATION, RESTART_SPOT_TOLERANCE,
-    RunSpell, StreamRules, Violation, job_closing, job_distance,
+    BallRest, JOB_NEAR_M, JobSide, MAX_BALL_REST_S, MAX_BALL_SPEED, MIN_SEPARATION,
+    RESTART_SPOT_TOLERANCE, RunSpell, StreamRules, Violation, job_distance_from,
 };
 use crate::error::EngineError;
 use crate::math::DVec2;
 use crate::record::{PLAYER_COUNT, TickRecord, TickSink};
 use crate::rules::fouls::Card;
 use crate::sim::{EngineEvent, EngineEventKind, EventDetail, Simulation};
-use crate::team::{PLAYERS_PER_TEAM, Team};
+use crate::team::{AnchorFrame, PLAYERS_PER_TEAM, Team};
 use crate::tuning::Tuning;
 
 /// Where a violation sorts: the record or event index, then the rule's place in the order
@@ -49,6 +49,32 @@ const TICK_RULES: usize = 7;
 /// A squared distance a little above `MIN_SEPARATION²`: a pair at or beyond it is far
 /// enough apart that its exact distance need not be taken.
 const SEPARATION_BOUND_SQ: f64 = MIN_SEPARATION * MIN_SEPARATION * 1.0001;
+
+/// One team shape's anchor frames ([`Team::anchor_frame`]), per slot with the ball and
+/// without: taken when the shape comes into force, so the anchor rule adds only the ball on
+/// each record.
+#[derive(Clone, Copy)]
+struct ShapeCache {
+    frames: [[AnchorFrame; 2]; PLAYERS_PER_TEAM],
+    /// Each slot's side for the job-target rule.
+    jobs: [JobSide; PLAYERS_PER_TEAM],
+}
+
+impl ShapeCache {
+    fn of(team: &Team) -> Self {
+        Self {
+            frames: std::array::from_fn(|slot| {
+                [true, false].map(|has| team.anchor_frame(slot, has))
+            }),
+            jobs: std::array::from_fn(|slot| JobSide::of(team, slot)),
+        }
+    }
+
+    /// Both shapes' frames.
+    fn both(teams: &[Team; 2]) -> [Self; 2] {
+        [Self::of(&teams[0]), Self::of(&teams[1])]
+    }
+}
 
 /// Each event rule's place among the rules of one event.
 const KICK_OFF_FIRST: u8 = 0;
@@ -161,6 +187,8 @@ pub struct RunningCheck {
 
     // Tick rules.
     shapes: [Team; 2],
+    /// The anchor frames of `shapes`.
+    cache: [ShapeCache; 2],
     pending_shapes: VecDeque<(u32, [Team; 2])>,
     records: usize,
     prev_ball: Option<DVec2>,
@@ -252,6 +280,7 @@ impl RunningCheck {
         Self {
             max_step: max_step(&tuning),
             tuning,
+            cache: ShapeCache::both(&teams),
             shapes: teams,
             pending_shapes: VecDeque::new(),
             records: 0,
@@ -465,6 +494,7 @@ impl RunningCheck {
         {
             let (_, teams) = self.pending_shapes.pop_front().expect("a front entry");
             self.shapes = teams;
+            self.cache = ShapeCache::both(&self.shapes);
         }
         let idx = self.records;
         self.records += 1;
@@ -574,8 +604,8 @@ impl RunningCheck {
             let slot = i % PLAYERS_PER_TEAM;
             // The record does not say which team has the ball, so the nearer of the slot's
             // two anchors counts.
-            let anchors =
-                [true, false].map(|has| teams[team].anchor(slot, reference, has, &self.tuning));
+            let frames = &self.cache[team].frames[slot];
+            let anchors = [0, 1].map(|has| frames[has].at(reference, &self.tuning));
             let nearer = nearer_anchor(anchors, *p);
             let d_anchor = (*p - nearer).length().min(kick_off_place_distance(
                 &teams[team],
@@ -584,10 +614,12 @@ impl RunningCheck {
                 reference,
             ));
             let d_ball = (*p - reference).length();
-            let d_job = job_distance(&pos, &parked, i, teams, nearer, &self.tuning);
+            let job_side = &self.cache[team].jobs[slot];
+            let d_job = job_distance_from(&pos, &parked, team, *p, job_side, nearer, &self.tuning);
             let prev_dist = self.prev_dist[i];
             let toward_ball = self
                 .prev_chase
+                .as_ref()
                 .is_some_and(|(was, at)| (*p - was).length() < (at[i] - was).length() - 1e-3);
             let far = d_ball > self.tuning.anchor_ball_distance
                 && d_anchor > self.tuning.anchor_tolerance
@@ -600,17 +632,11 @@ impl RunningCheck {
                 self.max_step,
                 &self.tuning,
             );
-            let toward_job = self.prev_chase.is_some_and(|(_, at)| {
-                job_closing(
-                    &at,
-                    *p,
-                    prev_dist[2],
-                    &parked,
-                    i,
-                    teams,
-                    nearer,
-                    &self.tuning,
-                )
+            // The mover's own entry is not a target, so the previous positions serve as the
+            // targets with him already at `p`: what `job_closing` judges, without its copy.
+            let toward_job = self.prev_chase.as_ref().is_some_and(|(_, at)| {
+                job_distance_from(at, &parked, team, *p, job_side, nearer, &self.tuning)
+                    < prev_dist[2] - 1e-3
             });
             let closing = d_ball < prev_dist[0] - 1e-3
                 || d_anchor < prev_dist[1] - 1e-3
@@ -945,6 +971,45 @@ mod tests {
             ["restart_spot"]
         );
         same(&teams(), &[throw_in], &[record(1), off_spot]);
+    }
+
+    /// After each shape of a played match's timeline comes into force, the cached anchor of
+    /// every slot equals [`Team::anchor`] on that shape bit for bit, for both phases and a
+    /// grid of balls.
+    #[test]
+    fn each_shape_s_cached_anchors_equal_the_team_s_anchors_by_bits() {
+        let config = crate::data::test_support::shipped_config(1, 90).unwrap();
+        let tuning = config.tuning.clone();
+        let mut sim = Simulation::new(config).unwrap();
+        sim.run(&mut crate::record::NullSink).unwrap();
+        let timeline = sim.team_timeline().to_vec();
+        assert!(timeline.len() > 2, "the match changes shape");
+        let mut check = RunningCheck::new(tuning.clone(), timeline[0].1.clone(), rules());
+        let balls = [-60.0, -30.0, 0.0, 17.5, 60.0]
+            .into_iter()
+            .flat_map(|x| [-40.0, -10.0, 0.0, 25.0, 40.0].map(|y| DVec2::new(x, y)));
+        let balls: Vec<DVec2> = balls.collect();
+        for (k, (tick, teams)) in timeline.iter().enumerate() {
+            if k > 0 {
+                check.shapes(*tick, teams.clone());
+                check.tick(&record(*tick));
+            }
+            for (team, shape) in teams.iter().enumerate() {
+                for slot in 0..PLAYERS_PER_TEAM {
+                    for (i, has) in [true, false].into_iter().enumerate() {
+                        for &ball in &balls {
+                            let cached = check.cache[team].frames[slot][i].at(ball, &tuning);
+                            let want = shape.anchor(slot, ball, has, &tuning);
+                            assert_eq!(
+                                cached.to_array().map(f64::to_bits),
+                                want.to_array().map(f64::to_bits),
+                                "shape {k}, team {team}, slot {slot}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #[test]

@@ -1,0 +1,29 @@
+{
+ "note": "invented",
+ "associations": [
+  {
+   "code": "ENG",
+   "rank": 1,
+   "movement": {
+    "1-2": {
+     "relegated_direct": 1
+    },
+    "2-3": {
+     "relegated_direct": 1
+    }
+   }
+  },
+  {
+   "code": "GER",
+   "rank": 2,
+   "movement": {
+    "1-2": {
+     "relegated_direct": 1
+    },
+    "2-3": {
+     "relegated_direct": null
+    }
+   }
+  }
+ ]
+}

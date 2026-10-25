@@ -1,6 +1,5 @@
 //! The verdict of a change run: one paired max-t bootstrap over the matches both engines
-//! played on the same fixtures, the power each band has to see its smallest shift, and a
-//! word per band (pass, fail, not sure) with one joint word.
+//! played on the same fixtures, two words per band, and one joint word.
 //!
 //! For each of [`RESAMPLES`] resamples, the paired fixtures are drawn with replacement
 //! within their stratum (a suite, a formation pairing, a red-card arm) from the engine's own
@@ -11,19 +10,14 @@
 //! 97th percentile: one threshold for every band, set by how the bands move together, with
 //! a 3 percent false-alarm limit for the whole run.
 //!
-//! A band has power when `(c + z) · se <= smallest shift`, with `z` the normal quantile of
-//! 80 percent power. For power, `se` is the larger of the paired error and the error the
-//! two engines' values would have apart: two engines that differ at all soon play
-//! different matches, so the pairing of a run whose engines are still identical says
-//! nothing about how precise a real change would be. A band **fails** when the changed
-//! engine's value is outside its range, or its change is beyond the threshold and at least
-//! its smallest shift; it **passes** when the value is inside, it did not move by its
-//! smallest shift, and it has power; otherwise it is **not sure**. A band with no power
-//! never passes.
-//!
-//! A band already outside its range at the pilot by more than its noise (`c` times the
-//! changed engine's own error of its value) sets no power target: it fails while it stays
-//! outside, so more matches would not change its word, and the other bands size the run.
+//! A band's word against real football is the pass rule's, on the changed engine: pass
+//! when the whole interval of engine minus real sits inside its margin, fail when wholly
+//! outside, not sure otherwise. Only that word feeds the joint word. Its word against the
+//! old engine ([`pass_rule::change::old_word`]) crosses the difference test, the change
+//! beyond `c` times its error, with the equivalence test, the change and its one-sided
+//! error inside the band's noticeable error: better, worse, equivalent or not sure. A run
+//! plays one fixed count of paired matches set in the band file for its kind; nothing here
+//! sizes it.
 
 use std::collections::BTreeMap;
 
@@ -33,17 +27,19 @@ use serde::Serialize;
 
 use super::distribution::PairedHist;
 use super::measures;
-use super::{BandCheck, RunBuilder, Suite};
+use super::{BandCheck, RuleWord, RunBuilder, Suite};
+pub use pass_rule::change::{Moved, OldWord};
 
 /// Resamples of the bootstrap.
 pub const RESAMPLES: usize = 1999;
 /// The joint false-alarm limit of a run.
 pub const FALSE_ALARM: f64 = 0.03;
-/// The normal quantile of 80 percent power.
-pub const Z_POWER: f64 = 0.8416;
-/// The two-sided normal threshold of one band at the false-alarm limit: the joint
-/// threshold over many bands is never below it, also when no resample varies.
-pub const ONE_BAND: f64 = 2.1701;
+
+/// The two-sided normal threshold of one band at the false-alarm limit, about 2.1701: the
+/// joint threshold over many bands is never below it, also when no resample varies.
+pub fn one_band() -> f64 {
+    pass_rule::special::norm_quantile(1.0 - FALSE_ALARM / 2.0)
+}
 /// Mixed into the run seed for the resampling stream, so it is apart from every match's.
 const STREAM_LABEL: u64 = 0x6d61_785f_745f_6273;
 
@@ -56,6 +52,10 @@ pub enum Word {
     Fail,
     #[serde(rename = "not sure")]
     NotSure,
+    /// A rare band in a run whose kind judges no rare band: neither pass nor fail, and never
+    /// part of the joint word.
+    #[serde(rename = "not judged")]
+    NotJudged,
 }
 
 impl Word {
@@ -64,7 +64,19 @@ impl Word {
             Word::Pass => "pass",
             Word::Fail => "fail",
             Word::NotSure => "not sure",
+            Word::NotJudged => "not judged",
         }
+    }
+}
+
+/// Marks each row whose band `skip` names as not judged in this run's kind: its word is
+/// [`Word::NotJudged`], its note says why, and it is left out of the joint word.
+pub fn mark_not_judged(rows: &mut [VerdictRow], skip: impl Fn(&str) -> bool) {
+    for r in rows.iter_mut().filter(|r| skip(&r.band)) {
+        r.word = Word::NotJudged;
+        r.report_only = Some(super::kinds::NOT_JUDGED.to_string());
+        r.note = Some(super::kinds::NOT_JUDGED.to_string());
+        r.accepted = None;
     }
 }
 
@@ -89,22 +101,12 @@ pub struct VerdictRow {
     /// A change run: the bootstrap standard error of the change.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub se: Option<f64>,
+    /// The band's noticeable error: the smallest change a player would notice.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub smallest_shift: Option<f64>,
-    /// A change run: the band can see its smallest shift with 80 percent power.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub power: Option<bool>,
-    /// A band without power: about how many matches per suite (per pairing, per arm) would
-    /// give it power.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub needed: Option<u32>,
     /// A change run: how far the changed engine's value is outside its range, when it is.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub outside_by: Option<f64>,
-    /// A change run: the band was outside its range beyond its noise at the pilot, so it set
-    /// no power target.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub no_target: Option<bool>,
     /// The band's real value, read in place from the real-data folder; absent when it has
     /// none here. It never changes the word.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -142,6 +144,20 @@ pub struct VerdictRow {
     /// accepted, not shown equivalent, and its word stays not sure.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accepted: Option<bool>,
+    /// A version 6 band: its word against real football by the pass rule, with the
+    /// interval and the margin that set it. The row's word is this word.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pass_rule: Option<RuleWord>,
+    /// A change or pair run: the band's word against the old engine (better, worse,
+    /// equivalent or not sure). It says what the change moved and never decides the run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub old_word: Option<OldWord>,
+    /// Why the band has no word against the old engine, or why the word is not sure.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub old_reason: Option<String>,
+    /// A significant move against the old engine: up or down.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub moved: Option<Moved>,
 }
 
 impl VerdictRow {
@@ -149,13 +165,13 @@ impl VerdictRow {
     /// distance outside; a row judged on its range alone when it has a value and that value
     /// lies in the range, a not-sure word near an edge included.
     pub fn inside(&self) -> bool {
-        if self.power.is_some() {
+        if self.judged == Some("paired") {
             return self.outside_by.is_none();
         }
         match self.word {
             Word::Pass => true,
             Word::Fail => false,
-            Word::NotSure => {
+            Word::NotSure | Word::NotJudged => {
                 let valueless = self
                     .note
                     .as_deref()
@@ -223,6 +239,30 @@ pub struct Joint {
     /// Why a fail comes from outside the bands: panics, dark paths, rule violations.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub guards: Vec<String>,
+    /// Why the joint word is not sure although no band says so: too many pairs dropped.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+/// The share of planned pairs a run may drop and still be judged on the pairs it kept.
+pub const DROPPED_LIMIT: f64 = 0.01;
+/// The reason of a joint word that more dropped pairs than [`DROPPED_LIMIT`] made not sure.
+pub const UNDER_COUNT: &str = "pairs under the fixed count";
+
+/// The joint word of a run that dropped `dropped` of `planned` pairs: a pass of a run that
+/// dropped more than [`DROPPED_LIMIT`] of its pairs is not sure, with [`UNDER_COUNT`] as its
+/// reason; a fail stays a fail. At or under the limit the run is judged on its kept pairs.
+pub fn under_count(joint: &mut Joint, planned: u32, dropped: u32) {
+    if planned > 0 && f64::from(dropped) > DROPPED_LIMIT * f64::from(planned) {
+        if joint.word == Word::Pass {
+            joint.word = Word::NotSure;
+        }
+        if joint.word == Word::NotSure {
+            joint.reason = Some(format!(
+                "{UNDER_COUNT}: {dropped} of {planned} planned pairs dropped"
+            ));
+        }
+    }
 }
 
 /// The note of a row whose band reads measures the run's matches do not carry.
@@ -246,10 +286,7 @@ fn plain_row(c: &BandCheck, word: Word) -> VerdictRow {
         diff: None,
         se: None,
         smallest_shift: None,
-        power: None,
-        needed: None,
         outside_by: None,
-        no_target: None,
         real: None,
         distance: None,
         upper: c.dist.as_ref().map(|d| round_to(d.upper, 5)),
@@ -259,6 +296,10 @@ fn plain_row(c: &BandCheck, word: Word) -> VerdictRow {
         judged: None,
         note: None,
         accepted: None,
+        pass_rule: c.rule.clone(),
+        old_word: None,
+        old_reason: None,
+        moved: None,
     }
 }
 
@@ -281,44 +322,36 @@ pub fn range_only(checks: &[BandCheck]) -> Vec<VerdictRow> {
         .filter(|c| c.band != "wall_ms")
         .map(|c| {
             let word = match (c.unjudged, c.pass) {
-                _ if c.whole => range_word(c),
+                _ if c.whole || c.rule.is_some() => range_word(c),
                 (true, _) => Word::NotSure,
                 (false, true) => Word::Pass,
                 (false, false) => Word::Fail,
             };
             let mut r = plain_row(c, word);
-            r.note = own_note(c).or_else(|| c.dist.as_ref().map(|d| d.note.clone()));
+            r.note = match &c.rule {
+                Some(rule) => Some(rule.note()),
+                None => own_note(c).or_else(|| c.dist.as_ref().map(|d| d.note.clone())),
+            };
             r
         })
         .collect()
 }
 
-/// The word of a row judged on its range alone, with its own error: fail outside the range;
-/// pass inside with the nearest edge at least [`ONE_BAND`] errors away (the bottom of a
-/// floor band, which starts at 0, is no edge); not sure otherwise, as a band with no power
-/// never passes. A row with no error passes inside; a row with no value is not sure. A
-/// whole-distribution row takes the word of its bounds and noise floor.
+/// The word of a row judged without an old engine: the pass rule's word, from the band's
+/// interval against its margin. A row the pass rule did not judge is not sure, never a
+/// pass: every band of the band file has the rule's fields, so no fixed range decides.
 pub fn range_word(c: &BandCheck) -> Word {
-    if c.unjudged || c.why_none.is_some() {
-        return Word::NotSure;
-    }
-    if let Some(d) = &c.dist {
-        return d.word;
-    }
-    if !c.pass {
-        return Word::Fail;
-    }
-    let range = super::bands::Band { lo: c.lo, hi: c.hi };
-    let low = if range.is_floor() {
-        f64::INFINITY
-    } else {
-        c.value - c.lo
-    };
-    let margin = low.min(c.hi - c.value);
-    if c.se == 0.0 || margin >= ONE_BAND * c.se {
-        Word::Pass
-    } else {
-        Word::NotSure
+    c.rule
+        .as_ref()
+        .map_or(Word::NotSure, |rule| rule_word(rule.word))
+}
+
+/// The pass rule's word as a verdict word.
+pub fn rule_word(w: pass_rule::rule::Word) -> Word {
+    match w {
+        pass_rule::rule::Word::Pass => Word::Pass,
+        pass_rule::rule::Word::NotSure => Word::NotSure,
+        pass_rule::rule::Word::Fail => Word::Fail,
     }
 }
 
@@ -333,10 +366,16 @@ pub fn range_rows(checks: &[BandCheck], note: Option<&str>) -> Vec<VerdictRow> {
             r.se = Some(c.se);
             r.judged = Some("range");
             let bounds = c.dist.as_ref().map(|d| d.note.as_str());
-            r.note = own_note(c).or_else(|| match (note, bounds) {
-                (Some(n), Some(b)) => Some(format!("{n}; {b}")),
-                (n, b) => n.or(b).map(str::to_string),
-            });
+            r.note = match &c.rule {
+                Some(rule) => Some(match note {
+                    Some(n) => format!("{n}; {}", rule.note()),
+                    None => rule.note(),
+                }),
+                None => own_note(c).or_else(|| match (note, bounds) {
+                    (Some(n), Some(b)) => Some(format!("{n}; {b}")),
+                    (n, b) => n.or(b).map(str::to_string),
+                }),
+            };
             r
         })
         .collect()
@@ -354,18 +393,9 @@ pub struct PairedRow {
     /// Per-match sums of the changed and the old engine, one entry per pair.
     pub changed: [Vec<f64>; 4],
     pub old: [Vec<f64>; 4],
-    /// The changed engine's value, rounded as its band check shows it, and its range check.
+    /// The changed engine's value, rounded as its band check shows it.
     pub value: Option<f64>,
     pub base_value: Option<f64>,
-    pub in_range: bool,
-    /// Either engine's value varies from match to match: a band whose event never happened
-    /// in either arm has nothing to measure a shift by.
-    pub spread: bool,
-    /// The error of the change if the two engines' matches were apart: the root of the sum
-    /// of each engine's squared error. Power is judged on at least this.
-    pub apart_se: f64,
-    /// The changed engine's own sampling error of the band's value.
-    pub value_se: f64,
     /// How far the changed engine's unrounded value is outside its range; 0 when its range
     /// check holds or it has no value.
     pub outside: f64,
@@ -376,22 +406,18 @@ pub struct PairedRow {
     pub dist: Option<Box<PairedHist>>,
 }
 
-/// The pairs of one suite: each pair's stratum, and the matches per suite unit (per
-/// pairing, per arm) the run played.
+/// The pairs of one suite: each pair's stratum (its formation pairing or red-card arm).
 #[derive(Debug, Clone)]
 pub struct SuiteSet {
-    pub suite: Suite,
     pub strata: Vec<u32>,
-    pub per_unit: u32,
 }
 
 /// The paired rows of a change run: for every suite both builders planned, the fixtures
 /// both played, joined on key. `keys` give each builder's matches' fixture keys, suite by
-/// suite, in the order the builder holds them; `per_unit` the matches per suite unit.
+/// suite, in the order the builder holds them.
 pub fn paired(
     changed: (&RunBuilder, &BTreeMap<Suite, Vec<u64>>),
     old: (&RunBuilder, &BTreeMap<Suite, Vec<u64>>),
-    per_unit: &BTreeMap<Suite, u32>,
 ) -> (Vec<SuiteSet>, Vec<PairedRow>) {
     let (cb, ck) = changed;
     let (ob, ok) = old;
@@ -421,11 +447,7 @@ pub fn paired(
             .map(|o| o.pairing.or(o.arm).map_or(0, |v| v as u32 + 1))
             .collect();
         let set = sets.len();
-        sets.push(SuiteSet {
-            suite,
-            strata,
-            per_unit: per_unit.get(&suite).copied().unwrap_or(0),
-        });
+        sets.push(SuiteSet { strata });
         for spec in specs.iter().filter(|s| s.suite == suite) {
             if spec.def.is_distribution() {
                 rows.push(paired_distribution(cb, spec, (&c_sub, &o_sub), set));
@@ -435,7 +457,7 @@ pub fn paired(
             let to = measures::terms(spec.def, &o_sub, spec.scope);
             let places = measures::places(&spec.def.measure);
             let value = tc.value().map(|v| round_to(v, places));
-            let in_range = measures::passes(spec.def, value.unwrap_or(0.0), &tc);
+            let in_range = spec.def.range().contains(value.unwrap_or(0.0));
             let outside = match tc.value() {
                 Some(v) if !in_range => (spec.def.lo - v).max(v - spec.def.hi).max(0.0),
                 _ => 0.0,
@@ -447,15 +469,11 @@ pub fn paired(
                 lo: spec.def.lo,
                 hi: spec.def.hi,
                 shift: spec.def.smallest_shift,
-                spread: tc.se() > 0.0 || to.se() > 0.0,
-                apart_se: tc.se().hypot(to.se()),
-                value_se: tc.se(),
                 outside,
                 changed: tc.per_match(),
                 old: to.per_match(),
                 value,
                 base_value: to.value().map(|v| round_to(v, places)),
-                in_range,
                 set,
                 dist: None,
             });
@@ -509,10 +527,6 @@ fn paired_distribution(
         old: zeros(),
         value,
         base_value: value_of(&oc),
-        in_range,
-        spread: hist.observed().is_some(),
-        apart_se: cc.se.hypot(oc.se),
-        value_se: cc.se,
         outside: match value {
             Some(v) if !in_range => (v - def.hi).max(def.lo - v).max(0.0),
             _ => 0.0,
@@ -559,7 +573,8 @@ fn change(
     let value = |s: [f64; 4]| (s[1] > 0.0 && s[2] > 0.0).then(|| s[0] / s[1] * (s[3] / s[2]));
     let (vc, vo) = (value(sc)?, value(so)?);
     let part = |t: &[Vec<f64>; 4], s: [f64; 4], v: f64, i: usize| {
-        let term = |k: usize| if s[k] > 0.0 { t[k][i] / s[k] } else { 0.0 };
+        // A difference band's numerator sum can be negative: only a zero sum has no term.
+        let term = |k: usize| if s[k] != 0.0 { t[k][i] / s[k] } else { 0.0 };
         v * (term(0) - term(1) + term(3) - term(2))
     };
     let mut var = 0.0;
@@ -681,7 +696,7 @@ pub fn bootstrap(
         let k = ((resamples as f64 + 1.0) * (1.0 - FALSE_ALARM)).ceil() as usize;
         stats[k.clamp(1, stats.len()) - 1]
     }
-    .max(ONE_BAND);
+    .max(one_band());
     let found = observed
         .into_iter()
         .zip(rows)
@@ -707,66 +722,21 @@ pub(crate) fn significant(diff: f64, se: f64, c: f64) -> bool {
     }
 }
 
-/// Matches per suite unit that would give a band of error `se` at `per_unit` matches power
-/// to see `shift`: the error falls with the square root of the matches.
-pub fn needed(per_unit: u32, se: f64, shift: f64, c: f64) -> u32 {
-    let scale = ((c + Z_POWER) * se / shift).powi(2);
-    let n = (f64::from(per_unit.max(1)) * scale).ceil();
-    if n >= f64::from(u32::MAX) {
-        u32::MAX
-    } else {
-        n as u32
-    }
-}
-
-/// `true` when a row is outside its range by more than its noise: its range check fails, and
-/// its value is further from the range than `critical` times its own error. Such a band
-/// fails while it stays outside, so it sets no power target. A row with no error, or one
-/// whose value fails a special range rule while numerically inside, still sets one.
-pub fn far_outside(r: &PairedRow, critical: f64) -> bool {
-    !r.in_range && r.value_se > 0.0 && r.outside > critical * r.value_se
-}
-
-/// A row's name in a suite's no-target list: the band, or `band/label` for a row of one
-/// pairing or one arm.
-pub fn target_label(band: &str, pairing: Option<&str>) -> String {
-    pairing.map_or_else(|| band.to_string(), |p| format!("{band}/{p}"))
-}
-
-/// The words of a change run's rows and its joint word. `guards` name failures outside the
-/// bands (panics, dark paths, violations); any one fails the run. `no_target` holds, by suite
-/// code, the rows that set no power target at the pilot ([`target_label`]): it changes no
-/// word, only the marks.
+/// The rows of a change run with their change columns, and its joint word. Each row's word
+/// is not sure here: [`set_rule_words`] sets its word against real football, and
+/// [`set_old_words`] its word against the old engine. `guards` name failures outside the
+/// bands (panics, dark paths, violations); any one fails the run.
 pub fn judge(
     sets: &[SuiteSet],
     rows: &[PairedRow],
     found: &[Found],
     critical: f64,
     guards: Vec<String>,
-    no_target: &BTreeMap<String, Vec<String>>,
 ) -> (Vec<VerdictRow>, Joint) {
     let mut out = Vec::with_capacity(rows.len());
     for (r, f) in rows.iter().zip(found) {
-        let per_unit = sets[r.set].per_unit;
-        let enough = sets[r.set].strata.len() >= 2;
-        let power_se = f.se.max(r.apart_se);
-        let power =
-            enough && r.spread && f.diff.is_some() && (critical + Z_POWER) * power_se <= r.shift;
-        // A move fails a band when it is beyond the threshold and at least the smallest
-        // shift that matters: a smaller move, however certain, is not a change of the band.
-        let moved = f
-            .diff
-            .is_some_and(|d| significant(d, f.se, critical) && d.abs() >= r.shift);
-        let word = match (r.value, f.diff) {
-            (Some(_), _) if !r.in_range || moved => Word::Fail,
-            (Some(_), Some(_)) if power => Word::Pass,
-            _ => Word::NotSure,
-        };
-        let need = (!power && r.spread && power_se > 0.0)
-            .then(|| needed(per_unit, power_se, r.shift, critical));
+        let word = Word::NotSure;
         let suite = r.suite.code();
-        let label = target_label(&r.band, r.pairing.as_deref());
-        let exempt = no_target.get(suite).is_some_and(|l| l.contains(&label));
         out.push(VerdictRow {
             band: r.band.clone(),
             suite: suite.to_string(),
@@ -779,10 +749,7 @@ pub fn judge(
             diff: f.diff.map(|d| round_to(d, 5)),
             se: Some(round_to(f.se, 5)),
             smallest_shift: Some(r.shift),
-            power: Some(power),
-            needed: need,
             outside_by: (r.outside > 0.0).then(|| round_to(r.outside, 5)),
-            no_target: exempt.then_some(true),
             real: None,
             distance: None,
             upper: r
@@ -800,6 +767,10 @@ pub fn judge(
             judged: Some("paired"),
             note: None,
             accepted: None,
+            pass_rule: None,
+            old_word: None,
+            old_reason: None,
+            moved: None,
         });
     }
     let word = joint_word(&out, &guards);
@@ -811,67 +782,77 @@ pub fn judge(
         false_alarm: FALSE_ALARM,
         pairs: u32::try_from(pairs).unwrap_or(u32::MAX),
         guards,
+        reason: None,
     };
     (out, joint)
 }
 
-/// One suite's power target and the band that set it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SuiteTarget {
-    /// Matches per suite unit: at least the pilot, at most the cap.
-    pub matches: u32,
-    /// The band that needs the most matches, when it needs more than the pilot; `None`
-    /// when the pilot already gives every band power.
-    pub driver: Option<String>,
-    /// The rows outside their range beyond their noise ([`far_outside`]), which set no
-    /// target, by [`target_label`].
-    pub no_target: Vec<String>,
-}
-
-/// The matches per suite unit each suite needs for every band with a spread to have power,
-/// from a judged pilot: at least `pilot`, at most `cap`, with the band that set it. The
-/// target depends on the spread alone, never on the change seen. A row outside its range
-/// beyond its noise sets no target and is listed instead; a suite whose every row is so
-/// keeps the pilot.
-pub fn targets(
-    sets: &[SuiteSet],
-    rows: &[PairedRow],
+/// Sets each paired row's word against the old engine ([`pass_rule::change::old_word`]):
+/// the change and its error from the bootstrap, the joint threshold `critical`, the band's
+/// noticeable error (its smallest shift) and the pass rule's `alpha`. Better means the
+/// changed engine sits closer to the band's target, which `target` gives by band (the real
+/// value read here, or the design value); a whole-distribution band is closer when its
+/// distance from the real sample is smaller. The word never changes the row's word.
+pub fn set_old_words(
+    rows: &mut [VerdictRow],
+    paired: &[PairedRow],
     found: &[Found],
     critical: f64,
-    pilot: u32,
-    cap: u32,
-) -> BTreeMap<Suite, SuiteTarget> {
-    let start = || SuiteTarget {
-        matches: pilot.min(cap),
-        driver: None,
-        no_target: Vec::new(),
-    };
-    let mut out: BTreeMap<Suite, SuiteTarget> = sets.iter().map(|s| (s.suite, start())).collect();
-    // The largest need of each suite so far, before the cap: the band with the largest need
-    // is the driver even when several reach the cap.
-    let mut most: BTreeMap<Suite, u32> = BTreeMap::new();
-    for (r, f) in rows.iter().zip(found) {
-        if far_outside(r, critical) {
-            let t = out.entry(r.suite).or_insert_with(start);
-            t.no_target
-                .push(target_label(&r.band, r.pairing.as_deref()));
+    alpha: f64,
+    target: &dyn Fn(&str) -> Option<f64>,
+) {
+    for ((r, p), f) in rows.iter_mut().zip(paired).zip(found) {
+        let Some(diff) = f.diff else {
+            r.old_reason = Some("no value on one of the engines".into());
             continue;
-        }
-        let power_se = f.se.max(r.apart_se);
-        if !r.spread || power_se <= 0.0 {
-            continue;
-        }
-        let need = needed(pilot, power_se, r.shift, critical);
-        let n = need.clamp(pilot, cap.max(pilot));
-        let t = out.entry(r.suite).or_insert_with(start);
-        t.matches = t.matches.max(n.min(cap));
-        let top = most.entry(r.suite).or_insert(pilot);
-        if need > *top {
-            *top = need;
-            t.driver = Some(r.band.clone());
+        };
+        let (changed, old) = (p.value, p.base_value);
+        let toward = match (&p.dist, changed, old) {
+            (Some(_), Some(c), Some(o)) => pass_rule::change::toward(c, o, Some(0.0)),
+            (None, Some(c), Some(o)) => pass_rule::change::toward(c, o, target(&p.band)),
+            _ => None,
+        };
+        let (word, moved) =
+            pass_rule::change::old_word(diff, f.se, critical, p.shift, alpha, toward);
+        // A distribution's change is a distance, never negative: its direction is whether
+        // the changed engine sits farther from the real sample than the old one.
+        let moved = match (&p.dist, moved, changed, old) {
+            (Some(_), Some(_), Some(c), Some(o)) => {
+                Some(if c > o { Moved::Up } else { Moved::Down })
+            }
+            (_, m, _, _) => m,
+        };
+        r.old_word = Some(word);
+        r.moved = moved;
+        r.old_reason = match word {
+            OldWord::NotSure if moved.is_some() => {
+                Some("moved; no target here to say better or worse".into())
+            }
+            OldWord::NotSure => {
+                Some("not shown inside the noticeable error, and no move seen".into())
+            }
+            _ => None,
+        };
+    }
+}
+
+/// Sets the word of every row of a version 6 band to its word against real football by the
+/// pass rule, from the band's check on the changed engine; the paired test still fills the
+/// change columns, and no longer sets the word.
+pub fn set_rule_words(rows: &mut [VerdictRow], checks: &[BandCheck]) {
+    for r in rows.iter_mut() {
+        let found = checks
+            .iter()
+            .find(|c| c.band == r.band && c.suite == r.suite && c.pairing == r.pairing);
+        if let Some(rule) = found.and_then(|c| c.rule.as_ref()) {
+            r.word = rule_word(rule.word);
+            r.note = Some(match r.note.take() {
+                Some(n) => format!("{n}; {}", rule.note()),
+                None => rule.note(),
+            });
+            r.pass_rule = Some(rule.clone());
         }
     }
-    out
 }
 
 /// The console table of a run's verdicts, and its joint word when it has one.
@@ -889,6 +870,9 @@ pub fn render_table(rows: &[VerdictRow], joint: Option<&Joint>) -> String {
         ));
         for g in &j.guards {
             out.push_str(&format!("  fails: {g}\n"));
+        }
+        if let Some(r) = &j.reason {
+            out.push_str(&format!("  not sure: {r}\n"));
         }
     }
     out
@@ -917,7 +901,7 @@ fn table(rows: &[VerdictRow], change: bool) -> String {
     let mut out = String::new();
     if change {
         out.push_str(&format!(
-            "{:<24} {:<10} {:<14} {:>10} {:>10} {:>10} {:>9} {:>6} {:>19} {:>10}  {}\n",
+            "{:<24} {:<10} {:<14} {:>10} {:>10} {:>10} {:>9} {:>10} {:>19} {:>10}  {}\n",
             "band",
             "suite",
             "pairing",
@@ -925,7 +909,7 @@ fn table(rows: &[VerdictRow], change: bool) -> String {
             "old",
             "change",
             "se",
-            "power",
+            "old engine",
             "real",
             "distance",
             "verdict"
@@ -938,16 +922,7 @@ fn table(rows: &[VerdictRow], change: bool) -> String {
     }
     for r in rows {
         let pairing = r.pairing.as_deref().unwrap_or("-");
-        let mut need = r
-            .needed
-            .map(|n| format!(" (about {n} matches per suite would give it power)"))
-            .unwrap_or_default();
-        if r.no_target == Some(true) {
-            need.push_str(&format!(
-                " (outside its range by {}, beyond its noise at the pilot: set no power target)",
-                r.outside_by.unwrap_or(0.0)
-            ));
-        }
+        let mut need = String::new();
         if let Some(why) = &r.report_only {
             need.push_str(&format!(" (report only: {why})"));
         }
@@ -967,7 +942,7 @@ fn table(rows: &[VerdictRow], change: bool) -> String {
         if change {
             let opt = |v: Option<f64>| v.map_or_else(|| "-".to_string(), |v| format!("{v}"));
             out.push_str(&format!(
-                "{:<24} {:<10} {:<14} {:>10} {:>10} {:>10} {:>9} {:>6} {:>19} {:>10}  {}{need}\n",
+                "{:<24} {:<10} {:<14} {:>10} {:>10} {:>10} {:>9} {:>10} {:>19} {:>10}  {}{need}\n",
                 r.band,
                 r.suite,
                 pairing,
@@ -975,7 +950,7 @@ fn table(rows: &[VerdictRow], change: bool) -> String {
                 opt(r.base_value),
                 opt(r.diff),
                 opt(r.se),
-                if r.power == Some(true) { "yes" } else { "no" },
+                r.old_word.map_or("-", OldWord::as_str),
                 real,
                 distance,
                 r.word.code()
@@ -987,7 +962,7 @@ fn table(rows: &[VerdictRow], change: bool) -> String {
                 r.suite,
                 pairing,
                 r.value,
-                format!("{} to {}", r.lo, r.hi),
+                range_cell(r.lo, r.hi),
                 real,
                 distance,
                 r.word.code()
@@ -997,15 +972,61 @@ fn table(rows: &[VerdictRow], change: bool) -> String {
     out
 }
 
+/// The range column of a plain table: a band judged by its margin around a target has no
+/// fixed range, and an open end is left out rather than printed as the largest number.
+fn range_cell(lo: f64, hi: f64) -> String {
+    let bounded = |v: f64| v.is_finite() && v.abs() < f64::MAX;
+    match (bounded(lo), bounded(hi)) {
+        (true, true) => format!("{lo} to {hi}"),
+        (true, false) => format!("from {lo}"),
+        (false, true) => format!("up to {hi}"),
+        (false, false) => "-".to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn more_than_one_percent_of_pairs_dropped_is_never_a_pass() {
+        let joint = |word| Joint {
+            word,
+            critical: 2.5,
+            resamples: 10,
+            false_alarm: FALSE_ALARM,
+            pairs: 0,
+            guards: Vec::new(),
+            reason: None,
+        };
+        // At the limit the run is judged on its kept pairs.
+        let mut j = joint(Word::Pass);
+        under_count(&mut j, 1000, 10);
+        assert_eq!((j.word, j.reason.as_deref()), (Word::Pass, None));
+        let mut j = joint(Word::Pass);
+        under_count(&mut j, 1000, 11);
+        assert_eq!(j.word, Word::NotSure);
+        assert_eq!(
+            j.reason.as_deref(),
+            Some("pairs under the fixed count: 11 of 1000 planned pairs dropped")
+        );
+        let mut j = joint(Word::Fail);
+        under_count(&mut j, 1000, 500);
+        assert_eq!((j.word, j.reason), (Word::Fail, None));
+    }
+
+    #[test]
+    fn an_open_range_prints_no_largest_number() {
+        assert_eq!(range_cell(1.0, 2.5), "1 to 2.5");
+        assert_eq!(range_cell(-f64::MAX, f64::MAX), "-");
+        assert_eq!(range_cell(0.0, f64::MAX), "from 0");
+        assert_eq!(range_cell(f64::NEG_INFINITY, 3.0), "up to 3");
+    }
 
     /// A paired row from per-match values: a mean (`b` = 1).
     fn row(set: usize, changed: Vec<f64>, old: Vec<f64>, shift: f64) -> PairedRow {
         let n = changed.len();
         let mean = |v: &[f64]| v.iter().sum::<f64>() / v.len() as f64;
-        let spread = |v: &[f64]| v.iter().any(|x| *x != v[0]);
         PairedRow {
             band: format!("band{set}"),
             suite: Suite::Equal,
@@ -1015,10 +1036,6 @@ mod tests {
             shift,
             value: Some(mean(&changed)),
             base_value: Some(mean(&old)),
-            in_range: true,
-            spread: spread(&changed) || spread(&old),
-            apart_se: 0.0,
-            value_se: 0.0,
             outside: 0.0,
             changed: [changed, vec![1.0; n], vec![1.0; n], vec![1.0; n]],
             old: [old, vec![1.0; n], vec![1.0; n], vec![1.0; n]],
@@ -1052,10 +1069,6 @@ mod tests {
             shift,
             value: Some(0.0),
             base_value: Some(0.0),
-            in_range: true,
-            spread: true,
-            apart_se: 0.0,
-            value_se: 0.0,
             outside: 0.0,
             changed: std::array::from_fn(|_| vec![0.0; n]),
             old: std::array::from_fn(|_| vec![0.0; n]),
@@ -1073,11 +1086,23 @@ mod tests {
     }
 
     fn set(n: usize) -> SuiteSet {
-        SuiteSet {
-            suite: Suite::Equal,
-            strata: vec![0; n],
-            per_unit: u32::try_from(n).unwrap(),
-        }
+        SuiteSet { strata: vec![0; n] }
+    }
+
+    /// A band whose values sum below zero, as a home-minus-away difference can, has the
+    /// same paired error as the same values moved above zero: its error is never zero.
+    #[test]
+    fn a_negative_sum_keeps_its_paired_error() {
+        let changed = vec![-1.0, -3.0, 0.0, -2.0, -4.0, -1.0];
+        let old = vec![-2.0, -1.0, -1.0, -2.0, -2.0, 0.0];
+        let up = |v: &[f64]| v.iter().map(|x| x + 10.0).collect::<Vec<f64>>();
+        let strata = BTreeMap::from([(0u32, (0..6).collect::<Vec<usize>>())]);
+        let ones = vec![1u32; 6];
+        let (d, se) = change(&row(0, changed.clone(), old.clone(), 1.0), &ones, &strata).unwrap();
+        let (d_up, se_up) = change(&row(0, up(&changed), up(&old), 1.0), &ones, &strata).unwrap();
+        assert!(se > 0.0, "{se}");
+        assert!((d - d_up).abs() < 1e-12, "{d} {d_up}");
+        assert!((se - se_up).abs() < 1e-12, "{se} {se_up}");
     }
 
     /// A deterministic normal draw (Box-Muller) from the engine's stream.
@@ -1099,243 +1124,6 @@ mod tests {
         assert_eq!((found, c), (again, c2));
         let (_, c3) = bootstrap(&sets, &rows, 8, 199);
         assert_ne!(c, c3, "another seed resamples differently");
-    }
-
-    #[test]
-    fn the_word_rules_on_hand_made_inputs() {
-        let sets = [set(10)];
-        let mk = |in_range, spread| PairedRow {
-            in_range,
-            spread,
-            ..row(0, vec![1.0; 10], vec![1.0; 10], 0.5)
-        };
-        let f = |diff, se| Found {
-            diff: Some(diff),
-            se,
-        };
-        let words = |r: PairedRow, found: Found| {
-            judge(&sets, &[r], &[found], 2.0, Vec::new(), &BTreeMap::new()).0[0].word
-        };
-        // Inside, no move, power: (2 + 0.8416) * 0.1 <= 0.5.
-        assert_eq!(words(mk(true, true), f(0.05, 0.1)), Word::Pass);
-        // The same without power: never pass.
-        assert_eq!(words(mk(true, true), f(0.05, 0.2)), Word::NotSure);
-        // A move beyond the threshold and at least the smallest shift, or a value outside
-        // the range: fail.
-        assert_eq!(words(mk(true, true), f(0.6, 0.1)), Word::Fail);
-        assert_eq!(words(mk(true, true), f(-0.5, 0.1)), Word::Fail);
-        assert_eq!(words(mk(false, true), f(0.0, 0.1)), Word::Fail);
-        // A certain move smaller than the smallest shift is no change of the band.
-        assert_eq!(words(mk(true, true), f(0.25, 0.1)), Word::Pass);
-        // Zero events in both engines: no spread, so not sure.
-        assert_eq!(words(mk(true, false), f(0.0, 0.0)), Word::NotSure);
-        // No value at all: not sure.
-        let (rows, joint) = judge(
-            &sets,
-            &[mk(true, true)],
-            &[Found {
-                diff: None,
-                se: 0.0,
-            }],
-            2.0,
-            Vec::new(),
-            &BTreeMap::new(),
-        );
-        assert_eq!(rows[0].word, Word::NotSure);
-        assert_eq!(joint.word, Word::NotSure);
-        // A guard fails the joint verdict even when every band passes.
-        let (_, joint) = judge(
-            &sets,
-            &[mk(true, true)],
-            &[f(0.0, 0.1)],
-            2.0,
-            vec!["1 match panicked".into()],
-            &BTreeMap::new(),
-        );
-        assert_eq!(joint.word, Word::Fail);
-        let (_, joint) = judge(
-            &sets,
-            &[mk(true, true)],
-            &[f(0.0, 0.1)],
-            2.0,
-            Vec::new(),
-            &BTreeMap::new(),
-        );
-        assert_eq!(joint.word, Word::Pass);
-    }
-
-    #[test]
-    fn the_power_formula_on_a_hand_case() {
-        // se 0.2 at 100 matches, shift 0.5, c 2: (2.8416 * 0.2 / 0.5)^2 = 1.29198... times 100.
-        assert_eq!(needed(100, 0.2, 0.5, 2.0), 130);
-        // Already powered: fewer than now.
-        assert!(needed(100, 0.05, 0.5, 2.0) < 100);
-        let sets = [set(100)];
-        let rows = [row(0, vec![1.0, 2.0], vec![1.0, 2.0], 0.5)];
-        let t = targets(
-            &sets,
-            &rows,
-            &[Found {
-                diff: Some(0.0),
-                se: 0.2,
-            }],
-            2.0,
-            100,
-            120,
-        );
-        assert_eq!(t[&Suite::Equal].matches, 120, "capped");
-        assert_eq!(t[&Suite::Equal].driver.as_deref(), Some("band0"));
-        let t = targets(
-            &sets,
-            &rows,
-            &[Found {
-                diff: Some(0.0),
-                se: 0.01,
-            }],
-            2.0,
-            100,
-            1000,
-        );
-        assert_eq!(t[&Suite::Equal].matches, 100, "never below the pilot");
-        assert_eq!(t[&Suite::Equal].driver, None, "the pilot holds: no driver");
-    }
-
-    #[test]
-    fn the_band_that_needs_the_most_matches_is_named_beside_the_target() {
-        let sets = [set(100)];
-        let mut tight = row(0, vec![1.0, 2.0], vec![1.0, 2.0], 0.1);
-        tight.band = "tight".into();
-        let mut loose = row(0, vec![1.0, 2.0], vec![1.0, 2.0], 0.5);
-        loose.band = "loose".into();
-        let f = Found {
-            diff: Some(0.0),
-            se: 0.2,
-        };
-        // Both reach the cap of 1000; the tight band needs more and is named.
-        for rows in [[loose.clone(), tight.clone()], [tight, loose]] {
-            let t = targets(&sets, &rows, &[f, f], 2.0, 100, 1000);
-            assert_eq!(t[&Suite::Equal].matches, 1000);
-            assert_eq!(t[&Suite::Equal].driver.as_deref(), Some("tight"));
-        }
-    }
-
-    /// A row outside its range by `outside`, with its own error `value_se`.
-    fn outside_row(band: &str, shift: f64, outside: f64, value_se: f64) -> PairedRow {
-        let mut r = row(0, vec![1.0, 2.0], vec![1.0, 2.0], shift);
-        r.band = band.into();
-        r.in_range = outside == 0.0;
-        r.outside = outside;
-        r.value_se = value_se;
-        r
-    }
-
-    #[test]
-    fn a_band_far_outside_its_range_sets_no_target_and_the_others_do() {
-        let sets = [set(100)];
-        let f = Found {
-            diff: Some(0.0),
-            se: 0.2,
-        };
-        // The far band needs the most (shift 0.01) but is 1.0 outside with error 0.1, beyond
-        // c (2) times it: it sets no target, and the other band sets the target and drives.
-        let far = outside_row("far", 0.01, 1.0, 0.1);
-        let other = outside_row("other", 0.5, 0.0, 0.1);
-        let t = targets(
-            &sets,
-            &[far.clone(), other.clone()],
-            &[f, f],
-            2.0,
-            100,
-            1000,
-        );
-        let eq = &t[&Suite::Equal];
-        assert_eq!(eq.matches, 130, "set by the other band alone");
-        assert_eq!(eq.driver.as_deref(), Some("other"));
-        assert_eq!(eq.no_target, vec!["far".to_string()]);
-        // Outside by less than c times its error (0.15 < 2 * 0.1): it still sets the target.
-        let near = outside_row("near", 0.01, 0.15, 0.1);
-        let t = targets(&sets, &[near, other.clone()], &[f, f], 2.0, 100, 1000);
-        assert_eq!(t[&Suite::Equal].matches, 1000);
-        assert_eq!(t[&Suite::Equal].driver.as_deref(), Some("near"));
-        assert!(t[&Suite::Equal].no_target.is_empty());
-        // Outside with no error of its own: still sets the target.
-        let blind = outside_row("blind", 0.01, 1.0, 0.0);
-        let t = targets(&sets, &[blind, other], &[f, f], 2.0, 100, 1000);
-        assert_eq!(t[&Suite::Equal].driver.as_deref(), Some("blind"));
-        assert!(t[&Suite::Equal].no_target.is_empty());
-        // A suite whose only row is far outside keeps the pilot, with no driver.
-        let t = targets(&sets, &[far], &[f], 2.0, 100, 1000);
-        assert_eq!(t[&Suite::Equal].matches, 100);
-        assert_eq!(t[&Suite::Equal].driver, None);
-        assert_eq!(t[&Suite::Equal].no_target, vec!["far".to_string()]);
-        // A row of one pairing or arm is listed as band/label.
-        let mut armed = outside_row("far", 0.01, 1.0, 0.1);
-        armed.pairing = Some("reduced".into());
-        let t = targets(&sets, &[armed], &[f], 2.0, 100, 1000);
-        assert_eq!(t[&Suite::Equal].no_target, vec!["far/reduced".to_string()]);
-    }
-
-    #[test]
-    fn a_no_target_band_is_judged_as_any_band_and_never_passes_without_power() {
-        let sets = [set(100)];
-        let no_target: BTreeMap<String, Vec<String>> =
-            [("equal".to_string(), vec!["far".to_string()])].into();
-        let far = outside_row("far", 0.01, 1.234_567, 0.1);
-        let (rows, joint) = judge(
-            &sets,
-            std::slice::from_ref(&far),
-            &[Found {
-                diff: Some(0.0),
-                se: 0.2,
-            }],
-            2.0,
-            Vec::new(),
-            &no_target,
-        );
-        assert_eq!(rows[0].word, Word::Fail, "outside its range: fail");
-        assert_eq!(rows[0].no_target, Some(true));
-        assert_eq!(rows[0].outside_by, Some(1.23457));
-        assert_eq!(joint.word, Word::Fail);
-        let table = render_table(&rows, Some(&joint));
-        assert!(
-            table.contains(
-                "outside its range by 1.23457, beyond its noise at the pilot: set no power target"
-            ),
-            "{table}"
-        );
-        // Listed but back inside its range and without power: not sure, never pass.
-        let inside = PairedRow {
-            in_range: true,
-            outside: 0.0,
-            ..far
-        };
-        let (rows, _) = judge(
-            &sets,
-            &[inside],
-            &[Found {
-                diff: Some(0.0),
-                se: 0.2,
-            }],
-            2.0,
-            Vec::new(),
-            &no_target,
-        );
-        assert_eq!(rows[0].word, Word::NotSure);
-        assert_eq!(rows[0].no_target, Some(true));
-        assert_eq!(rows[0].outside_by, None);
-        // A row not listed carries no mark.
-        let (rows, _) = judge(
-            &sets,
-            &[outside_row("other", 0.5, 0.0, 0.1)],
-            &[Found {
-                diff: Some(0.0),
-                se: 0.01,
-            }],
-            2.0,
-            Vec::new(),
-            &no_target,
-        );
-        assert_eq!((rows[0].no_target, rows[0].outside_by), (None, None));
     }
 
     /// An A/A comparison: both arms draw from the same correlated distribution on each
@@ -1393,7 +1181,7 @@ mod tests {
             };
             rows.push(dist_row(0, &draws(&a), &draws(&b), 0.5));
             let (found, c) = bootstrap(&sets, &rows, 1000 + u64::from(rep), resamples);
-            let (judged, _) = judge(&sets, &rows, &found, c, Vec::new(), &BTreeMap::new());
+            let (judged, _) = judge(&sets, &rows, &found, c, Vec::new());
             assert_eq!(judged.len(), 7, "every band on its own row");
             if found.iter().any(|f| significant(f.diff.unwrap(), f.se, c)) {
                 alarms += 1;
@@ -1436,12 +1224,12 @@ mod tests {
         assert!(rate <= FALSE_ALARM, "false-alarm rate {rate}");
     }
 
-    /// A whole distribution moved by twice its smallest shift fails the joint word of a
-    /// family of it and one unchanged scalar band; the coordinate draws no random number, so
-    /// the scalar band's change and error are the same with it or without it, and the
-    /// threshold never falls.
+    /// A whole distribution moved by twice its smallest shift is a move against the old
+    /// engine, and the unchanged scalar band beside it is equivalent; the coordinate draws no
+    /// random number, so the scalar band's change and error are the same with it or without
+    /// it, and the threshold never falls.
     #[test]
-    fn a_shifted_distribution_fails_the_joint_word_and_leaves_the_scalar_draws() {
+    fn a_shifted_distribution_moves_against_the_old_engine_and_leaves_the_scalar_draws() {
         let mut rng = EngineRng::from_seed(9);
         let n = 300;
         let base: Vec<Vec<f64>> = (0..n)
@@ -1461,10 +1249,12 @@ mod tests {
         let shifted = dist_row(0, &moved, &base, 0.5);
         let rows = [scalar.clone(), shifted];
         let (found, c) = bootstrap(&sets, &rows, 13, 499);
-        let (judged, joint) = judge(&sets, &rows, &found, c, Vec::new(), &BTreeMap::new());
+        let (mut judged, _) = judge(&sets, &rows, &found, c, Vec::new());
+        set_old_words(&mut judged, &rows, &found, c, 0.05, &|_| None);
         assert!(found[1].diff.unwrap() >= 2.0 * 0.5 - 0.15, "{:?}", found[1]);
-        assert_eq!(judged[1].word, Word::Fail, "{:?} c {c}", found[1]);
-        assert_eq!(joint.word, Word::Fail);
+        assert!(judged[1].moved.is_some(), "{:?} c {c}", found[1]);
+        assert_ne!(judged[1].old_word, Some(OldWord::Equivalent));
+        assert_eq!(judged[0].old_word, Some(OldWord::Equivalent));
         // The scalar row alone: the same change and error, and a threshold no higher.
         let (alone, c_alone) = bootstrap(&sets, std::slice::from_ref(&scalar), 13, 499);
         assert_eq!(alone[0], found[0]);
@@ -1528,8 +1318,7 @@ mod tests {
             ob.add(Suite::Equal, stats(*g, i != 2), None);
         }
         let keys: BTreeMap<Suite, Vec<u64>> = [(Suite::Equal, vec![10, 20, 30, 40])].into();
-        let per_unit: BTreeMap<Suite, u32> = [(Suite::Equal, 4)].into();
-        let (sets, rows) = paired((&cb, &keys), (&ob, &keys), &per_unit);
+        let (sets, rows) = paired((&cb, &keys), (&ob, &keys));
         assert_eq!(
             sets[0].strata.len(),
             2,
@@ -1550,38 +1339,8 @@ mod tests {
             .position(|r| r.band == "goals_per_match")
             .unwrap();
         assert_eq!(found[at].diff, Some(0.0), "the same fixtures on both sides");
-        let (_, joint) = judge(&sets, &rows, &found, 2.0, Vec::new(), &BTreeMap::new());
+        let (_, joint) = judge(&sets, &rows, &found, 2.0, Vec::new());
         assert_eq!(joint.pairs, 2);
-    }
-
-    #[test]
-    fn a_shift_beyond_the_smallest_is_seen_and_fails_the_joint_verdict() {
-        let mut rng = EngineRng::from_seed(5);
-        let n = 300;
-        let base: Vec<f64> = (0..n).map(|_| 5.0 + normal(&mut rng)).collect();
-        let noise: Vec<f64> = (0..n).map(|_| 0.3 * normal(&mut rng)).collect();
-        let changed: Vec<f64> = base.iter().zip(&noise).map(|(b, e)| b + 0.8 + e).collect();
-        let same: Vec<f64> = base.iter().zip(&noise).map(|(b, e)| b + e).collect();
-        let sets = [set(n)];
-        let rows = [row(0, changed, base.clone(), 0.5), row(0, same, base, 0.5)];
-        let (found, c) = bootstrap(&sets, &rows, 11, 499);
-        let (judged, joint) = judge(&sets, &rows, &found, c, Vec::new(), &BTreeMap::new());
-        assert_eq!(judged[0].word, Word::Fail);
-        assert_eq!(judged[1].word, Word::Pass);
-        assert_eq!(joint.word, Word::Fail);
-        // The same rows when the engines' matches would be apart: an error of 0.2 each
-        // leaves no power at (c + z) * 0.28 > 0.5, so the unchanged band is not sure.
-        let apart: Vec<PairedRow> = rows
-            .iter()
-            .map(|r| PairedRow {
-                apart_se: 0.2f64.hypot(0.2),
-                ..r.clone()
-            })
-            .collect();
-        let (judged, _) = judge(&sets, &apart, &found, c, Vec::new(), &BTreeMap::new());
-        assert_eq!(judged[0].word, Word::Fail, "a move is still a move");
-        assert_eq!(judged[1].word, Word::NotSure);
-        assert!(judged[1].needed.unwrap() > 300);
     }
 
     /// A band check of `value` in 1 to 3 with its own error `se`.
@@ -1600,28 +1359,26 @@ mod tests {
             unjudged: false,
             whole: false,
             dist: None,
+            rule: None,
         }
     }
 
     #[test]
-    fn a_range_only_row_passes_only_clear_of_its_edges_by_its_noise() {
-        // ONE_BAND * 0.1 = 0.217: the nearest edge must be at least that far.
-        assert_eq!(range_word(&check(2.0, 0.1)), Word::Pass);
-        assert_eq!(range_word(&check(1.22, 0.1)), Word::Pass);
-        assert_eq!(range_word(&check(1.2, 0.1)), Word::NotSure);
-        assert_eq!(range_word(&check(2.9, 0.1)), Word::NotSure);
-        assert_eq!(range_word(&check(3.1, 0.1)), Word::Fail);
-        assert_eq!(range_word(&check(0.9, 0.0)), Word::Fail);
-        // No error at all: inside is a pass.
-        assert_eq!(range_word(&check(1.0, 0.0)), Word::Pass);
-        // A floor band has no bottom edge: 0 is clear of it.
-        let floor = BandCheck {
-            lo: 0.0,
-            hi: 0.016,
-            pass: true,
-            ..check(0.0, 0.004)
-        };
-        assert_eq!(range_word(&floor), Word::Pass);
+    fn a_row_takes_the_pass_rule_word_and_a_row_without_it_is_not_sure() {
+        // No fixed range decides: inside the range is not a pass without the rule's word.
+        assert_eq!(range_word(&check(2.0, 0.1)), Word::NotSure);
+        assert_eq!(range_word(&check(3.1, 0.1)), Word::NotSure);
+        for w in [
+            pass_rule::rule::Word::Pass,
+            pass_rule::rule::Word::NotSure,
+            pass_rule::rule::Word::Fail,
+        ] {
+            let judged = BandCheck {
+                rule: Some(rule(w)),
+                ..check(0.0, 0.1)
+            };
+            assert_eq!(range_word(&judged), rule_word(w));
+        }
         // No value, or no measures: not sure, with the reason as the note.
         let none = BandCheck {
             why_none: Some("no club has 34 matches in this run".into()),
@@ -1661,10 +1418,22 @@ mod tests {
             diff: Some(0.0),
             se: 0.1,
         }];
-        let (rows, joint) = judge(&sets, &[gating], &found, 2.0, Vec::new(), &BTreeMap::new());
-        assert_eq!(joint.word, Word::Pass);
+        let (mut rows, joint) = judge(&sets, &[gating], &found, 2.0, Vec::new());
+        rows[0].word = Word::Pass;
+        assert_eq!(joint_word(&rows, &joint.guards), Word::Pass);
         // Reported rows of any word leave the gating word as it is.
-        let mut reported = range_rows(&[check(2.0, 0.1), check(5.0, 0.1), check(1.1, 0.1)], None);
+        let ruled = |value: f64, w: pass_rule::rule::Word| BandCheck {
+            rule: Some(rule(w)),
+            ..check(value, 0.1)
+        };
+        let mut reported = range_rows(
+            &[
+                ruled(2.0, pass_rule::rule::Word::Pass),
+                ruled(5.0, pass_rule::rule::Word::Fail),
+                ruled(1.1, pass_rule::rule::Word::NotSure),
+            ],
+            None,
+        );
         assert_eq!(joint_word(&rows, &joint.guards), Word::Pass);
         reported[2].accepted = Some(true);
         let text = render_reported(&reported, true);
@@ -1700,5 +1469,146 @@ mod tests {
             ..check(2.0, 0.0)
         };
         assert!(!range_rows(&[none], None)[0].inside());
+    }
+
+    /// A pass-rule word of `word` with the interval -0.2 to 0.1 inside the margin 0.3.
+    fn rule(word: pass_rule::rule::Word) -> RuleWord {
+        RuleWord {
+            word,
+            lo: Some(-0.2),
+            hi: Some(0.1),
+            point: Some(-0.05),
+            margin: 0.3,
+            target: "real".into(),
+            cap: None,
+            exposure: 1000.0,
+            min_exposure: 100.0,
+            units: 3,
+            reason: None,
+        }
+    }
+
+    #[test]
+    fn a_version_6_band_takes_the_pass_rule_word_over_its_range() {
+        use pass_rule::rule::Word as Rule;
+        // Outside its range, yet inside its margin against real football: a pass.
+        let outside = BandCheck {
+            rule: Some(rule(Rule::Pass)),
+            ..check(3.5, 0.1)
+        };
+        assert_eq!(range_word(&outside), Word::Pass);
+        let rows = range_only(std::slice::from_ref(&outside));
+        assert_eq!(rows[0].word, Word::Pass);
+        assert_eq!(rows[0].pass_rule.as_ref().map(|r| r.word), Some(Rule::Pass));
+        assert!(
+            rows[0]
+                .note
+                .as_deref()
+                .unwrap()
+                .contains("against margin 0.3")
+        );
+        // Inside its range, but not shown inside its margin: not sure, and the joint word
+        // reads that.
+        let inside = BandCheck {
+            rule: Some(rule(Rule::NotSure)),
+            ..check(2.0, 0.1)
+        };
+        let rows = range_only(std::slice::from_ref(&inside));
+        assert_eq!(rows[0].word, Word::NotSure);
+        assert_eq!(joint_word(&rows, &[]), Word::NotSure);
+        // A change run's rows take the rule word of the changed engine's check.
+        let passing = BandCheck {
+            rule: Some(rule(Rule::Pass)),
+            ..check(2.0, 0.1)
+        };
+        let mut rows = range_rows(&[passing], Some(PER_CLUB));
+        assert_eq!(rows[0].word, Word::Pass);
+        let failing = BandCheck {
+            rule: Some(rule(Rule::Fail)),
+            ..check(2.0, 0.1)
+        };
+        set_rule_words(&mut rows, &[failing]);
+        assert_eq!(rows[0].word, Word::Fail);
+        assert!(rows[0].pass_rule.is_some());
+    }
+
+    #[test]
+    fn a_band_worse_against_the_old_engine_leaves_the_joint_word_to_real_football() {
+        let mut rng = EngineRng::from_seed(21);
+        let n = 300;
+        let base: Vec<f64> = (0..n).map(|_| 5.0 + normal(&mut rng)).collect();
+        let noise: Vec<f64> = (0..n).map(|_| 0.2 * normal(&mut rng)).collect();
+        // Moved up by 1 from the old engine, away from a target of 5.
+        let worse: Vec<f64> = base.iter().zip(&noise).map(|(b, e)| b + 1.0 + e).collect();
+        // Moved down by 1 from 6.5, toward the same target.
+        let old_high: Vec<f64> = base.iter().map(|b| b + 1.5).collect();
+        let better: Vec<f64> = base.iter().zip(&noise).map(|(b, e)| b + 0.5 + e).collect();
+        let same: Vec<f64> = base.iter().zip(&noise).map(|(b, e)| b + 0.01 * e).collect();
+        let sets = [set(n)];
+        let rows = [
+            row(0, worse, base.clone(), 0.5),
+            row(0, better, old_high, 0.5),
+            row(0, same, base, 0.5),
+        ];
+        let (found, c) = bootstrap(&sets, &rows, 11, 499);
+        let (mut judged, joint) = judge(&sets, &rows, &found, c, Vec::new());
+        set_old_words(&mut judged, &rows, &found, c, 0.05, &|_| Some(5.0));
+        assert_eq!(judged[0].old_word, Some(OldWord::Worse));
+        assert_eq!(judged[0].moved, Some(Moved::Up));
+        assert_eq!(judged[1].old_word, Some(OldWord::Better));
+        assert_eq!(judged[1].moved, Some(Moved::Down));
+        assert_eq!(judged[2].old_word, Some(OldWord::Equivalent));
+        // Every row passes against real football: the worse row does not fail the run.
+        for r in &mut judged {
+            r.word = Word::Pass;
+        }
+        assert_eq!(joint_word(&judged, &joint.guards), Word::Pass);
+        // With no target here, a moved band is not sure and keeps its direction.
+        set_old_words(&mut judged, &rows, &found, c, 0.05, &|_| None);
+        assert_eq!(judged[0].old_word, Some(OldWord::NotSure));
+        assert_eq!(judged[0].moved, Some(Moved::Up));
+        assert!(
+            judged[0]
+                .old_reason
+                .as_deref()
+                .unwrap()
+                .contains("no target here")
+        );
+    }
+
+    #[test]
+    fn a_rare_band_not_judged_in_a_change_run_is_neither_pass_nor_fail_and_leaves_the_joint_word() {
+        let mut rng = EngineRng::from_seed(5);
+        let n = 100;
+        let base: Vec<f64> = (0..n).map(|_| 5.0 + normal(&mut rng)).collect();
+        let sets = [set(n)];
+        let rows = [
+            row(0, base.clone(), base.clone(), 0.5),
+            row(0, base.clone(), base, 0.5),
+        ];
+        let (found, c) = bootstrap(&sets, &rows, 3, 199);
+        let (mut judged, joint) = judge(&sets, &rows, &found, c, Vec::new());
+        judged[0].word = Word::Pass;
+        judged[1].band = "rare_share".into();
+        judged[1].word = Word::Fail;
+        assert_eq!(joint_word(&judged, &joint.guards), Word::Fail);
+        mark_not_judged(&mut judged, |b| b == "rare_share");
+        assert_eq!(judged[1].word, Word::NotJudged);
+        assert_eq!(judged[1].word.code(), "not judged");
+        assert_eq!(
+            judged[1].note.as_deref(),
+            Some(crate::report::kinds::NOT_JUDGED)
+        );
+        assert_eq!(judged[0].word, Word::Pass);
+        assert_eq!(joint_word(&judged, &joint.guards), Word::Pass);
+        assert_eq!(
+            serde_json::to_value(judged[1].word).unwrap(),
+            serde_json::json!("not judged")
+        );
+    }
+
+    #[test]
+    fn the_quantiles_are_the_constants_they_replace() {
+        assert!((one_band() - 2.1701).abs() < 1e-4);
     }
 }

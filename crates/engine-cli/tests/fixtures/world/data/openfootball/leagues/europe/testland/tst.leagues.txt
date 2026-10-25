@@ -1,0 +1,7 @@
+= Testland =   # invented
+
+1       Testland Premier Circuit     # each year
+         | tst.1 | Premier
+2   2018/19-    Old Second Circuit => Testland Second Circuit
+         | tst.2
+cup     Testland Shield,   cup

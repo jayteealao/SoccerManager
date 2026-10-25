@@ -17,9 +17,12 @@ use engine::observe::round_to;
 use serde::Serialize;
 use serde_json::Value;
 
+use pass_rule::interval::{Real, Unit};
+
 use super::bands::{BandDef, ChainCount, Evidence, Measure, Pointer, RealSource, Reduce, Registry};
 use super::distribution::{Sample, bin_of};
 use super::{se_mean, se_ratio, se_share};
+use crate::real_targets::ReferenceFile;
 
 /// Where the real-data folder came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -134,45 +137,95 @@ pub enum Outcome {
 /// The real value of `def` from `folder`, the file read for this band alone.
 #[cfg(test)]
 pub fn read(folder: &RealFolder, def: &BandDef) -> Outcome {
-    read_with(folder, def, None)
+    read_with(folder, def, None, None).0
 }
 
-/// The real value of `def` from `folder`; `csv` is the reduction of its CSV file when one pass
-/// over the file already read it for several bands.
+/// One reduction of a file: the value, its standard error when the reduction gives one, and
+/// the pass rule's real side (per-unit terms, tracked values, or the value and its error).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Reduced {
+    pub value: f64,
+    pub se: Option<f64>,
+    pub side: Real,
+}
+
+/// The real value of `def` from `folder`, and its real side for the pass rule; `csv` is the
+/// reduction of its CSV file when one pass over the file already read it for several bands,
+/// and `reference` the reference file of real targets for a band that names one.
 fn read_with(
     folder: &RealFolder,
     def: &BandDef,
-    csv: Option<Result<(f64, Option<f64>), String>>,
-) -> Outcome {
+    csv: Option<Result<Reduced, String>>,
+    reference: Option<&ReferenceFile>,
+) -> (Outcome, Option<Real>) {
     let Some(real) = &def.real else {
-        return Outcome::NoRecord;
+        return (Outcome::NoRecord, None);
     };
     let pointer = match &real.source {
         RealSource::NoCounterpart(n) => {
-            return Outcome::NoCounterpart {
-                reason: n.none.clone(),
-            };
+            return (
+                Outcome::NoCounterpart {
+                    reason: n.none.clone(),
+                },
+                None,
+            );
         }
         RealSource::Pointer(p) => p,
+        RealSource::Target(t) => {
+            let found = reference.and_then(|f| f.target(&t.target));
+            return match found.and_then(|x| x.value.map(|v| (v, x.se))) {
+                Some((value, se)) => (
+                    Outcome::Read {
+                        value,
+                        se: Some(se),
+                        file_date: None,
+                    },
+                    Some(Real::Summary { value, se }),
+                ),
+                None => (
+                    Outcome::NotHere {
+                        path: t.target.clone(),
+                        reason: if reference.is_some() {
+                            "the reference file of real targets has no scalar target by this key"
+                                .into()
+                        } else {
+                            "no reference file of real targets in gate/".into()
+                        },
+                    },
+                    None,
+                ),
+            };
+        }
     };
     let Some(dir) = &folder.path else {
-        return Outcome::NotHere {
-            path: String::new(),
-            reason: "no real-data folder: the content folder is in no git checkout; \
-                     pass --real-data"
-                .into(),
-        };
+        return (
+            Outcome::NotHere {
+                path: String::new(),
+                reason: "no real-data folder: the content folder is in no git checkout; \
+                         pass --real-data"
+                    .into(),
+            },
+            None,
+        );
     };
     if !dir.is_dir() {
-        return Outcome::NotHere {
-            path: dir.display().to_string(),
-            reason: "the folder does not exist".into(),
-        };
+        return (
+            Outcome::NotHere {
+                path: dir.display().to_string(),
+                reason: "the folder does not exist".into(),
+            },
+            None,
+        );
     }
     let path = dir.join(&pointer.file);
-    let not_here = |reason: String| Outcome::NotHere {
-        path: path.display().to_string(),
-        reason,
+    let not_here = |reason: String| {
+        (
+            Outcome::NotHere {
+                path: path.display().to_string(),
+                reason,
+            },
+            None,
+        )
     };
     if !path.is_file() {
         return not_here("the file does not exist".into());
@@ -183,16 +236,48 @@ fn read_with(
         csv.unwrap_or_else(|| read_csv(&path, pointer))
     };
     match read {
-        Ok((value, se)) => {
+        Ok(Reduced { value, se, side }) => {
             let scale = pointer.scale.unwrap_or(1.0);
             let file_date = modified_date(&path).filter(|d| *d > real.date);
-            Outcome::Read {
-                value: value * scale,
-                se: se.map(|s| s * scale.abs()),
-                file_date,
-            }
+            (
+                Outcome::Read {
+                    value: value * scale,
+                    se: se.map(|s| s * scale.abs()),
+                    file_date,
+                },
+                Some(scaled(side, scale)),
+            )
         }
         Err(reason) => not_here(reason),
+    }
+}
+
+/// A real side with every value times `scale`.
+fn scaled(side: Real, scale: f64) -> Real {
+    if scale == 1.0 {
+        return side;
+    }
+    match side {
+        Real::Matches(strata) => Real::Matches(
+            strata
+                .into_iter()
+                .map(|units| {
+                    units
+                        .into_iter()
+                        .map(|u| Unit {
+                            num: u.num * scale,
+                            ..u
+                        })
+                        .collect()
+                })
+                .collect(),
+        ),
+        Real::Summary { value, se } => Real::Summary {
+            value: value * scale,
+            se: se * scale.abs(),
+        },
+        Real::Tracked(values) => Real::Tracked(values.into_iter().map(|v| v * scale).collect()),
+        Real::Fixed(v) => Real::Fixed(v * scale),
     }
 }
 
@@ -215,7 +300,7 @@ fn lines(path: &Path) -> Result<Box<dyn BufRead>, String> {
 /// A JSON file: the value at the dotted key (`*` is the mean over every child, whose spread
 /// gives the error; keys joined by `+` are summed), over `den` when it names one (no error),
 /// and a share over `sample`.
-fn read_json(path: &Path, p: &Pointer, sample: u64) -> Result<(f64, Option<f64>), String> {
+fn read_json(path: &Path, p: &Pointer, sample: u64) -> Result<Reduced, String> {
     let mut text = String::new();
     lines(path)?
         .read_to_string(&mut text)
@@ -238,7 +323,15 @@ fn read_json(path: &Path, p: &Pointer, sample: u64) -> Result<(f64, Option<f64>)
         if d == 0.0 {
             return Err(format!("{den} is 0"));
         }
-        return Ok((value / d, None));
+        // A ratio of two summaries has no error the file gives: its real side is exact.
+        return Ok(Reduced {
+            value: value / d,
+            se: None,
+            side: Real::Summary {
+                value: value / d,
+                se: 0.0,
+            },
+        });
     }
     let se = if spread {
         Some(se_mean(&num))
@@ -253,7 +346,17 @@ fn read_json(path: &Path, p: &Pointer, sample: u64) -> Result<(f64, Option<f64>)
     } else {
         None
     };
-    Ok((value, se))
+    // A `*` term holds one value per tracked match: the pass rule leaves one match out at a
+    // time. Any other summary is drawn from its value and error.
+    let side = if spread {
+        Real::Tracked(num)
+    } else {
+        Real::Summary {
+            value,
+            se: se.unwrap_or(0.0),
+        }
+    };
+    Ok(Reduced { value, se, side })
 }
 
 /// The numbers at a dotted key, a `*` segment taking every child of an object.
@@ -335,7 +438,7 @@ enum Key {
 /// A CSV file without quoted fields, streamed line by line: the kept rows (by `where`,
 /// `range`, `same` and `skip_blank`), reduced as the pointer says. A mean is weighted by `weight` or
 /// divided by the sum of `den` when the pointer names one.
-fn read_csv(path: &Path, p: &Pointer) -> Result<(f64, Option<f64>), String> {
+fn read_csv(path: &Path, p: &Pointer) -> Result<Reduced, String> {
     read_csv_all(path, &[p])
         .pop()
         .unwrap_or_else(|| Err("no pointer".into()))
@@ -344,7 +447,7 @@ fn read_csv(path: &Path, p: &Pointer) -> Result<(f64, Option<f64>), String> {
 /// Every pointer of `pointers` over one CSV file, in one pass over its lines: each pointer's
 /// reduction, in their order, as [`read_csv`] gives it alone. A file read once serves every
 /// band that points into it, so a large compressed file is inflated once per judgement.
-fn read_csv_all(path: &Path, pointers: &[&Pointer]) -> Vec<Result<(f64, Option<f64>), String>> {
+fn read_csv_all(path: &Path, pointers: &[&Pointer]) -> Vec<Result<Reduced, String>> {
     let fail = |e: String| pointers.iter().map(|_| Err(e.clone())).collect();
     let mut rows = match lines(path) {
         Ok(r) => r.lines(),
@@ -617,8 +720,10 @@ impl<'a> CsvAcc<'a> {
         Ok(())
     }
 
-    /// The reduction of the kept rows, with its standard error when the reduction gives one.
-    fn finish(self) -> Result<(f64, Option<f64>), String> {
+    /// The reduction of the kept rows, with its standard error when the reduction gives one,
+    /// and the per-unit terms the pass rule resamples: one unit per kept row, or per group
+    /// for a reduction over groups.
+    fn finish(self) -> Result<Reduced, String> {
         let Self {
             p,
             reduce,
@@ -630,12 +735,20 @@ impl<'a> CsvAcc<'a> {
             hits,
             ..
         } = self;
-        let per_group = |f: &dyn Fn(&[f64]) -> Option<f64>| -> Result<(f64, Option<f64>), String> {
+        let read = |value: f64, se: Option<f64>, units: Vec<Unit>| -> Result<Reduced, String> {
+            Ok(Reduced {
+                value,
+                se,
+                side: Real::Matches(vec![units]),
+            })
+        };
+        let ones = |v: &[f64]| -> Vec<Unit> { v.iter().map(|x| Unit::ratio(*x, 1.0)).collect() };
+        let per_group = |f: &dyn Fn(&[f64]) -> Option<f64>| -> Result<Reduced, String> {
             let values: Vec<f64> = groups.values().filter_map(|v| f(v)).collect();
             if values.is_empty() {
                 return Err("no group has enough rows".into());
             }
-            Ok((mean(&values), Some(se_mean(&values))))
+            read(mean(&values), Some(se_mean(&values)), ones(&values))
         };
         let largest = |v: &[f64]| v.iter().copied().fold(f64::MIN, f64::max);
         let smallest = |v: &[f64]| v.iter().copied().fold(f64::MAX, f64::min);
@@ -644,9 +757,9 @@ impl<'a> CsvAcc<'a> {
                 if hits.is_empty() {
                     return Err("no row kept".into());
                 }
-                let hit = hits.values().filter(|h| **h).count();
-                let p = hit as f64 / hits.len() as f64;
-                Ok((p, Some(se_share(p, hits.len()))))
+                let flags: Vec<f64> = hits.values().map(|h| f64::from(u8::from(*h))).collect();
+                let p = mean(&flags);
+                read(p, Some(se_share(p, hits.len())), ones(&flags))
             }
             Reduce::GroupRange => {
                 let window = p.window.unwrap_or(2) as usize;
@@ -662,7 +775,12 @@ impl<'a> CsvAcc<'a> {
                 if d == 0.0 {
                     return Err(format!("{} sums to 0", p.den.as_deref().unwrap_or("den")));
                 }
-                Ok((xs.iter().sum::<f64>() / d, None))
+                let units = xs
+                    .iter()
+                    .zip(&ds)
+                    .map(|(x, d)| Unit::ratio(*x, *d))
+                    .collect();
+                read(xs.iter().sum::<f64>() / d, None, units)
             }
             Reduce::Mean | Reduce::BinShare if weight.is_some() => {
                 let w: f64 = ws.iter().sum();
@@ -670,21 +788,29 @@ impl<'a> CsvAcc<'a> {
                     return Err("the weights sum to 0".into());
                 }
                 let wx: Vec<f64> = xs.iter().zip(&ws).map(|(x, w)| x * w).collect();
-                Ok((wx.iter().sum::<f64>() / w, Some(se_ratio(&wx, &ws))))
+                let units = wx
+                    .iter()
+                    .zip(&ws)
+                    .map(|(a, b)| Unit::ratio(*a, *b))
+                    .collect();
+                read(wx.iter().sum::<f64>() / w, Some(se_ratio(&wx, &ws)), units)
             }
-            Reduce::Mean | Reduce::GoalDistance => Ok((mean(&xs), Some(se_mean(&xs)))),
+            Reduce::Mean | Reduce::GoalDistance => read(mean(&xs), Some(se_mean(&xs)), ones(&xs)),
             Reduce::BinShare | Reduce::Scoreline => {
                 let p = mean(&xs);
-                Ok((p, Some(se_share(p, xs.len()))))
+                read(p, Some(se_share(p, xs.len())), ones(&xs))
             }
             Reduce::Share => {
                 let (op, target) = (
                     p.op.unwrap_or(super::bands::Op::AtLeast),
                     p.value.unwrap_or(0.0),
                 );
-                let hit = xs.iter().filter(|s| op.holds(**s, target)).count();
-                let p = hit as f64 / xs.len() as f64;
-                Ok((p, Some(se_share(p, xs.len()))))
+                let flags: Vec<f64> = xs
+                    .iter()
+                    .map(|s| f64::from(u8::from(op.holds(*s, target))))
+                    .collect();
+                let p = mean(&flags);
+                read(p, Some(se_share(p, xs.len())), ones(&flags))
             }
             Reduce::FactorialRatio => {
                 let s: f64 = xs.iter().sum();
@@ -692,7 +818,17 @@ impl<'a> CsvAcc<'a> {
                     return Err(format!("{} sums to 0", p.key));
                 }
                 let f: f64 = xs.iter().map(|x| x * (x - 1.0)).sum();
-                Ok((xs.len() as f64 * f / (s * s), None))
+                // n sum(x(x-1)) / sum(x)^2 = (sum x(x-1) / sum x) (n / sum x).
+                let units = xs
+                    .iter()
+                    .map(|x| Unit {
+                        num: x * (x - 1.0),
+                        den: *x,
+                        scale_num: 1.0,
+                        scale_den: *x,
+                    })
+                    .collect();
+                read(xs.len() as f64 * f / (s * s), None, units)
             }
             Reduce::Histogram | Reduce::Cells | Reduce::Chains => Err(WHOLE_SAMPLE.into()),
         }
@@ -704,7 +840,7 @@ impl<'a> CsvAcc<'a> {
 fn csv_values<'r>(
     folder: &RealFolder,
     registry: &'r Registry,
-) -> BTreeMap<&'r str, Result<(f64, Option<f64>), String>> {
+) -> BTreeMap<&'r str, Result<Reduced, String>> {
     let mut by_file: BTreeMap<PathBuf, Vec<(&'r str, &'r Pointer)>> = BTreeMap::new();
     if let Some(dir) = folder.path.as_ref().filter(|d| d.is_dir()) {
         for def in registry.bands.iter().filter(|d| !d.is_distribution()) {
@@ -1049,6 +1185,16 @@ pub fn samples(folder: &RealFolder, registry: &Registry) -> Samples {
                     Err(format!("no real counterpart: {}", n.none)),
                 );
             }
+            Some(RealSource::Target(t)) => {
+                let got = match registry.targets.get(&t.target) {
+                    Some(target) => target_sample(folder, def, &t.target, target),
+                    None => Err(format!(
+                        "{} is not a target of the reference file read with the band file",
+                        t.target
+                    )),
+                };
+                out.insert(def.band.clone(), got);
+            }
             None => {
                 out.insert(def.band.clone(), Err("no real record".into()));
             }
@@ -1068,6 +1214,88 @@ pub fn samples(folder: &RealFolder, registry: &Registry) -> Samples {
         }
     }
     out
+}
+
+/// The raw-data folder beside a real-data folder: the folder itself when it holds the
+/// football-data files, otherwise its sibling `data` (the main checkout's `.scratch/data`
+/// beside `.scratch/out`).
+fn data_folder(folder: &RealFolder) -> Option<PathBuf> {
+    let dir = folder.path.as_ref()?;
+    if dir.join("football-data").is_dir() {
+        return Some(dir.clone());
+    }
+    dir.parent().map(|p| p.join("data"))
+}
+
+/// The whole real sample of a distribution band whose real side is a distribution target
+/// of the reference file (`<layer>.dist.<kind>`): every match of the target's leagues and
+/// seasons read in place from the football-data files, binned as the target was built. Each
+/// league weighs the same, as the target pools its leagues, so the sample's pooled shares
+/// are the target's: each match counts `n / (leagues x matches of its league)`.
+fn target_sample(
+    folder: &RealFolder,
+    def: &BandDef,
+    key: &str,
+    target: &crate::real_targets::Target,
+) -> Result<Sample, String> {
+    use crate::real_targets::football_data::{DISTS, match_rows};
+    let kind = key
+        .rsplit_once(".dist.")
+        .map(|(_, k)| k)
+        .ok_or_else(|| format!("{key} is not a distribution target"))?;
+    let dist = DISTS
+        .iter()
+        .find(|d| d.name == kind)
+        .ok_or_else(|| format!("{key}: no reader of the distribution {kind}"))?;
+    let (width, bins) = super::measures::hist_bins(&def.measure)
+        .ok_or_else(|| "the band is not a whole distribution".to_string())?;
+    if target.bins != Some(bins) || target.width != Some(width) {
+        return Err(format!(
+            "{key} holds {:?} bins of {:?}; the band has {bins} of {width}",
+            target.bins, target.width
+        ));
+    }
+    let data = data_folder(folder).ok_or_else(|| {
+        "no real-data folder: the content folder is in no git checkout; pass --real-data"
+            .to_string()
+    })?;
+    let leagues: Vec<&str> = target
+        .leagues
+        .iter()
+        .flatten()
+        .map(String::as_str)
+        .collect();
+    let seasons: Vec<&str> = target.seasons.iter().map(String::as_str).collect();
+    let read = match_rows(&data, &leagues, &seasons).map_err(|e| format!("{e:#}"))?;
+    if !read.missing.is_empty() {
+        return Err(format!(
+            "{}: {} result files are not here, such as {}",
+            data.display(),
+            read.missing.len(),
+            read.missing[0]
+        ));
+    }
+    let mut per_league: BTreeMap<&str, Vec<u32>> = BTreeMap::new();
+    for row in &read.rows {
+        if let Some(k) = (dist.bin)(row, bins, width) {
+            per_league.entry(row.div.as_str()).or_default().push(k);
+        }
+    }
+    let total: usize = per_league.values().map(Vec::len).sum();
+    if per_league.is_empty() || total < 2 {
+        return Err(format!("{key}: no match of its leagues holds the columns"));
+    }
+    let groups = per_league.len() as f64;
+    let mut per_match = Vec::with_capacity(total);
+    for matches in per_league.values() {
+        let weight = total as f64 / (groups * matches.len() as f64);
+        per_match.extend(matches.iter().map(|&k| vec![(k, weight)]));
+    }
+    Ok(Sample {
+        per_match,
+        bins,
+        width,
+    })
 }
 
 /// The samples of `bands` from one file of `folder`; `Err` when the folder or the file is
@@ -1177,7 +1405,7 @@ fn modified_date(path: &Path) -> Option<String> {
 }
 
 /// The calendar date of a day count from 1970-01-01 (Howard Hinnant's `civil_from_days`).
-fn civil_date(days: i64) -> String {
+pub(crate) fn civil_date(days: i64) -> String {
     let z = days + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z.rem_euclid(146_097);
@@ -1265,6 +1493,10 @@ pub struct RealBand {
     /// Why the band only reports, when it does.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub report_only: Option<String>,
+    /// The pass rule's real side: per-unit terms, tracked values, or the value and its
+    /// error. Judging reads it; the record does not hold it.
+    #[serde(skip)]
+    pub side: Option<Real>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -1291,7 +1523,19 @@ pub struct GeneralisationInfo {
 
 /// Reads every band's real value from `folder`; a distribution band's comes from its whole
 /// sample in `samples`, read once for the judgement.
+#[cfg(test)]
 pub fn read_all(folder: &RealFolder, registry: &Registry, samples: &Samples) -> RealInfo {
+    read_all_with(folder, registry, samples, None)
+}
+
+/// [`read_all`], with the reference file of real targets for the bands that name a target.
+/// Each band's entry also carries its real side for the pass rule.
+pub fn read_all_with(
+    folder: &RealFolder,
+    registry: &Registry,
+    samples: &Samples,
+    reference: Option<&ReferenceFile>,
+) -> RealInfo {
     let floor = u64::from(registry.generalisation_floor);
     let present = folder.path.as_ref().is_some_and(|p| p.is_dir());
     let mut info = RealInfo {
@@ -1310,6 +1554,7 @@ pub fn read_all(folder: &RealFolder, registry: &Registry, samples: &Samples) -> 
     let mut csv = csv_values(folder, registry);
     for def in &registry.bands {
         let whole = def.is_distribution().then(|| samples.get(&def.band));
+        let mut side = None;
         let outcome = match whole {
             Some(Some(Ok(sample))) => {
                 let (value, se) = sample_mean(def, sample);
@@ -1322,7 +1567,7 @@ pub fn read_all(folder: &RealFolder, registry: &Registry, samples: &Samples) -> 
                             .as_ref()
                             .and_then(|d| modified_date(&d.join(&p.file)))
                             .filter(|d| *d > r.date),
-                        RealSource::NoCounterpart(_) => None,
+                        RealSource::NoCounterpart(_) | RealSource::Target(_) => None,
                     }),
                 }
             }
@@ -1341,7 +1586,11 @@ pub fn read_all(folder: &RealFolder, registry: &Registry, samples: &Samples) -> 
                 path: String::new(),
                 reason: "the whole sample was not read".into(),
             },
-            _ => read_with(folder, def, csv.remove(def.band.as_str())),
+            _ => {
+                let (outcome, s) = read_with(folder, def, csv.remove(def.band.as_str()), reference);
+                side = s;
+                outcome
+            }
         };
         let matches = match whole {
             Some(Some(Ok(sample))) => Some(sample.per_match.len() as u64),
@@ -1402,6 +1651,7 @@ pub fn read_all(folder: &RealFolder, registry: &Registry, samples: &Samples) -> 
                 word: generalisation_word(units, floor, nc),
             },
             report_only: def.report_only.clone(),
+            side,
         });
     }
     info
@@ -1553,7 +1803,6 @@ mod tests {
                 source,
                 sample,
                 date: "2026-09-22".into(),
-                floor: None,
             }),
             evidence: Some(Evidence::Calibration),
             confidence: Some(Confidence {
@@ -1568,6 +1817,7 @@ mod tests {
             max_from_dry: None,
             gates: true,
             report_only: None,
+            rule: None,
         }
     }
 
@@ -1619,7 +1869,7 @@ A,0,0
         for (p, got) in [&mean, &share, &only_a, &broken].into_iter().zip(&all) {
             assert_eq!(*got, read_csv(&path, p));
         }
-        assert_eq!(all[0].as_ref().unwrap().0, 2.0);
+        assert_eq!(all[0].as_ref().unwrap().value, 2.0);
         assert!(all[3].as_ref().unwrap_err().contains("no_such_column"));
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1833,10 +2083,7 @@ A,0,0
             diff: None,
             se: None,
             smallest_shift: None,
-            power: None,
-            needed: None,
             outside_by: None,
-            no_target: None,
             real: None,
             distance: None,
             upper: None,
@@ -1846,6 +2093,10 @@ A,0,0
             judged: None,
             note: None,
             accepted: None,
+            pass_rule: None,
+            old_word: None,
+            old_reason: None,
+            moved: None,
         }
     }
 
@@ -1885,9 +2136,15 @@ A,0,0
     }
 
     #[test]
-    fn a_band_under_its_floor_prints_report_only_and_leaves_the_joint_word() {
+    fn a_band_of_a_report_only_group_prints_report_only_and_leaves_the_joint_word() {
         let thin = serde_json::json!({"competitions": 1, "seasons": 1, "clubs": 20});
-        let r = registry(&[("corners_per_team", "confidence.generalisation", thin)]);
+        // A thin real sample alone no longer makes a band report only: a band reports only
+        // when it belongs to a group the band file names.
+        let r = registry(&[
+            ("corners_per_team", "confidence.generalisation", thin),
+            ("corners_per_team", "gates", serde_json::json!(false)),
+            ("corners_per_team", "group", serde_json::json!("facing")),
+        ]);
         // The record shows the counts, the error and the words.
         let info = read_all(
             &at(&std::env::temp_dir().join("engine-cli-real-absent")),
@@ -1904,7 +2161,9 @@ A,0,0
                 .report_only
                 .as_deref()
                 .unwrap()
-                .contains("under the floor")
+                .contains("body facing"),
+            "{:?}",
+            corners.report_only
         );
         let goals = info.band("goals_per_match").unwrap();
         assert_eq!(
@@ -1921,8 +2180,10 @@ A,0,0
         assert_eq!(strong.report_only, None);
         assert_eq!(
             (info.missing, info.no_counterpart),
-            // The 101 team-shape bands read a file this folder lacks.
-            (15 + 35 + 101, 3)
+            // The 101 team-shape bands read a file this folder lacks, and the shots and cards
+            // distributions a reference file it lacks; the three experiment bands and the five
+            // bands only the slow tests judge have no real counterpart.
+            (15 + 35 + 101 + 2, 3 + 5)
         );
 
         let mut joint = Joint {
@@ -1932,6 +2193,7 @@ A,0,0
             false_alarm: 0.03,
             pairs: 10,
             guards: Vec::new(),
+            reason: None,
         };
         let mut rows = vec![
             row("goals_per_match", Word::Pass),
@@ -2139,7 +2401,13 @@ A,0,0
         );
         let r = registry(&[]);
         let got = samples(&at(&dir), &r);
-        assert_eq!(got.len(), 6, "{got:?}");
+        // The shots and cards distributions read reference-file targets, which this
+        // registry, read without the reference file, does not hold.
+        assert_eq!(got.len(), 8, "{got:?}");
+        for band in ["shots_total_distribution", "cards_total_distribution"] {
+            let why = got[band].as_ref().unwrap_err();
+            assert!(why.contains("is not a target"), "{band}: {why}");
+        }
         let hist = |band: &str| -> Vec<Hist> {
             got[band]
                 .as_ref()
@@ -2199,11 +2467,171 @@ A,0,0
         assert_eq!(passes.status, "not_here");
         // An absent folder: every band not here.
         let none = samples(&at(&dir.join("absent")), &r);
-        assert!(none.values().all(|s| {
-            s.as_ref()
-                .unwrap_err()
-                .ends_with("the folder does not exist")
-        }));
+        let target_backed = ["shots_total_distribution", "cards_total_distribution"];
+        assert!(
+            none.iter()
+                .filter(|(b, _)| !target_backed.contains(&b.as_str()))
+                .all(|(_, s)| {
+                    s.as_ref()
+                        .unwrap_err()
+                        .ends_with("the folder does not exist")
+                })
+        );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ---- The pass rule's real side ---------------------------------------------------
+
+    /// The real side of one band read alone from `dir`.
+    fn side_of(dir: &Path, source: RealSource) -> (Outcome, Option<Real>) {
+        read_with(&at(dir), &band(source, 10, 1.0), None, None)
+    }
+
+    #[test]
+    fn a_csv_reduction_gives_one_unit_per_kept_row_that_reproduces_its_value() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("m.csv"),
+            "comp,hg,ag\nA,1,0\nA,3,2\nB,0,0\nA,2,2\n",
+        )
+        .unwrap();
+        let cases: [(Pointer, usize); 4] = [
+            (pointer("m.csv", "hg+ag"), 4),
+            (
+                Pointer {
+                    reduce: Some(Reduce::Share),
+                    op: Some(super::super::bands::Op::AtLeast),
+                    value: Some(3.0),
+                    ..pointer("m.csv", "hg+ag")
+                },
+                4,
+            ),
+            (
+                Pointer {
+                    reduce: Some(Reduce::FactorialRatio),
+                    ..pointer("m.csv", "hg")
+                },
+                4,
+            ),
+            (
+                Pointer {
+                    filter: Some(BTreeMap::from([(
+                        "comp".to_string(),
+                        vec!["A".to_string()],
+                    )])),
+                    ..pointer("m.csv", "hg")
+                },
+                3,
+            ),
+        ];
+        for (p, rows) in cases {
+            let (outcome, side) = side_of(dir.path(), RealSource::Pointer(Box::new(p.clone())));
+            let (value, _) = value(outcome);
+            let Some(Real::Matches(strata)) = side else {
+                panic!("{}: {side:?}", p.key);
+            };
+            assert_eq!(strata.len(), 1);
+            assert_eq!(strata[0].len(), rows, "{}", p.key);
+            let (estimate, se) = pass_rule::interval::ratio_and_se(&strata[0]);
+            assert!(
+                (estimate - value).abs() < 1e-12,
+                "{}: {estimate} {value}",
+                p.key
+            );
+            assert!(se > 0.0, "{}", p.key);
+        }
+    }
+
+    #[test]
+    fn a_json_key_over_every_match_is_a_tracked_side_and_a_summary_its_value_and_error() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("t.json"),
+            r#"{"per_match": {"a": {"x": 1.0}, "b": {"x": 2.0}, "c": {"x": 4.0}}, "rate": 0.5}"#,
+        )
+        .unwrap();
+        let (_, side) = side_of(
+            dir.path(),
+            RealSource::Pointer(Box::new(pointer("t.json", "per_match.*.x"))),
+        );
+        assert_eq!(side, Some(Real::Tracked(vec![1.0, 2.0, 4.0])));
+        let share = Pointer {
+            reduce: Some(Reduce::Share),
+            ..pointer("t.json", "rate")
+        };
+        let (outcome, side) = side_of(dir.path(), RealSource::Pointer(Box::new(share)));
+        let (v, se) = value(outcome);
+        assert_eq!(
+            side,
+            Some(Real::Summary {
+                value: v,
+                se: se.unwrap()
+            })
+        );
+        // A scale applies to the side as to the value.
+        let scaled = Pointer {
+            scale: Some(0.5),
+            ..pointer("t.json", "per_match.*.x")
+        };
+        let (_, side) = side_of(dir.path(), RealSource::Pointer(Box::new(scaled)));
+        assert_eq!(side, Some(Real::Tracked(vec![0.5, 1.0, 2.0])));
+    }
+
+    #[test]
+    fn a_reference_file_target_reads_its_value_and_error() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../gate/real-targets.json");
+        let file = ReferenceFile::load(&path).unwrap();
+        let key = "tier.1.goals_per_match";
+        let want = file.target(key).unwrap();
+        let def = band(
+            RealSource::Target(super::super::bands::TargetRef { target: key.into() }),
+            10,
+            1.0,
+        );
+        let folder = at(Path::new("."));
+        let (outcome, side) = read_with(&folder, &def, None, Some(&file));
+        assert_eq!(value(outcome), (want.value.unwrap(), Some(want.se)));
+        assert_eq!(
+            side,
+            Some(Real::Summary {
+                value: want.value.unwrap(),
+                se: want.se
+            })
+        );
+        // Without the file, or with a key it lacks, the band reads not here.
+        assert!(matches!(
+            read_with(&folder, &def, None, None).0,
+            Outcome::NotHere { .. }
+        ));
+        let missing = band(
+            RealSource::Target(super::super::bands::TargetRef {
+                target: "tier.9.goals_per_match".into(),
+            }),
+            10,
+            1.0,
+        );
+        assert!(matches!(
+            read_with(&folder, &missing, None, Some(&file)).0,
+            Outcome::NotHere { .. }
+        ));
+    }
+
+    /// The slow tests read the reference file through the pass-rule crate's narrow view; it
+    /// gives the same four figures as the full reader for every key of the committed file.
+    #[test]
+    fn the_slow_tests_view_of_the_reference_file_matches_the_full_reader() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../gate/real-targets.json");
+        let full = crate::real_targets::ReferenceFile::load(&path).unwrap();
+        let view = pass_rule::limits::reference_targets(&path).unwrap();
+        assert_eq!(view.len(), full.targets.len());
+        for (key, target) in &full.targets {
+            let seen = view
+                .get(key)
+                .unwrap_or_else(|| panic!("the view has no {key}"));
+            assert_eq!(seen.value, target.value, "{key} value");
+            assert_eq!(seen.se, target.se, "{key} se");
+            assert_eq!(seen.n, target.n, "{key} n");
+            assert_eq!(seen.between_league_sd, target.between_league_sd, "{key}");
+        }
     }
 }

@@ -15,6 +15,7 @@ pub mod tactics;
 pub mod team;
 pub mod traits;
 pub mod tuning;
+pub mod world;
 
 use std::path::{Path, PathBuf};
 

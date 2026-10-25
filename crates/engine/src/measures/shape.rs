@@ -621,6 +621,10 @@ impl TickSink for ShapeSink {
         Ok(())
     }
 
+    fn reads_records(&self) -> bool {
+        false
+    }
+
     fn on_step(&mut self, sim: &Simulation) -> Result<(), EngineError> {
         let live_ticks = sim.summary().live_ticks;
         let live = live_ticks > self.last_live;
@@ -664,6 +668,10 @@ impl BlockHeightSink {
 impl TickSink for BlockHeightSink {
     fn on_tick(&mut self, _record: &TickRecord) -> Result<(), EngineError> {
         Ok(())
+    }
+
+    fn reads_records(&self) -> bool {
+        false
     }
 
     fn on_step(&mut self, sim: &Simulation) -> Result<(), EngineError> {

@@ -1,0 +1,17 @@
+Rank,Club,Country,Level,Elo,Provisional
+1,Brisket,TST,1,1700,false
+2,Mallow,TST,1,1650,false
+3,Quince,TST,1,1600,false
+4,Tamarind,TST,2,1450,false
+5,Juniper,TST,2,1400,false
+6,Fennel,TST,2,1380,false
+7,Sumac,TST,2,1420,false
+8,Ghost Club,TST,1,1500,false
+9,Twin Club,TST,2,1300,false
+10,Brisket Reserves,TST,3,1200,false
+,Newcomer,TST,3,-28,true
+11,Mallow Duplicate,TST,1,1550,false
+12,Sorrel,TST,1,1500,false
+13,Lovage Comets,,,1250,false
+14,Anise �,TST,2,1350,false
+15,Borage,NTL,1,1100,false

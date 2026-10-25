@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/engine",
     "crates/engine-cli",
+    "crates/pass-rule",
     "crates/protocol",
     "crates/script",
     "crates/stream",
@@ -42,6 +43,8 @@ libm = { version = "0.2.16", default-features = false }
 trybuild = "1.0.119"
 # Reads the compressed real-data files of the realism bands (pure-Rust back end, no C build).
 flate2 = "1.1"
+# Test folders that delete themselves, so no test leaves a folder in the system temp folder.
+tempfile = "3"
 
 [profile.release]
 debug = 1
@@ -67,6 +70,11 @@ opt-level = 3
 opt-level = 3
 
 [profile.dev.package.protocol]
+opt-level = 3
+
+# The pass rule resamples each band about two thousand times; an optimized build keeps the
+# judging tests quick. It cannot change a result: the same draws give the same interval.
+[profile.dev.package.pass-rule]
 opt-level = 3
 
 # The realism bands' real data includes a compressed events file of about 66 MB that each

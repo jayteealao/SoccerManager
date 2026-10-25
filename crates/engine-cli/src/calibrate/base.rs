@@ -9,6 +9,10 @@
 //! built and run, and then it resumes its folder and plays only the missing fixtures. `v2`
 //! is the cache format: `v1` folders (statistics files, no rows) are never read and can be
 //! deleted.
+//!
+//! A revision builds with this build's features (`measures`, `sensitivity`) where its own
+//! `crates/engine-cli/Cargo.toml` declares them, so both engines record the same things; a
+//! revision that lacks a feature builds without it, and the report names it.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -45,6 +49,8 @@ pub struct Request<'a> {
     /// The run's content folder: the content of a ready binary.
     pub content_dir: &'a Path,
     pub seed: u64,
+    /// The run's kind: the old engine plays the same kind, so it accepts the run's seed.
+    pub kind: crate::report::kinds::Kind,
     pub minutes: u32,
     /// Matches per suite unit, by suite.
     pub matches: &'a std::collections::BTreeMap<Suite, u32>,
@@ -56,6 +62,9 @@ pub struct Request<'a> {
     pub planned: &'a [(FixtureKey, u64)],
     /// A test seam: the build fails as a broken base branch would.
     pub fail_build: bool,
+    /// The revision a ready binary was built from (`--base-rev`): the binary plays that
+    /// revision's content instead of the run's.
+    pub base_rev: Option<&'a str>,
 }
 
 /// The old engine's results for a run.
@@ -72,6 +81,10 @@ pub struct BaseRun {
     pub hits: u32,
     /// Planned fixtures the old engine played now.
     pub played: u32,
+    /// The features the old engine was built with, comma-joined; empty for a ready binary.
+    pub features: String,
+    /// This build's features the old revision does not declare, so it was built without.
+    pub missing_features: Vec<String>,
 }
 
 /// A revision, resolved without building it.
@@ -79,6 +92,56 @@ struct Revision {
     repo: PathBuf,
     cache_root: PathBuf,
     key: CacheKey,
+    /// This build's features the revision does not declare.
+    missing: Vec<String>,
+}
+
+/// The cargo features of this build that the old engine should share.
+pub fn this_build_features() -> Vec<&'static str> {
+    let mut out = Vec::new();
+    if cfg!(feature = "measures") {
+        out.push("measures");
+    }
+    if cfg!(feature = "sensitivity") {
+        out.push("sensitivity");
+    }
+    out
+}
+
+/// The features a `Cargo.toml` declares in its `[features]` table.
+pub fn declared_features(manifest: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut inside = false;
+    for line in manifest.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            inside = line == "[features]";
+            continue;
+        }
+        if !inside || line.starts_with('#') {
+            continue;
+        }
+        if let Some((name, _)) = line.split_once('=') {
+            let name = name.trim().trim_matches('"');
+            if !name.is_empty() {
+                out.push(name.to_string());
+            }
+        }
+    }
+    out
+}
+
+/// The features to build an old revision with: each of `wanted` that its manifest declares,
+/// as the cache key holds them, and the ones it does not.
+pub fn features_for(wanted: &[&str], manifest: &str) -> (String, Vec<String>) {
+    let declared = declared_features(manifest);
+    let (have, missing): (Vec<&str>, Vec<&str>) = wanted
+        .iter()
+        .partition(|f| declared.iter().any(|d| d == *f));
+    (
+        cache::features_key(&have.join(",")),
+        missing.into_iter().map(str::to_string).collect(),
+    )
 }
 
 /// Finds or plays the old engine's result of every planned fixture. Any failure comes
@@ -89,11 +152,22 @@ pub fn run(req: &Request<'_>) -> anyhow::Result<BaseRun> {
             let path = std::path::absolute(path)?;
             let sha = cache::file_sha256(&path)
                 .with_context(|| format!("the old engine {} cannot be read", path.display()))?;
-            ("binary", None, None, sha, req.content_dir.to_path_buf())
+            let content = match req.base_rev {
+                Some(rev) => content_at(req.content_dir, rev)?.content,
+                None => req.content_dir.to_path_buf(),
+            };
+            (
+                "binary",
+                req.base_rev.map(str::to_string),
+                None,
+                sha,
+                content,
+            )
         }
         Source::Rev(rev) => {
             let revision = resolve(rev)?;
-            let content = extract_content(&revision)?;
+            let content =
+                extract_content(&revision.repo, &revision.cache_root, &revision.key.commit)?;
             let id = revision.key.id();
             ("rev", Some(rev.clone()), Some(revision), id, content)
         }
@@ -130,10 +204,28 @@ pub fn run(req: &Request<'_>) -> anyhow::Result<BaseRun> {
             );
         }
     }
+    if let Some(r) = revision.as_ref().filter(|r| !r.missing.is_empty()) {
+        eprintln!(
+            "old engine {}: its revision declares no {} feature, so it builds without it; \
+             the bands that read it get no old-engine word",
+            rev.as_deref().unwrap_or("?"),
+            r.missing.join(", ")
+        );
+    }
+    let features = revision
+        .as_ref()
+        .map(|r| r.key.features.clone())
+        .unwrap_or_default();
+    let missing_features = revision
+        .as_ref()
+        .map(|r| r.missing.clone())
+        .unwrap_or_default();
     Ok(BaseRun {
         source,
         rev,
         commit: revision.map(|r| r.key.commit),
+        features,
+        missing_features,
         build_id,
         content_hash,
         dir,
@@ -152,22 +244,114 @@ fn hits(dir: &Path, planned: &[(FixtureKey, u64)]) -> anyhow::Result<u32> {
     Ok(u32::try_from(n).unwrap_or(u32::MAX))
 }
 
-/// The cache key of `rev` in the repository this command runs in, with the release profile.
-fn resolve(rev: &str) -> anyhow::Result<Revision> {
+/// Runs git with `args` in `repo`, standard input closed, and returns its standard output; a
+/// failure names the command and git's own error.
+fn git(repo: &Path, args: &[&str]) -> anyhow::Result<Vec<u8>> {
     let out = Command::new("git")
-        .args(["rev-parse", "--show-toplevel"])
+        .arg("-C")
+        .arg(repo)
+        .args(args)
         .stdin(Stdio::null())
         .output()
-        .context("cannot run git to find the repository of the old engine")?;
-    let top = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if !out.status.success() || top.is_empty() {
-        anyhow::bail!("--base {rev} needs a git checkout of this repository as the working folder");
+        .context("cannot run git")?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "git {} failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
     }
-    let repo = std::path::absolute(PathBuf::from(top))?;
+    Ok(out.stdout)
+}
+
+/// The top folder of the git checkout that holds `dir`, when there is one.
+fn top_of(dir: &Path) -> Option<PathBuf> {
+    let out = git(dir, &["rev-parse", "--show-toplevel"]).ok()?;
+    let top = String::from_utf8_lossy(&out).trim().to_string();
+    if top.is_empty() {
+        return None;
+    }
+    std::path::absolute(PathBuf::from(top)).ok()
+}
+
+/// A revision's content folder and the checkout it came from.
+pub struct RevContent {
+    /// The top folder of the checkout.
+    pub repo: PathBuf,
+    /// The full commit the revision names.
+    pub commit: String,
+    /// The revision's `content/` folder, written once under the checkout's build cache.
+    pub content: PathBuf,
+}
+
+/// The `content/` folder of `rev` in the checkout whose `content/` folder `content_dir` is;
+/// written once under that checkout's build cache.
+pub fn content_at(content_dir: &Path, rev: &str) -> anyhow::Result<RevContent> {
+    let repo = checkout_of(content_dir).with_context(|| {
+        format!(
+            "{rev}: the content folder {} is not the content folder of a git checkout",
+            content_dir.display()
+        )
+    })?;
+    let commit = cache::resolve_commit(&repo, rev).map_err(anyhow::Error::msg)?;
+    let content = extract_content(&repo, &repo.join("target").join("bisect"), &commit)?;
+    Ok(RevContent {
+        repo,
+        commit,
+        content,
+    })
+}
+
+/// The checkout whose `content/` folder `content_dir` is, when it is one.
+pub fn checkout_of(content_dir: &Path) -> Option<PathBuf> {
+    let top = top_of(content_dir)?;
+    let same = |a: &Path, b: &Path| match (fs::canonicalize(a), fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    };
+    same(&top.join("content"), content_dir).then_some(top)
+}
+
+/// Every path of the checkout `repo` that differs from `commit`: changed, added or removed
+/// since it, staged or not, and every untracked file git does not ignore; with `/` separators,
+/// relative to the checkout.
+pub fn changed_paths(repo: &Path, commit: &str) -> anyhow::Result<Vec<String>> {
+    let mut out: Vec<String> = Vec::new();
+    for args in [
+        vec!["diff", "--name-only", "--no-renames", commit],
+        vec!["ls-files", "--others", "--exclude-standard"],
+    ] {
+        let bytes = git(repo, &args)?;
+        out.extend(
+            String::from_utf8_lossy(&bytes)
+                .lines()
+                .map(|l| l.trim().replace('\\', "/"))
+                .filter(|l| !l.is_empty()),
+        );
+    }
+    out.sort();
+    out.dedup();
+    Ok(out)
+}
+
+/// The cache key of `rev` in the repository this command runs in, with the release profile.
+fn resolve(rev: &str) -> anyhow::Result<Revision> {
+    let Some(repo) = top_of(Path::new(".")) else {
+        anyhow::bail!("--base {rev} needs a git checkout of this repository as the working folder");
+    };
     let cache_root = repo.join("target").join("bisect");
     let commit = cache::resolve_commit(&repo, rev).map_err(anyhow::Error::msg)?;
     let (toolchain, target) =
         cache::toolchain_of(&repo, &commit, &cache_root).map_err(anyhow::Error::msg)?;
+    // The old engine builds with this build's features where its revision declares them.
+    // A revision without the manifest declares no feature.
+    let manifest = git(
+        &repo,
+        &["show", &format!("{commit}:crates/engine-cli/Cargo.toml")],
+    )
+    .unwrap_or_default();
+    let (features, missing) =
+        features_for(&this_build_features(), &String::from_utf8_lossy(&manifest));
     Ok(Revision {
         repo,
         cache_root,
@@ -176,36 +360,21 @@ fn resolve(rev: &str) -> anyhow::Result<Revision> {
             toolchain,
             target,
             profile: "release".into(),
-            features: String::new(),
+            features,
         },
+        missing,
     })
 }
 
-/// The `content/` folder of the revision, written once under the build cache.
-fn extract_content(revision: &Revision) -> anyhow::Result<PathBuf> {
-    let commit = &revision.key.commit;
-    let dir = revision.cache_root.join("content").join(commit);
+/// The `content/` folder of `commit` in `repo`, written once under the build cache
+/// `cache_root`.
+fn extract_content(repo: &Path, cache_root: &Path, commit: &str) -> anyhow::Result<PathBuf> {
+    let dir = cache_root.join("content").join(commit);
     let done = dir.join(".complete");
     if done.is_file() {
         return Ok(dir);
     }
-    let git = |args: &[&str]| -> anyhow::Result<Vec<u8>> {
-        let out = Command::new("git")
-            .arg("-C")
-            .arg(&revision.repo)
-            .args(args)
-            .stdin(Stdio::null())
-            .output()
-            .context("cannot run git")?;
-        if !out.status.success() {
-            anyhow::bail!(
-                "git {} failed: {}",
-                args.join(" "),
-                String::from_utf8_lossy(&out.stderr).trim()
-            );
-        }
-        Ok(out.stdout)
-    };
+    let git = |args: &[&str]| git(repo, args);
     let list = git(&["ls-tree", "-r", "--name-only", commit, "--", "content"])?;
     let _ = fs::remove_dir_all(&dir);
     for path in String::from_utf8_lossy(&list).lines() {
@@ -367,6 +536,11 @@ fn play(
         .args(["--jobs", &req.jobs.to_string()])
         .arg("--out")
         .arg(dir);
+    // The change kind is the default, so an old engine from before kinds plays a change
+    // run's seeds; a milestone or release seed needs an old engine that knows its kind.
+    if req.kind != crate::report::kinds::Kind::Change {
+        cmd.args(["--kind", req.kind.code()]);
+    }
     if suite == Suite::Formations {
         for name in req.pairings {
             cmd.arg("--pairing").arg(name);
@@ -426,6 +600,8 @@ fn calibrate(exe: &Path, content: &Path) -> Command {
         cmd.env("SM_LOG", CHILD_LOG);
     }
     cmd.env(super::QUIET_ENV, "1");
+    // The run that started the old engine keeps the history.
+    cmd.env(crate::report::history::HISTORY_ENV, "off");
     cmd
 }
 
@@ -464,6 +640,15 @@ pub fn folder_hash(dir: &Path) -> anyhow::Result<String> {
         }
         let mut bytes =
             fs::read(&path).with_context(|| format!("cannot read {}", path.display()))?;
+        if name == super::drafts::FILE {
+            // The setting rules are calibrate's bookkeeping: they decide no match.
+            if let Ok(mut v) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+                if let Some(o) = v.as_object_mut() {
+                    o.remove("setting_rules");
+                }
+                bytes = serde_json::to_vec(&v)?;
+            }
+        }
         if name == crate::report::bands::BANDS_FILE {
             let boost = serde_json::from_slice::<serde_json::Value>(&bytes)
                 .ok()
@@ -483,6 +668,24 @@ pub fn folder_hash(dir: &Path) -> anyhow::Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_old_engine_builds_with_the_features_its_revision_declares() {
+        let manifest = "[package]\nname = \"engine-cli\"\n\n[features]\n# a comment\n\
+                        sensitivity = [\"engine/sensitivity\"]\nmeasures = [\"engine/measures\"]\n\n\
+                        [dependencies]\nmeasures2 = \"1\"\n";
+        assert_eq!(declared_features(manifest), ["sensitivity", "measures"]);
+        let (key, missing) = features_for(&["measures"], manifest);
+        assert_eq!((key.as_str(), missing.len()), ("measures", 0));
+        let (key, missing) = features_for(&["sensitivity", "measures"], manifest);
+        assert_eq!(key, "measures,sensitivity");
+        assert!(missing.is_empty());
+        // A revision from before the measures feature builds without it, and says so.
+        let old = "[features]\nsensitivity = []\n";
+        let (key, missing) = features_for(&["measures"], old);
+        assert_eq!(key, "");
+        assert_eq!(missing, ["measures"]);
+    }
     use crate::calibrate::run_folder::{Done, LedgerWriter, UnitLine};
 
     fn temp(name: &str) -> PathBuf {
@@ -612,6 +815,7 @@ mod tests {
                 profile: "release".into(),
                 features: String::new(),
             },
+            missing: Vec::new(),
         };
         let err = build("main", &revision, true).unwrap_err().to_string();
         assert!(

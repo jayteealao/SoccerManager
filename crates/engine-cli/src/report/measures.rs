@@ -144,7 +144,8 @@ pub fn fields_of(m: &Measure) -> Vec<&str> {
         Measure::Scoreline { .. }
         | Measure::Builtin { .. }
         | Measure::Distribution { .. }
-        | Measure::Cells { .. } => Vec::new(),
+        | Measure::Cells { .. }
+        | Measure::Scenario { .. } => Vec::new(),
     }
 }
 
@@ -315,6 +316,12 @@ pub fn check(m: &Measure) -> Result<(), String> {
             list(den, false, "den")
         }
         Measure::Builtin { .. } => Ok(()),
+        Measure::Scenario { test } => {
+            if test.trim().is_empty() {
+                return Err("a scenario names the slow test that plays it".into());
+            }
+            Ok(())
+        }
         Measure::Difference { of, minus } => {
             list(of, false, "of")?;
             list(minus, false, "minus")
@@ -386,6 +393,9 @@ pub struct Obs<'a> {
     /// The match's extras: its measures, its players' running and its clubs; `None` for a
     /// match folded without them.
     pub extras: Option<&'a Extras>,
+    /// The generated league the match belongs to, the outer unit the pass rule resamples;
+    /// `None` for a match folded without its fixture.
+    pub league: Option<u32>,
 }
 
 impl Obs<'_> {
@@ -457,6 +467,11 @@ impl Terms {
     /// Matches the row covers that finished.
     pub fn covered(&self) -> usize {
         self.covered.iter().filter(|c| **c).count()
+    }
+
+    /// For each match, whether the row covers it and it finished.
+    pub fn covered_flags(&self) -> &[bool] {
+        &self.covered
     }
 
     /// The value with every weight 1, before rounding; `None` when a denominator is 0.
@@ -747,6 +762,15 @@ pub fn terms(def: &BandDef, obs: &[Obs<'_>], scope: Scope) -> Terms {
             }
             return t;
         }
+        // A scenario plays in its slow test, never in a suite.
+        Measure::Scenario { test } => {
+            t.error = Error::Fixed;
+            for _ in obs {
+                push(&mut t, false, || ([0.0], [0.0]));
+            }
+            t.why_none = Some(format!("a scenario band is judged by its slow test {test}"));
+            return t;
+        }
         // A whole distribution has no per-match terms: it is judged by its distance, from
         // [`histograms`].
         Measure::Distribution { .. } | Measure::Cells { .. } => {
@@ -888,6 +912,11 @@ pub fn histograms(def: &BandDef, obs: &[Obs<'_>], scope: Scope) -> Vec<Option<Hi
                 Measure::Distribution { of, .. } => match of {
                     Source::Goals => points(&[f64::from(s.goals[0] + s.goals[1])]),
                     Source::Passes => points(&s.figures.passes.map(f64::from)),
+                    Source::Shots => points(&[f64::from(s.tactics.shots[0] + s.tactics.shots[1])]),
+                    Source::Cards => {
+                        let l = &s.laws;
+                        points(&[f64::from(l.yellow[0] + l.yellow[1] + l.red[0] + l.red[1])])
+                    }
                     Source::ShotDistance => {
                         let m = measures?;
                         pair(&m.shot_bins[0], &m.shot_bins[1])
@@ -905,35 +934,6 @@ pub fn histograms(def: &BandDef, obs: &[Obs<'_>], scope: Scope) -> Vec<Option<Hi
             })
         })
         .collect()
-}
-
-/// The row's range check, as the hard-coded checks made it: the rounded value inside the
-/// range; the stronger team's win rate above `lo`; a red-card row at or below `hi`, judged
-/// on the unrounded means.
-pub fn passes(def: &BandDef, rounded: f64, terms: &Terms) -> bool {
-    match &def.measure {
-        Measure::Builtin {
-            name: Builtin::StrongerTeamWinRate,
-        } => rounded > def.lo,
-        Measure::Builtin {
-            name: Builtin::ReducedMinusFull,
-        } => terms.value.unwrap_or(0.0) <= def.hi,
-        Measure::Builtin {
-            name: Builtin::FullOverControl,
-        } => {
-            let [a, b, c, d] = terms.per_match();
-            let mean = |x: &[f64], y: &[f64]| {
-                let n: f64 = y.iter().sum();
-                if n > 0.0 {
-                    x.iter().sum::<f64>() / n
-                } else {
-                    0.0
-                }
-            };
-            mean(&a, &b) <= def.hi * mean(&c, &d)
-        }
-        _ => def.range().contains(rounded),
-    }
 }
 
 #[cfg(test)]
@@ -968,6 +968,7 @@ mod tests {
                 pairing: None,
                 arm: None,
                 extras: None,
+                league: None,
             })
             .collect()
     }
@@ -988,6 +989,7 @@ mod tests {
             max_from_dry: None,
             gates: true,
             report_only: None,
+            rule: None,
         }
     }
 
@@ -1201,6 +1203,7 @@ mod tests {
             pairing: None,
             arm: None,
             extras: Some(e),
+            league: None,
         }
     }
 

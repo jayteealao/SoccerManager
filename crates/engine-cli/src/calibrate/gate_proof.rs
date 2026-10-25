@@ -26,7 +26,6 @@ use crate::report::real;
 #[derive(Debug, Clone)]
 pub struct Opts {
     pub seed: u64,
-    pub matches: u32,
     pub out: Option<PathBuf>,
     pub write: Option<PathBuf>,
     pub real_data: Option<PathBuf>,
@@ -122,7 +121,11 @@ pub fn run(content_dir: Option<&Path>, o: &Opts) -> anyhow::Result<i32> {
             measures: true,
         },
         seed: o.seed,
-        matches: o.matches,
+        // The change kind's count of the equal suite: every run plays the kind's counts.
+        matches: registry
+            .kinds
+            .as_ref()
+            .map_or(0, |t| t.change.count_for(crate::report::Suite::Equal)),
         minutes: o.minutes,
         self_runs,
         copies,
@@ -165,12 +168,22 @@ impl Child<'_> {
     ) -> anyhow::Result<Value> {
         let run_dir = self.out.join(&meta.name);
         let log = self.out.join(format!("{}.log", meta.name));
+        // Each run states an intent that names no band: the proof reads the joint words
+        // only, and its runs have no terminal to ask at.
+        let intent = self.out.join(super::intent::INTENT_FILE);
+        if !intent.is_file() {
+            super::intent::write_into(self.out, &super::intent::Intent::empty())?;
+        }
         let mut cmd = Command::new(self.exe);
+        // The proof's runs are experiments on the engine, not points of its history.
+        cmd.env(crate::report::history::HISTORY_ENV, "off");
         cmd.arg("--content-dir")
             .arg(self.content)
             .arg("calibrate")
             .args(["--seed", &meta.seed.to_string()])
-            .args(["--matches", &self.opts.matches.to_string()])
+            .args(["--kind", "change"])
+            .arg("--intent")
+            .arg(&intent)
             .args(["--minutes", &self.opts.minutes.to_string()])
             .arg("--base-binary")
             .arg(self.exe)

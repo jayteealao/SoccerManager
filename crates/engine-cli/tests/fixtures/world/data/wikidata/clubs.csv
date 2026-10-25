@@ -1,0 +1,20 @@
+qid,label_en,native_label,official_name,short_name,aliases_en,country_qid,home_nation,league_qid
+Q1,Brisket Athletic,,Brisket Athletic Football Club,BRK,"The ""Briskets""|Brisket",Q100,,Q500
+Q2,Mallow Rovers F.C.,,,,Mallow,Q100,,Q500
+Q3,Quince Town,,,,,Q100,,Q500
+Q4,Sorrel United,,,,,Q100,,Q500
+Q5,Tamarind City,,,,,Q100,,Q501
+Q6,Juniper Albion,,,,,Q100,,Q501
+Q7,Fennel Wanderers,,,,,Q100,,Q501
+Q8,Clove Rangers,,,,,Q100,,Q501
+Q9,Saffron Dale FC,,,,,Q100,,Q502
+Q10,Nutmeg Port,,,,,Q100,,Q503
+Q11,Caraway Stead,,,,,Q100,,Q509
+Q12,Sumac Athletic,,,,,Q100,,
+Q13,Anise Reserves,,,,,Q100,,
+Q14,Paprika Lane,,,,,Q100,,
+Q20,Borage Harriers,,,,,Q900,Northland,Q600
+Q21,Chervil Lions,,,,,Q900,,Q600
+Q22,Dill Saints,,,,,Q900,,Q601
+Q23,Tarragon Saints,,,,,Q900,,Q601
+Q30,Lovage Comets,,,,,Q200,,Q700

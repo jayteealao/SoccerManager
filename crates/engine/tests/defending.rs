@@ -6,17 +6,19 @@
 //! The criterion tests are slow: `cargo test --release -p engine --all-features -- --ignored`.
 //! - A sending-off gives no advantage: 120 seeds, cards otherwise off, the away keeper,
 //!   centre-back, or striker sent off at kick-off. The reduced side never outscores the full
-//!   side on average, and the full side scores at most 1.6 times its no-send-off mean.
+//!   side on average, and the full side's goals over its no-send-off mean stay inside the
+//!   `full_over_control` band (design 0.8, margin 0.48).
 //! - Every shipped formation holds against 4-4-2 at 11 against 11: neither side averages more
 //!   than 4.0 goals per match over 120 seeds.
 
 mod common;
 
-use common::{content, default_teams, index, run_many};
+use common::{content, default_teams, index, judge_band, limits, run_many, units};
 use engine::math::{DVec2, DVec3, segment_distance};
 use engine::record::NullSink;
 use engine::scenario::Scene;
 use engine::{Content, MatchConfig, Simulation, Tactics, Validator, VecSink};
+use pass_rule::interval::Unit;
 
 /// A 90-minute match on the shipped content with decisions every tick and no injuries.
 fn live(seed: u64) -> MatchConfig {
@@ -148,18 +150,22 @@ fn a_back_four_behind_a_4_3_3_leaves_no_gap_for_a_central_striker() {
 }
 
 /// Mean goals per match, home then away, over `seeds`, with `arrange` applied to each match.
-fn mean_goals(
+fn match_goals(
     seeds: std::ops::RangeInclusive<u64>,
     config: impl Fn(u64) -> MatchConfig + Sync,
     arrange: impl Fn(Scene) -> Scene + Sync,
-) -> [f64; 2] {
-    let goals = run_many(seeds, |seed| {
+) -> Vec<[f64; 2]> {
+    run_many(seeds, |seed| {
         let mut sim = arrange(Scene::new(config(seed))).build();
         sim.run(&mut NullSink).unwrap();
-        sim.summary().goals
-    });
+        sim.summary().goals.map(f64::from)
+    })
+}
+
+/// Each side's mean goals over `goals`.
+fn means(goals: &[[f64; 2]]) -> [f64; 2] {
     let n = goals.len() as f64;
-    [0, 1].map(|t| goals.iter().map(|g| f64::from(g[t])).sum::<f64>() / n)
+    [0, 1].map(|t| goals.iter().map(|g| g[t]).sum::<f64>() / n)
 }
 
 #[test]
@@ -226,25 +232,35 @@ fn a_sending_off_gives_no_advantage() {
         config.tuning.yellow_aggression_weight = 0.0;
         config
     };
-    let control = mean_goals(1..=240, cards_off, |s| s);
-    eprintln!("control: home {:.4} away {:.4}", control[0], control[1]);
+    let control = match_goals(1..=240, cards_off, |s| s);
+    let [home, away] = means(&control);
+    eprintln!("control: home {home:.4} away {away:.4}");
+    let limits = limits();
     let mut failures = Vec::new();
     for (arm, i) in [("keeper", 11), ("centre-back", 13), ("striker", 21)] {
-        let [full, reduced] = mean_goals(1..=240, cards_off, |s| s.sent_off(i));
-        eprintln!(
-            "{arm} sent off: full side {full:.4}, reduced side {reduced:.4}, limit {:.4}",
-            1.6 * control[0]
-        );
-        if reduced > full {
-            failures.push(format!(
-                "{arm}: the reduced side scored {reduced:.2} against {full:.2}"
-            ));
-        }
-        if full > 1.6 * control[0] {
-            failures.push(format!(
-                "{arm}: the full side scored {full:.2}, above 1.6 x {:.2}",
-                control[0]
-            ));
+        let goals = match_goals(1..=240, cards_off, |s| s.sent_off(i));
+        let [full, reduced] = means(&goals);
+        eprintln!("{arm} sent off: full side {full:.4}, reduced side {reduced:.4}");
+        // The reduced side's goals minus the full side's, per match.
+        let difference = units(goals.iter().map(|g| g[1] - g[0]));
+        // The full side's goals over the control's home goals, matched by seed.
+        let ratio: Vec<Unit> = goals
+            .iter()
+            .zip(&control)
+            .map(|(g, c)| Unit {
+                num: g[0],
+                den: 1.0,
+                scale_num: 1.0,
+                scale_den: c[0],
+            })
+            .collect();
+        for (band, sample) in [
+            ("reduced_minus_full", difference),
+            ("full_over_control", ratio),
+        ] {
+            if let Err(e) = judge_band(&limits, band, &sample) {
+                failures.push(format!("{arm}: {e}"));
+            }
         }
     }
     assert!(failures.is_empty(), "{failures:#?}");
@@ -255,6 +271,7 @@ fn a_sending_off_gives_no_advantage() {
 fn every_formation_holds() {
     let content = content();
     let [a, b] = default_teams(&content);
+    let limits = limits();
     let mut failures = Vec::new();
     for formation in &content.tactics.formations {
         let name = formation.name.as_str();
@@ -272,8 +289,11 @@ fn every_formation_holds() {
         let n = goals.len() as f64;
         let [mine, theirs] = [0, 1].map(|k| goals.iter().map(|g| f64::from(g[k])).sum::<f64>() / n);
         eprintln!("{name} v 4-4-2: {mine:.2} - {theirs:.2}");
-        if mine > 4.0 || theirs > 4.0 {
-            failures.push(format!("{name} v 4-4-2: {mine:.2} - {theirs:.2}"));
+        for k in [0, 1] {
+            let side = units(goals.iter().map(|g| f64::from(g[k])));
+            if let Err(e) = judge_band(&limits, "formation_goals_per_side", &side) {
+                failures.push(format!("{name} v 4-4-2, side {k}: {e}"));
+            }
         }
     }
     assert!(failures.is_empty(), "{failures:#?}");

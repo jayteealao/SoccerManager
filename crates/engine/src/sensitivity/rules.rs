@@ -12,8 +12,8 @@ use crate::data::attributes::{AttributeSchema, Direction};
 use crate::data::team::Position;
 use crate::error::EngineError;
 
-/// The version this build reads.
-pub const SENSITIVITY_VERSION: u32 = 1;
+/// The version this build reads. Version 2 adds the setting rules and their design size.
+pub const SENSITIVITY_VERSION: u32 = 2;
 
 /// The rules file's path inside the content folder.
 pub const SENSITIVITY_FILE: &str = "sensitivity.json";
@@ -193,6 +193,15 @@ pub struct DesignSize {
     /// Bootstrap resamples per interval.
     #[garde(range(min = 99, max = 99_999))]
     pub resamples: u32,
+    /// Matches each level of a setting rule plays: the first fixtures of a change run's equal
+    /// suite.
+    #[serde(default = "default_setting_matches")]
+    #[garde(range(min = 2, max = 100_000))]
+    pub setting_matches: u32,
+}
+
+fn default_setting_matches() -> u32 {
+    200
 }
 
 fn even(n: &u32, _ctx: &()) -> garde::Result {
@@ -325,6 +334,12 @@ pub struct SensitivityFile {
     pub derived: Vec<String>,
     #[garde(dive)]
     pub five_match: FiveMatch,
+    /// The setting rules: each ties one content setting to a band and the direction the band
+    /// moves as the setting rises. calibrate writes, checks and reads them; the engine keeps
+    /// them as they are written.
+    #[serde(default)]
+    #[garde(skip)]
+    pub setting_rules: Vec<serde_json::Value>,
 }
 
 /// One job as its owner names it: the label and the direction of its statistic, and whether
@@ -686,6 +701,30 @@ mod tests {
             .map(|r| r.job.as_str())
             .collect();
         assert_eq!(inert, ["loyalty", "money_motivation", "controversy"]);
+    }
+
+    #[test]
+    fn the_shipped_file_is_version_2_with_no_setting_rule() {
+        let file = edited(|_| {}).unwrap();
+        assert_eq!(file.schema_version, SENSITIVITY_VERSION);
+        assert_eq!(SENSITIVITY_VERSION, 2);
+        assert!(file.setting_rules.is_empty());
+        assert_eq!(file.design.setting_matches, 200);
+    }
+
+    #[test]
+    fn a_version_1_file_is_refused_naming_version_2() {
+        let err = edited(|v| v["schema_version"] = serde_json::json!(1)).unwrap_err();
+        let text = err.to_string();
+        assert!(text.contains('2'), "{text}");
+        assert!(text.contains("version"), "{text}");
+    }
+
+    #[test]
+    fn setting_rules_are_kept_as_written() {
+        let rule = serde_json::json!({"id": "sr-00000000", "status": "draft"});
+        let file = edited(|v| v["setting_rules"] = serde_json::json!([rule.clone()])).unwrap();
+        assert_eq!(file.setting_rules, vec![rule]);
     }
 
     #[test]

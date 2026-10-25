@@ -16,13 +16,16 @@
 
 mod common;
 
-use common::{calm_match, content, default_teams, index, run_many, spread};
+use common::{
+    calm_match, content, default_teams, index, judge_band, limits, run_many, spread, units,
+};
 use engine::data::StoppageKind;
 use engine::math::{DVec2, DVec3};
 use engine::pitch::{self, Pitch};
 use engine::rules::restart;
 use engine::scenario::Scene;
 use engine::{MatchConfig, Simulation};
+use pass_rule::interval::Unit;
 
 /// The home striker, the away keeper, and an away centre-back.
 const SHOOTER: usize = 9;
@@ -212,13 +215,13 @@ fn penalty(seed: u64) -> bool {
 
 #[test]
 fn penalties_convert_seventy_to_eighty_five_percent() {
-    let scored = run_many(1..=500, penalty)
-        .into_iter()
-        .filter(|&s| s)
-        .count();
-    let rate = scored as f64 / 500.0;
-    eprintln!("penalties: {scored} of 500 scored, {rate:.3}");
-    assert!((0.70..=0.85).contains(&rate), "{rate}");
+    let penalties = run_many(1..=500, penalty);
+    let scored = penalties.iter().filter(|&&s| s).count();
+    eprintln!("penalties: {scored} of 500 scored");
+    let sample = units(penalties.iter().map(|&s| f64::from(u8::from(s))));
+    if let Err(e) = judge_band(&limits(), "penalty_conversion_share", &sample) {
+        panic!("{e}");
+    }
 }
 
 /// The 90-minute match of the default clubs on `seed`.
@@ -271,8 +274,20 @@ fn set_pieces_arise_from_play() {
         "{} corners without a crossing: {bad:?}",
         bad.len()
     );
-    assert!(per_team >= 1.2, "corners per team {per_team:.3}");
-    assert!(per_match >= 10.0, "goal kicks per match {per_match:.3}");
+    let limits = limits();
+    let corners: Vec<Unit> = results
+        .iter()
+        .map(|r| Unit::ratio(f64::from(r.0[0] + r.0[1]), 2.0))
+        .collect();
+    let goal_kicks = units(results.iter().map(|r| f64::from(r.1[0] + r.1[1])));
+    let failures: Vec<String> = [
+        ("corners_per_team", corners),
+        ("goal_kicks_per_match", goal_kicks),
+    ]
+    .iter()
+    .filter_map(|(band, sample)| judge_band(&limits, band, sample).err())
+    .collect();
+    assert!(failures.is_empty(), "{failures:#?}");
 }
 
 #[test]

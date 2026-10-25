@@ -50,10 +50,10 @@ pub enum Command {
     /// Continue a match from its latest snapshot to full time.
     Resume(ResumeOpts),
     /// Play many AI-managed matches and check the realism bands.
-    Calibrate(CalibrateOpts),
+    Calibrate(Box<CalibrateOpts>),
     /// Replay the 22 gate matches and compare with the golden file.
     Gate(GateOpts),
-    /// Check each commit's golden-file change against the ledger rules.
+    /// Check each commit's golden-file change by the ledger rules.
     Guard(GuardOpts),
     /// Fit the fast model, check it, or refuse a stale fit.
     FastModel(FastModelOpts),
@@ -61,6 +61,10 @@ pub enum Command {
     RestartWaits(RestartWaitsOpts),
     /// Write the real-team signature table of the tactical primitives.
     Signatures(SignaturesOpts),
+    /// Check the raw real data, or build the real-targets file.
+    RealTargets(RealTargetsOpts),
+    /// Build the world database from local snapshots.
+    WorldDatabase(WorldDatabaseOpts),
     /// Check or fit a tactical primitive from played matches.
     #[cfg(feature = "measures")]
     Primitives(PrimitivesOpts),
@@ -91,6 +95,120 @@ pub struct RestartWaitsOpts {
     /// Where the table goes, usually content/restart-waits.json.
     #[arg(long, value_name = "FILE")]
     pub out: PathBuf,
+}
+
+/// The real-targets command.
+#[derive(Debug, Args)]
+pub struct RealTargetsOpts {
+    #[command(subcommand)]
+    pub action: RealTargetsAction,
+}
+
+/// What `real-targets` does.
+#[derive(Debug, Subcommand)]
+pub enum RealTargetsAction {
+    /// Count the raw data files and name each missing one.
+    #[command(
+        long_about = "Count the raw data files the reference file is built from: the\n\
+                      110 football-data.co.uk result files, the 25 FotMob tables,\n\
+                      the 20 SoccerTrack v2 annotation files and a ClubElo snapshot.\n\
+                      Names each missing file, and each file that differs from its\n\
+                      manifest. Exits 1 when a file is missing or differs."
+    )]
+    CheckData {
+        /// The raw data folder.
+        #[arg(
+            long,
+            value_name = "DIR",
+            long_help = "The raw data folder; default the main checkout's .scratch/data."
+        )]
+        data: Option<PathBuf>,
+    },
+    /// Build the reference file of real targets from the raw data.
+    #[command(
+        long_about = "Build the reference file of real targets from the raw data, read\n\
+                      in place: per-league targets over five seasons, a target set per\n\
+                      tier, banding-group targets from a formula fitted on the leagues\n\
+                      with data, league-table targets, whole distributions, duel\n\
+                      contests and pass completion. Each target carries its full record\n\
+                      and credit. Also writes the real club names to\n\
+                      real-names/football-data.json beside it, for the packaging check.\n\
+                      Prints the blocked-shot cross-check."
+    )]
+    Build {
+        /// The raw data folder.
+        #[arg(
+            long,
+            value_name = "DIR",
+            long_help = "The raw data folder; default the main checkout's .scratch/data."
+        )]
+        data: Option<PathBuf>,
+        /// The reference file to write.
+        #[arg(
+            long,
+            value_name = "FILE",
+            long_help = "The reference file to write; default gate/real-targets.json\n\
+                         beside the content folder."
+        )]
+        out: Option<PathBuf>,
+    },
+}
+
+/// The world database command.
+#[derive(Debug, Args)]
+pub struct WorldDatabaseOpts {
+    #[command(subcommand)]
+    pub action: WorldDatabaseAction,
+}
+
+/// What `world-database` does.
+#[derive(Debug, Subcommand)]
+pub enum WorldDatabaseAction {
+    /// Build the world database from local snapshots.
+    #[command(
+        long_about = "Build the world database from the local openfootball, ClubElo,\n\
+                      Wikidata and competitions snapshots, read in place, with no\n\
+                      network request. Writes world.json in the content folder:\n\
+                      every country (by code) and tier the sources cover, each club\n\
+                      with a facsimile name and an Elo strength with its source, and\n\
+                      the competitions as structure. In the gate folder, which never\n\
+                      ships, it writes the real names (real-names/world.json and\n\
+                      world/name-map.json), the gap list (world/gaps.csv) and the\n\
+                      coverage record (world/coverage.json)."
+    )]
+    Build {
+        /// The snapshot folder.
+        #[arg(
+            long,
+            value_name = "DIR",
+            long_help = "The snapshot folder; default the main checkout's .scratch/data."
+        )]
+        data: Option<PathBuf>,
+        /// The world file to write.
+        #[arg(
+            long,
+            value_name = "FILE",
+            long_help = "The world file to write; default world.json in the content\n\
+                         folder."
+        )]
+        out: Option<PathBuf>,
+        /// The gate folder for the real names, gap list and coverage.
+        #[arg(
+            long,
+            value_name = "DIR",
+            long_help = "The gate folder for the real names, the gap list and the\n\
+                         coverage record; default gate/ beside the content folder."
+        )]
+        gate: Option<PathBuf>,
+        /// The hand-fill file.
+        #[arg(
+            long = "hand-fills",
+            value_name = "FILE",
+            long_help = "The hand-fill file of facts filled from public pages; default\n\
+                         world/hand-fills.json in the gate folder (none when absent)."
+        )]
+        hand_fills: Option<PathBuf>,
+    },
 }
 
 /// The real-team signature table command.
@@ -983,16 +1101,28 @@ pub struct CalibrateOpts {
                      Required for a run; not taken by calibrate accept."
     )]
     pub seed_arg: Option<u64>,
-    /// Matches per suite or pairing.
+    /// Matches per suite or pairing (default 1000).
+    #[arg(
+        long = "matches",
+        value_name = "N",
+        long_help = "Matches in each suite and in each formation pairing; default 1000.\n\n\
+                     A change run (--base) refuses it: it plays the fixed count of\n\
+                     its kind from the band file."
+    )]
+    pub matches_arg: Option<u32>,
+    /// Run kind: seed set, count.
     #[arg(
         long,
-        default_value_t = 1000,
-        long_help = "Matches in each suite and in each formation pairing.\n\n\
-                     In a change run (--base) it is the cap: the run plays a pilot,\n\
-                     sizes each suite for the power to see each band's smallest\n\
-                     shift, and plays at most this many."
+        value_enum,
+        default_value = "change",
+        hide_possible_values = true,
+        long_help = "The run's kind: change (default), milestone or release.\n\n\
+                     The kind picks the seed set the run's seed must come from,\n\
+                     the rare-band margins (wider in a change run) and, in a change\n\
+                     run, the fixed count of paired matches per suite unit. The\n\
+                     three seed sets do not overlap."
     )]
-    pub matches: u32,
+    pub kind: crate::report::kinds::Kind,
     /// Minutes of play per match.
     #[arg(long, default_value_t = 90)]
     pub minutes: u32,
@@ -1061,10 +1191,9 @@ pub struct CalibrateOpts {
                      The baseline must have the same seed, match count, and\n\
                      fixtures hash, or the run stops before it plays. A change\n\
                      inside two sampling errors is marked as noise.\n\n\
-                     With --base, the match count checked is --matches, the cap.\n\
-                     The run may stop growing below it, so the diff can set the\n\
-                     baseline's matches against fewer matches of this build; each\n\
-                     side's sampling error covers its own count."
+                     With --base, the match count checked is the largest count\n\
+                     of the run's kind over its suites; each side's sampling\n\
+                     error covers its own count."
     )]
     pub baseline: Option<PathBuf>,
     /// Run folder; default SM_DATA_DIR/runs/<run.id>.
@@ -1126,15 +1255,31 @@ pub struct CalibrateOpts {
         long_help = "Make it a change run: compare this build with the old engine\n\
                      of REV (a branch, tag or commit of this repository), built once\n\
                      and cached with its results.\n\n\
-                     Both engines play the same fixtures. A pilot sizes each suite\n\
-                     for 80 percent power to see each band's smallest shift, the\n\
-                     run grows to it (at most --matches), and each band reports\n\
-                     pass, fail or not sure, with one joint verdict. Needs a git\n\
-                     checkout of this repository as the working folder.\n\n\
-                     --baseline still works here: its match count must equal\n\
-                     --matches, and its diff uses the matches this run played."
+                     Both engines play the same fixtures, the fixed count of the\n\
+                     run's kind. Each band gets its word against real football\n\
+                     (pass, fail or not sure), which alone sets the joint verdict,\n\
+                     and its word against the old engine (better, worse,\n\
+                     equivalent or not sure). The old engine builds with this\n\
+                     build's features. Needs a git checkout of this repository as\n\
+                     the working folder.\n\n\
+                     --baseline still works here: its match count must equal the\n\
+                     largest count the run plays."
     )]
     pub base: Option<String>,
+    /// The change's intent: bands it should move.
+    #[arg(
+        long,
+        value_name = "FILE",
+        long_help = "The intent of a change run: a JSON file naming the bands the\n\
+                     change should move and which way (up or down), and later one\n\
+                     note per surprise and the draft rules to confirm.\n\n\
+                     It is copied into the run folder before any match plays.\n\
+                     Without it a change run asks at a terminal, reads the run\n\
+                     folder's own intent.json, or stops before play. A played\n\
+                     run's bands and directions cannot change; only its notes\n\
+                     and confirmations."
+    )]
+    pub intent: Option<PathBuf>,
     /// The measured real data the bands read.
     #[arg(
         long = "real-data",
@@ -1150,12 +1295,13 @@ pub struct CalibrateOpts {
                      real value."
     )]
     pub real_data: Option<PathBuf>,
-    /// A change run's pilot, in matches per suite unit; a test seam (default 200).
-    #[arg(long, hide = true, value_name = "N", default_value_t = 200)]
-    pub pilot: u32,
     /// The old engine of a change run: a ready executable, played on the run's content.
     #[arg(long, hide = true, value_name = "EXE", conflicts_with = "pair")]
     pub base_binary: Option<PathBuf>,
+    /// The revision a ready old engine (`--base-binary`) was built from: its content is the
+    /// old engine's, and the change's touched settings are diffed against it.
+    #[arg(long, hide = true, value_name = "REV", requires = "base_binary")]
+    pub base_rev: Option<String>,
     /// The changed engine plays every match on a new engine seed derived with SALT; the old
     /// engine keeps the planned seeds. A test seam of the gate proof's self runs.
     #[arg(long, hide = true, value_name = "SALT")]
@@ -1177,12 +1323,38 @@ impl CalibrateOpts {
     pub fn seed(&self) -> u64 {
         self.seed_arg.unwrap_or_default()
     }
+
+    /// Matches per suite unit of a run that is not a change run.
+    pub fn matches(&self) -> u32 {
+        self.matches_arg.unwrap_or(1000)
+    }
 }
 
 /// What `calibrate` does with a run folder instead of a run.
 #[derive(Debug, Subcommand)]
 pub enum CalibrateAction {
-    /// Accept a not-sure band of a run folder: accepted, not shown equivalent.
+    /// Show a run against the real targets; report only.
+    #[command(
+        long_about = "Show the engine against the real targets, band by band, from a\n\
+                      run folder's stored rows: a mean with its error, or a whole\n\
+                      distribution with its distance from the real one. Reads the\n\
+                      equal suite's matches. Writes calibration.json in the run folder;\n\
+                      never report.json, so the run's verdict does not change."
+    )]
+    Report {
+        /// The run folder of a finished calibrate run.
+        #[arg(long, value_name = "DIR")]
+        run: PathBuf,
+        /// The reference file of real targets.
+        #[arg(
+            long,
+            value_name = "FILE",
+            long_help = "The reference file of real targets; default\n\
+                         gate/real-targets.json beside the content folder."
+        )]
+        targets: Option<PathBuf>,
+    },
+    /// Accept a not-sure band of a run: accepted, not shown equivalent.
     #[command(
         long_about = "Accept a band that reads not sure in a run folder's last judgement.\n\n\
                       The acceptance is written to accepted.json in the folder. Run the\n\
@@ -1199,11 +1371,49 @@ pub enum CalibrateAction {
         #[arg(long, value_name = "DIR")]
         run: PathBuf,
     },
+    /// Print each run kind's fixed count as the band file computes it.
+    #[command(
+        long_about = "Print each run kind's fixed count, suite by suite: the larger of\n\
+                      the real-test count (every gating band at its floor with the\n\
+                      kind's margins, every rare band it judges at its exposure;\n\
+                      a change run judges no rare band) and the\n\
+                      old-engine count (from the head pair agreement), and the band\n\
+                      that set it. Exit 1 when a count differs from the band file's,\n\
+                      2 when a band's floor no count meets."
+    )]
+    Count {
+        /// Only this kind: change, milestone or release.
+        #[arg(long, value_enum, hide_possible_values = true)]
+        kind: Option<crate::report::kinds::Kind>,
+        /// Real data whose errors the floors read.
+        #[arg(long = "real-data", value_name = "DIR")]
+        real_data: Option<PathBuf>,
+    },
+    /// Measure how closely two run folders' matches agree.
+    #[command(
+        long_about = "Measure the agreement of two run folders of the same seed: each\n\
+                      figure's correlation over the matches both played, joined on\n\
+                      match seed, and the median over the figures with its 90 percent\n\
+                      interval. Reads each folder's statistics files: play both runs\n\
+                      with --keep-events all."
+    )]
+    Agreement {
+        /// The first run folder.
+        #[arg(long, value_name = "DIR")]
+        a: PathBuf,
+        /// The second run folder, played on the same seed.
+        #[arg(long, value_name = "DIR")]
+        b: PathBuf,
+        /// Also write the agreement to this file.
+        #[arg(long, value_name = "FILE")]
+        out: Option<PathBuf>,
+    },
     /// Measure the gate: the engine against itself and four broken copies.
     #[command(
         long_about = "Measure the gate's pass and fail rates and write them to gate-proof.json.
 
-                      Plays about 30 change runs of this build against itself: 10 with new
+                      Plays about 30 change runs of the change kind's fixed count, this
+                      build against itself: 10 with new
                       match seeds on the changed side, and 5 of each broken copy that
                       gate-proof.json declares (a content flag turned on). It takes hours
                       on a full machine; run the same command again to resume. Needs a
@@ -1215,9 +1425,6 @@ pub enum CalibrateAction {
         /// The first run seed: self run i plays SEED+i, copy run j plays SEED+j.
         #[arg(long, value_name = "SEED")]
         seed: u64,
-        /// The cap of each change run, as calibrate --matches.
-        #[arg(long, default_value_t = 1000)]
-        matches: u32,
         /// Folder of the proof's runs; default SM_DATA_DIR/proofs/<registry>-<verdict code>.
         #[arg(long, value_name = "DIR")]
         out: Option<PathBuf>,
@@ -1297,7 +1504,7 @@ mod tests {
 
     fn calibrate(args: &[&str]) -> Result<CalibrateOpts, clap::Error> {
         parse(args).map(|cli| match cli.command {
-            Command::Calibrate(opts) => opts,
+            Command::Calibrate(opts) => *opts,
             other => panic!("{other:?}"),
         })
     }
@@ -1329,7 +1536,6 @@ mod tests {
         match proof.action {
             Some(CalibrateAction::Proof {
                 seed,
-                matches,
                 out,
                 write,
                 real_data,
@@ -1337,10 +1543,7 @@ mod tests {
                 copy_runs,
                 minutes,
             }) => {
-                assert_eq!(
-                    (seed, matches, self_runs, copy_runs, minutes),
-                    (2027, 1000, 10, 5, 90)
-                );
+                assert_eq!((seed, self_runs, copy_runs, minutes), (2027, 10, 5, 90));
                 assert_eq!((out, write, real_data), (None, None, None));
             }
             other => panic!("{other:?}"),

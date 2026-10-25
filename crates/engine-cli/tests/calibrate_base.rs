@@ -1,21 +1,31 @@
 //! The old engine of a change run: its results on the run's fixtures come from a cache
 //! keyed by build, content, and fixture, so a second run against the same old engine plays
-//! none of its matches; and an old engine that cannot be built stops the run before any
-//! match plays, naming the build error.
+//! none of its matches; an old engine that cannot be built stops the run before any match
+//! plays, naming the build error; and the old engine builds with this build's features.
 
 mod common;
 
 use std::path::Path;
 use std::process::Output;
 
-use common::{RecordSchemas, bin, record, temp};
+use common::{RecordSchemas, bin, edited_content, intent_file, record, set_counts, temp};
 use serde_json::Value;
 
+/// A change run of two paired matches of the equal suite, on a copy of the shipped content
+/// whose kinds play two matches.
 fn calibrate(data: &Path, run: &Path, args: &[&str]) -> Output {
+    let content = data.join("content");
+    if !content.is_dir() {
+        set_counts(&edited_content(data, "tuning.json", |_| {}), 2);
+    }
     bin(data)
+        .arg("--content-dir")
+        .arg(&content)
         .arg("calibrate")
-        .args(["--seed", "9", "--matches", "2", "--minutes", "3"])
+        .args(["--seed", "9", "--minutes", "3"])
         .args(["--suite", "equal", "--jobs", "2"])
+        .arg("--intent")
+        .arg(intent_file(data, &[]))
         .args(args)
         .arg("--out")
         .arg(run)
@@ -55,6 +65,9 @@ fn a_second_change_run_takes_every_old_engine_result_from_the_cache() {
     );
     let base = &first["calib.base"];
     assert_eq!(base["source"], "binary");
+    // A ready binary is built already: no features chosen here, none missing.
+    assert_eq!(base["features"], "");
+    assert!(base.get("missing_features").is_none(), "{base}");
     // The cache holds the old engine's rows, in the rows format's folder.
     let cache = data.join("calibrate").join("base");
     assert!(cache.join("v2").is_dir(), "no v2 cache folder");
@@ -119,6 +132,15 @@ fn the_old_engine_of_a_revision_is_built_once_and_cached() {
     let out = calibrate(&data, &first_dir, &["--base", "HEAD"]);
     let first = finished(&out, &first_dir);
     assert_eq!(first["calib.base"]["source"], "rev");
+    // HEAD declares both features: the old engine has exactly this build's.
+    let mine: Vec<&str> = [
+        cfg!(feature = "measures").then_some("measures"),
+        cfg!(feature = "sensitivity").then_some("sensitivity"),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    assert_eq!(first["calib.base"]["features"], mine.join(","));
     assert_eq!(first["calib.base"]["cache"]["played"], 2);
     let second_dir = data.join("second");
     let second = finished(

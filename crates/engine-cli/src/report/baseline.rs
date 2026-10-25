@@ -15,7 +15,6 @@ use serde::Serialize;
 use serde_json::Value;
 
 use super::BandCheck;
-use super::compare;
 
 /// A change is noise when it is at most this many sampling errors.
 pub const NOISE_ERRORS: f64 = 2.0;
@@ -174,27 +173,27 @@ pub struct Diff {
 /// The two runs are treated as independent, so the error is conservative on shared
 /// fixtures.
 pub fn diff(baseline: &Baseline, content_hash: &str, new: &[BandCheck]) -> Diff {
-    let se = |checks: &[BandCheck], r: &compare::CompareRow| {
-        checks
-            .iter()
-            .find(|c| c.suite == r.suite && c.band == r.band && c.pairing == r.pairing)
-            .map_or(0.0, |c| c.se)
-    };
-    let rows: Vec<DiffRow> = compare::compare(&baseline.bands, new)
-        .into_iter()
-        .map(|r| {
-            let error = (se(&baseline.bands, &r).powi(2) + se(new, &r).powi(2)).sqrt();
-            DiffRow {
-                noise: r.delta.abs() <= NOISE_ERRORS * error,
+    let rows: Vec<DiffRow> = baseline
+        .bands
+        .iter()
+        .filter(|c| c.band != "wall_ms")
+        .filter_map(|o| {
+            let n = new
+                .iter()
+                .find(|c| c.suite == o.suite && c.band == o.band && c.pairing == o.pairing)?;
+            let error = (o.se.powi(2) + n.se.powi(2)).sqrt();
+            let change = round_to(n.value - o.value, 4);
+            Some(DiffRow {
+                noise: change.abs() <= NOISE_ERRORS * error,
                 error: round_to(error, 5),
-                suite: r.suite,
-                band: r.band,
-                pairing: r.pairing,
-                baseline: r.off,
-                new: r.on,
-                change: r.delta,
-                pass: r.on_pass,
-            }
+                suite: o.suite.clone(),
+                band: o.band.clone(),
+                pairing: o.pairing.clone(),
+                baseline: o.value,
+                new: n.value,
+                change,
+                pass: n.pass,
+            })
         })
         .collect();
     let noise = rows.iter().filter(|r| r.noise).count() as u32;
@@ -267,6 +266,7 @@ mod tests {
             unjudged: false,
             whole: false,
             dist: None,
+            rule: None,
         }
     }
 

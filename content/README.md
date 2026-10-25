@@ -34,13 +34,25 @@ Compare a candidate with `calibrate --pair <name>`, then remove the flag with th
 
 ## Realism bands
 
-`realism-bands.json` holds the acceptance criteria that `engine-cli calibrate` checks. It is at version 5 and holds 154 bands: each band has its design range under `design`, and its record: `real` (a pointer to where its real value is measured, the sample size and the date), `evidence` (`calibration` or `validation`), `confidence` (the measurement count, and the competitions, seasons and clubs behind the real value), `condition` (`dry` for every band today) and `gates` (`true` for the 18 bands that change the verdict, `false` for the 136 that only report). The file holds pointers, never a real value: the calibrate command reads each value in place from the measured results (`--real-data`, by default the main checkout's `.scratch/out`) and reports it beside the verdict. Versions 4, 3 and 2 still load and migrate in memory; a migrated band gates, is `dry`, and has no real record. The engine refuses a file of version 1. The bands are criteria, never tuning values: change a band only by a recorded product-owner decision. Every field is in [the data-file reference](../docs/reference/data-files.md#realism-bandsjson).
+`realism-bands.json` holds the acceptance criteria that `engine-cli calibrate` checks. It is at version 6 and holds 161 bands. Each band has a `target` (`{"real": {}}`, the real value read in place; `{"target": "<key>"}`, a target of the reference file `gate/real-targets.json`; or `{"design": <value>}` with an optional `cap`, for an engine experiment no real match repeats), a `margin`, its `definition_version`, `population`, `estimator`, `resampling` (how the engine side and the real side are drawn: whole leagues or whole matches; whole matches, tracked matches, a summary value or nothing), `min_exposure` (the matches or events below which a pass waits), `rare`, `engine_spread` (the engine's per-match and between-league spread and, for a distribution, its noise floor, with the run that measured them), `context`, and its record: `real`, `evidence`, `confidence`, `condition` and `gates` (`true` for the 157 bands that change the verdict, `false` for the 4 that only report). The file holds pointers, never a real value: the calibrate command reads each value in place from the measured results (`--real-data`, by default the main checkout's `.scratch/out`) or from the reference file. The engine refuses a file of an earlier version, naming version 6. The bands are criteria, never tuning values: change a band only by a recorded product-owner decision. Every field is in [the data-file reference](../docs/reference/data-files.md#realism-bandsjson).
+
+### The pass rule
+
+A band passes when the whole confidence interval of the engine value minus its target sits inside `[-margin, +margin]`, fails when the whole interval sits outside it, and is not sure otherwise; a pass below `min_exposure` is not sure. Each side of the interval is at `1 - alpha` (`pass_rule.alpha`, 0.05). A rare band takes exact count bounds, so a run with no events still has an interval. A whole-distribution band passes when the upper bound of its distance is below its margin, and its margin must lie above its noise floor.
+
+A margin is the sum of its parts: `league_spread` (how far real leagues differ, from the reference file where the statistic has a between-league spread, else 0 with the reason "one population"), `noticeable_error` (the smallest error a player would notice, a design value) and, where needed, a `widening`. Each part has its reason. The loader refuses a margin under its floor: the margin a band needs so that, with every gating band of the file judged at the design count (`pass_rule.design_count`: 1,000 matches over 30 generated leagues), a truly equal engine passes every band 97 times in 100 (`pass_rule.sound_pass`). A `widening` marked `provisional: true` lifts a margin to its floor measured on today's 3 generated leagues; its reason is "engine spread at the design count, 3 leagues", and the floor is set again once the suites play 30 leagues. 36 margins are provisional today (one of them, the engine experiment `full_over_control`, has no real source and carries the reason "engine spread at the design count; engine experiment, no real source"), and the headline of every run counts them.
+
+Every band gates except the bands of a group the file names under `report_only`, each group with the most bands it may hold and its reason. Two groups are named: `facing` (the body-facing bands, measured on two pose matches; none on this branch) and `rare_real_error` (`five_one_share` and the goals from free kicks, penalties and throw-ins: rare events whose real figure is too uncertain for any match count to hold the floor; they gate again once a real source lowers that error). A report-only band skips the floor, and the report lists its needed margin and whether it would hold now.
+
+The engine's slow tests read their limits from this file by band name and judge their own scenarios with the same rule (`second_yellows_per_match`, `penalty_conversion_share`, `formation_goals_per_side`, `ai_trailing_change_share`, `attacking_minus_defensive_shots` and the bands they share with calibrate). A band they alone judge has the `scenario` measure kind, which names its test and plays in no suite.
+
+Earlier versions set each band a design range under `design`; the sections below keep those ranges as the history of the bands.
 
 The three bands of the strength and red-card suites (`stronger_team_win_rate`, `reduced_minus_full`, `full_over_control`) measure engine experiments that no real match repeats: a club with every attribute times 1.15, and a side a player down from kick-off. Their `real.source` is `{"none": "<reason>"}`, with `real.sample` 0 and the date of that decision, and the report counts them apart from the bands without a real value.
 
 The pointers read these files of the measured results: `wy2_matches.csv` (goals, ten-plus and goalless shares), `wy2_team_matches.csv` (possession and passes; it holds the 1,826 league matches), `wyscout_rates.json` (the means of the five leagues: shots, yellow cards, pass accuracy, corners, throw-ins and goal kicks, halved per team where the band is per team), `sb_action_summary.json` (shots on target and goals per expected goal), and `wy2_events.csv.gz` (sending-off share: the matches with tag 1701 or 1703, counted over the compressed events file).
 
-The 136 bands that only report (`gates: false`) are judged and shown in a table of their own, and never change the verdict. Each range is set from its real value measured on this machine's results, at least two real standard errors either side of it, except fouls and offsides, whose ranges run from the lowest league mean of the five to the highest. A band gates only after a product-owner decision promotes it. 35 of them measure real football from match and event data, and 101 measure the team's shape (below). The real-football reporting bands read these files of the measured results:
+The 4 bands that only report (`gates: false`, group `rare_real_error`) are judged and shown in a table of their own, and never change the verdict. Version 5 added 136 bands that only reported; since version 6 they gate. Their version 5 ranges (below) were set from each real value measured on this machine's results, at least two real standard errors either side of it, except fouls and offsides, whose ranges ran from the lowest league mean of the five to the highest. 35 of them measure real football from match and event data, and 101 measure the team's shape (below). The real-football reporting bands read these files of the measured results:
 
 - `wyscout_rates.json`: fouls and offsides per team.
 - `wy2_matches.csv`: home goal difference, the 5-1 scoreline.
@@ -49,7 +61,7 @@ The 136 bands that only report (`gates: false`) are judged and shown in a table 
 - `sb2_events.csv.gz`: possession by third, by the duration of passes and carries of the team in possession.
 - `gap_sb.json`: goals by how the move began.
 - `wyscout_actions.csv.gz`: pass completion by kind and length.
-- `idsse_players.csv`: running, from 7 matches. That is under its floor of 30, so these eight bands would only report even with `gates: true`.
+- `idsse_players.csv`: running, from 7 matches. A real sample that small no longer makes a band report only: its real error widens the band's interval, so these eight bands read not sure until more matches are measured.
 
 | Band | Unit | Range | Real value |
 |---|---|---|---|
@@ -74,7 +86,7 @@ The pass curve has nine cells, three kinds by three lengths (under 10 m, 10 to 2
 
 ### Team-shape bands
 
-101 of the bands that only report measure how the teams move, in a build with the `measures` feature. They read `shape3_real.json` of the measured results: one value per real match from 7 tracked Bundesliga and 2. Bundesliga matches, under the bands' floor of 30, so these bands would only report even with `gates: true`. A checkout without that file reads `no real data here` for them. The report groups them by `group`:
+101 of the bands measure how the teams move, in a build with the `measures` feature. They read `shape3_real.json` of the measured results: one value per real match from 7 tracked Bundesliga and 2. Bundesliga matches, so their real error is wide and they read not sure until more tracked matches are measured. A checkout without that file reads `no real data here` for them. The report groups them by `group`:
 
 | Group | Bands | What they measure |
 |---|---|---|
@@ -160,3 +172,17 @@ Every calibrate run compares its gate with the proof's and prints `gate changed 
 ## Formations
 
 `tactics.json` ships ten formations. The first four keep their places, so a saved lineup keeps its shape: 4-4-2, 4-3-3, 4-2-3-1, 3-5-2. Six follow: 4-1-4-1, 4-4-1-1, 4-1-2-1-2 (the diamond), 3-4-3, 5-3-2, and 5-4-1. The computer manager starts in 4-4-2 and never changes formation during a match.
+
+## World database
+
+`world.json` is the world database: every country and league tier the open sources cover, each club with a generated name and an Elo strength, and the continental, intercontinental and domestic cup competitions as structure only (scope, level, season, entrants and stages, with no fixture, result or venue). No match reads it yet; the league fixtures of the calibration run and the later world features build on it.
+
+- A country is its FIFA code, with its ISO code, its region and, for the 55 UEFA associations, the 2025 rank and coefficient, the real club count of the top division and the 2026/27 places in the three continental competitions.
+- A league carries its country, its tier when a source states it, a group letter for parallel regional leagues, its real club count with the count's source, and a name built from the code ("ENG tier 1", "ENG tier 3 group B").
+- A club carries a generated name and short name, its country and league, and its Elo strength with the strength's source: `clubelo` (its own rating), `league-median` (the median of its league's rated clubs), `tier-step` (the nearest rated tier above, less the median drop per tier) or `floor` (the 10th percentile of all rated clubs).
+
+Nothing in the file names a real club, league, competition or country. A club's name comes from the game's own club-name generator, seeded per club and drawn again while it, folded, equals a real name of the sources or of the lists in `gate/real-names/`. The real names stay in `gate/`, which never ships: `gate/real-names/world.json` (the list the packaging check scans the shipped content against), `gate/world/name-map.json` (every real name compared against, by content id), `gate/world/gaps.csv` (the gap list: every missing strength or tier, club-count conflict, unlinked rating and link to review, with the sources tried) and `gate/world/coverage.json` (what the sources cover and every input with its sha256). Facts filled by hand from public pages go in `gate/world/hand-fills.json`, with the page and its revision.
+
+Rebuild it from the local snapshots with `engine-cli world-database build` (see [the command reference](../docs/reference/cli.md#world-database)); the build makes no network request, and two builds of the same snapshots write the same bytes. Never edit the file by hand.
+
+Sources, facts only: openfootball (CC0 1.0, each repository and commit in the file's `sources`), ClubElo ratings by Lars Schiefler (clubelo.com, the snapshot date in `sources`), Wikidata (CC0 1.0) and Wikipedia (CC BY-SA 4.0; the page revisions in `sources`, the page titles in `gate/world/coverage.json`).

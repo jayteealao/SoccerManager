@@ -1,0 +1,2753 @@
+{
+  "builder_version": 1,
+  "clubelo": {
+    "by_reason": {
+      "ambiguous": 20,
+      "no current league and no single league at its ClubElo level": 28,
+      "provisional ClubElo row": 104,
+      "reserve or B team": 36,
+      "two ClubElo rows on one club": 92,
+      "unmatched in Wikidata": 101
+    },
+    "file": "clubelo/clubelo-2026-10-11.csv",
+    "linked": 1469,
+    "on_gap_list": 381,
+    "rows": 1850
+  },
+  "competitions_skipped": [
+    {
+      "reason": "no stage structure in the source",
+      "source_id": "fifa-club-world-cup-2029"
+    }
+  ],
+  "countries": [
+    "AFG",
+    "ALB",
+    "ALG",
+    "AND",
+    "ANG",
+    "ANT",
+    "ARG",
+    "ARM",
+    "ARU",
+    "ATG",
+    "AUS",
+    "AUT",
+    "AZE",
+    "BAH",
+    "BAN",
+    "BDI",
+    "BEL",
+    "BEN",
+    "BFA",
+    "BHR",
+    "BHU",
+    "BIH",
+    "BLR",
+    "BLZ",
+    "BOL",
+    "BOT",
+    "BRA",
+    "BRB",
+    "BRU",
+    "BUL",
+    "CAM",
+    "CAN",
+    "CGO",
+    "CHA",
+    "CHI",
+    "CHN",
+    "CIS",
+    "CIV",
+    "CMR",
+    "COD",
+    "COK",
+    "COL",
+    "COM",
+    "CPV",
+    "CRC",
+    "CRO",
+    "CTA",
+    "CUB",
+    "CUW",
+    "CYP",
+    "CZE",
+    "DEN",
+    "DJI",
+    "DMA",
+    "DOM",
+    "ECU",
+    "EGY",
+    "ENG",
+    "EQG",
+    "ERI",
+    "ESP",
+    "EST",
+    "ETH",
+    "FIJ",
+    "FIN",
+    "FRA",
+    "FRO",
+    "FSM",
+    "GAB",
+    "GAM",
+    "GDR",
+    "GEO",
+    "GER",
+    "GHA",
+    "GIB",
+    "GNB",
+    "GRE",
+    "GRN",
+    "GUA",
+    "GUI",
+    "GUY",
+    "HAI",
+    "HKG",
+    "HON",
+    "HUN",
+    "IDN",
+    "IND",
+    "IRL",
+    "IRN",
+    "IRQ",
+    "ISL",
+    "ISR",
+    "ITA",
+    "JAM",
+    "JOR",
+    "JPN",
+    "KAZ",
+    "KEN",
+    "KGZ",
+    "KIR",
+    "KOR",
+    "KSA",
+    "KUW",
+    "KVX",
+    "LAO",
+    "LBR",
+    "LBY",
+    "LCA",
+    "LES",
+    "LIB",
+    "LIE",
+    "LTU",
+    "LUX",
+    "LVA",
+    "MAC",
+    "MAD",
+    "MAR",
+    "MAS",
+    "MCO",
+    "MDA",
+    "MDV",
+    "MEX",
+    "MKD",
+    "MLI",
+    "MLT",
+    "MNE",
+    "MNG",
+    "MOZ",
+    "MRI",
+    "MTN",
+    "MWI",
+    "MYA",
+    "NAM",
+    "NCA",
+    "NCY",
+    "NED",
+    "NEP",
+    "NGA",
+    "NIG",
+    "NIR",
+    "NIU",
+    "NOR",
+    "NZL",
+    "OMA",
+    "PAK",
+    "PAN",
+    "PAR",
+    "PER",
+    "PHI",
+    "PLE",
+    "PLW",
+    "PNG",
+    "POL",
+    "POR",
+    "PRK",
+    "PUR",
+    "QAT",
+    "ROU",
+    "RSA",
+    "RUS",
+    "RWA",
+    "SAM",
+    "SCO",
+    "SDN",
+    "SEN",
+    "SEY",
+    "SIN",
+    "SKN",
+    "SLE",
+    "SLV",
+    "SMR",
+    "SOL",
+    "SOM",
+    "SRB",
+    "SRI",
+    "SSD",
+    "STP",
+    "SUI",
+    "SUR",
+    "SVK",
+    "SVN",
+    "SWE",
+    "SWZ",
+    "SXM",
+    "SYR",
+    "TAN",
+    "TCA",
+    "TCH",
+    "TGA",
+    "THA",
+    "TJK",
+    "TKM",
+    "TLS",
+    "TOG",
+    "TPE",
+    "TRI",
+    "TUN",
+    "TUR",
+    "TUV",
+    "UAE",
+    "UGA",
+    "UKR",
+    "URS",
+    "URU",
+    "USA",
+    "UZB",
+    "VAN",
+    "VEN",
+    "VGB",
+    "VIE",
+    "VIN",
+    "VIR",
+    "WAL",
+    "YEM",
+    "YUG",
+    "ZAM",
+    "ZIM"
+  ],
+  "inputs": [
+    {
+      "path": "data:clubelo/clubelo-2026-10-11.csv",
+      "sha256": "db01189c011402ba992940f85e71dd36fc89f7a76c4a32aed8cc3af2000eaf58"
+    },
+    {
+      "path": "data:competitions/competitions.json",
+      "sha256": "0c6445a341b436770d7c8a24d0cabafb28fd8a9ba55a1f81601e98d392864171"
+    },
+    {
+      "path": "data:competitions/domestic-structure.json",
+      "sha256": "3c5ca90e5d0603103ee0a8500e2fc587a06893e0d182097197c8c80ceff58f14"
+    },
+    {
+      "path": "data:competitions/manifest.json",
+      "sha256": "a9066d33e812ca4699ee946cca641633a2942d12031e01864a24808c75aacfff"
+    },
+    {
+      "path": "data:competitions/uefa-ranking-2026-27.csv",
+      "sha256": "88c44222776f419615b95f7a28f1a759b1e852aeb99374ba9f58bc43a696b987"
+    },
+    {
+      "path": "data:openfootball/clubs/africa/congo-dr/cd.clubs.txt",
+      "sha256": "05edd6b8e0be22654cbe49a9a02d192f79e1452c4a87f0e4404269a79e0ca443"
+    },
+    {
+      "path": "data:openfootball/clubs/africa/egypt/eg.clubs.txt",
+      "sha256": "7d22a1c7ec6c2a3172d167a5dbac84143482e6b0f13ebe544705e439e448e852"
+    },
+    {
+      "path": "data:openfootball/clubs/africa/morocco/ma.clubs.txt",
+      "sha256": "7ee0e477edb5dc9cbd940640f1596e74fed0c36801cfd0439eab75cf6dd327b1"
+    },
+    {
+      "path": "data:openfootball/clubs/africa/south-africa/za.clubs.txt",
+      "sha256": "ec5603c780f08378f4c7658a765c5b5fcbc3a0f24d5a3f014ce7f13e8b5590b6"
+    },
+    {
+      "path": "data:openfootball/clubs/africa/tunisia/tn.clubs.txt",
+      "sha256": "9611021383cdd388a4f8aa9c61a316ad782739be57dbc0981d3d83e8afcc2693"
+    },
+    {
+      "path": "data:openfootball/clubs/asia/china/cn.clubs.txt",
+      "sha256": "6884f57a273e6c84758ff01e19044cd6de33c82227e6f2ac810cab6fc57d26cc"
+    },
+    {
+      "path": "data:openfootball/clubs/asia/india/in.clubs.txt",
+      "sha256": "688731e282acc9bed7dc114003cc5d961625f7c2cb1b968c89a14847529dd987"
+    },
+    {
+      "path": "data:openfootball/clubs/asia/japan/jp.clubs.txt",
+      "sha256": "7e56b8025243b0acdb7f228551c272d7d7a626ef6b5a47b961756b671bdf06d9"
+    },
+    {
+      "path": "data:openfootball/clubs/asia/kazakhstan/kz.clubs.txt",
+      "sha256": "c5d54c66208acd50ec528ddbc63b87cf6325636c070bc30ffd3a34f5157db3fa"
+    },
+    {
+      "path": "data:openfootball/clubs/asia/singapore/sg.clubs.txt",
+      "sha256": "03d68f5164a011b33d2d728ef9e584f024e2911b1e8025a38598598a9d4dd4cf"
+    },
+    {
+      "path": "data:openfootball/clubs/asia/south-korea/kr.clubs.txt",
+      "sha256": "8df07b74044a0daacfb123d30a0b9c9fb03dab3cafcc882c713ae4f6936af40a"
+    },
+    {
+      "path": "data:openfootball/clubs/asia/thailand/th.clubs.txt",
+      "sha256": "1e779b6a92b418adcdb2cc19bda66d04012c16b7b1cebe2a1d8b9be091cf28ae"
+    },
+    {
+      "path": "data:openfootball/clubs/caribbean/anguilla/ai.clubs.txt",
+      "sha256": "04cbd22b5a0812d61ce033ae66b4d97c03899296fd3dfdd1302a881b5e449c94"
+    },
+    {
+      "path": "data:openfootball/clubs/caribbean/haiti/ht.clubs.txt",
+      "sha256": "768b0e2836c580bba692e79d26249cc57625ae73af1f141bb9cdf485896ea66f"
+    },
+    {
+      "path": "data:openfootball/clubs/caribbean/jamaica/jm.clubs.txt",
+      "sha256": "9a8e2dbf75a367342fd8b29379c1f170bb04d4a6e0a2f1f952be4088d7015511"
+    },
+    {
+      "path": "data:openfootball/clubs/caribbean/puerto-rico/pr.clubs.txt",
+      "sha256": "a419f273a8601c07f555bee9889cce23536f115a6f2fffccfb666652cb91d094"
+    },
+    {
+      "path": "data:openfootball/clubs/caribbean/trinidad-n-tobago/tt.clubs.txt",
+      "sha256": "4d3eeca5810957b264b191125b37872554076887870ebe468899fca1efbcd687"
+    },
+    {
+      "path": "data:openfootball/clubs/central-america/costa-rica/cr.clubs.txt",
+      "sha256": "042c7a4b244927150782a6f0cb25ad0a56fc116dae90edded653234c0daf3e51"
+    },
+    {
+      "path": "data:openfootball/clubs/central-america/el-salvador/sv.clubs.txt",
+      "sha256": "20daaee22c926f83c06e643cc29c92c6d34c196c40ca58f2d681054581c17138"
+    },
+    {
+      "path": "data:openfootball/clubs/central-america/guatemala/gt.clubs.txt",
+      "sha256": "14bf897b44ca5f8336bdeaa9afe292877901583732413693ff6138c3e5c0ec6a"
+    },
+    {
+      "path": "data:openfootball/clubs/central-america/honduras/hn.clubs.txt",
+      "sha256": "3d417190e69aba816903749fac3f70ba7f834b2614ed8057e710b259c0d972bf"
+    },
+    {
+      "path": "data:openfootball/clubs/central-america/nicaragua/ni.clubs.txt",
+      "sha256": "8c1623929656db13e3e4a5e4ab1ab0ea00115e776d32d6738d4baeb80b3ca994"
+    },
+    {
+      "path": "data:openfootball/clubs/central-america/panama/pa.clubs.txt",
+      "sha256": "3ea563070325862b3e7d9c1937f391e8088f8800a8d728770c99d5ebe9b34163"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/albania/al.clubs.txt",
+      "sha256": "058891133d631e79d25a0f7f03f740cb6c919a2001da2e5381a3a9085f2952ad"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/andorra/ad.clubs.txt",
+      "sha256": "28e36ee8e1ac7a8e1055fca2a31cbb88786f7b5e333476d3cbbd39d0cf2d8d0b"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/armenia/am.clubs.txt",
+      "sha256": "40c1cfb464b7f70a9e8889a952c3bbecfdc8192e39dd65f973757ade32581f00"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/austria/at.clubs.txt",
+      "sha256": "df8c6cd091e0ad4ac1a2f7bc6e7c643f1f025ec028d1f22a5649e7b45c96c053"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/azerbaijan/az.clubs.txt",
+      "sha256": "7712eae8b87acf88d2ea0958b5e2dc0d67a7fa32eba01d5964c39afe2f7dc402"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/belarus/by.clubs.txt",
+      "sha256": "e32e1f1a650706476a884faf0d9c28c9a8297ef37ca1f7ecf5139ecaf1a9d3e8"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/belgium/be.clubs.txt",
+      "sha256": "cee7c33f3676f7be5bd060ebcb1f1fd711bf1fc2892d446e5420ed2fe2b29184"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/bosnia-n-herzegovina/ba.clubs.txt",
+      "sha256": "f97f76403fe44b5e958301ae76b3857b76a473a8e00496da22fdc92c4c25b07c"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/bulgaria/bg.clubs.txt",
+      "sha256": "62de2f47b069d2439ce4dc5e8d08068a37fa6a820705db8dbf9288fd174e9c08"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/croatia/hr.clubs.txt",
+      "sha256": "f9fcbf74fd49d3a73515c7952f341a83e7563fa5399f31c9c0f0252104f85388"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/cyprus/cy.clubs.txt",
+      "sha256": "13958af9d2c62305e173539e248ac71e83ce7cf2b01350dd1d2a3b29d378f8ba"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/czech-republic/cz.clubs.txt",
+      "sha256": "86b9012df1f4bf842e43a608cd8d855a7984267f3c80ad217ac1be842c84fccf"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/denmark/dk.clubs.txt",
+      "sha256": "6f57960e61f315a9e4e745d07551a52efce419610a66cdb63a42e66bdaeca787"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/england/eng.clubs.txt",
+      "sha256": "272bf00c7cc8991a0dc98493d0963fab18f07435098637a968f700015e83e93e"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/estonia/ee.clubs.txt",
+      "sha256": "f384dfae2bd61fbb0a3f26756e05f73ff0bc721a83320f6566c0b4385d83f225"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/faroe-islands/fo.clubs.txt",
+      "sha256": "d32215942d3a4674569554d47a927bedbc4a9ca1886015de769d752e39aa93ac"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/finland/fi.clubs.txt",
+      "sha256": "802d2fe9de6f29c47df1cd17d9e22cfaf546da78dbf0738c7c401a34fab75a0a"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/france/fr.clubs.txt",
+      "sha256": "bfdba243242c950759cfeb4de3541ecd319885753cee2e9f4719ce78875aca07"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/georgia/ge.clubs.txt",
+      "sha256": "715cc7d30cf6cf8c8b3f336e63b3b0aff03bec173a0e3cdea77e33b291288787"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/germany/de.clubs.txt",
+      "sha256": "5e0d22d19880a17bfff665a1643835c91d2cabf9dd9c6052e2f4a041eb15afa7"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/gibraltar/gi.clubs.txt",
+      "sha256": "85fff1368af0824df98ff2ad9f23351528e0b6abc1cf6d13fd3ce6006079f7af"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/greece/gr.clubs.txt",
+      "sha256": "42cbf83f517ce03d80a0f5601f2bdba1f4d7afda3f0cd62f26427c25bec27640"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/hungary/hu.clubs.txt",
+      "sha256": "f0c3c26304609755c6f3f43efb5df05a678f8c8adb1466f9670180d181173951"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/iceland/is.clubs.txt",
+      "sha256": "aab8bd431ee14adc2d13c4fc19e044d9e955ec97fa7393b6b4cd49a4accbf471"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/ireland/ie.clubs.txt",
+      "sha256": "9a43d603abddfd2579bd6a4614ad85fde9e5fdd707ed328367d676bb00f28062"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/italy/it.clubs.txt",
+      "sha256": "9bd51774eefa3faff12d0433e03c0136004ed9ffe6642809191aea67a460ddd2"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/kosovo/kos.clubs.txt",
+      "sha256": "48033bef63022e15b2ac94a8d5980a9a4108fd6ee7f4fad1f25fd8c46995bafe"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/latvija/lv.clubs.txt",
+      "sha256": "706d47e99c79125f22d0217bdf51f2d9954ca1574a874395a73ad330940b0e17"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/liechtenstein/li.clubs.txt",
+      "sha256": "46c06f5a0fc13d97e645d3d533fe331bce5a37770649d9033fe29e2a0949353b"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/lithuania/lt.clubs.txt",
+      "sha256": "4f6126a6f31975800abaa514ab18ef502ff42e38f13becf4f8e9de98ca259042"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/luxembourg/lu.clubs.txt",
+      "sha256": "2a1403171775d986f4e4764e30b3ad46adf19f2ec3df603db5925453a1ae9049"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/macedonia/mk.clubs.txt",
+      "sha256": "cdce8ceab9b5fad7e6b2e8e63ebd0ed81a1653da2ca339500da4d98527de58fe"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/malta/mt.clubs.txt",
+      "sha256": "82473ef7dd2c17e161e2903cdaf424fcb9417511e7c17b78d46237bb0ea5e65f"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/moldova/md.clubs.txt",
+      "sha256": "8e63f1690f9926aa08d48d9a0c3af8e4c477ae18bd6e41c58aa7738090cbcba1"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/monaco/mc.clubs.txt",
+      "sha256": "3ba204ede0dec97e161d2aed8f240e49b5775a902797228c8d43e8de59f59e55"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/montenegro/me.clubs.txt",
+      "sha256": "2fd1260308966bb08cc644700ece7164c917934c3faa38c0cb4fefae5f4fe5a7"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/netherlands/nl.clubs.txt",
+      "sha256": "b5e134230cc74056f98b95a9aa443c075975eee28cec977c0b1c7b13460557b1"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/northern-ireland/nir.clubs.txt",
+      "sha256": "5ac2516ebd93298c9bb9eb9441d71c92358842d2b583c5fa0614f1956308d79f"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/norway/no.clubs.txt",
+      "sha256": "8df275c64e88c3ec64e431bb07d8ba59a9f3e05c844e79abf0d59cf302ca1181"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/poland/pl.clubs.txt",
+      "sha256": "6e923accc9b54d5d7500e1c9cac3f16f5ca72df1ec5ec4c91efa7ced6164f8c1"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/portugal/pt.clubs.txt",
+      "sha256": "9b2ec8b0903a4f59f1c14c0994919c105028835778f0f0372b43a6682e70be85"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/romania/ro.clubs.txt",
+      "sha256": "4f74c2cadd265f9d7bb616d21e84d65ce607237eb214aff8a996d612c2225ea9"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/russia/ru.clubs.txt",
+      "sha256": "fa1a869f65e3ad873127f68e545cb79589328ca6f35af393e4c8899e02d98496"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/san-marino/sm.clubs.txt",
+      "sha256": "b6310a0711b193d681bd542c828353c7564ca55bd408b2c3d43d089bda52ed6d"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/scotland/sco.clubs.txt",
+      "sha256": "6f345455932b028049d61c38aa07bd42249ef69105d9cbcdeeceba9e978abf5d"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/serbia/rs.clubs.txt",
+      "sha256": "053c58937e9f5071029a840ee7888c891e29843f3492e4cecc1af2d6415d7f9f"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/slovakia/sk.clubs.txt",
+      "sha256": "44df2ff41cc92defe1c1b6ef894ddbda914b4f2045121b7b20f68719c48a3396"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/slovenia/si.clubs.txt",
+      "sha256": "f21b776fa71ea7ef117cf86988dc8986fd2ca602b333a2e9eab8a460af736b94"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/spain/es.clubs.txt",
+      "sha256": "057b6d2fa987ed488d9881b4741f65859be3649d78860aff25d3e1308e2c693a"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/sweden/se.clubs.txt",
+      "sha256": "d295e21456d0b4551462ab5e1caa1344d328a89ed145df34b0053dbbea43c031"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/switzerland/ch.clubs.txt",
+      "sha256": "0161d0893f121e1534c6aa103b07ce21d71b6302c5f849e9452a911b9093aa39"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/turkey/tr.clubs.txt",
+      "sha256": "a6f4ed5def4eada3c89d8d16e7b45002b76883415cd5ed07b8f3cb305b5ffe4a"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/ukraine/ua.clubs.txt",
+      "sha256": "5270daa705608c644dcd3ac32c5e8f735f43522bb3ef9f73c53bdeaf8d21107f"
+    },
+    {
+      "path": "data:openfootball/clubs/europe/wales/wal.clubs.txt",
+      "sha256": "158142b278a7e6b6bf7f04b47de425d794a527b65450fd68c1be9e438c05d88a"
+    },
+    {
+      "path": "data:openfootball/clubs/middle-east/iran/ir.clubs.txt",
+      "sha256": "44972abc96fe7506e7311bac9a654ee3c8f1934556a2e6d6c2bc15d355cbc387"
+    },
+    {
+      "path": "data:openfootball/clubs/middle-east/israel/il.clubs.txt",
+      "sha256": "6d87006c0207e83f26fdd102e001f1db0d82bf8f6d91843f10cf728fae3c7b18"
+    },
+    {
+      "path": "data:openfootball/clubs/middle-east/jordan/jo.clubs.txt",
+      "sha256": "33c76ada19337b6c1c233164469bcfb065acd4debbe35af2b4c14c79093684f3"
+    },
+    {
+      "path": "data:openfootball/clubs/middle-east/lebanon/lb.clubs.txt",
+      "sha256": "67bb393f79c34a3e41da79ddd6cfd4d32014509fe6cfec0f95ff35dfe43f22a4"
+    },
+    {
+      "path": "data:openfootball/clubs/middle-east/qatar/qa.clubs.txt",
+      "sha256": "c5523eb5dd65e874cd9fa4db421d4ffa5651750c3ab98bf2d3173a008726c151"
+    },
+    {
+      "path": "data:openfootball/clubs/middle-east/saudi-arabia/sa.clubs.txt",
+      "sha256": "3da9c44167ffa31efd04a8e3c8e1a2ff2a5ad5156f1c36e9f553faec07864cd1"
+    },
+    {
+      "path": "data:openfootball/clubs/middle-east/united-arab-emirates/ae.clubs.txt",
+      "sha256": "a18d681b8097618bd6f2ee1e1585c61f226de1c39aafed8d06920b3fbfdd9a46"
+    },
+    {
+      "path": "data:openfootball/clubs/north-america/canada/ca.clubs.txt",
+      "sha256": "ac89563cda317898335600f8295424157fb5d29feabd010a4d3d743b87f03179"
+    },
+    {
+      "path": "data:openfootball/clubs/north-america/mexico/mx.clubs.txt",
+      "sha256": "6f18178e356532f3d20631a157ba6f9fcd1f8766c30a2830de6f2e15726e5400"
+    },
+    {
+      "path": "data:openfootball/clubs/north-america/united-states/us.clubs.txt",
+      "sha256": "44bf3f2a23e7a8fe2ff57585661e9c8e288be6dd70a17089000675b0e67f8278"
+    },
+    {
+      "path": "data:openfootball/clubs/pacific/australia/au.clubs.txt",
+      "sha256": "eacdc2006ab4aa00c9fee0a314123ce0c8fcf3e273b05fed776999178a2b4417"
+    },
+    {
+      "path": "data:openfootball/clubs/pacific/new-zealand/nz.clubs.txt",
+      "sha256": "5aa487266e9d25267a08f216e9de011132b8b1cfc92a8dca81db873de7e8171d"
+    },
+    {
+      "path": "data:openfootball/clubs/south-america/argentina/ar.clubs.txt",
+      "sha256": "3822643d1998e42e848437e7e90ca7068c93919c51b5fc0c536dba42370bba98"
+    },
+    {
+      "path": "data:openfootball/clubs/south-america/bolivia/bo.clubs.txt",
+      "sha256": "3beb563b07339a3d6b4f2515c7a3c9b18ee33dafe1ffdd674ca07d7da0e381b6"
+    },
+    {
+      "path": "data:openfootball/clubs/south-america/brazil/br.clubs.txt",
+      "sha256": "8420c36cd40b4c8c81f02330e796e0fb4488ca9be301c600d8941375e24998b7"
+    },
+    {
+      "path": "data:openfootball/clubs/south-america/chile/cl.clubs.txt",
+      "sha256": "760c915cd494aebc4bf960801814cf6c29d6e41040a6f0a107f6ffc6127da142"
+    },
+    {
+      "path": "data:openfootball/clubs/south-america/colombia/co.clubs.txt",
+      "sha256": "4b7395b7bd288e2be5df2dec6ab3f0dae3e439918aa580748660e032eca0c784"
+    },
+    {
+      "path": "data:openfootball/clubs/south-america/ecuador/ec.clubs.txt",
+      "sha256": "8160f1ba539580c47392936642f3a5b787b30d261353f9f52eca3829d7c3a705"
+    },
+    {
+      "path": "data:openfootball/clubs/south-america/guyana/gy.clubs.txt",
+      "sha256": "01fb78b33985235fcc988a99308fc3693b3b8c5edbfcf6eb636a2629b6e35524"
+    },
+    {
+      "path": "data:openfootball/clubs/south-america/paraguay/py.clubs.txt",
+      "sha256": "7f96896ef95b11a57fcccf597fc243e0738dfb5123d2d016203ccb440b8ac9a3"
+    },
+    {
+      "path": "data:openfootball/clubs/south-america/peru/pe.clubs.txt",
+      "sha256": "a1457cb0f422932da593808efba61bb1ddec9392c5e7d6b1ff15a59fff3a8b24"
+    },
+    {
+      "path": "data:openfootball/clubs/south-america/suriname/sr.clubs.txt",
+      "sha256": "dcdd1abe306dd754461dfc88d2623834f203522506c222b96d7d946bb1c9fd4c"
+    },
+    {
+      "path": "data:openfootball/clubs/south-america/uruguay/uy.clubs.txt",
+      "sha256": "1bd2d560daf5f1f0d6d1a9794cbf347d60da9acd5b1fb5504cd2cf0d9c512c2d"
+    },
+    {
+      "path": "data:openfootball/clubs/south-america/venezuela/ve.clubs.txt",
+      "sha256": "0929f0b1413c12c179cbd58a236b1b5cdd131c5cdd3a80b5f8f4b9ebcf4e8f29"
+    },
+    {
+      "path": "data:openfootball/leagues/europe/austria/at.leagues.txt",
+      "sha256": "880ad5c4e59fc1d4236639b87c52a991c907c4c567d9b4fe844b9d1ad7f80aa7"
+    },
+    {
+      "path": "data:openfootball/leagues/europe/england/eng.leagues.txt",
+      "sha256": "fe65adf12c9c85d55cd5f324e8e7c00278dfb709d5efa97c046ad08616e0a5b9"
+    },
+    {
+      "path": "data:openfootball/leagues/europe/germany/de.leagues.txt",
+      "sha256": "d7f395b27445601daafa39f7c05f61b5e1b3fc9024273f26cee6abcf1efe50c2"
+    },
+    {
+      "path": "data:openfootball/leagues/south-america/argentina/ar.leagues.txt",
+      "sha256": "34d10930f3d87d66ffbb667476415114751f73ee27e66ee9c1d1838831440aa5"
+    },
+    {
+      "path": "data:openfootball/leagues/south-america/brazil/br.leagues.txt",
+      "sha256": "4923e5d85c3c1887ce17598ccf47b2fc0cc26989c7ed24f0775db5016ded60e2"
+    },
+    {
+      "path": "data:openfootball/manifest.json",
+      "sha256": "690f6e8209ce90c1339251929e12ca61467bf9ca5cf357238bd78f4acc52ecbd"
+    },
+    {
+      "path": "data:wikidata/associations.csv",
+      "sha256": "d22cfd190bd702e1ccadd08d8ad99145dfdf24ca3582ea75e1112ef33e0903da"
+    },
+    {
+      "path": "data:wikidata/clubelo_match.csv",
+      "sha256": "b62f163e0be947a18812e81f201b56ae4168599795feaa100a7e7b5aee4532ba"
+    },
+    {
+      "path": "data:wikidata/clubs.csv",
+      "sha256": "1caeeed27394d5e88b08fe7bb7c3ac3c7243180a14833d46dbc9f660b6fa1bb5"
+    },
+    {
+      "path": "data:wikidata/leagues.csv",
+      "sha256": "9c834b42bd0733734c3a4c47e981b2f58adad5bf2ec3c8f1c081c48a765ccf9b"
+    },
+    {
+      "path": "data:wikidata/manifest.json",
+      "sha256": "a35c5507e1ff658b1813737593049b881e3c0b7f33855e2e2194c502054fc08f"
+    },
+    {
+      "path": "gate:real-names/football-data.json",
+      "sha256": "723e6dfd48d60bf79e797aec6cc2e96778d57797abd71de079f5dd68997d28a5"
+    },
+    {
+      "path": "hand-fills:hand-fills.json",
+      "sha256": "fddf3d821ea5e4975f9210106467772f8d0c87584a6363857495cade6a8f928e"
+    }
+  ],
+  "openfootball": [
+    {
+      "commit": "627ba1b3ebddc5a513420239356f490bef2453ec",
+      "repo": "openfootball/austria"
+    },
+    {
+      "commit": "1166d3c9c5725aec01e1bbeaa20f6467e39ddbb8",
+      "repo": "openfootball/belgium"
+    },
+    {
+      "commit": "abfaeddc2ee3d14f99ecc163c9ddb46cb4d67cef",
+      "repo": "openfootball/champions-league"
+    },
+    {
+      "commit": "803f0250a33f89009c51ee6d98ba88c31e655e7d",
+      "repo": "openfootball/club-worldcup"
+    },
+    {
+      "commit": "ae3800227c449447b3a337fc0aac79a8f02f4c8b",
+      "repo": "openfootball/clubs"
+    },
+    {
+      "commit": "c34532ab6950aa0089ef1c736ffdb8c818c3356f",
+      "repo": "openfootball/deutschland"
+    },
+    {
+      "commit": "b17e8f01707d83d2ce1790c14d4a5eeb35987825",
+      "repo": "openfootball/england"
+    },
+    {
+      "commit": "09afd6cd836ee72f69a50e82d8727bcc39a8b8dc",
+      "repo": "openfootball/espana"
+    },
+    {
+      "commit": "0bf83f88e8feb22904c5f9d93c6407574c1347e0",
+      "repo": "openfootball/europe"
+    },
+    {
+      "commit": "48954d163c312aa705efacb64f771267031fe6eb",
+      "repo": "openfootball/italy"
+    },
+    {
+      "commit": "500b3eb4958e57849f93f816261149e0286e25c4",
+      "repo": "openfootball/leagues"
+    },
+    {
+      "commit": "119fa1724b2079a1072a0cb0ca0ccac26d92fd34",
+      "repo": "openfootball/south-america"
+    },
+    {
+      "commit": "42df8203e73e922cdfa36104e3acee3aea1f2bc0",
+      "repo": "openfootball/world"
+    }
+  ],
+  "openfootball_unmapped_league_files": [],
+  "real_names_compared": 85182,
+  "scan_exceptions": [],
+  "strength": {
+    "floor": 1305.0,
+    "tier_drop": 101.5
+  },
+  "tiers": [
+    [
+      "ALB",
+      1
+    ],
+    [
+      "ALB",
+      2
+    ],
+    [
+      "ALB",
+      3
+    ],
+    [
+      "ALB",
+      4
+    ],
+    [
+      "ALG",
+      1
+    ],
+    [
+      "ALG",
+      2
+    ],
+    [
+      "AND",
+      1
+    ],
+    [
+      "AND",
+      2
+    ],
+    [
+      "ARG",
+      1
+    ],
+    [
+      "ARG",
+      2
+    ],
+    [
+      "ARG",
+      3
+    ],
+    [
+      "ARG",
+      4
+    ],
+    [
+      "ARG",
+      5
+    ],
+    [
+      "ARG",
+      6
+    ],
+    [
+      "ARM",
+      1
+    ],
+    [
+      "ARM",
+      2
+    ],
+    [
+      "AUT",
+      1
+    ],
+    [
+      "AUT",
+      2
+    ],
+    [
+      "AUT",
+      3
+    ],
+    [
+      "AUT",
+      4
+    ],
+    [
+      "AUT",
+      5
+    ],
+    [
+      "AZE",
+      1
+    ],
+    [
+      "AZE",
+      2
+    ],
+    [
+      "AZE",
+      3
+    ],
+    [
+      "BEL",
+      1
+    ],
+    [
+      "BEL",
+      2
+    ],
+    [
+      "BEL",
+      3
+    ],
+    [
+      "BEL",
+      4
+    ],
+    [
+      "BEL",
+      5
+    ],
+    [
+      "BIH",
+      1
+    ],
+    [
+      "BIH",
+      2
+    ],
+    [
+      "BIH",
+      3
+    ],
+    [
+      "BLR",
+      1
+    ],
+    [
+      "BLR",
+      2
+    ],
+    [
+      "BLR",
+      3
+    ],
+    [
+      "BRA",
+      1
+    ],
+    [
+      "BRA",
+      2
+    ],
+    [
+      "BRA",
+      3
+    ],
+    [
+      "BRA",
+      4
+    ],
+    [
+      "BUL",
+      1
+    ],
+    [
+      "BUL",
+      2
+    ],
+    [
+      "BUL",
+      3
+    ],
+    [
+      "CHN",
+      1
+    ],
+    [
+      "CHN",
+      2
+    ],
+    [
+      "CHN",
+      3
+    ],
+    [
+      "CHN",
+      4
+    ],
+    [
+      "CIS",
+      1
+    ],
+    [
+      "CIV",
+      1
+    ],
+    [
+      "CIV",
+      2
+    ],
+    [
+      "CRO",
+      1
+    ],
+    [
+      "CRO",
+      2
+    ],
+    [
+      "CRO",
+      3
+    ],
+    [
+      "CYP",
+      1
+    ],
+    [
+      "CYP",
+      2
+    ],
+    [
+      "CYP",
+      3
+    ],
+    [
+      "CYP",
+      4
+    ],
+    [
+      "CZE",
+      1
+    ],
+    [
+      "CZE",
+      2
+    ],
+    [
+      "CZE",
+      3
+    ],
+    [
+      "DEN",
+      1
+    ],
+    [
+      "DEN",
+      2
+    ],
+    [
+      "DEN",
+      3
+    ],
+    [
+      "DEN",
+      4
+    ],
+    [
+      "DEN",
+      5
+    ],
+    [
+      "ENG",
+      1
+    ],
+    [
+      "ENG",
+      2
+    ],
+    [
+      "ENG",
+      3
+    ],
+    [
+      "ENG",
+      4
+    ],
+    [
+      "ENG",
+      5
+    ],
+    [
+      "ENG",
+      6
+    ],
+    [
+      "ENG",
+      7
+    ],
+    [
+      "EQG",
+      1
+    ],
+    [
+      "ESP",
+      1
+    ],
+    [
+      "ESP",
+      2
+    ],
+    [
+      "ESP",
+      3
+    ],
+    [
+      "ESP",
+      4
+    ],
+    [
+      "ESP",
+      5
+    ],
+    [
+      "ESP",
+      6
+    ],
+    [
+      "ESP",
+      7
+    ],
+    [
+      "ESP",
+      8
+    ],
+    [
+      "ESP",
+      9
+    ],
+    [
+      "EST",
+      1
+    ],
+    [
+      "EST",
+      2
+    ],
+    [
+      "EST",
+      3
+    ],
+    [
+      "FIN",
+      1
+    ],
+    [
+      "FIN",
+      2
+    ],
+    [
+      "FIN",
+      3
+    ],
+    [
+      "FIN",
+      4
+    ],
+    [
+      "FIN",
+      5
+    ],
+    [
+      "FIN",
+      6
+    ],
+    [
+      "FIN",
+      7
+    ],
+    [
+      "FIN",
+      8
+    ],
+    [
+      "FRA",
+      1
+    ],
+    [
+      "FRA",
+      2
+    ],
+    [
+      "FRA",
+      3
+    ],
+    [
+      "FRA",
+      4
+    ],
+    [
+      "FRA",
+      5
+    ],
+    [
+      "FRA",
+      6
+    ],
+    [
+      "GEO",
+      1
+    ],
+    [
+      "GEO",
+      2
+    ],
+    [
+      "GEO",
+      3
+    ],
+    [
+      "GEO",
+      4
+    ],
+    [
+      "GER",
+      1
+    ],
+    [
+      "GER",
+      2
+    ],
+    [
+      "GER",
+      3
+    ],
+    [
+      "GER",
+      4
+    ],
+    [
+      "GER",
+      5
+    ],
+    [
+      "GER",
+      6
+    ],
+    [
+      "GER",
+      7
+    ],
+    [
+      "GRE",
+      1
+    ],
+    [
+      "GRE",
+      2
+    ],
+    [
+      "GRE",
+      3
+    ],
+    [
+      "HUN",
+      1
+    ],
+    [
+      "HUN",
+      2
+    ],
+    [
+      "HUN",
+      3
+    ],
+    [
+      "IRL",
+      1
+    ],
+    [
+      "IRL",
+      2
+    ],
+    [
+      "IRL",
+      3
+    ],
+    [
+      "ISL",
+      1
+    ],
+    [
+      "ISL",
+      2
+    ],
+    [
+      "ISL",
+      3
+    ],
+    [
+      "ISL",
+      4
+    ],
+    [
+      "ISL",
+      5
+    ],
+    [
+      "ISR",
+      1
+    ],
+    [
+      "ISR",
+      2
+    ],
+    [
+      "ISR",
+      3
+    ],
+    [
+      "ISR",
+      4
+    ],
+    [
+      "ISR",
+      5
+    ],
+    [
+      "ITA",
+      1
+    ],
+    [
+      "ITA",
+      2
+    ],
+    [
+      "ITA",
+      3
+    ],
+    [
+      "ITA",
+      4
+    ],
+    [
+      "ITA",
+      5
+    ],
+    [
+      "ITA",
+      6
+    ],
+    [
+      "JPN",
+      1
+    ],
+    [
+      "JPN",
+      2
+    ],
+    [
+      "JPN",
+      3
+    ],
+    [
+      "JPN",
+      4
+    ],
+    [
+      "JPN",
+      5
+    ],
+    [
+      "JPN",
+      6
+    ],
+    [
+      "JPN",
+      7
+    ],
+    [
+      "KAZ",
+      1
+    ],
+    [
+      "KAZ",
+      2
+    ],
+    [
+      "KOR",
+      1
+    ],
+    [
+      "KOR",
+      2
+    ],
+    [
+      "KOR",
+      3
+    ],
+    [
+      "KOR",
+      4
+    ],
+    [
+      "KOR",
+      5
+    ],
+    [
+      "KSA",
+      1
+    ],
+    [
+      "KSA",
+      2
+    ],
+    [
+      "KVX",
+      1
+    ],
+    [
+      "KVX",
+      2
+    ],
+    [
+      "LIB",
+      1
+    ],
+    [
+      "LIB",
+      2
+    ],
+    [
+      "LIB",
+      3
+    ],
+    [
+      "LIB",
+      4
+    ],
+    [
+      "LTU",
+      1
+    ],
+    [
+      "LTU",
+      2
+    ],
+    [
+      "LUX",
+      1
+    ],
+    [
+      "LUX",
+      2
+    ],
+    [
+      "LUX",
+      3
+    ],
+    [
+      "LVA",
+      1
+    ],
+    [
+      "LVA",
+      2
+    ],
+    [
+      "LVA",
+      3
+    ],
+    [
+      "MDA",
+      1
+    ],
+    [
+      "MDA",
+      2
+    ],
+    [
+      "MDA",
+      3
+    ],
+    [
+      "MEX",
+      1
+    ],
+    [
+      "MEX",
+      2
+    ],
+    [
+      "MEX",
+      4
+    ],
+    [
+      "MEX",
+      5
+    ],
+    [
+      "MEX",
+      6
+    ],
+    [
+      "MKD",
+      1
+    ],
+    [
+      "MKD",
+      2
+    ],
+    [
+      "MKD",
+      3
+    ],
+    [
+      "MLT",
+      1
+    ],
+    [
+      "MLT",
+      2
+    ],
+    [
+      "MLT",
+      3
+    ],
+    [
+      "MLT",
+      4
+    ],
+    [
+      "MNE",
+      1
+    ],
+    [
+      "NED",
+      1
+    ],
+    [
+      "NED",
+      2
+    ],
+    [
+      "NED",
+      3
+    ],
+    [
+      "NED",
+      4
+    ],
+    [
+      "NED",
+      5
+    ],
+    [
+      "NIR",
+      1
+    ],
+    [
+      "NIR",
+      2
+    ],
+    [
+      "NIR",
+      3
+    ],
+    [
+      "NOR",
+      1
+    ],
+    [
+      "NOR",
+      2
+    ],
+    [
+      "NOR",
+      3
+    ],
+    [
+      "NOR",
+      4
+    ],
+    [
+      "NOR",
+      5
+    ],
+    [
+      "NOR",
+      6
+    ],
+    [
+      "NOR",
+      7
+    ],
+    [
+      "NOR",
+      8
+    ],
+    [
+      "NOR",
+      10
+    ],
+    [
+      "POL",
+      1
+    ],
+    [
+      "POL",
+      2
+    ],
+    [
+      "POL",
+      3
+    ],
+    [
+      "POL",
+      4
+    ],
+    [
+      "POL",
+      5
+    ],
+    [
+      "POL",
+      6
+    ],
+    [
+      "POL",
+      7
+    ],
+    [
+      "POL",
+      8
+    ],
+    [
+      "POR",
+      1
+    ],
+    [
+      "POR",
+      2
+    ],
+    [
+      "POR",
+      3
+    ],
+    [
+      "POR",
+      4
+    ],
+    [
+      "ROU",
+      1
+    ],
+    [
+      "ROU",
+      2
+    ],
+    [
+      "ROU",
+      3
+    ],
+    [
+      "ROU",
+      4
+    ],
+    [
+      "ROU",
+      5
+    ],
+    [
+      "RSA",
+      1
+    ],
+    [
+      "RSA",
+      2
+    ],
+    [
+      "RUS",
+      1
+    ],
+    [
+      "RUS",
+      2
+    ],
+    [
+      "RUS",
+      3
+    ],
+    [
+      "RUS",
+      4
+    ],
+    [
+      "SCO",
+      1
+    ],
+    [
+      "SCO",
+      2
+    ],
+    [
+      "SCO",
+      3
+    ],
+    [
+      "SCO",
+      4
+    ],
+    [
+      "SMR",
+      1
+    ],
+    [
+      "SRB",
+      1
+    ],
+    [
+      "SRB",
+      2
+    ],
+    [
+      "SRB",
+      3
+    ],
+    [
+      "SUI",
+      1
+    ],
+    [
+      "SUI",
+      2
+    ],
+    [
+      "SUI",
+      3
+    ],
+    [
+      "SUI",
+      4
+    ],
+    [
+      "SUI",
+      5
+    ],
+    [
+      "SUI",
+      6
+    ],
+    [
+      "SVK",
+      1
+    ],
+    [
+      "SVK",
+      2
+    ],
+    [
+      "SVK",
+      3
+    ],
+    [
+      "SVK",
+      4
+    ],
+    [
+      "SVN",
+      1
+    ],
+    [
+      "SVN",
+      2
+    ],
+    [
+      "SVN",
+      3
+    ],
+    [
+      "SWE",
+      1
+    ],
+    [
+      "SWE",
+      2
+    ],
+    [
+      "SWE",
+      3
+    ],
+    [
+      "SWE",
+      4
+    ],
+    [
+      "SWE",
+      5
+    ],
+    [
+      "SWE",
+      6
+    ],
+    [
+      "TUR",
+      1
+    ],
+    [
+      "TUR",
+      2
+    ],
+    [
+      "TUR",
+      3
+    ],
+    [
+      "TUR",
+      4
+    ],
+    [
+      "TUR",
+      5
+    ],
+    [
+      "TUR",
+      6
+    ],
+    [
+      "UKR",
+      1
+    ],
+    [
+      "UKR",
+      2
+    ],
+    [
+      "UKR",
+      3
+    ],
+    [
+      "URU",
+      1
+    ],
+    [
+      "URU",
+      2
+    ],
+    [
+      "URU",
+      3
+    ],
+    [
+      "WAL",
+      1
+    ],
+    [
+      "WAL",
+      2
+    ],
+    [
+      "YEM",
+      1
+    ]
+  ],
+  "tiers_by_source": {
+    "domestic-structure": 21,
+    "hand-fill": 5,
+    "none": 908,
+    "openfootball": 12,
+    "wikidata": 220,
+    "wikidata-chain": 165
+  },
+  "wikipedia_pages": [
+    {
+      "page": "2. Liga (Austria)",
+      "revision": 1370504650
+    },
+    {
+      "page": "2025 FIFA Club World Cup",
+      "revision": 1378292572
+    },
+    {
+      "page": "2025 FIFA Club World Cup qualification",
+      "revision": 1377993843
+    },
+    {
+      "page": "2025–26 Norwegian Football Cup",
+      "revision": 1363990722
+    },
+    {
+      "page": "2026 Allsvenskan",
+      "revision": 1379729926
+    },
+    {
+      "page": "2026 Belarusian Premier League",
+      "revision": 1379749412
+    },
+    {
+      "page": "2026 Besta deild karla",
+      "revision": 1379773767
+    },
+    {
+      "page": "2026 CONCACAF Champions Cup",
+      "revision": 1378507007
+    },
+    {
+      "page": "2026 Copa Libertadores",
+      "revision": 1378878107
+    },
+    {
+      "page": "2026 Copa Sudamericana",
+      "revision": 1378878488
+    },
+    {
+      "page": "2026 Eliteserien",
+      "revision": 1379735813
+    },
+    {
+      "page": "2026 Erovnuli Liga",
+      "revision": 1379733674
+    },
+    {
+      "page": "2026 FIFA Intercontinental Cup",
+      "revision": 1377115674
+    },
+    {
+      "page": "2026 Kazakhstan Premier League",
+      "revision": 1379748775
+    },
+    {
+      "page": "2026 Latvian Higher League",
+      "revision": 1379727923
+    },
+    {
+      "page": "2026 League of Ireland Premier Division",
+      "revision": 1379524452
+    },
+    {
+      "page": "2026 Meistriliiga",
+      "revision": 1379720969
+    },
+    {
+      "page": "2026 Norwegian First Division",
+      "revision": 1379011395
+    },
+    {
+      "page": "2026 Norwegian Second Division",
+      "revision": 1378847426
+    },
+    {
+      "page": "2026 OFC Men's Champions League",
+      "revision": 1376322803
+    },
+    {
+      "page": "2026 OFC Men's Champions League group stage",
+      "revision": 1371272781
+    },
+    {
+      "page": "2026 OFC Men's Champions League knockout stage",
+      "revision": 1378439532
+    },
+    {
+      "page": "2026 Superettan",
+      "revision": 1379742270
+    },
+    {
+      "page": "2026 Toplyga",
+      "revision": 1379726933
+    },
+    {
+      "page": "2026 UEFA Super Cup",
+      "revision": 1379113639
+    },
+    {
+      "page": "2026 Veikkausliiga",
+      "revision": 1379726250
+    },
+    {
+      "page": "2026–27 2. Bundesliga",
+      "revision": 1379709430
+    },
+    {
+      "page": "2026–27 2. Liga (Slovakia)",
+      "revision": 1377271014
+    },
+    {
+      "page": "2026–27 3. Liga",
+      "revision": 1379914701
+    },
+    {
+      "page": "2026–27 3. Liga (Slovakia)",
+      "revision": 1377860731
+    },
+    {
+      "page": "2026–27 AFC Champions League Elite",
+      "revision": 1379323210
+    },
+    {
+      "page": "2026–27 AFC Champions League Elite league stage",
+      "revision": 1379906121
+    },
+    {
+      "page": "2026–27 AFC Champions League Two",
+      "revision": 1379323218
+    },
+    {
+      "page": "2026–27 Armenian Premier League",
+      "revision": 1379745895
+    },
+    {
+      "page": "2026–27 Austrian Cup",
+      "revision": 1374651995
+    },
+    {
+      "page": "2026–27 Austrian Football Bundesliga",
+      "revision": 1379746551
+    },
+    {
+      "page": "2026–27 Austrian Football Second League",
+      "revision": 1379746747
+    },
+    {
+      "page": "2026–27 Azerbaijan Cup",
+      "revision": 1376733388
+    },
+    {
+      "page": "2026–27 Azerbaijan Premier League",
+      "revision": 1379735868
+    },
+    {
+      "page": "2026–27 Belgian Cup",
+      "revision": 1377484462
+    },
+    {
+      "page": "2026–27 Belgian Division 1",
+      "revision": 1377325950
+    },
+    {
+      "page": "2026–27 Belgian Pro League",
+      "revision": 1379775831
+    },
+    {
+      "page": "2026–27 Bulgarian Cup",
+      "revision": 1378677873
+    },
+    {
+      "page": "2026–27 Bundesliga",
+      "revision": 1379747288
+    },
+    {
+      "page": "2026–27 CAF Champions League",
+      "revision": 1379061703
+    },
+    {
+      "page": "2026–27 CAF Champions League qualifying rounds",
+      "revision": 1379027187
+    },
+    {
+      "page": "2026–27 CAF Confederation Cup",
+      "revision": 1373862510
+    },
+    {
+      "page": "2026–27 CAF Confederation Cup qualifying rounds",
+      "revision": 1378472192
+    },
+    {
+      "page": "2026–27 Challenger Pro League",
+      "revision": 1379754272
+    },
+    {
+      "page": "2026–27 Copa del Rey",
+      "revision": 1379858605
+    },
+    {
+      "page": "2026–27 Coppa Italia",
+      "revision": 1379328382
+    },
+    {
+      "page": "2026–27 Croatian Football Cup",
+      "revision": 1378466103
+    },
+    {
+      "page": "2026–27 Croatian Football League",
+      "revision": 1379742104
+    },
+    {
+      "page": "2026–27 Cupa României",
+      "revision": 1379470829
+    },
+    {
+      "page": "2026–27 Cymru Premier",
+      "revision": 1379556212
+    },
+    {
+      "page": "2026–27 Cypriot Cup",
+      "revision": 1379163377
+    },
+    {
+      "page": "2026–27 Cypriot First Division",
+      "revision": 1379758269
+    },
+    {
+      "page": "2026–27 Czech Cup",
+      "revision": 1379484955
+    },
+    {
+      "page": "2026–27 Czech First League",
+      "revision": 1379746689
+    },
+    {
+      "page": "2026–27 Czech National Football League",
+      "revision": 1379659558
+    },
+    {
+      "page": "2026–27 DFB-Pokal",
+      "revision": 1377434885
+    },
+    {
+      "page": "2026–27 Danish 1st Division",
+      "revision": 1375914249
+    },
+    {
+      "page": "2026–27 Danish 2nd Division",
+      "revision": 1375914814
+    },
+    {
+      "page": "2026–27 Danish Superliga",
+      "revision": 1379750292
+    },
+    {
+      "page": "2026–27 EFL Championship",
+      "revision": 1379718129
+    },
+    {
+      "page": "2026–27 EFL Cup",
+      "revision": 1379887409
+    },
+    {
+      "page": "2026–27 EFL League One",
+      "revision": 1379738312
+    },
+    {
+      "page": "2026–27 Eerste Divisie",
+      "revision": 1379514215
+    },
+    {
+      "page": "2026–27 Ekstraklasa",
+      "revision": 1379760755
+    },
+    {
+      "page": "2026–27 Eredivisie",
+      "revision": 1379734027
+    },
+    {
+      "page": "2026–27 FA Cup",
+      "revision": 1379894586
+    },
+    {
+      "page": "2026–27 First Football League (Croatia)",
+      "revision": 1377520806
+    },
+    {
+      "page": "2026–27 First Professional Football League (Bulgaria)",
+      "revision": 1379750181
+    },
+    {
+      "page": "2026–27 Football Superleague of Kosovo",
+      "revision": 1379873415
+    },
+    {
+      "page": "2026–27 Gamma Ethniki",
+      "revision": 1379882362
+    },
+    {
+      "page": "2026–27 Gibraltar Football League",
+      "revision": 1379753047
+    },
+    {
+      "page": "2026–27 Greek Football Cup",
+      "revision": 1378626138
+    },
+    {
+      "page": "2026–27 I liga",
+      "revision": 1377674839
+    },
+    {
+      "page": "2026–27 II liga",
+      "revision": 1379047606
+    },
+    {
+      "page": "2026–27 Israel State Cup",
+      "revision": 1379191996
+    },
+    {
+      "page": "2026–27 Israeli Premier League",
+      "revision": 1379786286
+    },
+    {
+      "page": "2026–27 KNVB Cup",
+      "revision": 1379066536
+    },
+    {
+      "page": "2026–27 Kategoria Superiore",
+      "revision": 1379902583
+    },
+    {
+      "page": "2026–27 La Liga",
+      "revision": 1379741905
+    },
+    {
+      "page": "2026–27 Liga 3 (Portugal)",
+      "revision": 1374870181
+    },
+    {
+      "page": "2026–27 Liga I",
+      "revision": 1379758797
+    },
+    {
+      "page": "2026–27 Liga II",
+      "revision": 1379654525
+    },
+    {
+      "page": "2026–27 Liga III",
+      "revision": 1379653889
+    },
+    {
+      "page": "2026–27 Liga Leumit",
+      "revision": 1379662005
+    },
+    {
+      "page": "2026–27 Liga Portugal 2",
+      "revision": 1379750759
+    },
+    {
+      "page": "2026–27 Ligue 1",
+      "revision": 1378069426
+    },
+    {
+      "page": "2026–27 Ligue 2",
+      "revision": 1379599324
+    },
+    {
+      "page": "2026–27 Ligue 3",
+      "revision": 1379572599
+    },
+    {
+      "page": "2026–27 Luxembourg National Division",
+      "revision": 1379762480
+    },
+    {
+      "page": "2026–27 Macedonian First Football League",
+      "revision": 1379906920
+    },
+    {
+      "page": "2026–27 Magyar Kupa",
+      "revision": 1377833177
+    },
+    {
+      "page": "2026–27 Maltese Premier League",
+      "revision": 1379899832
+    },
+    {
+      "page": "2026–27 Moldovan Liga",
+      "revision": 1379791562
+    },
+    {
+      "page": "2026–27 NIFL Premiership",
+      "revision": 1379564225
+    },
+    {
+      "page": "2026–27 Nemzeti Bajnokság I",
+      "revision": 1379783886
+    },
+    {
+      "page": "2026–27 Norwegian Football Cup",
+      "revision": 1378995291
+    },
+    {
+      "page": "2026–27 Polish Cup",
+      "revision": 1379916875
+    },
+    {
+      "page": "2026–27 Premier League",
+      "revision": 1379895201
+    },
+    {
+      "page": "2026–27 Premier League of Bosnia and Herzegovina",
+      "revision": 1379752778
+    },
+    {
+      "page": "2026–27 Primeira Liga",
+      "revision": 1379773134
+    },
+    {
+      "page": "2026–27 Primera Federación",
+      "revision": 1379781846
+    },
+    {
+      "page": "2026–27 Russian Cup",
+      "revision": 1379344084
+    },
+    {
+      "page": "2026–27 Russian First League",
+      "revision": 1379827915
+    },
+    {
+      "page": "2026–27 Russian Premier League",
+      "revision": 1379757910
+    },
+    {
+      "page": "2026–27 Scottish Championship",
+      "revision": 1379618084
+    },
+    {
+      "page": "2026–27 Scottish Cup",
+      "revision": 1379556467
+    },
+    {
+      "page": "2026–27 Scottish League Cup",
+      "revision": 1375237537
+    },
+    {
+      "page": "2026–27 Scottish League One",
+      "revision": 1379601590
+    },
+    {
+      "page": "2026–27 Scottish Premiership",
+      "revision": 1379898272
+    },
+    {
+      "page": "2026–27 Second Professional Football League (Bulgaria)",
+      "revision": 1379909546
+    },
+    {
+      "page": "2026–27 Segunda División",
+      "revision": 1379907581
+    },
+    {
+      "page": "2026–27 Serbian First League",
+      "revision": 1379343179
+    },
+    {
+      "page": "2026–27 Serbian SuperLiga",
+      "revision": 1376466332
+    },
+    {
+      "page": "2026–27 Serie A",
+      "revision": 1379765240
+    },
+    {
+      "page": "2026–27 Serie B",
+      "revision": 1379895677
+    },
+    {
+      "page": "2026–27 Serie C",
+      "revision": 1379640391
+    },
+    {
+      "page": "2026–27 Slovak First Football League",
+      "revision": 1376194799
+    },
+    {
+      "page": "2026–27 Slovenian PrvaLiga",
+      "revision": 1379189519
+    },
+    {
+      "page": "2026–27 Super League Greece",
+      "revision": 1379871146
+    },
+    {
+      "page": "2026–27 Super League Greece 2",
+      "revision": 1379912763
+    },
+    {
+      "page": "2026–27 Swiss Challenge League",
+      "revision": 1379514257
+    },
+    {
+      "page": "2026–27 Swiss Super League",
+      "revision": 1379749713
+    },
+    {
+      "page": "2026–27 Süper Lig",
+      "revision": 1379750682
+    },
+    {
+      "page": "2026–27 TFF 1. Lig",
+      "revision": 1375854544
+    },
+    {
+      "page": "2026–27 TFF 2. Lig",
+      "revision": 1375907209
+    },
+    {
+      "page": "2026–27 Taça da Liga",
+      "revision": 1375425245
+    },
+    {
+      "page": "2026–27 Taça de Portugal",
+      "revision": 1379575387
+    },
+    {
+      "page": "2026–27 Third Amateur Football League (Bulgaria)",
+      "revision": 1379757479
+    },
+    {
+      "page": "2026–27 Turkish Cup",
+      "revision": 1379729369
+    },
+    {
+      "page": "2026–27 UEFA Champions League",
+      "revision": 1379853631
+    },
+    {
+      "page": "2026–27 UEFA Champions League league phase",
+      "revision": 1379863900
+    },
+    {
+      "page": "2026–27 UEFA Conference League",
+      "revision": 1379707326
+    },
+    {
+      "page": "2026–27 UEFA Conference League league phase",
+      "revision": 1375264669
+    },
+    {
+      "page": "2026–27 UEFA Europa League",
+      "revision": 1379707144
+    },
+    {
+      "page": "2026–27 UEFA Europa League league phase",
+      "revision": 1377709147
+    },
+    {
+      "page": "2026–27 Ukrainian Cup",
+      "revision": 1378844607
+    },
+    {
+      "page": "2026–27 Ukrainian First League",
+      "revision": 1379895969
+    },
+    {
+      "page": "2026–27 Ukrainian Premier League",
+      "revision": 1379888190
+    },
+    {
+      "page": "2026–27 Ukrainian Second League",
+      "revision": 1379886086
+    },
+    {
+      "page": "2027–28 UEFA Champions League",
+      "revision": 1379720826
+    },
+    {
+      "page": "2029 FIFA Club World Cup",
+      "revision": 1379362516
+    },
+    {
+      "page": "AFC Champions League Elite",
+      "revision": 1378825944
+    },
+    {
+      "page": "AFC Champions League Two",
+      "revision": 1378915715
+    },
+    {
+      "page": "Austrian Cup",
+      "revision": 1373245215
+    },
+    {
+      "page": "Austrian Regionalliga",
+      "revision": 1373345034
+    },
+    {
+      "page": "Azerbaijan Cup",
+      "revision": 1373680583
+    },
+    {
+      "page": "Azerbaijan First League",
+      "revision": 1373680641
+    },
+    {
+      "page": "Azerbaijan Second League",
+      "revision": 1374102076
+    },
+    {
+      "page": "Belgian Cup",
+      "revision": 1377652896
+    },
+    {
+      "page": "Belgian Division 1",
+      "revision": 1369439489
+    },
+    {
+      "page": "Bohemian Football League",
+      "revision": 1369634871
+    },
+    {
+      "page": "Bulgarian Cup",
+      "revision": 1376463389
+    },
+    {
+      "page": "CAF Champions League",
+      "revision": 1378911854
+    },
+    {
+      "page": "CAF Confederation Cup",
+      "revision": 1378915295
+    },
+    {
+      "page": "CONCACAF Champions Cup",
+      "revision": 1379093746
+    },
+    {
+      "page": "Campionato Sammarinese",
+      "revision": 1379245666
+    },
+    {
+      "page": "Copa Libertadores",
+      "revision": 1379054328
+    },
+    {
+      "page": "Copa Sudamericana",
+      "revision": 1378915636
+    },
+    {
+      "page": "Copa del Rey",
+      "revision": 1378420825
+    },
+    {
+      "page": "Coppa Italia",
+      "revision": 1378455630
+    },
+    {
+      "page": "Coupe de France",
+      "revision": 1377644747
+    },
+    {
+      "page": "Croatian Football Cup",
+      "revision": 1371308134
+    },
+    {
+      "page": "Cypriot First Division",
+      "revision": 1379166515
+    },
+    {
+      "page": "Cypriot Second Division",
+      "revision": 1369633354
+    },
+    {
+      "page": "Cypriot Third Division",
+      "revision": 1377669873
+    },
+    {
+      "page": "Czech Cup",
+      "revision": 1374195933
+    },
+    {
+      "page": "DFB-Pokal",
+      "revision": 1378294556
+    },
+    {
+      "page": "Danish Cup",
+      "revision": 1377202490
+    },
+    {
+      "page": "EFL Cup",
+      "revision": 1379755966
+    },
+    {
+      "page": "Eerste Divisie",
+      "revision": 1374050934
+    },
+    {
+      "page": "Ettan Fotboll",
+      "revision": 1376007950
+    },
+    {
+      "page": "FA Cup",
+      "revision": 1379411561
+    },
+    {
+      "page": "FIFA Club World Cup",
+      "revision": 1375533681
+    },
+    {
+      "page": "FIFA Intercontinental Cup",
+      "revision": 1375823808
+    },
+    {
+      "page": "Faroe Islands Premier League",
+      "revision": 1371613577
+    },
+    {
+      "page": "First Football League (Croatia)",
+      "revision": 1375373021
+    },
+    {
+      "page": "Gamma Ethniki",
+      "revision": 1374670108
+    },
+    {
+      "page": "Greek Football Cup",
+      "revision": 1376653576
+    },
+    {
+      "page": "Israel State Cup",
+      "revision": 1372402082
+    },
+    {
+      "page": "Israeli Premier League",
+      "revision": 1376531793
+    },
+    {
+      "page": "KNVB Cup",
+      "revision": 1376286202
+    },
+    {
+      "page": "Liga 3 (Portugal)",
+      "revision": 1376531569
+    },
+    {
+      "page": "Liga Alef",
+      "revision": 1377446938
+    },
+    {
+      "page": "Liga Portugal 2",
+      "revision": 1376531660
+    },
+    {
+      "page": "Montenegrin First League",
+      "revision": 1374028854
+    },
+    {
+      "page": "Moravian-Silesian Football League",
+      "revision": 1370518712
+    },
+    {
+      "page": "Nemzeti Bajnokság II",
+      "revision": 1379323139
+    },
+    {
+      "page": "Nemzeti Bajnokság III",
+      "revision": 1379477976
+    },
+    {
+      "page": "Norwegian Football Cup",
+      "revision": 1378336686
+    },
+    {
+      "page": "OFC Men's Champions League",
+      "revision": 1371955245
+    },
+    {
+      "page": "Polish Cup",
+      "revision": 1374807402
+    },
+    {
+      "page": "Primera Divisió",
+      "revision": 1373774974
+    },
+    {
+      "page": "Promotion League",
+      "revision": 1376010178
+    },
+    {
+      "page": "Russian Cup (football)",
+      "revision": 1374977471
+    },
+    {
+      "page": "Russian Second League",
+      "revision": 1374977534
+    },
+    {
+      "page": "Scottish Cup",
+      "revision": 1379085571
+    },
+    {
+      "page": "Scottish League Cup",
+      "revision": 1375311118
+    },
+    {
+      "page": "Second Football League (Croatia)",
+      "revision": 1376765436
+    },
+    {
+      "page": "Serbian Cup",
+      "revision": 1377331277
+    },
+    {
+      "page": "Serbian League",
+      "revision": 1377334438
+    },
+    {
+      "page": "Slovak Cup",
+      "revision": 1375538250
+    },
+    {
+      "page": "Slovenian Football Cup",
+      "revision": 1376817738
+    },
+    {
+      "page": "Slovenian Second League",
+      "revision": 1375538860
+    },
+    {
+      "page": "Slovenian Third League",
+      "revision": 1375538909
+    },
+    {
+      "page": "Super League Greece 2",
+      "revision": 1376317196
+    },
+    {
+      "page": "Svenska Cupen",
+      "revision": 1376007690
+    },
+    {
+      "page": "Swiss Cup",
+      "revision": 1376010250
+    },
+    {
+      "page": "TFF 2. Lig",
+      "revision": 1376132878
+    },
+    {
+      "page": "Taça da Liga",
+      "revision": 1374816861
+    },
+    {
+      "page": "Taça de Portugal",
+      "revision": 1379613744
+    },
+    {
+      "page": "Template:2026–27 2. Bundesliga table",
+      "revision": 1379707902
+    },
+    {
+      "page": "Template:2026–27 3. Liga table",
+      "revision": 1379754570
+    },
+    {
+      "page": "Template:2026–27 Bundesliga table",
+      "revision": 1379737322
+    },
+    {
+      "page": "Template:2026–27 La Liga table",
+      "revision": 1379767607
+    },
+    {
+      "page": "Template:2026–27 Ligue 1 table",
+      "revision": 1379765010
+    },
+    {
+      "page": "Template:2026–27 Russian Premier League table",
+      "revision": 1379746567
+    },
+    {
+      "page": "Template:2026–27 Serie C Group A table",
+      "revision": 1379477703
+    },
+    {
+      "page": "Turkish Cup",
+      "revision": 1376132607
+    },
+    {
+      "page": "Tweede Divisie",
+      "revision": 1374051090
+    },
+    {
+      "page": "UEFA Champions League",
+      "revision": 1376651765
+    },
+    {
+      "page": "UEFA Conference League",
+      "revision": 1378415662
+    },
+    {
+      "page": "UEFA Europa League",
+      "revision": 1378915855
+    },
+    {
+      "page": "UEFA Super Cup",
+      "revision": 1378910410
+    }
+  ]
+}

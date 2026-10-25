@@ -6,7 +6,7 @@
 
 mod common;
 
-use common::{content, default_teams, run_many};
+use common::{content, default_teams, judge_band, limits, run_many, units};
 use engine::record::NullSink;
 use engine::scenario::Scene;
 use engine::{ChangeKind, EngineEventKind, EventDetail, MatchConfig};
@@ -34,8 +34,8 @@ fn a_trailing_ai_team_changes_its_tactics() {
     });
     let n = changed.iter().filter(|&&c| c).count();
     eprintln!("an applied tactics change in {n} of 100 scenes");
-    assert!(
-        n >= 90,
-        "an applied tactics change in only {n} of 100 scenes"
-    );
+    let sample = units(changed.iter().map(|&c| f64::from(u8::from(c))));
+    if let Err(e) = judge_band(&limits(), "ai_trailing_change_share", &sample) {
+        panic!("{e}");
+    }
 }

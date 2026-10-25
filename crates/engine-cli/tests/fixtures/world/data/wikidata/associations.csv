@@ -1,0 +1,6 @@
+country_qid,country,fifa_code,iso3,ioc_code,association_qid,association,confederation_qid,confederation,member_since,clubs_wikidata,clubs_with_current_league
+Q100,Testland,TST,TST,TST,Q101,Testland Ball Union,Q102,UEFA,1950,20,15
+Q900,United Kingdom,NTL,GBR,GBR,Q903,Isle Ball Union,Q104,CONCACAF,1990,6,4
+Q901,Northland,NTL,,,Q902,Northland Ball Union,Q102,UEFA,1950,6,4
+Q200,Farland,FRL,FRL,FRX,Q201,"Farland Ball Union, Inc.",Q105,AFC,1960,2,1
+Q300,Oldland,OLD,,,,,,,,0,0

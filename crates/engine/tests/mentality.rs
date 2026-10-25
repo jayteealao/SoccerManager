@@ -6,18 +6,19 @@
 
 mod common;
 
-use common::{content, default_teams, run_many};
+use common::{content, default_teams, judge_band, limits, run_many, units};
 use engine::record::NullSink;
 use engine::{Manager, MatchConfig, Simulation, Tactics};
 
-fn mean_shots(mentality: &str) -> f64 {
+/// Team A's shots in each of the 200 matches, set to `mentality`.
+fn match_shots(mentality: &str) -> Vec<f64> {
     let content = content();
     let [a, b] = default_teams(&content);
     let schema = &content.tactics;
     let m = schema
         .mentality_index(mentality)
         .expect("the tactics file names the mentality") as u8;
-    let shots = run_many(1..=200, |seed| {
+    run_many(1..=200, |seed| {
         let mut tactics = Tactics::defaults(schema);
         tactics.mentality = m;
         let config = MatchConfig::new(seed, 90, &content, [&a, &b])
@@ -27,18 +28,23 @@ fn mean_shots(mentality: &str) -> f64 {
         let mut sim = Simulation::new(config).unwrap();
         sim.run(&mut NullSink).unwrap();
         f64::from(sim.summary().shots[0])
-    });
-    shots.iter().sum::<f64>() / shots.len() as f64
+    })
 }
 
 #[test]
 #[ignore = "slow: cargo test --release -p engine -- --ignored"]
 fn an_attacking_team_shoots_more_than_a_defensive_one() {
-    let defensive = mean_shots("defensive");
-    let attacking = mean_shots("attacking");
-    eprintln!("mean shots per match: defensive {defensive:.2}, attacking {attacking:.2}");
-    assert!(
-        attacking > defensive,
-        "attacking {attacking:.2} against defensive {defensive:.2}"
+    let defensive = match_shots("defensive");
+    let attacking = match_shots("attacking");
+    let mean = |v: &[f64]| v.iter().sum::<f64>() / v.len() as f64;
+    eprintln!(
+        "mean shots per match: defensive {:.2}, attacking {:.2}",
+        mean(&defensive),
+        mean(&attacking)
     );
+    // Attacking minus defensive shots, matched by seed.
+    let more = units(attacking.iter().zip(&defensive).map(|(a, d)| a - d));
+    if let Err(e) = judge_band(&limits(), "attacking_minus_defensive_shots", &more) {
+        panic!("{e}");
+    }
 }

@@ -308,6 +308,149 @@ pub fn judge(
         .collect()
 }
 
+/// The result of one rule judged at three levels: the low-to-high result, as at two levels,
+/// with the statistic at the middle level and the two steps, low to middle and middle to
+/// high, each a relative move in the job's direction with its interval.
+#[derive(Debug, Clone, Serialize)]
+pub struct LevelResult {
+    #[serde(flatten)]
+    pub result: RuleResult,
+    pub mid: f64,
+    pub steps: [Interval; 2],
+}
+
+/// The word of a rule at three levels: the low-to-high word, then a pass becomes fail when a
+/// step's interval lies wholly against the job's direction, and not sure when a step's interval
+/// crosses zero against it. A job expected not to move keeps its no-move word.
+pub fn level_word(base: Word, expect: Expect, steps: [Interval; 2]) -> Word {
+    if expect == Expect::NoMove || base != Word::Pass {
+        return base;
+    }
+    if steps.iter().any(|s| s.hi < 0.0) {
+        Word::Fail
+    } else if steps.iter().any(|s| s.lo < 0.0) {
+        Word::NotSure
+    } else {
+        Word::Pass
+    }
+}
+
+/// `w` with every row whose level of `factor` is not `level` set to zero weight.
+fn at_level(w: &[f64], levels: &[Vec<u8>], factor: usize, level: u8) -> Vec<f64> {
+    w.iter()
+        .zip(levels)
+        .map(|(&wt, l)| if l[factor] == level { wt } else { 0.0 })
+        .collect()
+}
+
+/// One rule's point figures in one resample: the statistic at each level, the low-to-high
+/// move, the two steps, and the share.
+type LevelPoint = ([f64; 3], f64, [f64; 2], Option<f64>);
+
+/// Judges every rule of `asks` on the three-level design rows, whose levels `levels` holds
+/// per row, and, when given, the two arms (all low, all high), with `resamples` bootstrap
+/// resamples from `seed`. The move and the share read the low and the high level, as
+/// [`judge`] does; the steps read the middle level too.
+pub fn judge_levels(
+    asks: &[Ask],
+    design: &[MatchRow],
+    levels: &[Vec<u8>],
+    arms: Option<(&[MatchRow], &[MatchRow])>,
+    resamples: u32,
+    seed: u64,
+) -> Vec<LevelResult> {
+    let estimate = |w: &[f64], arm_w: Option<(&[f64], &[f64])>| -> Vec<LevelPoint> {
+        let outcome = arms
+            .zip(arm_w)
+            .map(|((lo, hi), (wl, wh))| mean_gd(hi, wh, |_| true) - mean_gd(lo, wl, |_| true));
+        asks.iter()
+            .map(|a| {
+                let w_at: Vec<Vec<f64>> =
+                    (0..3u8).map(|l| at_level(w, levels, a.factor, l)).collect();
+                let s = |l: usize| statistic(a.measure, design, &w_at[l], |_| true);
+                let stat = [s(0), s(1), s(2)];
+                let mv = relative_move(stat[0], stat[2], a.direction);
+                let steps = [
+                    relative_move(stat[0], stat[1], a.direction),
+                    relative_move(stat[1], stat[2], a.direction),
+                ];
+                let share = outcome.map(|all| {
+                    let effect =
+                        mean_gd(design, &w_at[2], |_| true) - mean_gd(design, &w_at[0], |_| true);
+                    if all.abs() > 1e-12 {
+                        effect / all
+                    } else {
+                        f64::INFINITY
+                    }
+                });
+                (stat, mv, steps, share)
+            })
+            .collect()
+    };
+    let one = vec![1.0; design.len()];
+    let arm_one = arms.map(|(lo, hi)| (vec![1.0; lo.len()], vec![1.0; hi.len()]));
+    let point = estimate(
+        &one,
+        arm_one.as_ref().map(|(a, b)| (a.as_slice(), b.as_slice())),
+    );
+    let mut rng = EngineRng::from_seed(seed);
+    let n = asks.len();
+    let mut moves = vec![Vec::with_capacity(resamples as usize); n];
+    let mut steps = vec![[Vec::new(), Vec::new()]; n];
+    let mut shares = vec![Vec::with_capacity(resamples as usize); n];
+    for _ in 0..resamples {
+        let w = resample(design.len(), &mut rng);
+        let aw = arms.map(|(lo, hi)| (resample(lo.len(), &mut rng), resample(hi.len(), &mut rng)));
+        let est = estimate(&w, aw.as_ref().map(|(a, b)| (a.as_slice(), b.as_slice())));
+        for (k, (_, mv, st, share)) in est.into_iter().enumerate() {
+            moves[k].push(mv);
+            steps[k][0].push(st[0]);
+            steps[k][1].push(st[1]);
+            if let Some(s) = share {
+                shares[k].push(s);
+            }
+        }
+    }
+    asks.iter()
+        .enumerate()
+        .map(|(k, a)| {
+            let (stat, mv, st, share) = point[k];
+            let interval = |est: f64, values: Vec<f64>| {
+                let (lo, hi) = percentiles(values);
+                Interval { est, lo, hi }
+            };
+            let mv = interval(mv, std::mem::take(&mut moves[k]));
+            let step_intervals = [
+                interval(st[0], std::mem::take(&mut steps[k][0])),
+                interval(st[1], std::mem::take(&mut steps[k][1])),
+            ];
+            let share = share.map(|s| interval(s, std::mem::take(&mut shares[k])));
+            let base = match a.expect {
+                Expect::Move => word(mv, share, a.thresholds),
+                Expect::NoMove => no_move_word(mv, a.thresholds),
+            };
+            LevelResult {
+                result: RuleResult {
+                    job: a.job.clone(),
+                    statistic: a.statistic.clone(),
+                    measure: a.measure,
+                    low: stat[0],
+                    high: stat[2],
+                    mv,
+                    share,
+                    min_move: a.thresholds.min_move,
+                    ceiling: a.thresholds.ceiling,
+                    expect: a.expect,
+                    word: level_word(base, a.expect, step_intervals),
+                    report_only: a.report_only,
+                },
+                mid: stat[1],
+                steps: step_intervals,
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -468,5 +611,96 @@ mod tests {
         )
         .remove(0);
         assert_eq!(r.word, Word::NotSure);
+    }
+
+    /// A three-level design of `n` rows with one factor cycling through its levels, the pass
+    /// completion of each level drawn around `p[level]` out of 40 passes.
+    fn level_rows(n: usize, p: [f64; 3], seed: u64) -> (Vec<MatchRow>, Vec<Vec<u8>>) {
+        let mut rng = EngineRng::from_seed(seed);
+        let levels: Vec<Vec<u8>> = (0..n).map(|m| vec![(m % 3) as u8]).collect();
+        let rows = levels
+            .iter()
+            .map(|l| {
+                let p = p[usize::from(l[0])];
+                let completed = (0..40).filter(|_| rng.next_f64() < p).count();
+                let mut parts = vec![[0.0, 0.0]; Measure::ALL.len()];
+                parts[Measure::PassCompletion.index()] = [completed as f64, 40.0];
+                MatchRow {
+                    high: vec![l[0] == 2],
+                    parts,
+                    gd: if l[0] == 2 { 0.1 } else { 0.0 } + rng.range_f64(-1.0, 1.0),
+                    xgd: 0.0,
+                    ratings: Vec::new(),
+                }
+            })
+            .collect();
+        (rows, levels)
+    }
+
+    fn three(p: [f64; 3], n: usize, expect: Expect) -> LevelResult {
+        let (d, levels) = level_rows(n, p, 11);
+        let mut a = ask(Measure::PassCompletion, Direction::Up);
+        a.expect = expect;
+        judge_levels(
+            &[a],
+            &d,
+            &levels,
+            Some((&arm(200, -2.0, 2), &arm(200, 2.0, 3))),
+            499,
+            7,
+        )
+        .remove(0)
+    }
+
+    #[test]
+    fn a_steady_rise_passes_at_three_levels() {
+        let r = three([0.55, 0.65, 0.75], 1200, Expect::Move);
+        assert!(r.steps.iter().all(|s| s.lo > 0.0), "{r:?}");
+        assert!((r.mid - 0.65).abs() < 0.02, "{r:?}");
+        assert_eq!(r.result.word, Word::Pass, "{r:?}");
+    }
+
+    #[test]
+    fn a_rise_that_turns_back_at_the_top_fails() {
+        let r = three([0.55, 0.8, 0.7], 1200, Expect::Move);
+        assert!(r.result.mv.lo > 0.05, "{r:?}");
+        assert!(r.steps[1].hi < 0.0, "{r:?}");
+        assert_eq!(r.result.word, Word::Fail, "{r:?}");
+    }
+
+    #[test]
+    fn a_wide_middle_reads_not_sure() {
+        // The whole rise sits in the first step; the second step is flat, so its interval
+        // crosses zero.
+        let r = three([0.55, 0.72, 0.72], 300, Expect::Move);
+        assert!(r.result.mv.lo > 0.05, "{r:?}");
+        assert!(r.steps[1].lo < 0.0 && r.steps[1].hi > 0.0, "{r:?}");
+        assert_eq!(r.result.word, Word::NotSure, "{r:?}");
+    }
+
+    #[test]
+    fn an_inert_job_passes_with_no_move_at_any_level() {
+        let r = three([0.7, 0.7, 0.7], 1200, Expect::NoMove);
+        assert_eq!(r.result.word, Word::Pass, "{r:?}");
+    }
+
+    #[test]
+    fn the_level_word_only_lowers_a_pass() {
+        let i = |lo: f64, hi: f64| Interval { est: 0.0, lo, hi };
+        let up = [i(0.01, 0.1), i(0.02, 0.2)];
+        assert_eq!(level_word(Word::Pass, Expect::Move, up), Word::Pass);
+        assert_eq!(
+            level_word(Word::Pass, Expect::Move, [i(-0.2, -0.01), up[1]]),
+            Word::Fail
+        );
+        assert_eq!(
+            level_word(Word::Pass, Expect::Move, [i(-0.01, 0.2), up[1]]),
+            Word::NotSure
+        );
+        assert_eq!(level_word(Word::Fail, Expect::Move, up), Word::Fail);
+        assert_eq!(
+            level_word(Word::Pass, Expect::NoMove, [i(-0.2, -0.1), up[1]]),
+            Word::Pass
+        );
     }
 }

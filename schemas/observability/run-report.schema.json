@@ -24,8 +24,8 @@
       "const": "run-report"
     },
     "schema.version": {
-      "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows; 4 for a calibrate run that reports each band's real value (calib.real, calib.realism, and the real columns of each verdict); 5 for a calibrate run that reports the bands that only report apart (calib.reported), the developer's acceptances (calib.accepted), the match counts (calib.counts), and how each verdict row was judged; 6 for a calibrate run with the whole-distribution bands (upper and noise_floor on a verdict row); 7 for a calibrate run with the formation field rating (calib.nash); 8 for a calibrate run with the registry's figures (calib.figures); 9 for a calibrate run whose change run reports a styles sample (calib.styles). Every key of an older version stays.",
-      "enum": ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
+      "description": "1 for a benchmark run and for calibrate runs before the band registry; 2 for a calibrate run with the registry, the verdicts and the stage costs; 3 for a calibrate run whose rules stage reports its rows; 4 for a calibrate run that reports each band's real value (calib.real, calib.realism, and the real columns of each verdict); 5 for a calibrate run that reports the bands that only report apart (calib.reported), the developer's acceptances (calib.accepted), the match counts (calib.counts), and how each verdict row was judged; 6 for a calibrate run with the whole-distribution bands (upper and noise_floor on a verdict row); 7 for a calibrate run with the formation field rating (calib.nash); 8 for a calibrate run with the registry's figures (calib.figures); 9 for a calibrate run whose change run reports a styles sample (calib.styles); 10 for a calibrate run with a version 6 band file, whose verdict rows carry the pass rule's word, interval and margin (pass_rule), with the provisional margins (calib.provisional_margins) and the report-only bands against their floor (calib.report_only_floor); 12 for a calibrate run whose change run states its intent (calib.intent), flags its surprises against it (calib.surprises, calib.finished), writes draft setting rules (calib.drafts), counts the matches the call played (calib.played), and checks the touched rules at three levels (calib.rules.touched, a middle level on each rule row, the setting rules). Every key of an older version stays.",
+      "enum": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]
     },
     "calib.substitutions": {
       "description": "The substitutions of the run's matches (per team a match, the share of team matches by count, the minute quartiles, the reasons, the out-of-position share) beside the real era of the rule pack's substitution limit from the signature table; report only.",
@@ -146,7 +146,7 @@
         "band": { "type": "string", "minLength": 1 },
         "suite": { "enum": ["equal", "strength", "formations", "red-card"] },
         "pairing": { "type": "string" },
-        "word": { "enum": ["pass", "fail", "not sure"] },
+        "word": { "description": "Since version 11 also not judged: a rare band in a change run, which judges no rare band; neither pass nor fail, and out of the joint word.", "enum": ["pass", "fail", "not sure", "not judged"] },
         "value": { "type": "number" },
         "lo": { "type": "number" },
         "hi": { "type": "number" },
@@ -154,16 +154,23 @@
         "diff": { "type": "number" },
         "se": { "type": "number", "minimum": 0 },
         "smallest_shift": { "type": "number", "exclusiveMinimum": 0 },
-        "power": { "type": "boolean" },
-        "needed": { "type": "integer", "minimum": 0 },
         "outside_by": {
           "description": "A change run: how far the changed engine's value is outside its range, when its range check fails.",
           "type": "number",
           "minimum": 0
         },
-        "no_target": {
-          "description": "A change run: the band was outside its range by more than its noise at the pilot (beyond the joint threshold times its own error), so it set no power target. Its word is judged as for any band.",
-          "const": true
+        "old_word": {
+          "description": "Since version 11: a change or paired run's word against the old engine (the off arm of a paired run): better or worse when the change is beyond the joint threshold times its error and the changed engine sits closer to or farther from the band's target; equivalent when the change and its one-sided error sit inside the band's noticeable error; not sure otherwise. It never decides the run.",
+          "enum": ["better", "worse", "equivalent", "not sure"]
+        },
+        "old_reason": {
+          "description": "Since version 11: why the row has no word against the old engine, or why that word is not sure.",
+          "type": "string",
+          "minLength": 1
+        },
+        "moved": {
+          "description": "Since version 11: the direction of a change beyond the joint threshold times its error.",
+          "enum": ["up", "down"]
         },
         "real": {
           "description": "The band's real value, read in place from the real-data folder; absent when the band has none here. It never changes the word.",
@@ -200,6 +207,25 @@
         "accepted": {
           "description": "Since version 5: the developer accepted this not-sure row in the run folder's accepted.json. It is accepted, not shown equivalent: its word stays not sure and it never counts as a pass.",
           "const": true
+        },
+        "pass_rule": {
+          "description": "Since version 10: a version 6 band's word against real football by the equivalence rule. Pass when the interval of the engine minus the target sits inside plus or minus the margin, fail when it sits wholly outside, not sure otherwise. The row's word is this word.",
+          "type": "object",
+          "required": ["word", "margin", "target", "exposure", "min_exposure", "units"],
+          "additionalProperties": false,
+          "properties": {
+            "word": { "enum": ["pass", "fail", "not sure"] },
+            "lo": { "type": "number" },
+            "hi": { "type": "number" },
+            "point": { "type": "number" },
+            "margin": { "type": "number", "minimum": 0 },
+            "target": { "type": "string", "minLength": 1 },
+            "cap": { "type": "number", "minimum": 0 },
+            "exposure": { "type": "number", "minimum": 0 },
+            "min_exposure": { "type": "number", "minimum": 0 },
+            "units": { "type": "integer", "minimum": 0 },
+            "reason": { "type": "string", "minLength": 1 }
+          }
         }
       }
     },
@@ -710,67 +736,39 @@
             }
           },
           "calib.compare": {
+            "description": "Since version 11: a paired run's rows, the on arm judged as a change run judges its engine with the off arm in the old engine's place: value is the on arm's, base_value the off arm's, word the on arm's word against real football and old_word its word against the off arm.",
             "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "suite",
-                "band",
-                "lo",
-                "hi",
-                "off",
-                "on",
-                "delta",
-                "off_pass",
-                "on_pass"
-              ],
-              "properties": {
-                "suite": {
-                  "enum": [
-                    "equal",
-                    "strength",
-                    "formations",
-                    "red-card"
-                  ]
-                },
-                "band": {
-                  "type": "string"
-                },
-                "pairing": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "lo": {
-                  "type": "number"
-                },
-                "hi": {
-                  "type": "number"
-                },
-                "off": {
-                  "type": "number"
-                },
-                "on": {
-                  "type": "number"
-                },
-                "delta": {
-                  "type": "number"
-                },
-                "off_pass": {
-                  "type": "boolean"
-                },
-                "on_pass": {
-                  "type": "boolean"
+            "items": { "$ref": "#/$defs/verdictRow" }
+          },
+          "calib.verdict": {
+            "description": "Since version 11: on-rejected when the on arm broke a guardrail, else the on arm's joint word against real football.",
+            "enum": [
+              "on-rejected",
+              "pass",
+              "fail",
+              "not-sure"
+            ]
+          },
+          "calib.pair_verdict": {
+            "description": "Since version 11: the guardrails the on arm broke and the counts of its words against the off arm over the bands that gate.",
+            "type": "object",
+            "required": ["verdict", "words"],
+            "additionalProperties": false,
+            "properties": {
+              "verdict": { "enum": ["on-rejected", "pass", "fail", "not-sure"] },
+              "rejected": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+              "words": {
+                "type": "object",
+                "required": ["better", "worse", "equivalent", "not_sure"],
+                "additionalProperties": false,
+                "properties": {
+                  "better": { "type": "integer", "minimum": 0 },
+                  "worse": { "type": "integer", "minimum": 0 },
+                  "equivalent": { "type": "integer", "minimum": 0 },
+                  "not_sure": { "type": "integer", "minimum": 0 }
                 }
               }
             }
-          },
-          "calib.verdict": {
-            "enum": [
-              "on-rejected",
-              "on-better",
-              "off-better",
-              "no-difference"
-            ]
           },
           "calib.units": {
             "description": "The run's fixtures over every arm and suite, those an earlier session of the run had finished, and those this session played.",
@@ -884,32 +882,55 @@
               "resamples": { "type": "integer", "minimum": 1 },
               "false_alarm": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 },
               "pairs": { "type": "integer", "minimum": 0 },
-              "guards": { "type": "array", "items": { "type": "string" } }
-            }
-          },
-          "calib.power": {
-            "description": "A change run, per suite: the pilot's matches per suite unit, the power target played, the cap (--matches), whether every band of the suite reached its power, the band that set the target, and the bands that set none because they were outside their range by more than their noise at the pilot.",
-            "type": "object",
-            "additionalProperties": {
-              "type": "object",
-              "required": ["target", "cap", "reached"],
-              "properties": {
-                "pilot": { "type": "integer", "minimum": 1 },
-                "target": { "type": "integer", "minimum": 1 },
-                "cap": { "type": "integer", "minimum": 1 },
-                "reached": { "type": "boolean" },
-                "driver": {
-                  "description": "The band whose power needed the most matches at the pilot, which set the target. Absent when the pilot gave every band power.",
-                  "type": "string",
-                  "minLength": 1
-                },
-                "no_target": {
-                  "description": "The bands outside their range by more than their noise at the pilot, which set no target (band, or band/label for a row of one arm). Absent when every band set the target.",
-                  "type": "array",
-                  "items": { "type": "string", "minLength": 1 }
-                }
+              "guards": { "type": "array", "items": { "type": "string" } },
+              "reason": {
+                "description": "Since version 11: why the joint word is not sure although no band says so: more than one percent of the planned pairs dropped (pairs under the fixed count).",
+                "type": "string",
+                "minLength": 1
               }
             }
+          },
+          "calib.kind": {
+            "description": "Since version 11: the run's kind, which picks its seed set, its rare-band margins and, in a change run, its fixed count.",
+            "enum": ["change", "milestone", "release"]
+          },
+          "calib.count": {
+            "description": "Since version 11: a change run's fixed count of its kind, in matches per suite unit (per formation pairing, per red-card arm), by suite.",
+            "type": "object",
+            "additionalProperties": { "type": "integer", "minimum": 1 }
+          },
+          "calib.dropped": {
+            "description": "Since version 11: a change run's planned pairs, the pairs both engines finished, and the pairs dropped because a match failed, by the engine that failed it (both: both failed, or one never played it). More than one percent dropped makes the joint word not sure, never pass.",
+            "type": "object",
+            "required": ["planned", "kept", "dropped", "changed", "old", "both"],
+            "additionalProperties": false,
+            "properties": {
+              "planned": { "type": "integer", "minimum": 0 },
+              "kept": { "type": "integer", "minimum": 0 },
+              "dropped": { "type": "integer", "minimum": 0 },
+              "changed": { "type": "integer", "minimum": 0 },
+              "old": { "type": "integer", "minimum": 0 },
+              "both": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "calib.pair_agreement": {
+            "description": "Since version 11: a change or paired run's agreement of the two sides' matches: each gating scalar band's correlation over the kept pairs of each match's part in the band's value, with its 90 percent Fisher interval, and the median over the bands with a 90 percent interval from resampling the bands. It never decides the run.",
+            "type": "object",
+            "required": ["median", "lo", "hi", "pairs", "bands"],
+            "additionalProperties": false,
+            "properties": {
+              "median": { "type": "number", "minimum": -1, "maximum": 1 },
+              "lo": { "type": "number", "minimum": -1, "maximum": 1 },
+              "hi": { "type": "number", "minimum": -1, "maximum": 1 },
+              "pairs": { "type": "integer", "minimum": 0 },
+              "bands": { "type": "object", "additionalProperties": { "type": "object", "required": ["r", "lo", "hi", "pairs"], "additionalProperties": false, "properties": { "r": { "type": "number", "minimum": -1, "maximum": 1 }, "lo": { "type": "number", "minimum": -1, "maximum": 1 }, "hi": { "type": "number", "minimum": -1, "maximum": 1 }, "pairs": { "type": "integer", "minimum": 0 } } } },
+              "without": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } }
+            }
+          },
+          "calib.headline": {
+            "description": "Since version 11: a change run's one headline line: kind, fixed count per suite, not-sure gating bands, accepted rows and dropped pairs. Since version 12 it ends with the open surprises and run unfinished, or with the bug notes, if any, and run finished.",
+            "type": "string",
+            "pattern": "^kind (change|milestone|release): fixed count equal [0-9]+, strength [0-9]+, formations [0-9]+ per pairing, red-card [0-9]+ per arm; not sure: [0-9]+ of [0-9]+ gating bands; accepted: [0-9]+; dropped pairs: [0-9]+(; open surprises: [0-9]+; run unfinished|(; bug notes: [0-9]+)?; run finished)?$"
           },
           "calib.real": {
             "description": "The real-data folder the run read (--real-data, or the main checkout's .scratch/out), whether it exists, the bands without a real value (not read here, or migrated without a record), the bands with no real counterpart (engine experiments, never counted as missing), the folder when it does not exist, and one entry per band with its real value, standard error, record and confidence words.",
@@ -979,13 +1000,77 @@
             }
           },
           "calib.registry": {
-            "description": "The band registry the run was judged with: its layout version (4 since the band record), the digest of what decides each band's verdict, and the version it was migrated from when it was.",
+            "description": "The band registry the run was judged with: its layout version (4 since the band record, 6 since the pass rule's fields) and the digest of what decides each band's verdict. Before version 10 a run also named the version the file was migrated from.",
             "type": "object",
             "required": ["version", "digest"],
             "properties": {
               "version": { "type": "integer", "minimum": 3 },
               "digest": { "type": "string", "pattern": "^[0-9a-f]{12}$" },
               "migrated_from": { "type": "integer", "minimum": 1 }
+            }
+          },
+          "calib.provisional_margins": {
+            "description": "Version 10: the margins widened provisionally to hold the 97 percent floor until the floor is set again on more leagues; their count and, for each, the band, the margin, the part added and its reason.",
+            "type": "object",
+            "required": ["count", "bands"],
+            "properties": {
+              "count": { "type": "integer", "minimum": 0 },
+              "bands": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["band", "margin", "widening", "reason"],
+                  "properties": {
+                    "band": { "type": "string", "minLength": 1 },
+                    "margin": { "type": "number" },
+                    "widening": { "type": "number", "exclusiveMinimum": 0 },
+                    "reason": { "type": "string", "minLength": 1 }
+                  }
+                }
+              }
+            }
+          },
+          "calib.report_only_floor": {
+            "description": "Version 10: each band of a named report-only group against the floor it would need if it gated, with the real errors read here, and whether it would hold now. Moving a band back to gating is a band-file edit by a person.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["band", "group", "margin", "needed", "sigma_e", "sigma_r", "holds"],
+              "properties": {
+                "band": { "type": "string", "minLength": 1 },
+                "group": { "type": "string", "minLength": 1 },
+                "margin": { "type": "number" },
+                "needed": { "type": "number" },
+                "sigma_e": { "type": "number", "minimum": 0 },
+                "sigma_r": { "type": "number", "minimum": 0 },
+                "holds": { "type": "boolean" }
+              }
+            }
+          },
+          "calib.drift": {
+            "description": "Version 10: the band history this run added one point per band row to, and the bands whose history drifts: a two-sided cumulative sum of a band's points of one definition version against the mean of its first five, with the run where the rise began. A drift never changes a word or the exit code. Absent when the run keeps no history.",
+            "type": "object",
+            "required": ["history", "added", "drifts"],
+            "properties": {
+              "history": { "type": "string", "minLength": 1 },
+              "added": { "type": "integer", "minimum": 0 },
+              "drifts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["band", "suite", "definition_version", "direction", "since_run", "flagged_run", "points"],
+                  "properties": {
+                    "band": { "type": "string", "minLength": 1 },
+                    "suite": { "type": "string" },
+                    "pairing": { "type": "string" },
+                    "definition_version": { "type": "integer", "minimum": 1 },
+                    "direction": { "enum": ["up", "down"] },
+                    "since_run": { "type": "string" },
+                    "flagged_run": { "type": "string" },
+                    "points": { "type": "integer", "minimum": 0 }
+                  }
+                }
+              }
             }
           },
           "calib.stages": {
@@ -1001,11 +1086,174 @@
               }
             }
           },
+          "calib.intent": {
+            "description": "Since version 12: a change run's intent: the file in the run folder, where it came from (file, run folder or prompt), its SHA-256, the change it describes, the bands it should move, how many notes it holds and the draft rules it confirms.",
+            "type": "object",
+            "required": ["file", "source", "sha256", "change", "bands", "notes", "confirm"],
+            "additionalProperties": false,
+            "properties": {
+              "file": { "const": "intent.json" },
+              "source": { "enum": ["file", "run folder", "prompt"] },
+              "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+              "change": { "type": "string" },
+              "bands": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["band", "direction"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "band": { "type": "string", "minLength": 1 },
+                    "direction": { "enum": ["up", "down"] },
+                    "size": { "type": "number" }
+                  }
+                }
+              },
+              "notes": { "type": "integer", "minimum": 0 },
+              "confirm": { "type": "array", "items": { "type": "string", "pattern": "^sr-[0-9a-f]{8}$" } }
+            }
+          },
+          "calib.surprises": {
+            "description": "Since version 12: a change run's surprises against its intent: a band that moved unintended, an intended band that did not move (missed) or moved the other way (wrong-way), each with its note when the intent holds one; the open surprises (no note) and the bug notes; the intended bands that moved as intended; the moves a confirmed setting rule expected; and the rows not checked (not judged in a change run, or no old-engine word).",
+            "type": "object",
+            "required": ["open", "bug_notes", "rows", "as_expected", "expected", "not_checked"],
+            "properties": {
+              "open": { "type": "integer", "minimum": 0 },
+              "bug_notes": { "type": "integer", "minimum": 0 },
+              "rows": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["band", "suite", "kind", "old_word"],
+                  "properties": {
+                    "band": { "type": "string", "minLength": 1 },
+                    "suite": { "type": "string" },
+                    "pairing": { "type": "string" },
+                    "kind": { "enum": ["unintended", "missed", "wrong-way"] },
+                    "old_word": { "type": "string" },
+                    "moved": { "enum": ["up", "down"] },
+                    "intended": { "enum": ["up", "down"] },
+                    "size": { "type": "number" },
+                    "expected_by": { "type": "string" },
+                    "change": { "type": "number" },
+                    "distribution": { "type": "boolean" },
+                    "note": {
+                      "type": "object",
+                      "required": ["band", "kind", "note"],
+                      "properties": {
+                        "band": { "type": "string" },
+                        "kind": { "enum": ["side effect", "bug"] },
+                        "note": { "type": "string" },
+                        "setting": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              },
+              "as_expected": { "type": "array", "items": { "type": "string" } },
+              "expected": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["band", "direction", "rule"],
+                  "properties": {
+                    "band": { "type": "string" },
+                    "direction": { "enum": ["up", "down"] },
+                    "rule": { "type": "string" }
+                  }
+                }
+              },
+              "not_checked": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["band", "suite", "why"],
+                  "properties": {
+                    "band": { "type": "string" },
+                    "suite": { "type": "string" },
+                    "why": { "type": "string", "minLength": 1 }
+                  }
+                }
+              }
+            }
+          },
+          "calib.finished": {
+            "description": "Since version 12: a change run is finished once every surprise has its note.",
+            "type": "boolean"
+          },
+          "calib.drafts": {
+            "description": "Since version 12: each draft setting rule this judgement wrote from a side-effect note, found already there, confirmed, or skipped, with its reason.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["band", "action"],
+              "properties": {
+                "id": { "type": "string", "pattern": "^sr-[0-9a-f]{8}$" },
+                "band": { "type": "string" },
+                "setting": { "type": "string" },
+                "action": { "enum": ["written", "already there", "confirmed", "already confirmed", "skipped"] },
+                "reason": { "type": "string" }
+              }
+            }
+          },
+          "calib.played": {
+            "description": "Since version 12: the matches this call of calibrate played, by source, and their total; a judgement again of a finished run folder plays none.",
+            "type": "object",
+            "required": ["changed", "old", "bench", "styles", "rules", "setting_rules", "total"],
+            "additionalProperties": false,
+            "properties": {
+              "changed": { "type": "integer", "minimum": 0 },
+              "old": { "type": "integer", "minimum": 0 },
+              "bench": { "type": "integer", "minimum": 0 },
+              "styles": { "type": "integer", "minimum": 0 },
+              "rules": { "type": "integer", "minimum": 0 },
+              "setting_rules": { "type": "integer", "minimum": 0 },
+              "total": { "type": "integer", "minimum": 0 }
+            }
+          },
           "calib.rules": {
-            "description": "A change run's rules stage: the touched sensitivity rules checked, the levels checked over every rule (two per rule), and the rules judged fail. Since version 3 also the rules judged not sure, whether the build carries the rules (the sensitivity feature), the stage's wall time, and one row per rule with the five-match rule last.",
+            "description": "A change run's rules stage: the touched sensitivity rules checked, the levels checked over every rule (two per rule before version 12, three since), and the rules judged fail. Since version 3 also the rules judged not sure, whether the build carries the rules (the sensitivity feature), the stage's wall time, and one row per rule with the five-match rule last. Since version 12 also the run's kind, what the change touched and the rules it selected (touched), a note when a judgement again has no stage of its own, the confirmed setting rules (setting) and the matches the stage played.",
             "type": "object",
             "required": ["checked", "levels", "failed"],
             "properties": {
+              "kind": { "type": "string" },
+              "touched": {
+                "type": "object",
+                "required": ["reason", "settings", "unruled", "rules", "setting_rules", "all"],
+                "properties": {
+                  "reason": { "enum": ["code", "content", "no-base", "none"] },
+                  "against": { "type": "string" },
+                  "why": { "type": "string" },
+                  "code": { "type": "array", "items": { "type": "string" } },
+                  "settings": { "type": "array", "items": { "type": "string" } },
+                  "unruled": { "type": "array", "items": { "type": "string" } },
+                  "rules": { "type": "array", "items": { "type": "string" } },
+                  "setting_rules": { "type": "array", "items": { "type": "string" } },
+                  "all": { "type": "boolean" }
+                }
+              },
+              "note": { "type": "string", "minLength": 1 },
+              "matches": { "type": "integer", "minimum": 0 },
+              "setting": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["id", "setting", "band", "direction", "levels", "values", "matches", "word"],
+                  "properties": {
+                    "id": { "type": "string", "pattern": "^sr-[0-9a-f]{8}$" },
+                    "setting": { "type": "string" },
+                    "band": { "type": "string" },
+                    "direction": { "enum": ["up", "down"] },
+                    "levels": { "type": "array" },
+                    "values": { "type": "array", "items": { "type": ["number", "null"] } },
+                    "matches": { "type": "integer", "minimum": 0 },
+                    "change": { "$ref": "#/$defs/ruleInterval" },
+                    "steps": { "type": "array", "items": { "$ref": "#/$defs/ruleInterval" }, "minItems": 2, "maxItems": 2 },
+                    "word": { "enum": ["pass", "fail", "not_sure", "not_played"] },
+                    "note": { "type": "string" }
+                  }
+                }
+              },
               "checked": { "type": "integer", "minimum": 0 },
               "levels": { "type": "integer", "minimum": 0 },
               "failed": { "type": "integer", "minimum": 0 },
@@ -1017,12 +1265,22 @@
                 "items": {
                   "type": "object",
                   "required": ["job", "statistic", "levels", "word"],
+                  "if": { "properties": { "job": { "const": "five-match" } } },
+                  "then": { "properties": { "levels": { "maxItems": 2 } } },
                   "properties": {
                     "job": { "type": "string", "minLength": 1 },
                     "statistic": { "type": "string", "minLength": 1 },
-                    "levels": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+                    "levels": {
+                      "description": "The low and high level; since version 12 the low, middle and high level of a job rule (the five-match rule keeps its two copies).",
+                      "type": "array",
+                      "items": { "type": "number" },
+                      "minItems": 2,
+                      "maxItems": 3
+                    },
                     "low": { "type": "number" },
+                    "mid": { "type": "number" },
                     "high": { "type": "number" },
+                    "steps": { "type": "array", "items": { "$ref": "#/$defs/ruleInterval" }, "minItems": 2, "maxItems": 2 },
                     "move": { "$ref": "#/$defs/ruleInterval" },
                     "share": { "$ref": "#/$defs/ruleInterval" },
                     "roles": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0, "maximum": 1 } },
@@ -1043,6 +1301,15 @@
               "commit": { "type": "string" },
               "build.id": { "type": "string", "minLength": 1 },
               "content.hash": { "type": "string" },
+              "features": {
+                "description": "Since version 11: the cargo features the old engine was built with, comma-joined: this build's features that its revision declares. Empty for a ready binary or none.",
+                "type": "string"
+              },
+              "missing_features": {
+                "description": "Since version 11: this build's features the old revision does not declare, so it was built without them; the bands that read them get no word against the old engine.",
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 }
+              },
               "cache": {
                 "type": "object",
                 "required": ["hits", "played"],
@@ -1065,11 +1332,14 @@
           "calib.pair": [
             "calib.arms",
             "calib.compare",
-            "calib.verdict"
+            "calib.verdict",
+            "calib.pair_verdict"
           ],
           "calib.joint": [
             "calib.verdicts",
-            "calib.power",
+            "calib.count",
+            "calib.dropped",
+            "calib.headline",
             "calib.rules",
             "calib.base"
           ]

@@ -6,7 +6,7 @@
 
 mod common;
 
-use common::{content, default_teams, run_many, stronger};
+use common::{content, default_teams, judge_band, limits, run_many, stronger, units};
 use engine::record::NullSink;
 use engine::{MatchConfig, Simulation};
 
@@ -30,8 +30,8 @@ fn a_stronger_team_wins_more_than_half_its_matches() {
     let draws = results.iter().filter(|(a, b)| a == b).count();
     let losses = results.len() - wins - draws;
     eprintln!("stronger team: won {wins}, drew {draws}, lost {losses} of 200");
-    assert!(
-        wins > 100,
-        "won {wins} of 200 (drew {draws}, lost {losses})"
-    );
+    let won = units(results.iter().map(|(a, b)| f64::from(u8::from(a > b))));
+    if let Err(e) = judge_band(&limits(), "stronger_team_win_rate", &won) {
+        panic!("{e}");
+    }
 }

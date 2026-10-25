@@ -1,0 +1,27 @@
+Rank,Club,Country,Level,Elo,From,To,SnapshotDate,Change,Golo,Provisional
+1,ENG club 10,ENG,1,1720,,,2026-10-11,0,0,false
+2,ENG club 11,ENG,1,1690,,,2026-10-11,0,0,false
+3,ENG club 12,ENG,1,1660,,,2026-10-11,0,0,false
+4,ENG club 13,ENG,1,1700,,,2026-10-11,0,0,false
+5,ENG club 20,ENG,2,1520,,,2026-10-11,0,0,false
+6,ENG club 21,ENG,2,1490,,,2026-10-11,0,0,false
+7,ENG club 22,ENG,2,1500,,,2026-10-11,0,0,false
+8,ENG club 23,ENG,2,1470,,,2026-10-11,0,0,false
+9,GER club 10,GER,1,1650,,,2026-10-11,0,0,false
+10,GER club 11,GER,1,1640,,,2026-10-11,0,0,false
+11,GER club 12,GER,1,1610,,,2026-10-11,0,0,false
+12,GER club 13,GER,1,1600,,,2026-10-11,0,0,false
+13,GER club 20,GER,2,1450,,,2026-10-11,0,0,false
+14,GER club 21,GER,2,1440,,,2026-10-11,0,0,false
+15,GER club 22,GER,2,1460,,,2026-10-11,0,0,false
+16,GER club 23,GER,2,1430,,,2026-10-11,0,0,false
+17,ESP club 10,ESP,1,1760,,,2026-10-11,0,0,false
+18,ESP club 11,ESP,1,1740,,,2026-10-11,0,0,false
+19,ESP club 12,ESP,1,1730,,,2026-10-11,0,0,false
+20,ESP club 13,ESP,1,1750,,,2026-10-11,0,0,false
+21,XAA club 10,XAA,1,1560,,,2026-10-11,0,0,false
+22,XAA club 11,XAA,1,1580,,,2026-10-11,0,0,false
+23,XBB club 20,XBB,2,1210,,,2026-10-11,0,0,false
+24,XBB club 21,XBB,2,1190,,,2026-10-11,0,0,false
+25,Newcomers,XAA,1,1300,,,2026-10-11,0,0,true
+26,Nowhere,XCC,,1500,,,2026-10-11,0,0,false

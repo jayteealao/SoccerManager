@@ -1,43 +1,21 @@
 //! The comparison of a paired calibration run: the off arm and the on arm of one flag,
-//! band by band, and the verdict of the decision rule.
+//! judged as a change run judges two engines, with the off arm in the old engine's place.
 //!
-//! The rule, in order: an on arm that breaks a guardrail is rejected; otherwise the arm that
-//! passes more bands wins; on equal passes, the arm closer to the band centres wins when the
-//! summed normalized distance differs by more than [`MARGIN`]; otherwise there is no
-//! difference, and the candidate is removed. A band that starts at 0 has no centre to aim
-//! for: only a value above its top adds distance.
+//! Every band gets the on arm's word against real football (pass, fail or not sure) and its
+//! word against the off arm (better, worse, equivalent or not sure), from the paired change
+//! over the fixtures both arms played. The verdict, in order: an on arm that breaks a
+//! guardrail is rejected; otherwise the verdict is the on arm's joint word against real
+//! football, with the counts of the words against the off arm beside it.
 
 use serde::Serialize;
 
-use super::BandCheck;
-use super::bands::Band;
-
-/// The smallest difference in summed normalized distance that decides a tie on passes.
-pub const MARGIN: f64 = 0.05;
+use super::verdict::{OldWord, VerdictRow, Word};
 
 /// The on arm's single-thread match time may be at most this multiple of the off arm's.
 pub const TIME_GUARDRAIL: f64 = 1.10;
 
-/// The band whose lower bound is a guardrail as well as a band.
+/// The band whose word is a guardrail as well as a word.
 const STRONGER: &str = "stronger_team_win_rate";
-
-/// One band of one suite, in both arms.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct CompareRow {
-    pub suite: String,
-    pub band: String,
-    /// The formation pairing, for a row of the formations suite.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pairing: Option<String>,
-    pub lo: f64,
-    pub hi: f64,
-    pub off: f64,
-    pub on: f64,
-    /// `on` minus `off`.
-    pub delta: f64,
-    pub off_pass: bool,
-    pub on_pass: bool,
-}
 
 /// What the rule concluded.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -45,18 +23,19 @@ pub struct CompareRow {
 pub enum Verdict {
     /// The on arm broke a guardrail.
     OnRejected,
-    OnBetter,
-    OffBetter,
-    NoDifference,
+    /// The on arm's joint word against real football.
+    Pass,
+    Fail,
+    NotSure,
 }
 
 impl Verdict {
     pub fn code(self) -> &'static str {
         match self {
             Verdict::OnRejected => "on-rejected",
-            Verdict::OnBetter => "on-better",
-            Verdict::OffBetter => "off-better",
-            Verdict::NoDifference => "no-difference",
+            Verdict::Pass => "pass",
+            Verdict::Fail => "fail",
+            Verdict::NotSure => "not-sure",
         }
     }
 }
@@ -71,147 +50,124 @@ pub struct Guard {
     pub match_wall_ms: u64,
 }
 
-/// One row per suite, realism band, and formation pairing that both arms judged. The time
-/// budget is not a realism band and is left out; each arm reports its own.
-pub fn compare(off: &[BandCheck], on: &[BandCheck]) -> Vec<CompareRow> {
-    off.iter()
-        .filter(|c| c.band != "wall_ms")
-        .filter_map(|o| {
-            let n = on
-                .iter()
-                .find(|c| c.suite == o.suite && c.band == o.band && c.pairing == o.pairing)?;
-            Some(CompareRow {
-                suite: o.suite.clone(),
-                band: o.band.clone(),
-                pairing: o.pairing.clone(),
-                lo: o.lo,
-                hi: o.hi,
-                off: o.value,
-                on: n.value,
-                delta: engine::observe::round_to(n.value - o.value, 4),
-                off_pass: o.pass,
-                on_pass: n.pass,
-            })
-        })
-        .collect()
+/// How many bands the on arm moved which way against the off arm.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct WordCounts {
+    pub better: u32,
+    pub worse: u32,
+    pub equivalent: u32,
+    pub not_sure: u32,
 }
 
-/// The verdict of the decision rule.
-pub fn verdict(rows: &[CompareRow], off: &Guard, on: &Guard) -> Verdict {
-    let slower = on.match_wall_ms as f64 > off.match_wall_ms as f64 * TIME_GUARDRAIL;
-    let weaker = rows.iter().any(|r| r.band == STRONGER && !r.on_pass);
-    if on.dark_paths > 0 || on.violations > 0 || slower || weaker {
-        return Verdict::OnRejected;
-    }
-    let passes = |arm: fn(&CompareRow) -> bool| rows.iter().filter(|r| arm(r)).count();
-    let (off_passes, on_passes) = (passes(|r| r.off_pass), passes(|r| r.on_pass));
-    if on_passes != off_passes {
-        return if on_passes > off_passes {
-            Verdict::OnBetter
-        } else {
-            Verdict::OffBetter
-        };
-    }
-    let (off_d, on_d) = (distance(rows, |r| r.off), distance(rows, |r| r.on));
-    if off_d - on_d > MARGIN {
-        Verdict::OnBetter
-    } else if on_d - off_d > MARGIN {
-        Verdict::OffBetter
-    } else {
-        Verdict::NoDifference
-    }
-}
-
-/// The summed distance of one arm to the band centres, each in half-widths of its band.
-/// The stronger team's win rate has a lower bound only, so it has no centre and counts as a
-/// pass and a guardrail, not as a distance. A floor band (0 to `hi`) adds only the excess
-/// above `hi`, in widths of the band, so a passing 0 adds nothing.
-fn distance(rows: &[CompareRow], value: fn(&CompareRow) -> f64) -> f64 {
-    rows.iter()
-        .filter(|r| r.band != STRONGER && r.hi > r.lo)
-        .map(|r| {
-            let v = value(r);
-            let band = Band { lo: r.lo, hi: r.hi };
-            if band.is_floor() {
-                (v - r.hi).max(0.0) / r.hi
-            } else {
-                (v - (r.lo + r.hi) / 2.0).abs() / ((r.hi - r.lo) / 2.0)
+impl WordCounts {
+    /// The counts of the old-engine words over the rows that gate.
+    pub fn of(rows: &[VerdictRow]) -> WordCounts {
+        let mut c = WordCounts::default();
+        for r in rows.iter().filter(|r| r.report_only.is_none()) {
+            match r.old_word.unwrap_or(OldWord::NotSure) {
+                OldWord::Better => c.better += 1,
+                OldWord::Worse => c.worse += 1,
+                OldWord::Equivalent => c.equivalent += 1,
+                OldWord::NotSure => c.not_sure += 1,
             }
-        })
-        .sum()
+        }
+        c
+    }
 }
 
-/// A fixed-width table of the rows and the verdict, for a person reading the terminal.
-pub fn render_table(flag: &str, rows: &[CompareRow], verdict: Verdict) -> String {
-    let mut out = format!("paired run of flag {flag}\n");
-    out.push_str(&format!(
-        "{:<10} {:<23} {:>19} {:>9} {:>9} {:>9}  {}\n",
-        "suite", "band", "band range", "off", "on", "delta", "pairing"
-    ));
-    for r in rows {
-        let mark = |pass: bool| if pass { ' ' } else { '*' };
-        out.push_str(&format!(
-            "{:<10} {:<23} {:>19} {:>8.3}{} {:>8.3}{} {:>+9.3}  {}\n",
-            r.suite,
-            r.band,
-            format!("{:.3} to {:.3}", r.lo, r.hi),
-            r.off,
-            mark(r.off_pass),
-            r.on,
-            mark(r.on_pass),
-            r.delta,
-            r.pairing.as_deref().unwrap_or("")
+/// The verdict of a paired run with its reasons and counts.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PairVerdict {
+    pub verdict: Verdict,
+    /// The guardrails the on arm broke; empty unless it is rejected.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub rejected: Vec<String>,
+    /// The words against the off arm over the bands that gate.
+    pub words: WordCounts,
+}
+
+/// The verdict of the decision rule over the on arm's rows, judged against the off arm, and
+/// the on arm's joint word against real football.
+pub fn verdict(rows: &[VerdictRow], joint: Word, off: &Guard, on: &Guard) -> PairVerdict {
+    let mut rejected = Vec::new();
+    if on.dark_paths > 0 {
+        rejected.push(format!("{} dark paths in the on arm", on.dark_paths));
+    }
+    if on.violations > 0 {
+        rejected.push(format!("{} rule violations in the on arm", on.violations));
+    }
+    if on.match_wall_ms as f64 > off.match_wall_ms as f64 * TIME_GUARDRAIL {
+        rejected.push(format!(
+            "the on arm's match takes {} ms against {} ms, more than {} percent slower",
+            on.match_wall_ms,
+            off.match_wall_ms,
+            ((TIME_GUARDRAIL - 1.0) * 100.0).round()
         ));
     }
-    out.push_str("* outside the band\n");
-    out.push_str(&format!("verdict: {}\n", verdict.code()));
+    if rows
+        .iter()
+        .any(|r| r.band == STRONGER && r.word == Word::Fail)
+    {
+        rejected.push(format!("{STRONGER} fails in the on arm"));
+    }
+    let verdict = if !rejected.is_empty() {
+        Verdict::OnRejected
+    } else {
+        match joint {
+            Word::Pass => Verdict::Pass,
+            Word::Fail => Verdict::Fail,
+            Word::NotSure | Word::NotJudged => Verdict::NotSure,
+        }
+    };
+    PairVerdict {
+        verdict,
+        rejected,
+        words: WordCounts::of(rows),
+    }
+}
+
+/// The verdict lines under the paired run's table, for a person reading the terminal.
+pub fn render_verdict(flag: &str, v: &PairVerdict) -> String {
+    let w = &v.words;
+    let mut out = format!(
+        "paired run of flag {flag}: on against off: {} better, {} worse, {} equivalent, {} not \
+         sure\n",
+        w.better, w.worse, w.equivalent, w.not_sure
+    );
+    for r in &v.rejected {
+        out.push_str(&format!("  rejected: {r}\n"));
+    }
+    out.push_str(&format!("verdict: {}\n", v.verdict.code()));
     out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::report::BandCheck;
+    use crate::report::verdict::range_rows;
 
-    fn check(band: &str, value: f64, lo: f64, hi: f64) -> BandCheck {
-        BandCheck {
+    fn row(band: &str, word: Word, old: OldWord) -> VerdictRow {
+        let check = BandCheck {
             band: band.into(),
-            suite: if band == STRONGER {
-                "strength"
-            } else {
-                "equal"
-            }
-            .into(),
+            suite: "equal".into(),
             pairing: None,
-            value,
-            lo,
-            hi,
-            pass: if band == STRONGER {
-                value > lo
-            } else {
-                (lo..=hi).contains(&value)
-            },
+            value: 1.0,
+            lo: 0.0,
+            hi: 2.0,
+            pass: true,
             se: 0.0,
             informational: None,
             why_none: None,
             unjudged: false,
             whole: false,
             dist: None,
-        }
-    }
-
-    /// Goals and shots per arm, with possession and the stronger team in band in both.
-    fn rows(off: (f64, f64), on: (f64, f64)) -> Vec<CompareRow> {
-        let arm = |(goals, shots): (f64, f64)| {
-            vec![
-                check("goals_per_match", goals, 2.4, 3.2),
-                check("shots_per_team", shots, 8.0, 16.0),
-                check("possession_home_pct", 50.0, 35.0, 65.0),
-                check("possession_away_pct", 50.0, 35.0, 65.0),
-                check(STRONGER, 0.6, 0.5, 1.0),
-                check("wall_ms", 10.0, 0.0, 100.0),
-            ]
+            rule: None,
         };
-        compare(&arm(off), &arm(on))
+        let mut r = range_rows(&[check], None).remove(0);
+        r.word = word;
+        r.old_word = Some(old);
+        r
     }
 
     const CLEAN: Guard = Guard {
@@ -220,113 +176,117 @@ mod tests {
         match_wall_ms: 100,
     };
 
-    #[test]
-    fn the_rows_pair_every_realism_band_and_leave_out_the_time_budget() {
-        let r = rows((2.8, 12.0), (3.0, 12.0));
-        let names: Vec<&str> = r.iter().map(|r| r.band.as_str()).collect();
-        assert_eq!(
-            names,
-            [
-                "goals_per_match",
-                "shots_per_team",
-                "possession_home_pct",
-                "possession_away_pct",
-                STRONGER
-            ]
-        );
-        assert_eq!(r[0].off, 2.8);
-        assert_eq!(r[0].on, 3.0);
-        assert_eq!(r[0].delta, 0.2);
+    fn rows() -> Vec<VerdictRow> {
+        vec![
+            row("goals_per_match", Word::Pass, OldWord::Better),
+            row("shots_per_team", Word::Pass, OldWord::Equivalent),
+            row("corners_per_team", Word::NotSure, OldWord::NotSure),
+            row(STRONGER, Word::Pass, OldWord::Worse),
+        ]
     }
 
     #[test]
-    fn a_guardrail_breach_rejects_the_on_arm() {
-        let r = rows((2.8, 12.0), (2.8, 12.0));
+    fn the_verdict_is_the_joint_word_with_the_counts_of_the_old_words() {
+        let v = verdict(&rows(), Word::NotSure, &CLEAN, &CLEAN);
+        assert_eq!(v.verdict, Verdict::NotSure);
+        assert!(v.rejected.is_empty());
+        assert_eq!(
+            v.words,
+            WordCounts {
+                better: 1,
+                worse: 1,
+                equivalent: 1,
+                not_sure: 1
+            }
+        );
+        assert_eq!(
+            verdict(&rows(), Word::Pass, &CLEAN, &CLEAN).verdict,
+            Verdict::Pass
+        );
+        // A report-only row counts no word.
+        let mut r = rows();
+        r[0].report_only = Some("reported".into());
+        assert_eq!(verdict(&r, Word::Fail, &CLEAN, &CLEAN).words.better, 0);
+    }
+
+    #[test]
+    fn a_guardrail_breach_rejects_the_on_arm_whatever_its_words() {
         let dark = Guard {
             dark_paths: 1,
             ..CLEAN
         };
-        assert_eq!(verdict(&r, &CLEAN, &dark), Verdict::OnRejected);
+        let v = verdict(&rows(), Word::Pass, &CLEAN, &dark);
+        assert_eq!(v.verdict, Verdict::OnRejected);
+        assert!(v.rejected[0].contains("dark paths"), "{:?}", v.rejected);
         let slow = Guard {
             match_wall_ms: 111,
             ..CLEAN
         };
-        assert_eq!(verdict(&r, &CLEAN, &slow), Verdict::OnRejected);
-        let mut weak = r.clone();
-        weak[4].on_pass = false;
-        assert_eq!(verdict(&weak, &CLEAN, &CLEAN), Verdict::OnRejected);
-    }
-
-    #[test]
-    fn more_bands_passed_wins() {
-        // The off arm misses the goals band; the on arm passes it.
-        let r = rows((3.5, 12.0), (3.0, 12.0));
-        assert_eq!(verdict(&r, &CLEAN, &CLEAN), Verdict::OnBetter);
-        let r = rows((3.0, 12.0), (3.5, 12.0));
-        assert_eq!(verdict(&r, &CLEAN, &CLEAN), Verdict::OffBetter);
-    }
-
-    #[test]
-    fn equal_passes_fall_to_the_distance_and_its_margin() {
-        // Goals centre 2.8, half-width 0.4. 0.1 goals is 0.25 of a half-width.
-        let r = rows((3.0, 12.0), (2.9, 12.0));
-        assert_eq!(verdict(&r, &CLEAN, &CLEAN), Verdict::OnBetter);
-        // 0.01 goals is 0.025 of a half-width: inside the margin.
-        let r = rows((2.81, 12.0), (2.82, 12.0));
-        assert_eq!(verdict(&r, &CLEAN, &CLEAN), Verdict::NoDifference);
-    }
-
-    #[test]
-    fn the_margin_boundary_is_not_a_difference() {
-        // Shots centre 12, half-width 4: 0.2 shots is exactly 0.05 of a half-width.
-        let r = rows((2.8, 12.2), (2.8, 12.0));
-        assert_eq!(verdict(&r, &CLEAN, &CLEAN), Verdict::NoDifference);
-        // 0.24 shots is 0.06: over the margin, and the on arm is closer.
-        let r = rows((2.8, 12.24), (2.8, 12.0));
-        assert_eq!(verdict(&r, &CLEAN, &CLEAN), Verdict::OnBetter);
-    }
-
-    #[test]
-    fn a_floor_band_adds_only_the_excess_above_its_top() {
-        let floor = |v: f64| {
-            let arm = vec![check("ten_plus_goals_share", v, 0.0, 0.005)];
-            distance(&compare(&arm, &arm), |r| r.off)
+        assert_eq!(
+            verdict(&rows(), Word::Pass, &CLEAN, &slow).verdict,
+            Verdict::OnRejected
+        );
+        // Exactly 10 percent slower is inside the guardrail.
+        let edge = Guard {
+            match_wall_ms: 110,
+            ..CLEAN
         };
-        assert_eq!(floor(0.0), 0.0);
-        assert_eq!(floor(0.005), 0.0);
-        assert!((floor(0.01) - 1.0).abs() < 1e-12, "{}", floor(0.01));
-        // The goals band keeps the distance to its centre.
-        let goals = rows((3.0, 12.0), (3.0, 12.0));
-        assert!((distance(&goals, |r| r.off) - 0.5).abs() < 1e-12);
+        assert_eq!(
+            verdict(&rows(), Word::Pass, &CLEAN, &edge).verdict,
+            Verdict::Pass
+        );
+        let mut weak = rows();
+        weak[3].word = Word::Fail;
+        let v = verdict(&weak, Word::Fail, &CLEAN, &CLEAN);
+        assert_eq!(v.verdict, Verdict::OnRejected);
+        assert!(v.rejected[0].contains(STRONGER));
     }
 
     #[test]
-    fn rows_of_the_formations_suite_pair_by_pairing() {
-        let arm = |v: f64| {
-            ["4-4-2 v 4-4-2", "4-4-2 v 4-3-3"]
-                .map(|p| BandCheck {
-                    suite: "formations".into(),
-                    pairing: Some(p.into()),
-                    ..check("goals_per_match", v, 2.4, 3.2)
-                })
-                .to_vec()
-        };
-        let mut on = arm(3.0);
-        on.reverse();
-        let r = compare(&arm(2.8), &on);
-        assert_eq!(r.len(), 2);
-        assert_eq!(r[0].pairing.as_deref(), Some("4-4-2 v 4-4-2"));
-        assert_eq!(r[1].pairing.as_deref(), Some("4-4-2 v 4-3-3"));
-        assert!(r.iter().all(|r| r.on == 3.0 && r.off == 2.8));
+    fn the_verdict_lines_name_the_counts_and_the_verdict() {
+        let v = verdict(&rows(), Word::NotSure, &CLEAN, &CLEAN);
+        let text = render_verdict("probe", &v);
+        assert!(
+            text.contains("1 better, 1 worse, 1 equivalent, 1 not sure"),
+            "{text}"
+        );
+        assert!(text.ends_with("verdict: not-sure\n"), "{text}");
     }
 
+    /// The band-centre rule is gone: no source file of this crate names its parts.
     #[test]
-    fn the_table_names_every_row_and_the_verdict() {
-        let r = rows((3.5, 12.0), (3.0, 12.0));
-        let text = render_table("probe", &r, Verdict::OnBetter);
-        assert!(text.contains("goals_per_match"), "{text}");
-        assert!(text.contains("2.400 to 3.200"), "{text}");
-        assert!(text.contains("3.500*"), "{text}");
-        assert!(text.ends_with("verdict: on-better\n"), "{text}");
+    fn no_source_file_keeps_the_band_centre_rule() {
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let names = [
+            ["On", "Better"].concat(),
+            ["Off", "Better"].concat(),
+            ["No", "Difference"].concat(),
+            ["pub const ", "MARGIN:"].concat(),
+            ["off", "_pass"].concat(),
+        ];
+        let mut stack = vec![src];
+        let mut seen = 0;
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                if path.extension().is_none_or(|e| e != "rs") {
+                    continue;
+                }
+                seen += 1;
+                let text = std::fs::read_to_string(&path).unwrap();
+                for n in &names {
+                    assert!(!text.contains(n.as_str()), "{} names {n}", path.display());
+                }
+                if path.ends_with("report/compare.rs") {
+                    let f = ["fn ", "distance("].concat();
+                    assert!(!text.contains(&f), "compare.rs keeps {f}");
+                }
+            }
+        }
+        assert!(seen > 20, "only {seen} source files read");
     }
 }

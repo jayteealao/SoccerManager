@@ -686,7 +686,6 @@ mod tests {
             .map(|b| b.band.as_str())
             .collect();
         let keys: BTreeMap<Suite, Vec<u64>> = [(Suite::Equal, (0..n as u64).collect())].into();
-        let per_unit: BTreeMap<Suite, u32> = [(Suite::Equal, n as u32)].into();
         let mut rng = EngineRng::from_seed(2026);
         let mut alarms = 0u32;
         for rep in 0..replicates {
@@ -705,9 +704,9 @@ mod tests {
                 b
             };
             let (first, second) = (arm(&picks[..n]), arm(&picks[n..2 * n]));
-            let (sets, rows) = verdict::paired((&first, &keys), (&second, &keys), &per_unit);
+            let (sets, rows) = verdict::paired((&first, &keys), (&second, &keys));
             let (found, c) = verdict::bootstrap(&sets, &rows, 1000 + u64::from(rep), RESAMPLES);
-            let (judged, _) = verdict::judge(&sets, &rows, &found, c, Vec::new(), &BTreeMap::new());
+            let (judged, _) = verdict::judge(&sets, &rows, &found, c, Vec::new());
             for band in &equal_bands {
                 assert!(
                     judged.iter().any(|r| r.band == *band),

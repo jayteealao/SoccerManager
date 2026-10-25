@@ -133,8 +133,70 @@ pub fn run_rules(
             design::play_arm(content, clubs, &all, true, n, size.seed.wrapping_add(2)),
         )
     });
+    let asks = asks(content, file, &selected);
+    let results = words::judge(
+        &asks,
+        &rows,
+        arms.as_ref().map(|(lo, hi)| (lo.as_slice(), hi.as_slice())),
+        size.resamples,
+        size.seed,
+    );
+    (Played { design: rows, arms }, results)
+}
+
+/// The rows a three-level run played: the design with each match's levels, and the two
+/// arms when it played them.
+#[derive(Debug, Clone)]
+pub struct LevelPlayed {
+    pub design: Vec<design::MatchRow>,
+    pub levels: Vec<Vec<u8>>,
+    pub arms: Option<(Vec<design::MatchRow>, Vec<design::MatchRow>)>,
+}
+
+/// Plays the rules of `file` whose jobs `only` names (every rule when `None`) at three levels:
+/// the three-level design over those jobs' factors, every other factor held at its middle
+/// level, and the two arms over every factor. Returns the rows and the judged rules, each with
+/// its middle level and its two steps.
+pub fn run_levels(
+    content: &Content,
+    clubs: &Clubs,
+    file: &SensitivityFile,
+    only: Option<&[&str]>,
+    size: Size,
+) -> (LevelPlayed, Vec<words::LevelResult>) {
+    let (all, varied, selected) = factors(content, file, only);
+    let (levels, rows) =
+        design::play_levels(content, clubs, &all, &varied, size.matches, size.seed);
+    let arms = size.arm_matches.map(|n| {
+        (
+            design::play_arm(content, clubs, &all, false, n, size.seed.wrapping_add(1)),
+            design::play_arm(content, clubs, &all, true, n, size.seed.wrapping_add(2)),
+        )
+    });
+    let asks = asks(content, file, &selected);
+    let results = words::judge_levels(
+        &asks,
+        &rows,
+        &levels,
+        arms.as_ref().map(|(lo, hi)| (lo.as_slice(), hi.as_slice())),
+        size.resamples,
+        size.seed,
+    );
+    (
+        LevelPlayed {
+            design: rows,
+            levels,
+            arms,
+        },
+        results,
+    )
+}
+
+/// What each selected rule asks, from its index in the file and its factor's place among the
+/// varied ones.
+fn asks(content: &Content, file: &SensitivityFile, selected: &[(usize, usize)]) -> Vec<Ask> {
     let body = &content.tuning.engine.contract.body;
-    let asks: Vec<Ask> = selected
+    selected
         .iter()
         .map(|&(i, k)| {
             let r = &file.rules[i];
@@ -149,15 +211,7 @@ pub fn run_rules(
                 report_only: r.report_only,
             }
         })
-        .collect();
-    let results = words::judge(
-        &asks,
-        &rows,
-        arms.as_ref().map(|(lo, hi)| (lo.as_slice(), hi.as_slice())),
-        size.resamples,
-        size.seed,
-    );
-    (Played { design: rows, arms }, results)
+        .collect()
 }
 
 /// The rules that fail a full run: those whose word is not pass and that lack the

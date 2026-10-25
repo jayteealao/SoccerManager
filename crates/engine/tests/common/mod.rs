@@ -10,6 +10,38 @@ use engine::{Content, ContentDir, MatchConfig, TickHeader};
 
 pub const SEED: u64 = 42;
 
+/// The band file's limits for the slow tests, judged by the pass rule. A band with a real
+/// target reads the reference file, else the calibrate report named by `SM_REAL_REPORT`.
+pub fn limits() -> pass_rule::limits::Limits {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    pass_rule::limits::Limits::load(&root.join("content"), &root.join("gate"))
+        .expect("the band file loads")
+}
+
+/// Judges `band` on `sample` by the band file and prints the judgement; the error, when the
+/// word is not pass, holds the band, its interval and its margin.
+pub fn judge_band(
+    limits: &pass_rule::limits::Limits,
+    band: &str,
+    sample: &[pass_rule::interval::Unit],
+) -> Result<(), String> {
+    let judged = limits.judge_sample(band, sample);
+    eprintln!("{judged}");
+    if judged.word == pass_rule::rule::Word::Pass {
+        Ok(())
+    } else {
+        Err(judged.to_string())
+    }
+}
+
+/// One unit per match (or scene, or penalty) of a plain mean or share.
+pub fn units(values: impl IntoIterator<Item = f64>) -> Vec<pass_rule::interval::Unit> {
+    values
+        .into_iter()
+        .map(|v| pass_rule::interval::Unit::ratio(v, 1.0))
+        .collect()
+}
+
 /// The `content/` folder at the workspace root.
 pub fn content_dir() -> ContentDir {
     ContentDir::at(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content"))

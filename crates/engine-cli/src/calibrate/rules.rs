@@ -1,12 +1,17 @@
 //! The rules stage of a change run: the sensitivity rules of the content folder's
-//! `sensitivity.json` (one per attribute job and per body job) and the five-match rule, each
-//! judged pass, fail or not sure from its low and its high level. Every rule counts as
-//! touched. The rules and the job probe they count with build only with the `sensitivity`
-//! feature, so a normal build's matches pay nothing for them; such a build checks no rule and
-//! says so.
+//! `sensitivity.json` (one per attribute job and per body job) and the five-match rule. Only
+//! the rules of the settings the change touched play ([`super::touched`]); a change to engine
+//! code, or a run with no revision to compare with, plays every rule. Each job rule plays at
+//! three levels, low, middle and high, and is judged pass, fail or not sure from its
+//! low-to-high move and its two steps; the five-match rule keeps its two copies. The job rules
+//! and the probe they count with build only with the `sensitivity` feature, so a normal build's
+//! matches pay nothing for them; such a build checks no job rule and says so, and still
+//! reports what the change touched. The confirmed setting rules play in any build
+//! ([`super::setting_rules`]).
 
 use engine::data::{Content, ContentDir};
 
+use super::touched::{FIVE_MATCH, Touched};
 pub use crate::report::{RuleInterval, RuleRow, RulesReport};
 
 /// The rules a change run checks, loaded before any match plays, so a refused rules file
@@ -33,64 +38,113 @@ pub fn load(_content: &Content, _dir: &ContentDir) -> anyhow::Result<RuleSet> {
     Ok(RuleSet {})
 }
 
-/// Plays and judges every rule of `set` at the size its file sets.
+/// Plays and judges the rules of `set` that `touched` selects, each job rule at three levels,
+/// at the size its file sets.
 #[cfg(feature = "sensitivity")]
-pub fn run(content: &Content, set: &RuleSet) -> RulesReport {
+pub fn run(content: &Content, set: &RuleSet, touched: &Touched, kind: &str) -> RulesReport {
     use engine::sensitivity::{self, Size, five_match};
 
     let started = std::time::Instant::now();
     let file = &set.file;
-    let (_, results) = sensitivity::run_rules(content, &set.clubs, file, None, Size::of(file));
-    let five = five_match::run(
-        content,
-        &set.clubs,
-        &file.five_match,
-        file.design.seed,
-        file.design.resamples,
-    );
-    let mut rows: Vec<RuleRow> = file
+    let jobs: Vec<&str> = file
         .rules
         .iter()
-        .zip(&results)
-        .map(|(def, r)| RuleRow {
-            job: r.job.clone(),
-            statistic: r.statistic.clone(),
-            levels: def.levels,
-            low: Some(r.low),
-            high: Some(r.high),
-            mv: interval(r.mv),
-            share: r.share.and_then(interval),
-            roles: None,
-            word: word(r.word),
-            report_only: r.report_only,
-        })
+        .map(|r| r.job.as_str())
+        .filter(|j| touched.selects(j))
         .collect();
-    rows.push(RuleRow {
-        job: "five-match".to_string(),
-        statistic: "runs of five matches in which a top player out-rates an average one"
-            .to_string(),
-        levels: [file.five_match.average, file.five_match.top],
-        low: None,
-        high: None,
-        mv: None,
-        share: interval(five.pooled),
-        roles: Some(
-            five.roles
+    let mut rows: Vec<RuleRow> = Vec::new();
+    let mut matches = 0u32;
+    if !jobs.is_empty() {
+        matches += file.design.matches + 2 * file.design.arm_matches;
+        let only = (!touched.all).then_some(jobs.as_slice());
+        let (_, results) = sensitivity::run_levels(content, &set.clubs, file, only, Size::of(file));
+        for r in &results {
+            let def = file
+                .rules
                 .iter()
-                .map(|r| (format!("{:?}", r.role), r.share))
-                .collect::<std::collections::BTreeMap<_, _>>(),
-        ),
-        word: word(five.word),
-        report_only: false,
-    });
-    report(rows, true, started.elapsed())
+                .find(|d| d.job == r.result.job)
+                .expect("a result names a rule of the file");
+            let mid = engine::sensitivity::design::Factor::of(def, content).middle();
+            let steps = match (interval(r.steps[0]), interval(r.steps[1])) {
+                (Some(a), Some(b)) => Some([a, b]),
+                _ => None,
+            };
+            rows.push(RuleRow {
+                job: r.result.job.clone(),
+                statistic: r.result.statistic.clone(),
+                levels: vec![def.levels[0], mid, def.levels[1]],
+                low: Some(r.result.low),
+                mid: Some(r.mid),
+                high: Some(r.result.high),
+                steps,
+                mv: interval(r.result.mv),
+                share: r.result.share.and_then(interval),
+                roles: None,
+                word: word(r.result.word).to_string(),
+                report_only: r.result.report_only,
+            });
+        }
+    }
+    if touched.selects(FIVE_MATCH) {
+        let fm = &file.five_match;
+        matches += fm.roles.len() as u32 * fm.runs * fm.matches_per_run * 2;
+        let five = five_match::run(
+            content,
+            &set.clubs,
+            &file.five_match,
+            file.design.seed,
+            file.design.resamples,
+        );
+        rows.push(RuleRow {
+            job: FIVE_MATCH.to_string(),
+            statistic: "runs of five matches in which a top player out-rates an average one"
+                .to_string(),
+            levels: vec![file.five_match.average, file.five_match.top],
+            low: None,
+            mid: None,
+            high: None,
+            steps: None,
+            mv: None,
+            share: interval(five.pooled),
+            roles: Some(
+                five.roles
+                    .iter()
+                    .map(|r| (format!("{:?}", r.role), r.share))
+                    .collect::<std::collections::BTreeMap<_, _>>(),
+            ),
+            word: word(five.word).to_string(),
+            report_only: false,
+        });
+    }
+    let mut r = report(rows, true, started.elapsed(), touched, kind);
+    r.matches = matches;
+    r
 }
 
-/// A build without the `sensitivity` feature checks no rule.
+/// A build without the `sensitivity` feature checks no job rule; it still reports what the
+/// change touched.
 #[cfg(not(feature = "sensitivity"))]
-pub fn run(_content: &Content, _set: &RuleSet) -> RulesReport {
-    report(Vec::new(), false, std::time::Duration::ZERO)
+pub fn run(_content: &Content, _set: &RuleSet, touched: &Touched, kind: &str) -> RulesReport {
+    report(Vec::new(), false, std::time::Duration::ZERO, touched, kind)
 }
+
+/// The stage of a finished run folder written before the stage was kept: nothing is played
+/// again, and the report says so.
+pub fn run_stored_none(touched: &Touched, kind: &str) -> RulesReport {
+    let mut r = report(
+        Vec::new(),
+        cfg!(feature = "sensitivity"),
+        std::time::Duration::ZERO,
+        touched,
+        kind,
+    );
+    r.note = Some(NOT_STORED.to_string());
+    r
+}
+
+/// Why a judged-again run has no rules stage of its own.
+pub const NOT_STORED: &str = "not stored: this run folder was written before the rules stage \
+                              was kept, and a judgement again plays no match";
 
 #[cfg(feature = "sensitivity")]
 /// The interval of `i`, or none when a bound is not finite: the arms' outcome did not move,
@@ -116,12 +170,23 @@ fn word(w: engine::sensitivity::words::Word) -> &'static str {
     }
 }
 
-/// The stage's counts over `rows`, each rule checked at its two levels.
-fn report(rows: Vec<RuleRow>, built: bool, took: std::time::Duration) -> RulesReport {
+/// The stage's counts over `rows`, each rule at its levels.
+fn report(
+    rows: Vec<RuleRow>,
+    built: bool,
+    took: std::time::Duration,
+    touched: &Touched,
+    kind: &str,
+) -> RulesReport {
     let count = |w: &str| rows.iter().filter(|r| r.word == w).count() as u32;
     RulesReport {
+        kind: kind.to_string(),
+        touched: Some(touched.clone()),
+        note: None,
+        setting: Vec::new(),
+        matches: 0,
         checked: rows.len() as u32,
-        levels: 2 * rows.len() as u32,
+        levels: rows.iter().map(|r| r.levels.len() as u32).sum(),
         failed: count("fail"),
         not_sure: count("not_sure"),
         built,
@@ -132,14 +197,24 @@ fn report(rows: Vec<RuleRow>, built: bool, took: std::time::Duration) -> RulesRe
 
 /// The console line of the stage.
 pub fn line(r: &RulesReport) -> String {
+    let why = r
+        .touched
+        .as_ref()
+        .map_or_else(|| "every rule".to_string(), Touched::why_line);
+    if let Some(note) = &r.note {
+        return format!("rules stage (kind {}): {why}; {note}", r.kind);
+    }
     if !r.built {
-        return "rules stage: this build has no sensitivity rules; build engine-cli with \
-                --features sensitivity to check them"
-            .to_string();
+        return format!(
+            "rules stage (kind {}): {why}; this build has no sensitivity rules; build \
+             engine-cli with --features sensitivity to check them",
+            r.kind
+        );
     }
     format!(
-        "rules stage: {} touched sensitivity rules checked at {} levels, {} failed, {} not sure \
-         ({:.1} s)",
+        "rules stage (kind {}): {} touched rules checked at {} levels ({why}), {} failed, {} not \
+         sure ({:.1} s)",
+        r.kind,
         r.checked,
         r.levels,
         r.failed,
@@ -157,15 +232,27 @@ pub fn render_table(r: &RulesReport) -> String {
     };
     let fig = |v: Option<f64>| v.map_or("-".to_string(), |v| format!("{v:.4}"));
     let mut out = format!(
-        "{:<17} {:>13} {:>9} {:>9} {:>26} {:>26} word\n",
-        "rule", "levels", "low", "high", "move [95%]", "share [95%]"
+        "{:<17} {:>16} {:>9} {:>9} {:>9} {:>26} {:>26} word\n",
+        "rule", "levels", "low", "mid", "high", "move [95%]", "share [95%]"
     );
     for row in &r.rows {
+        let levels = row
+            .levels
+            .iter()
+            .map(|l| format!("{l}"))
+            .collect::<Vec<_>>()
+            .join("-");
+        let levels = if row.job == FIVE_MATCH {
+            format!("{levels} two copies")
+        } else {
+            levels
+        };
         out.push_str(&format!(
-            "{:<17} {:>13} {:>9} {:>9} {:>26} {:>26} {}\n",
+            "{:<17} {:>16} {:>9} {:>9} {:>9} {:>26} {:>26} {}\n",
             row.job,
-            format!("{}-{}", row.levels[0], row.levels[1]),
+            levels,
             fig(row.low),
+            fig(row.mid),
             fig(row.high),
             iv(row.mv),
             iv(row.share),
@@ -176,20 +263,49 @@ pub fn render_table(r: &RulesReport) -> String {
             }
         ));
     }
+    for s in &r.setting {
+        let levels = s
+            .levels
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(" | ");
+        let values = s
+            .values
+            .iter()
+            .map(|v| v.map_or("-".to_string(), |v| format!("{v:.4}")))
+            .collect::<Vec<_>>()
+            .join(" | ");
+        out.push_str(&format!(
+            "setting rule {} ({} {} as {} rises): levels {levels}; band {values}; change {}; {}{}\n",
+            s.id,
+            s.band,
+            s.direction.code(),
+            s.setting,
+            iv(s.change),
+            s.word.replace('_', " "),
+            s.note
+                .as_deref()
+                .map_or_else(String::new, |n| format!(" ({n})"))
+        ));
+    }
     out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::calibrate::touched::Reason;
 
-    fn row(job: &str, word: &'static str) -> RuleRow {
+    fn row(job: &str, word: &str) -> RuleRow {
         RuleRow {
             job: job.to_string(),
             statistic: "pass completion share".to_string(),
-            levels: [8.0, 16.0],
+            levels: vec![8.0, 12.0, 16.0],
             low: Some(0.8),
+            mid: Some(0.83),
             high: Some(0.86),
+            steps: None,
             mv: Some(RuleInterval {
                 est: 0.075,
                 lo: 0.06,
@@ -197,13 +313,21 @@ mod tests {
             }),
             share: None,
             roles: None,
-            word,
+            word: word.to_string(),
             report_only: false,
         }
     }
 
+    fn content_change() -> Touched {
+        let mut t = Touched::every(Reason::Content, Some("abc".into()), None, Vec::new(), &[]);
+        t.all = false;
+        t.settings = vec!["attributes.json#/attributes[passing]/group".into()];
+        t.rules = vec!["passing".into()];
+        t
+    }
+
     #[test]
-    fn the_stage_counts_each_rule_at_two_levels_and_its_words() {
+    fn the_stage_counts_each_rule_at_three_levels_and_its_words() {
         let r = report(
             vec![
                 row("passing", "pass"),
@@ -212,21 +336,31 @@ mod tests {
                     report_only: true,
                     ..row("flair", "not_sure")
                 },
+                RuleRow {
+                    levels: vec![10.0, 16.0],
+                    ..row(FIVE_MATCH, "pass")
+                },
             ],
             true,
             std::time::Duration::from_millis(1_500),
+            &content_change(),
+            "change",
         );
-        assert_eq!((r.checked, r.levels, r.failed, r.not_sure), (3, 6, 1, 1));
+        assert_eq!((r.checked, r.levels, r.failed, r.not_sure), (4, 11, 1, 1));
         assert_eq!(
             line(&r),
-            "rules stage: 3 touched sensitivity rules checked at 6 levels, 1 failed, 1 not sure \
-             (1.5 s)"
+            "rules stage (kind change): 4 touched rules checked at 11 levels (1 changed \
+             settings, 0 with no rule), 1 failed, 1 not sure (1.5 s)"
         );
         let table = render_table(&r);
         assert!(table.contains("flair"), "{table}");
         assert!(table.contains("not sure report"), "{table}");
+        assert!(table.contains("8-12-16"), "{table}");
+        assert!(table.contains("10-16 two copies"), "{table}");
         let json = serde_json::to_value(&r.rows[2]).unwrap();
         assert_eq!(json["report_only"], true);
+        assert_eq!(json["levels"], serde_json::json!([8.0, 12.0, 16.0]));
+        assert_eq!(json["mid"], 0.83);
         assert!(
             serde_json::to_value(&r.rows[0])
                 .unwrap()
@@ -234,12 +368,35 @@ mod tests {
                 .is_none()
         );
         assert!(table.contains("+0.075 [+0.060, +0.090]"), "{table}");
+        let back: RulesReport = serde_json::from_value(serde_json::to_value(&r).unwrap()).unwrap();
+        assert_eq!(back.rows, r.rows);
+        assert_eq!(back.touched.unwrap().rules, ["passing"]);
     }
 
     #[test]
-    fn a_build_without_the_rules_says_so() {
-        let r = report(Vec::new(), false, std::time::Duration::ZERO);
+    fn a_build_without_the_rules_says_so_and_names_the_touched_settings() {
+        let r = report(
+            Vec::new(),
+            false,
+            std::time::Duration::ZERO,
+            &content_change(),
+            "milestone",
+        );
         assert_eq!((r.checked, r.levels, r.failed, r.not_sure), (0, 0, 0, 0));
-        assert!(line(&r).contains("--features sensitivity"), "{}", line(&r));
+        let l = line(&r);
+        assert!(l.contains("--features sensitivity"), "{l}");
+        assert!(
+            l.starts_with("rules stage (kind milestone): 1 changed settings"),
+            "{l}"
+        );
+        let every = Touched::every(Reason::Code, None, None, vec!["crates/x.rs".into()], &[]);
+        let r = report(
+            Vec::new(),
+            false,
+            std::time::Duration::ZERO,
+            &every,
+            "change",
+        );
+        assert!(line(&r).contains("engine code changed: 1"), "{}", line(&r));
     }
 }

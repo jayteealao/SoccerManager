@@ -603,6 +603,11 @@ impl Team {
     /// sideways stand. In play the shift reads each outfield player's followed ball point
     /// ([`follow`]), so a far player's anchor slides late; the validator, the restarts and
     /// the keeper pass the ball itself.
+    ///
+    /// Play calls this every tick, so it keeps its own direct body: built from
+    /// `anchor_frame` and `AnchorFrame::at` it played about 6 percent slower per
+    /// tick. The two must agree bit for bit; the frame and the rule checker's cache tests
+    /// check that.
     pub fn anchor(&self, slot: usize, ball: DVec2, in_possession: bool, t: &Tuning) -> DVec2 {
         if slot == self.keeper_slot() {
             // The keeper stands on the line from the goal centre toward the ball.
@@ -647,6 +652,86 @@ impl Team {
         );
         let shift = DVec2::new(ball.x * t.compactness_x, ball.y * t.compactness_y);
         self.pitch.clamp(base + shift, 0.5)
+    }
+
+    /// The part of [`Team::anchor`] that does not read the ball: for the keeper his goal
+    /// centre, for an outfield slot its base before the ball shift. It changes only with
+    /// the team's shape, so a reader that judges many balls on one shape can keep it.
+    pub(crate) fn anchor_frame(&self, slot: usize, in_possession: bool) -> AnchorFrame {
+        if slot == self.keeper_slot() {
+            return AnchorFrame::Keeper {
+                goal: self.own_goal(),
+                pitch: self.pitch,
+            };
+        }
+        let (fx, fy) = self.formation[slot];
+        let (sx, sy) = self.pitch.scale();
+        // The player's own plan: a player instruction may set his width, and a rule change
+        // reaches his place once he has taken it up.
+        let plan = self.plan_for(slot);
+        let slot_plan = &plan.slots[slot];
+        let offset = if in_possession {
+            slot_plan.in_possession
+        } else {
+            slot_plan.out_of_possession
+        };
+        // The role's offset comes after the existing sums, so an offset of 0 keeps every
+        // anchor's bits.
+        // Out of possession the line height moves the back line and the line of engagement
+        // the players in front of it.
+        let block = if in_possession {
+            0.0
+        } else if self.in_back_line(slot) {
+            plan.block_depth
+        } else {
+            plan.engage_depth_m
+        };
+        let depth = (fx + block + slot_plan.depth + offset.x) * sx;
+        let side = self.slot_side(slot);
+        // Width spreads the side with the ball; defensive width spreads it without the ball.
+        let width = if in_possession {
+            plan.width
+        } else {
+            plan.defensive_width
+        };
+        let base = DVec2::new(
+            (depth - self.pitch.half_length()) * self.attack_x,
+            (fy * width + side * offset.y) * sy * self.attack_x,
+        );
+        AnchorFrame::Outfield {
+            base,
+            pitch: self.pitch,
+        }
+    }
+}
+
+/// A slot's anchor on one team shape without the ball ([`Team::anchor_frame`]);
+/// [`AnchorFrame::at`] adds the ball with the same arithmetic as [`Team::anchor`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum AnchorFrame {
+    /// The keeper: he stands on the line from his goal centre toward the ball.
+    Keeper { goal: DVec2, pitch: Pitch },
+    /// An outfield slot: its base, to which the ball shift is added.
+    Outfield { base: DVec2, pitch: Pitch },
+}
+
+impl AnchorFrame {
+    /// The anchor for `ball`: bit for bit [`Team::anchor`] on the shape the frame was taken
+    /// from.
+    #[inline]
+    pub(crate) fn at(&self, ball: DVec2, t: &Tuning) -> DVec2 {
+        match *self {
+            Self::Keeper { goal, pitch } => {
+                // The keeper stands on the line from the goal centre toward the ball.
+                let out = crate::math::toward(goal, ball) * t.keeper_depth;
+                let at = DVec2::new(goal.x + out.x, out.y.clamp(-3.0, 3.0));
+                pitch.clamp(at, 0.5)
+            }
+            Self::Outfield { base, pitch } => {
+                let shift = DVec2::new(ball.x * t.compactness_x, ball.y * t.compactness_y);
+                pitch.clamp(base + shift, 0.5)
+            }
+        }
     }
 }
 
@@ -883,6 +968,109 @@ mod tests {
     use super::test_support::bare;
     use super::*;
     use crate::data::test_support::shipped_content;
+
+    /// [`Team::anchor`] as it was before its split into a frame and a ball step: the
+    /// reference the split must equal bit for bit.
+    fn unsplit_anchor(
+        team: &Team,
+        slot: usize,
+        ball: DVec2,
+        in_possession: bool,
+        t: &Tuning,
+    ) -> DVec2 {
+        if slot == team.keeper_slot() {
+            let goal = team.own_goal();
+            let out = crate::math::toward(goal, ball) * t.keeper_depth;
+            let at = DVec2::new(goal.x + out.x, out.y.clamp(-3.0, 3.0));
+            return team.pitch.clamp(at, 0.5);
+        }
+        let (fx, fy) = team.formation[slot];
+        let (sx, sy) = team.pitch.scale();
+        let plan = team.plan_for(slot);
+        let slot_plan = &plan.slots[slot];
+        let offset = if in_possession {
+            slot_plan.in_possession
+        } else {
+            slot_plan.out_of_possession
+        };
+        let block = if in_possession {
+            0.0
+        } else if team.in_back_line(slot) {
+            plan.block_depth
+        } else {
+            plan.engage_depth_m
+        };
+        let depth = (fx + block + slot_plan.depth + offset.x) * sx;
+        let side = team.slot_side(slot);
+        let width = if in_possession {
+            plan.width
+        } else {
+            plan.defensive_width
+        };
+        let base = DVec2::new(
+            (depth - team.pitch.half_length()) * team.attack_x,
+            (fy * width + side * offset.y) * sy * team.attack_x,
+        );
+        let shift = DVec2::new(ball.x * t.compactness_x, ball.y * t.compactness_y);
+        team.pitch.clamp(base + shift, 0.5)
+    }
+
+    /// The split anchor equals the unsplit one bit for bit: for both bare teams, a reshaped
+    /// line, an acting keeper, a team after half-time and a team taking a change up, on every
+    /// slot, both phases and 49 balls from the centre spot to points past the corners.
+    #[test]
+    fn the_anchor_frame_and_its_ball_step_equal_the_unsplit_anchor_by_bits() {
+        let content = shipped_content();
+        let schema = &content.tactics;
+        let t = &content.tuning.engine;
+        let mut teams = vec![bare(0), bare(1)];
+        let mut reshaped = bare(0);
+        reshaped.reshape(2);
+        teams.push(reshaped);
+        let mut acting = bare(1);
+        acting.reshape(0);
+        assert_ne!(acting.keeper_slot(), 0);
+        teams.push(acting);
+        let mut turned = bare(0);
+        turned.switch_ends();
+        teams.push(turned);
+        let mut taking = bare(1);
+        let mut tactics = Tactics::defaults(schema);
+        tactics.mentality = (schema.mentalities.len() - 1) as u8;
+        tactics.instructions[crate::data::tactics::LINE_HEIGHT] = 2;
+        tactics.instructions[crate::data::tactics::WIDTH] = 0;
+        let at = std::array::from_fn(|s| if s % 2 == 0 { 10 } else { 1_000 });
+        taking.begin_take_up(tactics, at, 20, schema, t);
+        assert!(
+            taking.take_up_share().is_some(),
+            "the change is being taken up"
+        );
+        teams.push(taking);
+        let (hx, hy) = (Pitch::DEFAULT.half_length(), Pitch::DEFAULT.half_width());
+        let steps = [-1.2, -1.0, -0.5, 0.0, 0.5, 1.0, 1.2];
+        let balls: Vec<DVec2> = steps
+            .iter()
+            .flat_map(|&x| steps.iter().map(move |&y| DVec2::new(x * hx, y * hy)))
+            .collect();
+        assert_eq!(balls.len(), 49);
+        for team in &teams {
+            for slot in 0..PLAYERS_PER_TEAM {
+                for has in [true, false] {
+                    let frame = team.anchor_frame(slot, has);
+                    for &ball in &balls {
+                        let want = unsplit_anchor(team, slot, ball, has, t)
+                            .to_array()
+                            .map(f64::to_bits);
+                        assert_eq!(frame.at(ball, t).to_array().map(f64::to_bits), want);
+                        assert_eq!(
+                            team.anchor(slot, ball, has, t).to_array().map(f64::to_bits),
+                            want
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn anchors_stay_inside_the_pitch_for_every_corner() {

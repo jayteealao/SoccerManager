@@ -198,15 +198,52 @@ pub(crate) fn job_distance(
     t: &Tuning,
 ) -> f64 {
     let team = i / PLAYERS_PER_TEAM;
-    let side = &teams[team];
-    let half = side.pitch().half_length();
+    let side = JobSide::of(&teams[team], i % PLAYERS_PER_TEAM);
+    job_distance_from(pos, parked, team, pos[i], &side, anchor, t)
+}
+
+/// What the job-target rule reads of the mover's side and slot: whether he covers (a
+/// back-line player), his own goal's centre, the half length and the attack direction. It
+/// changes only with the team's shape.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct JobSide {
+    covers: bool,
+    goal: DVec2,
+    half: f64,
+    attack_x: f64,
+}
+
+impl JobSide {
+    /// The job side of `slot` on `side`'s shape.
+    pub(crate) fn of(side: &Team, slot: usize) -> Self {
+        Self {
+            covers: side.in_back_line(slot),
+            goal: side.own_goal(),
+            half: side.pitch().half_length(),
+            attack_x: side.attack_x,
+        }
+    }
+}
+
+/// [`job_distance`] for a mover of `team` standing at `me` (his nearer anchor at `anchor`),
+/// the targets read from `targets`: the mover's own team is never a target, so his own
+/// entry in `targets` is not read.
+pub(crate) fn job_distance_from(
+    targets: &[DVec2; PLAYER_COUNT],
+    parked: &[bool; PLAYER_COUNT],
+    team: usize,
+    me: DVec2,
+    side: &JobSide,
+    anchor: DVec2,
+    t: &Tuning,
+) -> f64 {
+    let half = side.half;
     let depth = |at: DVec2| at.x * side.attack_x + half;
-    let covers = side.in_back_line(i % PLAYERS_PER_TEAM);
-    let goal = side.own_goal();
+    let covers = side.covers;
+    let goal = side.goal;
     let hold = depth(anchor).max(0.5);
-    let me = pos[i];
     let mut nearest = f64::INFINITY;
-    for (j, &at) in pos.iter().enumerate() {
+    for (j, &at) in targets.iter().enumerate() {
         if j / PLAYERS_PER_TEAM == team || parked[j] {
             continue;
         }
@@ -238,9 +275,9 @@ pub(crate) fn job_closing(
     anchor: DVec2,
     t: &Tuning,
 ) -> bool {
-    let mut moved = *before;
-    moved[i] = now;
-    job_distance(&moved, parked, i, teams, anchor, t) < was_m - 1e-3
+    let team = i / PLAYERS_PER_TEAM;
+    let side = JobSide::of(&teams[team], i % PLAYERS_PER_TEAM);
+    job_distance_from(before, parked, team, now, &side, anchor, t) < was_m - 1e-3
 }
 
 /// One rule violation.
