@@ -167,7 +167,10 @@ pub fn play_match(
         check,
         engine::FanoutSink::new(
             super::physical::Physical::default(),
-            engine::measures::shape::ShapeSink::default(),
+            engine::FanoutSink::new(
+                engine::measures::shape::ShapeSink::default(),
+                super::tracked_feed::TrackedFeed::new(sim.config().pitch().length()),
+            ),
         ),
     );
     #[cfg(not(feature = "measures"))]
@@ -178,9 +181,10 @@ pub fn play_match(
         sim.run(&mut sink)?;
     }
     #[cfg(feature = "measures")]
-    let (check, (physical, shape)) = {
+    let (check, (physical, (shape, tracked))) = {
         let (check, running) = sink.into_parts();
-        (check, running.into_parts())
+        let (physical, shapes) = running.into_parts();
+        (check, (physical, shapes.into_parts()))
     };
     #[cfg(not(feature = "measures"))]
     let check = sink;
@@ -206,7 +210,10 @@ pub fn play_match(
     row.subs = crate::report::substitutions::of_match(&events, &sim);
     #[cfg(feature = "measures")]
     let row = match sim.measures() {
-        Some(measures) => row.with_measures(measures, &physical, &shape.finish()),
+        Some(measures) => {
+            let tracked = tracked.finish().map_err(EngineError::Sink)?;
+            row.with_measures(measures, &physical, &shape.finish(), &tracked)
+        }
         None => row,
     };
     #[cfg(feature = "measures")]

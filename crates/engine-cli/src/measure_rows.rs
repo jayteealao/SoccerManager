@@ -3,6 +3,8 @@
 //! report reads them back into the bands, so both depend on this module and neither on the
 //! other for the row layout.
 
+use crate::report::tracked_shape::{TRACKED_FIELDS, TrackedValues};
+
 /// Shot distance bins: 1 m each from 0 m to 40 m, then 40 m and over.
 pub const SHOT_BINS: usize = 41;
 /// Pass cells: ground pass, long pass or chip, cross, each under 10 m, 10 to 25 m and over
@@ -231,6 +233,9 @@ pub struct MeasureBlock {
     pub physical_overflow: [u32; 2],
     /// The team-shape sums, per side, in [`shape_name`] order.
     pub shape: [[f64; SHAPE_FIELDS]; 2],
+    /// The shared shape report's figures, per side, in
+    /// [`crate::report::tracked_shape::field_names`] order.
+    pub tracked: TrackedValues,
 }
 
 impl Default for MeasureBlock {
@@ -240,6 +245,7 @@ impl Default for MeasureBlock {
             physical: [[PlayerRow::default(); PLAYER_SLOTS]; 2],
             physical_overflow: [0; 2],
             shape: [[0.0; SHAPE_FIELDS]; 2],
+            tracked: [[0.0; TRACKED_FIELDS]; 2],
         }
     }
 }

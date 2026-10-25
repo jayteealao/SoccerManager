@@ -277,6 +277,12 @@ fn walk(block: &mut MeasureBlock, f: &mut dyn FnMut(&dyn Fn() -> String, Slot<'_
             f(&|| format!("shape.{side}.{}", shape_name(i)), Slot::F64(v));
         }
     }
+    let tracked = crate::report::tracked_shape::field_names();
+    for (s, side) in SIDES.iter().enumerate() {
+        for (v, name) in block.tracked[s].iter_mut().zip(&tracked) {
+            f(&|| format!("trk.{side}.{name}"), Slot::F64(v));
+        }
+    }
 }
 
 /// The measure columns, in file order: each one's name and type. Built once.
@@ -677,20 +683,21 @@ impl Row {
     }
 
     /// The row with the measures of a measures build: the engine's match measures, the
-    /// team-shape sums and each
-    /// player's running.
+    /// team-shape sums, each player's running and the shared shape report's figures.
     #[cfg(feature = "measures")]
     pub fn with_measures(
         mut self,
         measures: &engine::measures::MatchMeasures,
         physical: &super::physical::Physical,
         shape: &engine::measures::shape::ShapeValues,
+        tracked: &crate::report::tracked_shape::TrackedValues,
     ) -> Self {
         self.measured = Some(Box::new(MeasureBlock {
             measures: Measures::from(measures),
             physical: physical.players,
             physical_overflow: physical.overflow,
             shape: *shape,
+            tracked: *tracked,
         }));
         self
     }
@@ -1276,8 +1283,9 @@ mod tests {
     #[test]
     fn a_row_with_measures_round_trips_field_by_field() {
         let cols = measure_columns();
-        // 1 + 82 + 2 + 24 + 24 + 14 + 6 + 2 + 32 + 62 + 2 + 2 + 2 x 16 x 9 + 2 + 2 x 157.
-        assert_eq!(cols.len(), 857);
+        // 1 + 82 + 2 + 24 + 24 + 14 + 6 + 2 + 32 + 62 + 2 + 2 + 2 x 16 x 9 + 2 + 2 x 157
+        // + 2 x 173.
+        assert_eq!(cols.len(), 1203);
         let names: std::collections::BTreeSet<&str> =
             cols.iter().map(|(n, _)| n.as_str()).collect();
         assert_eq!(names.len(), cols.len(), "every name once");
@@ -1298,6 +1306,8 @@ mod tests {
             "shape.home.cb.depth_in_sum",
             "shape.away.st.live_ticks",
             "shape.away.links_total",
+            "trk.home.cb.depth_in_sum",
+            "trk.away.free.n",
         ] {
             assert!(names.contains(name), "{name}");
         }

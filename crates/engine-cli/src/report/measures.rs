@@ -20,6 +20,7 @@ use engine::observe::MatchStats;
 
 use super::bands::{BandDef, Builtin, Measure, Per, Source};
 use super::distribution::{Hist, Metric, bin_of};
+use super::tracked_shape::{self, TRACKED_FIELDS, TrackedValues};
 use super::{se_mean, se_ratio, se_share};
 use crate::measure_rows::{
     Measures, PASS_CELL_NAMES, PHASES, PLAYER_SLOTS, PlayerRow, SHAPE_FIELDS, ZONES, shape_place,
@@ -57,8 +58,12 @@ pub const MATCH: [&str; 3] = ["injuries", "ball_in_play_s", "ball_in_play_min"];
 /// peak speed `peak_mps`, and the ball-in-play ticks in each zone. A sixth family,
 /// `shape.<sum>`, names each team-shape sum ([`crate::measure_rows::shape_name`]), such as
 /// `shape.cb.depth_in_sum` or `shape.slide_x_in_sxy`, and `shape.<group>.live_min`, the
-/// group's ball-in-play player-minutes.
-pub const MEASURE_FIELDS: [&str; 14] = [
+/// group's ball-in-play player-minutes. A seventh, `trk.<figure>`, names each figure of the
+/// shared shape report ([`super::tracked_shape::field_names`]), such as
+/// `trk.cb.depth_in_sum` or `trk.run.distance_m`, and `trk.<group>.live_min` and
+/// `trk.team.live_min`, the group's ball-in-play player-minutes and the match's ball-in-play
+/// minutes at 25 frames a second.
+pub const MEASURE_FIELDS: [&str; 15] = [
     "shot_distance_m",
     "pass_attempts",
     "pass_completed",
@@ -73,6 +78,7 @@ pub const MEASURE_FIELDS: [&str; 14] = [
     "peak_mps",
     "zone_ticks",
     "shape",
+    "trk",
 ];
 
 /// The thirds of the pitch, from a side's own goal line.
@@ -85,6 +91,7 @@ pub struct Extras {
     pub measures: Measures,
     pub physical: [[PlayerRow; PLAYER_SLOTS]; 2],
     pub shape: [[f64; SHAPE_FIELDS]; 2],
+    pub tracked: TrackedValues,
     pub clubs: [(u32, u32); 2],
 }
 
@@ -103,6 +110,7 @@ fn measure_base(base: &str) -> bool {
         Some(("third_ticks", third)) => member(&THIRDS, third).is_some(),
         Some(("zone_ticks", zone)) => member(&ZONES, zone).is_some(),
         Some(("shape", sum)) => shape_sum(&[[0.0; SHAPE_FIELDS]; 2], sum, 0).is_some(),
+        Some(("trk", figure)) => tracked_figure(&[[0.0; TRACKED_FIELDS]; 2], figure, 0).is_some(),
         Some(_) => false,
         None => {
             MEASURE_FIELDS.contains(&base)
@@ -114,6 +122,7 @@ fn measure_base(base: &str) -> bool {
                         | "third_ticks"
                         | "zone_ticks"
                         | "shape"
+                        | "trk"
                 )
         }
     }
@@ -172,6 +181,7 @@ fn extra(e: &Extras, base: &str, side: usize) -> Option<f64> {
             players().map(|p| f64::from(p.zone_ticks[z])).sum()
         }
         Some(("shape", sum)) => shape_sum(&e.shape, sum, side)?,
+        Some(("trk", figure)) => tracked_figure(&e.tracked, figure, side)?,
         Some(_) => return None,
         None => match base {
             "shot_distance_m" => m.shot_distance_m[side],
@@ -199,6 +209,16 @@ fn shape_sum(shape: &[[f64; SHAPE_FIELDS]; 2], sum: &str, side: usize) -> Option
         return Some(ticks / (f64::from(engine::TICKS_PER_SECOND) * 60.0));
     }
     Some(shape[side][shape_place(sum)?])
+}
+
+/// The shared shape report's figure `figure` of `side`: a kept figure by its name, or
+/// `<group>.live_min` and `team.live_min`, the ball-in-play frames in minutes.
+fn tracked_figure(v: &TrackedValues, figure: &str, side: usize) -> Option<f64> {
+    if let Some(of) = figure.strip_suffix(".live_min") {
+        let frames = v[side][tracked_shape::place(&format!("{of}.live_frames"))?];
+        return Some(frames / (tracked_shape::FRAMES_PER_SECOND * 60.0));
+    }
+    Some(v[side][tracked_shape::place(figure)?])
 }
 
 /// The value of the per-team field `name` for `side` (0 home, 1 away).
@@ -1188,10 +1208,15 @@ mod tests {
         shape[0][shape_place("cb.depth_in_sum").unwrap()] = 120.0;
         shape[0][shape_place("cb.depth_in_n").unwrap()] = 12.0;
         shape[1][shape_place("stops_corner").unwrap()] = 3.0;
+        let mut tracked = [[0.0; TRACKED_FIELDS]; 2];
+        tracked[0][tracked_shape::place("cm.live_frames").unwrap()] = 3000.0;
+        tracked[1][tracked_shape::place("run.distance_m").unwrap()] = 9000.0;
+        tracked[1][tracked_shape::place("team.live_frames").unwrap()] = 1500.0;
         Extras {
             measures: m,
             physical,
             shape,
+            tracked,
             clubs,
         }
     }
@@ -1236,6 +1261,14 @@ mod tests {
         assert!(!is_measure_field("shape.home"));
         assert!(is_measure_field("shape.w.live_min.away"));
         assert!(!is_measure_field("shape.slide.live_min.away"));
+        assert_eq!(f("trk.cm.live_frames.home"), Some(3000.0));
+        assert_eq!(f("trk.cm.live_min.home"), Some(2.0));
+        assert_eq!(f("trk.run.distance_m.away"), Some(9000.0));
+        assert_eq!(f("trk.team.live_min.away"), Some(1.0));
+        assert_eq!(f("trk.team.live_min.home"), Some(0.0));
+        assert!(is_measure_field("trk.free.spread_sum.{side}"));
+        assert!(!is_measure_field("trk.keeper.depth_in_sum.home"));
+        assert!(!is_measure_field("trk.home"));
         // A catalog field still reads the band record.
         assert_eq!(f("goals.home"), Some(2.0));
         // Without extras, or with extras of a build without the measures: no value.

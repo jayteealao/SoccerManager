@@ -47,8 +47,10 @@ pub const OUTLIER_SHOTS_PER_TEAM: std::ops::RangeInclusive<u32> = 8..=16;
 /// pass kind and length, goal phase, possession by third, possession chains, and each
 /// player's running. Version 3 adds the team-shape sums: each outfield group's depth, width,
 /// pace and sprints, and each team's slide, far-player response, dead-ball calm, stoppages by
-/// kind and completed links.
-pub const MEASURES_VERSION: u32 = 3;
+/// kind and completed links. Version 4 adds the shared shape report's figures
+/// ([`tracked_shape`]), measured at 25 frames a second by the code that measures a real
+/// tracked match.
+pub const MEASURES_VERSION: u32 = 4;
 
 /// One suite of a calibration run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

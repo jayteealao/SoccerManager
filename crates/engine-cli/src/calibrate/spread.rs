@@ -18,6 +18,7 @@ use super::run_folder;
 use crate::measure_rows::SHAPE_FIELDS;
 use crate::report::bands::Registry;
 use crate::report::measures::Extras;
+use crate::report::tracked_shape::TRACKED_FIELDS;
 use crate::report::{BandCheck, RunBuilder, Suite, real};
 use engine::ContentDir;
 
@@ -77,6 +78,7 @@ fn fold(
                 measures: measured.map(|m| m.measures).unwrap_or_default(),
                 physical: measured.map(|m| m.physical).unwrap_or_default(),
                 shape: measured.map_or([[0.0; SHAPE_FIELDS]; 2], |m| m.shape),
+                tracked: measured.map_or([[0.0; TRACKED_FIELDS]; 2], |m| m.tracked),
                 clubs: k.fixture.clubs.map(club),
             },
         );

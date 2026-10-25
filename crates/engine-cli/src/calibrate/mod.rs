@@ -67,6 +67,8 @@ pub mod stages;
 pub mod styles;
 pub mod surprises;
 pub mod touched;
+#[cfg(feature = "measures")]
+pub mod tracked_feed;
 pub mod worker;
 
 use std::collections::BTreeMap;
@@ -91,6 +93,7 @@ use crate::report::baseline::{self, Identity};
 use crate::report::compare::{self, Guard};
 use crate::report::kinds::Kind;
 use crate::report::measures::Extras;
+use crate::report::tracked_shape::TRACKED_FIELDS;
 use crate::report::{
     ArmReport, BandCheck, BaseCache, BaseReport, CalibrationReport, Counts, FlagEntry, IntentInfo,
     MEASURES_VERSION, Observations, PairInfo, PairingFigures, RED_CARD_ARMS, Recorded,
@@ -2106,6 +2109,7 @@ impl RunCtx<'_> {
                         },
                         physical: measured.map(|m| m.physical).unwrap_or_default(),
                         shape: measured.map_or([[0.0; SHAPE_FIELDS]; 2], |m| m.shape),
+                        tracked: measured.map_or([[0.0; TRACKED_FIELDS]; 2], |m| m.tracked),
                         clubs: k.fixture.clubs.map(club),
                     },
                 );
