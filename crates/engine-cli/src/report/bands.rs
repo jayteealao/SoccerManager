@@ -1076,11 +1076,6 @@ impl Margin {
 /// was measured at the design count on 3 generated leagues, so the floor sits again on more.
 pub const PROVISIONAL_REASON: &str = "engine spread at the design count, 3 leagues";
 
-/// The reason of the provisional widenings the tracked bands took on 2026-10-25: their real
-/// error is the jackknife error over 7 tracked matches, so a margin may narrow back when
-/// more tracked matches exist.
-pub const TRACKED_REASON: &str = "real error from 7 tracked matches";
-
 /// A part of a margin added so it holds the 97 percent floor. A provisional one holds the
 /// floor until the floor is set again on more leagues, when it may shrink or go; any other
 /// widening cites a noticeable error.
@@ -2103,6 +2098,11 @@ mod tests {
             }
         }
     }
+
+    /// The reason of the provisional widenings the tracked bands took on 2026-10-25: their
+    /// real error is the jackknife error over 7 tracked matches, so a margin may narrow back
+    /// when more tracked matches exist.
+    const TRACKED_REASON: &str = "real error from 7 tracked matches";
 
     /// The floor answers of 2026-10-22 and 2026-10-25: every margin the floor refused is
     /// widened by a provisional part with the stated reason, and the noticeable error keeps

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "builder": {
     "version": "0.2.0-dev",
-    "git_head": "7c27501084cf42578e164f44403e7a8405e7e1b1"
+    "git_head": "cab1c8ad4d3719c507f816514e1d75265a835e3f"
   },
   "built_from": [
     {
@@ -42463,7 +42463,7 @@
       "engine_count": {
         "text": "the band ball_in_play_minutes on the engine's matches",
         "band": "ball_in_play_minutes",
-        "measure": "{\"kind\":\"mean\",\"of\":[\"ball_in_play_min\"],\"per\":\"match\"}"
+        "measure": "{\"kind\":\"mean\",\"of\":[\"trk.team.live_min.home\"],\"per\":\"match\"}"
       },
       "per_match": [
         56.912667,
@@ -42496,7 +42496,7 @@
       "engine_count": {
         "text": "the band cb_depth_in on the engine's matches",
         "band": "cb_depth_in",
-        "measure": "{\"den\":[\"shape.cb.depth_in_n.home\",\"shape.cb.depth_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.depth_in_sum.home\",\"shape.cb.depth_in_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.cb.depth_in_n.home\",\"trk.cb.depth_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cb.depth_in_sum.home\",\"trk.cb.depth_in_sum.away\"]}"
       },
       "per_match": [
         12.133502,
@@ -42529,7 +42529,7 @@
       "engine_count": {
         "text": "the band cb_depth_out on the engine's matches",
         "band": "cb_depth_out",
-        "measure": "{\"den\":[\"shape.cb.depth_out_n.home\",\"shape.cb.depth_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.depth_out_sum.home\",\"shape.cb.depth_out_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.cb.depth_out_n.home\",\"trk.cb.depth_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cb.depth_out_sum.home\",\"trk.cb.depth_out_sum.away\"]}"
       },
       "per_match": [
         21.440983,
@@ -42562,7 +42562,7 @@
       "engine_count": {
         "text": "the band cb_pace_hs_share on the engine's matches",
         "band": "cb_pace_hs_share",
-        "measure": "{\"den\":[\"shape.cb.live_ticks.home\",\"shape.cb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.pace_hs.home\",\"shape.cb.pace_hs.away\"]}"
+        "measure": "{\"den\":[\"trk.cb.live_frames.home\",\"trk.cb.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cb.pace_hs.home\",\"trk.cb.pace_hs.away\"]}"
       },
       "per_match": [
         0.020262,
@@ -42595,7 +42595,7 @@
       "engine_count": {
         "text": "the band cb_pace_jog_share on the engine's matches",
         "band": "cb_pace_jog_share",
-        "measure": "{\"den\":[\"shape.cb.live_ticks.home\",\"shape.cb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.pace_jog.home\",\"shape.cb.pace_jog.away\"]}"
+        "measure": "{\"den\":[\"trk.cb.live_frames.home\",\"trk.cb.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cb.pace_jog.home\",\"trk.cb.pace_jog.away\"]}"
       },
       "per_match": [
         0.411016,
@@ -42628,7 +42628,7 @@
       "engine_count": {
         "text": "the band cb_pace_run_share on the engine's matches",
         "band": "cb_pace_run_share",
-        "measure": "{\"den\":[\"shape.cb.live_ticks.home\",\"shape.cb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.pace_run.home\",\"shape.cb.pace_run.away\"]}"
+        "measure": "{\"den\":[\"trk.cb.live_frames.home\",\"trk.cb.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cb.pace_run.home\",\"trk.cb.pace_run.away\"]}"
       },
       "per_match": [
         0.076357,
@@ -42661,7 +42661,7 @@
       "engine_count": {
         "text": "the band cb_pace_sprint_share on the engine's matches",
         "band": "cb_pace_sprint_share",
-        "measure": "{\"den\":[\"shape.cb.live_ticks.home\",\"shape.cb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.pace_sprint.home\",\"shape.cb.pace_sprint.away\"]}"
+        "measure": "{\"den\":[\"trk.cb.live_frames.home\",\"trk.cb.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cb.pace_sprint.home\",\"trk.cb.pace_sprint.away\"]}"
       },
       "per_match": [
         0.004229,
@@ -42694,7 +42694,7 @@
       "engine_count": {
         "text": "the band cb_pace_stand_share on the engine's matches",
         "band": "cb_pace_stand_share",
-        "measure": "{\"den\":[\"shape.cb.live_ticks.home\",\"shape.cb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.pace_stand.home\",\"shape.cb.pace_stand.away\"]}"
+        "measure": "{\"den\":[\"trk.cb.live_frames.home\",\"trk.cb.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cb.pace_stand.home\",\"trk.cb.pace_stand.away\"]}"
       },
       "per_match": [
         0.008941,
@@ -42727,7 +42727,7 @@
       "engine_count": {
         "text": "the band cb_pace_walk_share on the engine's matches",
         "band": "cb_pace_walk_share",
-        "measure": "{\"den\":[\"shape.cb.live_ticks.home\",\"shape.cb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.pace_walk.home\",\"shape.cb.pace_walk.away\"]}"
+        "measure": "{\"den\":[\"trk.cb.live_frames.home\",\"trk.cb.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cb.pace_walk.home\",\"trk.cb.pace_walk.away\"]}"
       },
       "per_match": [
         0.479196,
@@ -42760,7 +42760,7 @@
       "engine_count": {
         "text": "the band cb_speed_far on the engine's matches",
         "band": "cb_speed_far",
-        "measure": "{\"den\":[\"shape.cb.speed_far_n.home\",\"shape.cb.speed_far_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.speed_far_sum.home\",\"shape.cb.speed_far_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.cb.speed_far_n.home\",\"trk.cb.speed_far_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cb.speed_far_sum.home\",\"trk.cb.speed_far_sum.away\"]}"
       },
       "per_match": [
         2.212725,
@@ -42793,7 +42793,7 @@
       "engine_count": {
         "text": "the band cb_speed_near on the engine's matches",
         "band": "cb_speed_near",
-        "measure": "{\"den\":[\"shape.cb.speed_near_n.home\",\"shape.cb.speed_near_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.speed_near_sum.home\",\"shape.cb.speed_near_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.cb.speed_near_n.home\",\"trk.cb.speed_near_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cb.speed_near_sum.home\",\"trk.cb.speed_near_sum.away\"]}"
       },
       "per_match": [
         2.414761,
@@ -42826,7 +42826,7 @@
       "engine_count": {
         "text": "the band cb_sprints_back_per_min on the engine's matches",
         "band": "cb_sprints_back_per_min",
-        "measure": "{\"den\":[\"shape.cb.live_min.home\",\"shape.cb.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.sprints_back.home\",\"shape.cb.sprints_back.away\"]}"
+        "measure": "{\"den\":[\"trk.cb.live_min.home\",\"trk.cb.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cb.sprints_back.home\",\"trk.cb.sprints_back.away\"]}"
       },
       "per_match": [
         0.101032,
@@ -42859,7 +42859,7 @@
       "engine_count": {
         "text": "the band cb_sprints_fwd_per_min on the engine's matches",
         "band": "cb_sprints_fwd_per_min",
-        "measure": "{\"den\":[\"shape.cb.live_min.home\",\"shape.cb.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.sprints_fwd.home\",\"shape.cb.sprints_fwd.away\"]}"
+        "measure": "{\"den\":[\"trk.cb.live_min.home\",\"trk.cb.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cb.sprints_fwd.home\",\"trk.cb.sprints_fwd.away\"]}"
       },
       "per_match": [
         0.013178,
@@ -42892,7 +42892,7 @@
       "engine_count": {
         "text": "the band cb_sprints_lat_per_min on the engine's matches",
         "band": "cb_sprints_lat_per_min",
-        "measure": "{\"den\":[\"shape.cb.live_min.home\",\"shape.cb.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.sprints_lat.home\",\"shape.cb.sprints_lat.away\"]}"
+        "measure": "{\"den\":[\"trk.cb.live_min.home\",\"trk.cb.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cb.sprints_lat.home\",\"trk.cb.sprints_lat.away\"]}"
       },
       "per_match": [
         0.0,
@@ -42925,7 +42925,7 @@
       "engine_count": {
         "text": "the band cb_width_far_in on the engine's matches",
         "band": "cb_width_far_in",
-        "measure": "{\"den\":[\"shape.cb.width_far_in_n.home\",\"shape.cb.width_far_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.width_far_in_sum.home\",\"shape.cb.width_far_in_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.cb.width_far_in_n.home\",\"trk.cb.width_far_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cb.width_far_in_sum.home\",\"trk.cb.width_far_in_sum.away\"]}"
       },
       "per_match": [
         7.735598,
@@ -42958,7 +42958,7 @@
       "engine_count": {
         "text": "the band cb_width_far_out on the engine's matches",
         "band": "cb_width_far_out",
-        "measure": "{\"den\":[\"shape.cb.width_far_out_n.home\",\"shape.cb.width_far_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.width_far_out_sum.home\",\"shape.cb.width_far_out_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.cb.width_far_out_n.home\",\"trk.cb.width_far_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cb.width_far_out_sum.home\",\"trk.cb.width_far_out_sum.away\"]}"
       },
       "per_match": [
         5.742882,
@@ -42991,7 +42991,7 @@
       "engine_count": {
         "text": "the band cb_width_near_in on the engine's matches",
         "band": "cb_width_near_in",
-        "measure": "{\"den\":[\"shape.cb.width_near_in_n.home\",\"shape.cb.width_near_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.width_near_in_sum.home\",\"shape.cb.width_near_in_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.cb.width_near_in_n.home\",\"trk.cb.width_near_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cb.width_near_in_sum.home\",\"trk.cb.width_near_in_sum.away\"]}"
       },
       "per_match": [
         16.132237,
@@ -43024,7 +43024,7 @@
       "engine_count": {
         "text": "the band cb_width_near_out on the engine's matches",
         "band": "cb_width_near_out",
-        "measure": "{\"den\":[\"shape.cb.width_near_out_n.home\",\"shape.cb.width_near_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.width_near_out_sum.home\",\"shape.cb.width_near_out_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.cb.width_near_out_n.home\",\"trk.cb.width_near_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cb.width_near_out_sum.home\",\"trk.cb.width_near_out_sum.away\"]}"
       },
       "per_match": [
         14.370458,
@@ -43057,7 +43057,7 @@
       "engine_count": {
         "text": "the band cm_depth_in on the engine's matches",
         "band": "cm_depth_in",
-        "measure": "{\"den\":[\"shape.cm.depth_in_n.home\",\"shape.cm.depth_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.depth_in_sum.home\",\"shape.cm.depth_in_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.cm.depth_in_n.home\",\"trk.cm.depth_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cm.depth_in_sum.home\",\"trk.cm.depth_in_sum.away\"]}"
       },
       "per_match": [
         -4.084965,
@@ -43090,7 +43090,7 @@
       "engine_count": {
         "text": "the band cm_depth_out on the engine's matches",
         "band": "cm_depth_out",
-        "measure": "{\"den\":[\"shape.cm.depth_out_n.home\",\"shape.cm.depth_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.depth_out_sum.home\",\"shape.cm.depth_out_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.cm.depth_out_n.home\",\"trk.cm.depth_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cm.depth_out_sum.home\",\"trk.cm.depth_out_sum.away\"]}"
       },
       "per_match": [
         6.26122,
@@ -43123,7 +43123,7 @@
       "engine_count": {
         "text": "the band cm_pace_hs_share on the engine's matches",
         "band": "cm_pace_hs_share",
-        "measure": "{\"den\":[\"shape.cm.live_ticks.home\",\"shape.cm.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.pace_hs.home\",\"shape.cm.pace_hs.away\"]}"
+        "measure": "{\"den\":[\"trk.cm.live_frames.home\",\"trk.cm.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cm.pace_hs.home\",\"trk.cm.pace_hs.away\"]}"
       },
       "per_match": [
         0.032472,
@@ -43156,7 +43156,7 @@
       "engine_count": {
         "text": "the band cm_pace_jog_share on the engine's matches",
         "band": "cm_pace_jog_share",
-        "measure": "{\"den\":[\"shape.cm.live_ticks.home\",\"shape.cm.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.pace_jog.home\",\"shape.cm.pace_jog.away\"]}"
+        "measure": "{\"den\":[\"trk.cm.live_frames.home\",\"trk.cm.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cm.pace_jog.home\",\"trk.cm.pace_jog.away\"]}"
       },
       "per_match": [
         0.455325,
@@ -43189,7 +43189,7 @@
       "engine_count": {
         "text": "the band cm_pace_run_share on the engine's matches",
         "band": "cm_pace_run_share",
-        "measure": "{\"den\":[\"shape.cm.live_ticks.home\",\"shape.cm.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.pace_run.home\",\"shape.cm.pace_run.away\"]}"
+        "measure": "{\"den\":[\"trk.cm.live_frames.home\",\"trk.cm.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cm.pace_run.home\",\"trk.cm.pace_run.away\"]}"
       },
       "per_match": [
         0.144864,
@@ -43222,7 +43222,7 @@
       "engine_count": {
         "text": "the band cm_pace_sprint_share on the engine's matches",
         "band": "cm_pace_sprint_share",
-        "measure": "{\"den\":[\"shape.cm.live_ticks.home\",\"shape.cm.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.pace_sprint.home\",\"shape.cm.pace_sprint.away\"]}"
+        "measure": "{\"den\":[\"trk.cm.live_frames.home\",\"trk.cm.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cm.pace_sprint.home\",\"trk.cm.pace_sprint.away\"]}"
       },
       "per_match": [
         0.006392,
@@ -43255,7 +43255,7 @@
       "engine_count": {
         "text": "the band cm_pace_stand_share on the engine's matches",
         "band": "cm_pace_stand_share",
-        "measure": "{\"den\":[\"shape.cm.live_ticks.home\",\"shape.cm.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.pace_stand.home\",\"shape.cm.pace_stand.away\"]}"
+        "measure": "{\"den\":[\"trk.cm.live_frames.home\",\"trk.cm.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cm.pace_stand.home\",\"trk.cm.pace_stand.away\"]}"
       },
       "per_match": [
         0.004187,
@@ -43288,7 +43288,7 @@
       "engine_count": {
         "text": "the band cm_pace_walk_share on the engine's matches",
         "band": "cm_pace_walk_share",
-        "measure": "{\"den\":[\"shape.cm.live_ticks.home\",\"shape.cm.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.pace_walk.home\",\"shape.cm.pace_walk.away\"]}"
+        "measure": "{\"den\":[\"trk.cm.live_frames.home\",\"trk.cm.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cm.pace_walk.home\",\"trk.cm.pace_walk.away\"]}"
       },
       "per_match": [
         0.356761,
@@ -43321,7 +43321,7 @@
       "engine_count": {
         "text": "the band cm_speed_far on the engine's matches",
         "band": "cm_speed_far",
-        "measure": "{\"den\":[\"shape.cm.speed_far_n.home\",\"shape.cm.speed_far_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.speed_far_sum.home\",\"shape.cm.speed_far_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.cm.speed_far_n.home\",\"trk.cm.speed_far_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cm.speed_far_sum.home\",\"trk.cm.speed_far_sum.away\"]}"
       },
       "per_match": [
         2.700653,
@@ -43354,7 +43354,7 @@
       "engine_count": {
         "text": "the band cm_speed_near on the engine's matches",
         "band": "cm_speed_near",
-        "measure": "{\"den\":[\"shape.cm.speed_near_n.home\",\"shape.cm.speed_near_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.speed_near_sum.home\",\"shape.cm.speed_near_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.cm.speed_near_n.home\",\"trk.cm.speed_near_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cm.speed_near_sum.home\",\"trk.cm.speed_near_sum.away\"]}"
       },
       "per_match": [
         2.85233,
@@ -43387,7 +43387,7 @@
       "engine_count": {
         "text": "the band cm_sprints_back_per_min on the engine's matches",
         "band": "cm_sprints_back_per_min",
-        "measure": "{\"den\":[\"shape.cm.live_min.home\",\"shape.cm.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.sprints_back.home\",\"shape.cm.sprints_back.away\"]}"
+        "measure": "{\"den\":[\"trk.cm.live_min.home\",\"trk.cm.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cm.sprints_back.home\",\"trk.cm.sprints_back.away\"]}"
       },
       "per_match": [
         0.088837,
@@ -43420,7 +43420,7 @@
       "engine_count": {
         "text": "the band cm_sprints_fwd_per_min on the engine's matches",
         "band": "cm_sprints_fwd_per_min",
-        "measure": "{\"den\":[\"shape.cm.live_min.home\",\"shape.cm.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.sprints_fwd.home\",\"shape.cm.sprints_fwd.away\"]}"
+        "measure": "{\"den\":[\"trk.cm.live_min.home\",\"trk.cm.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cm.sprints_fwd.home\",\"trk.cm.sprints_fwd.away\"]}"
       },
       "per_match": [
         0.061267,
@@ -43453,7 +43453,7 @@
       "engine_count": {
         "text": "the band cm_sprints_lat_per_min on the engine's matches",
         "band": "cm_sprints_lat_per_min",
-        "measure": "{\"den\":[\"shape.cm.live_min.home\",\"shape.cm.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.sprints_lat.home\",\"shape.cm.sprints_lat.away\"]}"
+        "measure": "{\"den\":[\"trk.cm.live_min.home\",\"trk.cm.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cm.sprints_lat.home\",\"trk.cm.sprints_lat.away\"]}"
       },
       "per_match": [
         0.003063,
@@ -43486,7 +43486,7 @@
       "engine_count": {
         "text": "the band cm_width_far_in on the engine's matches",
         "band": "cm_width_far_in",
-        "measure": "{\"den\":[\"shape.cm.width_far_in_n.home\",\"shape.cm.width_far_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.width_far_in_sum.home\",\"shape.cm.width_far_in_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.cm.width_far_in_n.home\",\"trk.cm.width_far_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cm.width_far_in_sum.home\",\"trk.cm.width_far_in_sum.away\"]}"
       },
       "per_match": [
         10.942962,
@@ -43519,7 +43519,7 @@
       "engine_count": {
         "text": "the band cm_width_far_out on the engine's matches",
         "band": "cm_width_far_out",
-        "measure": "{\"den\":[\"shape.cm.width_far_out_n.home\",\"shape.cm.width_far_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.width_far_out_sum.home\",\"shape.cm.width_far_out_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.cm.width_far_out_n.home\",\"trk.cm.width_far_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cm.width_far_out_sum.home\",\"trk.cm.width_far_out_sum.away\"]}"
       },
       "per_match": [
         10.356398,
@@ -43552,7 +43552,7 @@
       "engine_count": {
         "text": "the band cm_width_near_in on the engine's matches",
         "band": "cm_width_near_in",
-        "measure": "{\"den\":[\"shape.cm.width_near_in_n.home\",\"shape.cm.width_near_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.width_near_in_sum.home\",\"shape.cm.width_near_in_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.cm.width_near_in_n.home\",\"trk.cm.width_near_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cm.width_near_in_sum.home\",\"trk.cm.width_near_in_sum.away\"]}"
       },
       "per_match": [
         13.972992,
@@ -43585,7 +43585,7 @@
       "engine_count": {
         "text": "the band cm_width_near_out on the engine's matches",
         "band": "cm_width_near_out",
-        "measure": "{\"den\":[\"shape.cm.width_near_out_n.home\",\"shape.cm.width_near_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.width_near_out_sum.home\",\"shape.cm.width_near_out_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.cm.width_near_out_n.home\",\"trk.cm.width_near_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.cm.width_near_out_sum.home\",\"trk.cm.width_near_out_sum.away\"]}"
       },
       "per_match": [
         13.857841,
@@ -43618,7 +43618,7 @@
       "engine_count": {
         "text": "the band dead_ball_calm_share on the engine's matches",
         "band": "dead_ball_calm_share",
-        "measure": "{\"den\":[\"shape.dead_ticks.home\",\"shape.dead_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.calm_ticks.home\",\"shape.calm_ticks.away\"]}"
+        "measure": "{\"den\":[\"trk.team.dead_frames.home\",\"trk.team.dead_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.team.calm_frames.home\",\"trk.team.calm_frames.away\"]}"
       },
       "per_match": [
         0.898892,
@@ -43651,7 +43651,7 @@
       "engine_count": {
         "text": "the band distance_per_minute on the engine's matches",
         "band": "distance_per_minute",
-        "measure": "{\"den\":[\"minutes_on.home\",\"minutes_on.away\"],\"kind\":\"ratio\",\"num\":[\"distance_m.home\",\"distance_m.away\"]}"
+        "measure": "{\"den\":[\"trk.run.minutes_on.home\",\"trk.run.minutes_on.away\"],\"kind\":\"ratio\",\"num\":[\"trk.run.distance_m.home\",\"trk.run.distance_m.away\"]}"
       },
       "per_match": [
         109.166456,
@@ -43684,7 +43684,7 @@
       "engine_count": {
         "text": "the band far_gain_10s_30_45 on the engine's matches",
         "band": "far_gain_10s_30_45",
-        "measure": "{\"den\":[\"shape.far_10s_30_45_qq.home\",\"shape.far_10s_30_45_qq.away\"],\"kind\":\"ratio\",\"num\":[\"shape.far_10s_30_45_pq.home\",\"shape.far_10s_30_45_pq.away\"]}"
+        "measure": "{\"den\":[\"trk.team.far_10s_30_45_qq.home\",\"trk.team.far_10s_30_45_qq.away\"],\"kind\":\"ratio\",\"num\":[\"trk.team.far_10s_30_45_pq.home\",\"trk.team.far_10s_30_45_pq.away\"]}"
       },
       "per_match": [
         0.273795,
@@ -43717,7 +43717,7 @@
       "engine_count": {
         "text": "the band far_gain_10s_gt45 on the engine's matches",
         "band": "far_gain_10s_gt45",
-        "measure": "{\"den\":[\"shape.far_10s_gt45_qq.home\",\"shape.far_10s_gt45_qq.away\"],\"kind\":\"ratio\",\"num\":[\"shape.far_10s_gt45_pq.home\",\"shape.far_10s_gt45_pq.away\"]}"
+        "measure": "{\"den\":[\"trk.team.far_10s_gt45_qq.home\",\"trk.team.far_10s_gt45_qq.away\"],\"kind\":\"ratio\",\"num\":[\"trk.team.far_10s_gt45_pq.home\",\"trk.team.far_10s_gt45_pq.away\"]}"
       },
       "per_match": [
         0.161025,
@@ -43750,7 +43750,7 @@
       "engine_count": {
         "text": "the band far_gain_1s_30_45 on the engine's matches",
         "band": "far_gain_1s_30_45",
-        "measure": "{\"den\":[\"shape.far_1s_30_45_qq.home\",\"shape.far_1s_30_45_qq.away\"],\"kind\":\"ratio\",\"num\":[\"shape.far_1s_30_45_pq.home\",\"shape.far_1s_30_45_pq.away\"]}"
+        "measure": "{\"den\":[\"trk.team.far_1s_30_45_qq.home\",\"trk.team.far_1s_30_45_qq.away\"],\"kind\":\"ratio\",\"num\":[\"trk.team.far_1s_30_45_pq.home\",\"trk.team.far_1s_30_45_pq.away\"]}"
       },
       "per_match": [
         0.119813,
@@ -43783,7 +43783,7 @@
       "engine_count": {
         "text": "the band far_gain_1s_gt45 on the engine's matches",
         "band": "far_gain_1s_gt45",
-        "measure": "{\"den\":[\"shape.far_1s_gt45_qq.home\",\"shape.far_1s_gt45_qq.away\"],\"kind\":\"ratio\",\"num\":[\"shape.far_1s_gt45_pq.home\",\"shape.far_1s_gt45_pq.away\"]}"
+        "measure": "{\"den\":[\"trk.team.far_1s_gt45_qq.home\",\"trk.team.far_1s_gt45_qq.away\"],\"kind\":\"ratio\",\"num\":[\"trk.team.far_1s_gt45_pq.home\",\"trk.team.far_1s_gt45_pq.away\"]}"
       },
       "per_match": [
         0.090635,
@@ -43816,7 +43816,7 @@
       "engine_count": {
         "text": "the band fb_depth_in on the engine's matches",
         "band": "fb_depth_in",
-        "measure": "{\"den\":[\"shape.fb.depth_in_n.home\",\"shape.fb.depth_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.depth_in_sum.home\",\"shape.fb.depth_in_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.fb.depth_in_n.home\",\"trk.fb.depth_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.fb.depth_in_sum.home\",\"trk.fb.depth_in_sum.away\"]}"
       },
       "per_match": [
         1.118232,
@@ -43849,7 +43849,7 @@
       "engine_count": {
         "text": "the band fb_depth_out on the engine's matches",
         "band": "fb_depth_out",
-        "measure": "{\"den\":[\"shape.fb.depth_out_n.home\",\"shape.fb.depth_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.depth_out_sum.home\",\"shape.fb.depth_out_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.fb.depth_out_n.home\",\"trk.fb.depth_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.fb.depth_out_sum.home\",\"trk.fb.depth_out_sum.away\"]}"
       },
       "per_match": [
         15.405086,
@@ -43882,7 +43882,7 @@
       "engine_count": {
         "text": "the band fb_pace_hs_share on the engine's matches",
         "band": "fb_pace_hs_share",
-        "measure": "{\"den\":[\"shape.fb.live_ticks.home\",\"shape.fb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.pace_hs.home\",\"shape.fb.pace_hs.away\"]}"
+        "measure": "{\"den\":[\"trk.fb.live_frames.home\",\"trk.fb.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.fb.pace_hs.home\",\"trk.fb.pace_hs.away\"]}"
       },
       "per_match": [
         0.027198,
@@ -43915,7 +43915,7 @@
       "engine_count": {
         "text": "the band fb_pace_jog_share on the engine's matches",
         "band": "fb_pace_jog_share",
-        "measure": "{\"den\":[\"shape.fb.live_ticks.home\",\"shape.fb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.pace_jog.home\",\"shape.fb.pace_jog.away\"]}"
+        "measure": "{\"den\":[\"trk.fb.live_frames.home\",\"trk.fb.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.fb.pace_jog.home\",\"trk.fb.pace_jog.away\"]}"
       },
       "per_match": [
         0.37813,
@@ -43948,7 +43948,7 @@
       "engine_count": {
         "text": "the band fb_pace_run_share on the engine's matches",
         "band": "fb_pace_run_share",
-        "measure": "{\"den\":[\"shape.fb.live_ticks.home\",\"shape.fb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.pace_run.home\",\"shape.fb.pace_run.away\"]}"
+        "measure": "{\"den\":[\"trk.fb.live_frames.home\",\"trk.fb.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.fb.pace_run.home\",\"trk.fb.pace_run.away\"]}"
       },
       "per_match": [
         0.093836,
@@ -43981,7 +43981,7 @@
       "engine_count": {
         "text": "the band fb_pace_sprint_share on the engine's matches",
         "band": "fb_pace_sprint_share",
-        "measure": "{\"den\":[\"shape.fb.live_ticks.home\",\"shape.fb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.pace_sprint.home\",\"shape.fb.pace_sprint.away\"]}"
+        "measure": "{\"den\":[\"trk.fb.live_frames.home\",\"trk.fb.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.fb.pace_sprint.home\",\"trk.fb.pace_sprint.away\"]}"
       },
       "per_match": [
         0.006521,
@@ -44014,7 +44014,7 @@
       "engine_count": {
         "text": "the band fb_pace_stand_share on the engine's matches",
         "band": "fb_pace_stand_share",
-        "measure": "{\"den\":[\"shape.fb.live_ticks.home\",\"shape.fb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.pace_stand.home\",\"shape.fb.pace_stand.away\"]}"
+        "measure": "{\"den\":[\"trk.fb.live_frames.home\",\"trk.fb.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.fb.pace_stand.home\",\"trk.fb.pace_stand.away\"]}"
       },
       "per_match": [
         0.011199,
@@ -44047,7 +44047,7 @@
       "engine_count": {
         "text": "the band fb_pace_walk_share on the engine's matches",
         "band": "fb_pace_walk_share",
-        "measure": "{\"den\":[\"shape.fb.live_ticks.home\",\"shape.fb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.pace_walk.home\",\"shape.fb.pace_walk.away\"]}"
+        "measure": "{\"den\":[\"trk.fb.live_frames.home\",\"trk.fb.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.fb.pace_walk.home\",\"trk.fb.pace_walk.away\"]}"
       },
       "per_match": [
         0.483116,
@@ -44080,7 +44080,7 @@
       "engine_count": {
         "text": "the band fb_speed_far on the engine's matches",
         "band": "fb_speed_far",
-        "measure": "{\"den\":[\"shape.fb.speed_far_n.home\",\"shape.fb.speed_far_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.speed_far_sum.home\",\"shape.fb.speed_far_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.fb.speed_far_n.home\",\"trk.fb.speed_far_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.fb.speed_far_sum.home\",\"trk.fb.speed_far_sum.away\"]}"
       },
       "per_match": [
         2.126641,
@@ -44113,7 +44113,7 @@
       "engine_count": {
         "text": "the band fb_speed_near on the engine's matches",
         "band": "fb_speed_near",
-        "measure": "{\"den\":[\"shape.fb.speed_near_n.home\",\"shape.fb.speed_near_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.speed_near_sum.home\",\"shape.fb.speed_near_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.fb.speed_near_n.home\",\"trk.fb.speed_near_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.fb.speed_near_sum.home\",\"trk.fb.speed_near_sum.away\"]}"
       },
       "per_match": [
         2.59692,
@@ -44146,7 +44146,7 @@
       "engine_count": {
         "text": "the band fb_sprints_back_per_min on the engine's matches",
         "band": "fb_sprints_back_per_min",
-        "measure": "{\"den\":[\"shape.fb.live_min.home\",\"shape.fb.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.sprints_back.home\",\"shape.fb.sprints_back.away\"]}"
+        "measure": "{\"den\":[\"trk.fb.live_min.home\",\"trk.fb.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"trk.fb.sprints_back.home\",\"trk.fb.sprints_back.away\"]}"
       },
       "per_match": [
         0.10228,
@@ -44179,7 +44179,7 @@
       "engine_count": {
         "text": "the band fb_sprints_fwd_per_min on the engine's matches",
         "band": "fb_sprints_fwd_per_min",
-        "measure": "{\"den\":[\"shape.fb.live_min.home\",\"shape.fb.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.sprints_fwd.home\",\"shape.fb.sprints_fwd.away\"]}"
+        "measure": "{\"den\":[\"trk.fb.live_min.home\",\"trk.fb.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"trk.fb.sprints_fwd.home\",\"trk.fb.sprints_fwd.away\"]}"
       },
       "per_match": [
         0.061368,
@@ -44212,7 +44212,7 @@
       "engine_count": {
         "text": "the band fb_sprints_lat_per_min on the engine's matches",
         "band": "fb_sprints_lat_per_min",
-        "measure": "{\"den\":[\"shape.fb.live_min.home\",\"shape.fb.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.sprints_lat.home\",\"shape.fb.sprints_lat.away\"]}"
+        "measure": "{\"den\":[\"trk.fb.live_min.home\",\"trk.fb.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"trk.fb.sprints_lat.home\",\"trk.fb.sprints_lat.away\"]}"
       },
       "per_match": [
         0.0,
@@ -44245,7 +44245,7 @@
       "engine_count": {
         "text": "the band fb_width_far_in on the engine's matches",
         "band": "fb_width_far_in",
-        "measure": "{\"den\":[\"shape.fb.width_far_in_n.home\",\"shape.fb.width_far_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.width_far_in_sum.home\",\"shape.fb.width_far_in_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.fb.width_far_in_n.home\",\"trk.fb.width_far_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.fb.width_far_in_sum.home\",\"trk.fb.width_far_in_sum.away\"]}"
       },
       "per_match": [
         15.791425,
@@ -44278,7 +44278,7 @@
       "engine_count": {
         "text": "the band fb_width_far_out on the engine's matches",
         "band": "fb_width_far_out",
-        "measure": "{\"den\":[\"shape.fb.width_far_out_n.home\",\"shape.fb.width_far_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.width_far_out_sum.home\",\"shape.fb.width_far_out_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.fb.width_far_out_n.home\",\"trk.fb.width_far_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.fb.width_far_out_sum.home\",\"trk.fb.width_far_out_sum.away\"]}"
       },
       "per_match": [
         11.115928,
@@ -44311,7 +44311,7 @@
       "engine_count": {
         "text": "the band fb_width_near_in on the engine's matches",
         "band": "fb_width_near_in",
-        "measure": "{\"den\":[\"shape.fb.width_near_in_n.home\",\"shape.fb.width_near_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.width_near_in_sum.home\",\"shape.fb.width_near_in_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.fb.width_near_in_n.home\",\"trk.fb.width_near_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.fb.width_near_in_sum.home\",\"trk.fb.width_near_in_sum.away\"]}"
       },
       "per_match": [
         24.398385,
@@ -44344,7 +44344,7 @@
       "engine_count": {
         "text": "the band fb_width_near_out on the engine's matches",
         "band": "fb_width_near_out",
-        "measure": "{\"den\":[\"shape.fb.width_near_out_n.home\",\"shape.fb.width_near_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.width_near_out_sum.home\",\"shape.fb.width_near_out_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.fb.width_near_out_n.home\",\"trk.fb.width_near_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.fb.width_near_out_sum.home\",\"trk.fb.width_near_out_sum.away\"]}"
       },
       "per_match": [
         21.949858,
@@ -44377,7 +44377,7 @@
       "engine_count": {
         "text": "the band high_speed_share on the engine's matches",
         "band": "high_speed_share",
-        "measure": "{\"den\":[\"zone_ticks.walk.home\",\"zone_ticks.walk.away\",\"zone_ticks.jog.home\",\"zone_ticks.jog.away\",\"zone_ticks.run.home\",\"zone_ticks.run.away\",\"zone_ticks.hi.home\",\"zone_ticks.hi.away\",\"zone_ticks.sprint.home\",\"zone_ticks.sprint.away\"],\"kind\":\"ratio\",\"num\":[\"zone_ticks.hi.home\",\"zone_ticks.hi.away\",\"zone_ticks.sprint.home\",\"zone_ticks.sprint.away\"]}"
+        "measure": "{\"den\":[\"trk.run.zone_walk.home\",\"trk.run.zone_walk.away\",\"trk.run.zone_jog.home\",\"trk.run.zone_jog.away\",\"trk.run.zone_run.home\",\"trk.run.zone_run.away\",\"trk.run.zone_hi.home\",\"trk.run.zone_hi.away\",\"trk.run.zone_sprint.home\",\"trk.run.zone_sprint.away\"],\"kind\":\"ratio\",\"num\":[\"trk.run.zone_hi.home\",\"trk.run.zone_hi.away\",\"trk.run.zone_sprint.home\",\"trk.run.zone_sprint.away\"]}"
       },
       "per_match": [
         0.035285,
@@ -44410,7 +44410,7 @@
       "engine_count": {
         "text": "the band peak_speed_mean on the engine's matches",
         "band": "peak_speed_mean",
-        "measure": "{\"den\":[\"players_used.home\",\"players_used.away\"],\"kind\":\"ratio\",\"num\":[\"peak_mps.home\",\"peak_mps.away\"]}"
+        "measure": "{\"den\":[\"trk.run.players_used.home\",\"trk.run.players_used.away\"],\"kind\":\"ratio\",\"num\":[\"trk.run.peak_sum.home\",\"trk.run.peak_sum.away\"]}"
       },
       "per_match": [
         8.345397,
@@ -44443,7 +44443,7 @@
       "engine_count": {
         "text": "the band slide_across_in on the engine's matches",
         "band": "slide_across_in",
-        "measure": "{\"den\":[\"shape.slide_y_in_sxx.home\",\"shape.slide_y_in_sxx.away\"],\"kind\":\"ratio\",\"num\":[\"shape.slide_y_in_sxy.home\",\"shape.slide_y_in_sxy.away\"]}"
+        "measure": "{\"den\":[\"trk.team.slide_y_in_sxx.home\",\"trk.team.slide_y_in_sxx.away\"],\"kind\":\"ratio\",\"num\":[\"trk.team.slide_y_in_sxy.home\",\"trk.team.slide_y_in_sxy.away\"]}"
       },
       "per_match": [
         0.359833,
@@ -44476,7 +44476,7 @@
       "engine_count": {
         "text": "the band slide_across_out on the engine's matches",
         "band": "slide_across_out",
-        "measure": "{\"den\":[\"shape.slide_y_out_sxx.home\",\"shape.slide_y_out_sxx.away\"],\"kind\":\"ratio\",\"num\":[\"shape.slide_y_out_sxy.home\",\"shape.slide_y_out_sxy.away\"]}"
+        "measure": "{\"den\":[\"trk.team.slide_y_out_sxx.home\",\"trk.team.slide_y_out_sxx.away\"],\"kind\":\"ratio\",\"num\":[\"trk.team.slide_y_out_sxy.home\",\"trk.team.slide_y_out_sxy.away\"]}"
       },
       "per_match": [
         0.408803,
@@ -44509,7 +44509,7 @@
       "engine_count": {
         "text": "the band slide_up_in on the engine's matches",
         "band": "slide_up_in",
-        "measure": "{\"den\":[\"shape.slide_x_in_sxx.home\",\"shape.slide_x_in_sxx.away\"],\"kind\":\"ratio\",\"num\":[\"shape.slide_x_in_sxy.home\",\"shape.slide_x_in_sxy.away\"]}"
+        "measure": "{\"den\":[\"trk.team.slide_x_in_sxx.home\",\"trk.team.slide_x_in_sxx.away\"],\"kind\":\"ratio\",\"num\":[\"trk.team.slide_x_in_sxy.home\",\"trk.team.slide_x_in_sxy.away\"]}"
       },
       "per_match": [
         0.569912,
@@ -44542,7 +44542,7 @@
       "engine_count": {
         "text": "the band slide_up_out on the engine's matches",
         "band": "slide_up_out",
-        "measure": "{\"den\":[\"shape.slide_x_out_sxx.home\",\"shape.slide_x_out_sxx.away\"],\"kind\":\"ratio\",\"num\":[\"shape.slide_x_out_sxy.home\",\"shape.slide_x_out_sxy.away\"]}"
+        "measure": "{\"den\":[\"trk.team.slide_x_out_sxx.home\",\"trk.team.slide_x_out_sxx.away\"],\"kind\":\"ratio\",\"num\":[\"trk.team.slide_x_out_sxy.home\",\"trk.team.slide_x_out_sxy.away\"]}"
       },
       "per_match": [
         0.577739,
@@ -44575,7 +44575,7 @@
       "engine_count": {
         "text": "the band speed_hi_share on the engine's matches",
         "band": "speed_hi_share",
-        "measure": "{\"den\":[\"zone_ticks.walk.home\",\"zone_ticks.walk.away\",\"zone_ticks.jog.home\",\"zone_ticks.jog.away\",\"zone_ticks.run.home\",\"zone_ticks.run.away\",\"zone_ticks.hi.home\",\"zone_ticks.hi.away\",\"zone_ticks.sprint.home\",\"zone_ticks.sprint.away\"],\"kind\":\"ratio\",\"num\":[\"zone_ticks.hi.home\",\"zone_ticks.hi.away\"]}"
+        "measure": "{\"den\":[\"trk.run.zone_walk.home\",\"trk.run.zone_walk.away\",\"trk.run.zone_jog.home\",\"trk.run.zone_jog.away\",\"trk.run.zone_run.home\",\"trk.run.zone_run.away\",\"trk.run.zone_hi.home\",\"trk.run.zone_hi.away\",\"trk.run.zone_sprint.home\",\"trk.run.zone_sprint.away\"],\"kind\":\"ratio\",\"num\":[\"trk.run.zone_hi.home\",\"trk.run.zone_hi.away\"]}"
       },
       "per_match": [
         0.028357,
@@ -44608,7 +44608,7 @@
       "engine_count": {
         "text": "the band speed_jog_share on the engine's matches",
         "band": "speed_jog_share",
-        "measure": "{\"den\":[\"zone_ticks.walk.home\",\"zone_ticks.walk.away\",\"zone_ticks.jog.home\",\"zone_ticks.jog.away\",\"zone_ticks.run.home\",\"zone_ticks.run.away\",\"zone_ticks.hi.home\",\"zone_ticks.hi.away\",\"zone_ticks.sprint.home\",\"zone_ticks.sprint.away\"],\"kind\":\"ratio\",\"num\":[\"zone_ticks.jog.home\",\"zone_ticks.jog.away\"]}"
+        "measure": "{\"den\":[\"trk.run.zone_walk.home\",\"trk.run.zone_walk.away\",\"trk.run.zone_jog.home\",\"trk.run.zone_jog.away\",\"trk.run.zone_run.home\",\"trk.run.zone_run.away\",\"trk.run.zone_hi.home\",\"trk.run.zone_hi.away\",\"trk.run.zone_sprint.home\",\"trk.run.zone_sprint.away\"],\"kind\":\"ratio\",\"num\":[\"trk.run.zone_jog.home\",\"trk.run.zone_jog.away\"]}"
       },
       "per_match": [
         0.370193,
@@ -44641,7 +44641,7 @@
       "engine_count": {
         "text": "the band speed_run_share on the engine's matches",
         "band": "speed_run_share",
-        "measure": "{\"den\":[\"zone_ticks.walk.home\",\"zone_ticks.walk.away\",\"zone_ticks.jog.home\",\"zone_ticks.jog.away\",\"zone_ticks.run.home\",\"zone_ticks.run.away\",\"zone_ticks.hi.home\",\"zone_ticks.hi.away\",\"zone_ticks.sprint.home\",\"zone_ticks.sprint.away\"],\"kind\":\"ratio\",\"num\":[\"zone_ticks.run.home\",\"zone_ticks.run.away\"]}"
+        "measure": "{\"den\":[\"trk.run.zone_walk.home\",\"trk.run.zone_walk.away\",\"trk.run.zone_jog.home\",\"trk.run.zone_jog.away\",\"trk.run.zone_run.home\",\"trk.run.zone_run.away\",\"trk.run.zone_hi.home\",\"trk.run.zone_hi.away\",\"trk.run.zone_sprint.home\",\"trk.run.zone_sprint.away\"],\"kind\":\"ratio\",\"num\":[\"trk.run.zone_run.home\",\"trk.run.zone_run.away\"]}"
       },
       "per_match": [
         0.100079,
@@ -44674,7 +44674,7 @@
       "engine_count": {
         "text": "the band speed_sprint_share on the engine's matches",
         "band": "speed_sprint_share",
-        "measure": "{\"den\":[\"zone_ticks.walk.home\",\"zone_ticks.walk.away\",\"zone_ticks.jog.home\",\"zone_ticks.jog.away\",\"zone_ticks.run.home\",\"zone_ticks.run.away\",\"zone_ticks.hi.home\",\"zone_ticks.hi.away\",\"zone_ticks.sprint.home\",\"zone_ticks.sprint.away\"],\"kind\":\"ratio\",\"num\":[\"zone_ticks.sprint.home\",\"zone_ticks.sprint.away\"]}"
+        "measure": "{\"den\":[\"trk.run.zone_walk.home\",\"trk.run.zone_walk.away\",\"trk.run.zone_jog.home\",\"trk.run.zone_jog.away\",\"trk.run.zone_run.home\",\"trk.run.zone_run.away\",\"trk.run.zone_hi.home\",\"trk.run.zone_hi.away\",\"trk.run.zone_sprint.home\",\"trk.run.zone_sprint.away\"],\"kind\":\"ratio\",\"num\":[\"trk.run.zone_sprint.home\",\"trk.run.zone_sprint.away\"]}"
       },
       "per_match": [
         0.006928,
@@ -44707,7 +44707,7 @@
       "engine_count": {
         "text": "the band speed_walk_share on the engine's matches",
         "band": "speed_walk_share",
-        "measure": "{\"den\":[\"zone_ticks.walk.home\",\"zone_ticks.walk.away\",\"zone_ticks.jog.home\",\"zone_ticks.jog.away\",\"zone_ticks.run.home\",\"zone_ticks.run.away\",\"zone_ticks.hi.home\",\"zone_ticks.hi.away\",\"zone_ticks.sprint.home\",\"zone_ticks.sprint.away\"],\"kind\":\"ratio\",\"num\":[\"zone_ticks.walk.home\",\"zone_ticks.walk.away\"]}"
+        "measure": "{\"den\":[\"trk.run.zone_walk.home\",\"trk.run.zone_walk.away\",\"trk.run.zone_jog.home\",\"trk.run.zone_jog.away\",\"trk.run.zone_run.home\",\"trk.run.zone_run.away\",\"trk.run.zone_hi.home\",\"trk.run.zone_hi.away\",\"trk.run.zone_sprint.home\",\"trk.run.zone_sprint.away\"],\"kind\":\"ratio\",\"num\":[\"trk.run.zone_walk.home\",\"trk.run.zone_walk.away\"]}"
       },
       "per_match": [
         0.494443,
@@ -44740,7 +44740,7 @@
       "engine_count": {
         "text": "the band st_depth_in on the engine's matches",
         "band": "st_depth_in",
-        "measure": "{\"den\":[\"shape.st.depth_in_n.home\",\"shape.st.depth_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.depth_in_sum.home\",\"shape.st.depth_in_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.st.depth_in_n.home\",\"trk.st.depth_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.st.depth_in_sum.home\",\"trk.st.depth_in_sum.away\"]}"
       },
       "per_match": [
         -17.68605,
@@ -44773,7 +44773,7 @@
       "engine_count": {
         "text": "the band st_depth_out on the engine's matches",
         "band": "st_depth_out",
-        "measure": "{\"den\":[\"shape.st.depth_out_n.home\",\"shape.st.depth_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.depth_out_sum.home\",\"shape.st.depth_out_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.st.depth_out_n.home\",\"trk.st.depth_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.st.depth_out_sum.home\",\"trk.st.depth_out_sum.away\"]}"
       },
       "per_match": [
         -5.393324,
@@ -44806,7 +44806,7 @@
       "engine_count": {
         "text": "the band st_pace_hs_share on the engine's matches",
         "band": "st_pace_hs_share",
-        "measure": "{\"den\":[\"shape.st.live_ticks.home\",\"shape.st.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.pace_hs.home\",\"shape.st.pace_hs.away\"]}"
+        "measure": "{\"den\":[\"trk.st.live_frames.home\",\"trk.st.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.st.pace_hs.home\",\"trk.st.pace_hs.away\"]}"
       },
       "per_match": [
         0.0393,
@@ -44839,7 +44839,7 @@
       "engine_count": {
         "text": "the band st_pace_jog_share on the engine's matches",
         "band": "st_pace_jog_share",
-        "measure": "{\"den\":[\"shape.st.live_ticks.home\",\"shape.st.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.pace_jog.home\",\"shape.st.pace_jog.away\"]}"
+        "measure": "{\"den\":[\"trk.st.live_frames.home\",\"trk.st.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.st.pace_jog.home\",\"trk.st.pace_jog.away\"]}"
       },
       "per_match": [
         0.362101,
@@ -44872,7 +44872,7 @@
       "engine_count": {
         "text": "the band st_pace_run_share on the engine's matches",
         "band": "st_pace_run_share",
-        "measure": "{\"den\":[\"shape.st.live_ticks.home\",\"shape.st.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.pace_run.home\",\"shape.st.pace_run.away\"]}"
+        "measure": "{\"den\":[\"trk.st.live_frames.home\",\"trk.st.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.st.pace_run.home\",\"trk.st.pace_run.away\"]}"
       },
       "per_match": [
         0.111311,
@@ -44905,7 +44905,7 @@
       "engine_count": {
         "text": "the band st_pace_sprint_share on the engine's matches",
         "band": "st_pace_sprint_share",
-        "measure": "{\"den\":[\"shape.st.live_ticks.home\",\"shape.st.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.pace_sprint.home\",\"shape.st.pace_sprint.away\"]}"
+        "measure": "{\"den\":[\"trk.st.live_frames.home\",\"trk.st.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.st.pace_sprint.home\",\"trk.st.pace_sprint.away\"]}"
       },
       "per_match": [
         0.006967,
@@ -44938,7 +44938,7 @@
       "engine_count": {
         "text": "the band st_pace_stand_share on the engine's matches",
         "band": "st_pace_stand_share",
-        "measure": "{\"den\":[\"shape.st.live_ticks.home\",\"shape.st.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.pace_stand.home\",\"shape.st.pace_stand.away\"]}"
+        "measure": "{\"den\":[\"trk.st.live_frames.home\",\"trk.st.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.st.pace_stand.home\",\"trk.st.pace_stand.away\"]}"
       },
       "per_match": [
         0.011588,
@@ -44971,7 +44971,7 @@
       "engine_count": {
         "text": "the band st_pace_walk_share on the engine's matches",
         "band": "st_pace_walk_share",
-        "measure": "{\"den\":[\"shape.st.live_ticks.home\",\"shape.st.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.pace_walk.home\",\"shape.st.pace_walk.away\"]}"
+        "measure": "{\"den\":[\"trk.st.live_frames.home\",\"trk.st.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.st.pace_walk.home\",\"trk.st.pace_walk.away\"]}"
       },
       "per_match": [
         0.468733,
@@ -45004,7 +45004,7 @@
       "engine_count": {
         "text": "the band st_speed_far on the engine's matches",
         "band": "st_speed_far",
-        "measure": "{\"den\":[\"shape.st.speed_far_n.home\",\"shape.st.speed_far_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.speed_far_sum.home\",\"shape.st.speed_far_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.st.speed_far_n.home\",\"trk.st.speed_far_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.st.speed_far_sum.home\",\"trk.st.speed_far_sum.away\"]}"
       },
       "per_match": [
         2.434577,
@@ -45037,7 +45037,7 @@
       "engine_count": {
         "text": "the band st_speed_near on the engine's matches",
         "band": "st_speed_near",
-        "measure": "{\"den\":[\"shape.st.speed_near_n.home\",\"shape.st.speed_near_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.speed_near_sum.home\",\"shape.st.speed_near_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.st.speed_near_n.home\",\"trk.st.speed_near_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.st.speed_near_sum.home\",\"trk.st.speed_near_sum.away\"]}"
       },
       "per_match": [
         2.509091,
@@ -45070,7 +45070,7 @@
       "engine_count": {
         "text": "the band st_sprints_back_per_min on the engine's matches",
         "band": "st_sprints_back_per_min",
-        "measure": "{\"den\":[\"shape.st.live_min.home\",\"shape.st.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.sprints_back.home\",\"shape.st.sprints_back.away\"]}"
+        "measure": "{\"den\":[\"trk.st.live_min.home\",\"trk.st.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"trk.st.sprints_back.home\",\"trk.st.sprints_back.away\"]}"
       },
       "per_match": [
         0.036748,
@@ -45103,7 +45103,7 @@
       "engine_count": {
         "text": "the band st_sprints_fwd_per_min on the engine's matches",
         "band": "st_sprints_fwd_per_min",
-        "measure": "{\"den\":[\"shape.st.live_min.home\",\"shape.st.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.sprints_fwd.home\",\"shape.st.sprints_fwd.away\"]}"
+        "measure": "{\"den\":[\"trk.st.live_min.home\",\"trk.st.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"trk.st.sprints_fwd.home\",\"trk.st.sprints_fwd.away\"]}"
       },
       "per_match": [
         0.110243,
@@ -45136,7 +45136,7 @@
       "engine_count": {
         "text": "the band st_sprints_lat_per_min on the engine's matches",
         "band": "st_sprints_lat_per_min",
-        "measure": "{\"den\":[\"shape.st.live_min.home\",\"shape.st.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.sprints_lat.home\",\"shape.st.sprints_lat.away\"]}"
+        "measure": "{\"den\":[\"trk.st.live_min.home\",\"trk.st.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"trk.st.sprints_lat.home\",\"trk.st.sprints_lat.away\"]}"
       },
       "per_match": [
         0.014699,
@@ -45169,7 +45169,7 @@
       "engine_count": {
         "text": "the band st_width_far_in on the engine's matches",
         "band": "st_width_far_in",
-        "measure": "{\"den\":[\"shape.st.width_far_in_n.home\",\"shape.st.width_far_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.width_far_in_sum.home\",\"shape.st.width_far_in_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.st.width_far_in_n.home\",\"trk.st.width_far_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.st.width_far_in_sum.home\",\"trk.st.width_far_in_sum.away\"]}"
       },
       "per_match": [
         10.282634,
@@ -45202,7 +45202,7 @@
       "engine_count": {
         "text": "the band st_width_far_out on the engine's matches",
         "band": "st_width_far_out",
-        "measure": "{\"den\":[\"shape.st.width_far_out_n.home\",\"shape.st.width_far_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.width_far_out_sum.home\",\"shape.st.width_far_out_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.st.width_far_out_n.home\",\"trk.st.width_far_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.st.width_far_out_sum.home\",\"trk.st.width_far_out_sum.away\"]}"
       },
       "per_match": [
         9.853096,
@@ -45235,7 +45235,7 @@
       "engine_count": {
         "text": "the band st_width_near_in on the engine's matches",
         "band": "st_width_near_in",
-        "measure": "{\"den\":[\"shape.st.width_near_in_n.home\",\"shape.st.width_near_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.width_near_in_sum.home\",\"shape.st.width_near_in_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.st.width_near_in_n.home\",\"trk.st.width_near_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.st.width_near_in_sum.home\",\"trk.st.width_near_in_sum.away\"]}"
       },
       "per_match": [
         13.352809,
@@ -45268,7 +45268,7 @@
       "engine_count": {
         "text": "the band st_width_near_out on the engine's matches",
         "band": "st_width_near_out",
-        "measure": "{\"den\":[\"shape.st.width_near_out_n.home\",\"shape.st.width_near_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.width_near_out_sum.home\",\"shape.st.width_near_out_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.st.width_near_out_n.home\",\"trk.st.width_near_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.st.width_near_out_sum.home\",\"trk.st.width_near_out_sum.away\"]}"
       },
       "per_match": [
         14.166607,
@@ -45301,7 +45301,7 @@
       "engine_count": {
         "text": "the band stoppages_corner_per_match on the engine's matches",
         "band": "stoppages_corner_per_match",
-        "measure": "{\"kind\":\"mean\",\"of\":[\"shape.stops_corner.home\",\"shape.stops_corner.away\"],\"per\":\"match\"}"
+        "measure": "{\"kind\":\"mean\",\"of\":[\"trk.team.stops_corner.home\",\"trk.team.stops_corner.away\"],\"per\":\"match\"}"
       },
       "per_match": [
         10.0,
@@ -45334,7 +45334,7 @@
       "engine_count": {
         "text": "the band stoppages_free_kick_per_match on the engine's matches",
         "band": "stoppages_free_kick_per_match",
-        "measure": "{\"kind\":\"mean\",\"of\":[\"shape.stops_free_kick.home\",\"shape.stops_free_kick.away\"],\"per\":\"match\"}"
+        "measure": "{\"kind\":\"mean\",\"of\":[\"trk.team.stops_free_kick.home\",\"trk.team.stops_free_kick.away\"],\"per\":\"match\"}"
       },
       "per_match": [
         20.0,
@@ -45367,7 +45367,7 @@
       "engine_count": {
         "text": "the band stoppages_goal_kick_per_match on the engine's matches",
         "band": "stoppages_goal_kick_per_match",
-        "measure": "{\"kind\":\"mean\",\"of\":[\"shape.stops_goal_kick.home\",\"shape.stops_goal_kick.away\"],\"per\":\"match\"}"
+        "measure": "{\"kind\":\"mean\",\"of\":[\"trk.team.stops_goal_kick.home\",\"trk.team.stops_goal_kick.away\"],\"per\":\"match\"}"
       },
       "per_match": [
         14.0,
@@ -45400,7 +45400,7 @@
       "engine_count": {
         "text": "the band stoppages_kick_off_per_match on the engine's matches",
         "band": "stoppages_kick_off_per_match",
-        "measure": "{\"kind\":\"mean\",\"of\":[\"shape.stops_kick_off.home\",\"shape.stops_kick_off.away\"],\"per\":\"match\"}"
+        "measure": "{\"kind\":\"mean\",\"of\":[\"trk.team.stops_kick_off.home\",\"trk.team.stops_kick_off.away\"],\"per\":\"match\"}"
       },
       "per_match": [
         4.0,
@@ -45433,7 +45433,7 @@
       "engine_count": {
         "text": "the band stoppages_penalty_per_match on the engine's matches",
         "band": "stoppages_penalty_per_match",
-        "measure": "{\"kind\":\"mean\",\"of\":[\"shape.stops_penalty.home\",\"shape.stops_penalty.away\"],\"per\":\"match\"}"
+        "measure": "{\"kind\":\"mean\",\"of\":[\"trk.team.stops_penalty.home\",\"trk.team.stops_penalty.away\"],\"per\":\"match\"}"
       },
       "per_match": [
         1.0,
@@ -45466,7 +45466,7 @@
       "engine_count": {
         "text": "the band stoppages_throw_in_per_match on the engine's matches",
         "band": "stoppages_throw_in_per_match",
-        "measure": "{\"kind\":\"mean\",\"of\":[\"shape.stops_throw_in.home\",\"shape.stops_throw_in.away\"],\"per\":\"match\"}"
+        "measure": "{\"kind\":\"mean\",\"of\":[\"trk.team.stops_throw_in.home\",\"trk.team.stops_throw_in.away\"],\"per\":\"match\"}"
       },
       "per_match": [
         52.0,
@@ -45499,7 +45499,7 @@
       "engine_count": {
         "text": "the band w_depth_in on the engine's matches",
         "band": "w_depth_in",
-        "measure": "{\"den\":[\"shape.w.depth_in_n.home\",\"shape.w.depth_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.depth_in_sum.home\",\"shape.w.depth_in_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.w.depth_in_n.home\",\"trk.w.depth_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.w.depth_in_sum.home\",\"trk.w.depth_in_sum.away\"]}"
       },
       "per_match": [
         -14.454075,
@@ -45532,7 +45532,7 @@
       "engine_count": {
         "text": "the band w_depth_out on the engine's matches",
         "band": "w_depth_out",
-        "measure": "{\"den\":[\"shape.w.depth_out_n.home\",\"shape.w.depth_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.depth_out_sum.home\",\"shape.w.depth_out_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.w.depth_out_n.home\",\"trk.w.depth_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.w.depth_out_sum.home\",\"trk.w.depth_out_sum.away\"]}"
       },
       "per_match": [
         0.121297,
@@ -45565,7 +45565,7 @@
       "engine_count": {
         "text": "the band w_pace_hs_share on the engine's matches",
         "band": "w_pace_hs_share",
-        "measure": "{\"den\":[\"shape.w.live_ticks.home\",\"shape.w.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.pace_hs.home\",\"shape.w.pace_hs.away\"]}"
+        "measure": "{\"den\":[\"trk.w.live_frames.home\",\"trk.w.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.w.pace_hs.home\",\"trk.w.pace_hs.away\"]}"
       },
       "per_match": [
         0.040225,
@@ -45598,7 +45598,7 @@
       "engine_count": {
         "text": "the band w_pace_jog_share on the engine's matches",
         "band": "w_pace_jog_share",
-        "measure": "{\"den\":[\"shape.w.live_ticks.home\",\"shape.w.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.pace_jog.home\",\"shape.w.pace_jog.away\"]}"
+        "measure": "{\"den\":[\"trk.w.live_frames.home\",\"trk.w.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.w.pace_jog.home\",\"trk.w.pace_jog.away\"]}"
       },
       "per_match": [
         0.332049,
@@ -45631,7 +45631,7 @@
       "engine_count": {
         "text": "the band w_pace_run_share on the engine's matches",
         "band": "w_pace_run_share",
-        "measure": "{\"den\":[\"shape.w.live_ticks.home\",\"shape.w.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.pace_run.home\",\"shape.w.pace_run.away\"]}"
+        "measure": "{\"den\":[\"trk.w.live_frames.home\",\"trk.w.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.w.pace_run.home\",\"trk.w.pace_run.away\"]}"
       },
       "per_match": [
         0.106635,
@@ -45664,7 +45664,7 @@
       "engine_count": {
         "text": "the band w_pace_sprint_share on the engine's matches",
         "band": "w_pace_sprint_share",
-        "measure": "{\"den\":[\"shape.w.live_ticks.home\",\"shape.w.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.pace_sprint.home\",\"shape.w.pace_sprint.away\"]}"
+        "measure": "{\"den\":[\"trk.w.live_frames.home\",\"trk.w.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.w.pace_sprint.home\",\"trk.w.pace_sprint.away\"]}"
       },
       "per_match": [
         0.015135,
@@ -45697,7 +45697,7 @@
       "engine_count": {
         "text": "the band w_pace_stand_share on the engine's matches",
         "band": "w_pace_stand_share",
-        "measure": "{\"den\":[\"shape.w.live_ticks.home\",\"shape.w.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.pace_stand.home\",\"shape.w.pace_stand.away\"]}"
+        "measure": "{\"den\":[\"trk.w.live_frames.home\",\"trk.w.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.w.pace_stand.home\",\"trk.w.pace_stand.away\"]}"
       },
       "per_match": [
         0.016513,
@@ -45730,7 +45730,7 @@
       "engine_count": {
         "text": "the band w_pace_walk_share on the engine's matches",
         "band": "w_pace_walk_share",
-        "measure": "{\"den\":[\"shape.w.live_ticks.home\",\"shape.w.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.pace_walk.home\",\"shape.w.pace_walk.away\"]}"
+        "measure": "{\"den\":[\"trk.w.live_frames.home\",\"trk.w.live_frames.away\"],\"kind\":\"ratio\",\"num\":[\"trk.w.pace_walk.home\",\"trk.w.pace_walk.away\"]}"
       },
       "per_match": [
         0.489442,
@@ -45763,7 +45763,7 @@
       "engine_count": {
         "text": "the band w_speed_far on the engine's matches",
         "band": "w_speed_far",
-        "measure": "{\"den\":[\"shape.w.speed_far_n.home\",\"shape.w.speed_far_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.speed_far_sum.home\",\"shape.w.speed_far_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.w.speed_far_n.home\",\"trk.w.speed_far_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.w.speed_far_sum.home\",\"trk.w.speed_far_sum.away\"]}"
       },
       "per_match": [
         2.118774,
@@ -45796,7 +45796,7 @@
       "engine_count": {
         "text": "the band w_speed_near on the engine's matches",
         "band": "w_speed_near",
-        "measure": "{\"den\":[\"shape.w.speed_near_n.home\",\"shape.w.speed_near_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.speed_near_sum.home\",\"shape.w.speed_near_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.w.speed_near_n.home\",\"trk.w.speed_near_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.w.speed_near_sum.home\",\"trk.w.speed_near_sum.away\"]}"
       },
       "per_match": [
         2.860738,
@@ -45829,7 +45829,7 @@
       "engine_count": {
         "text": "the band w_sprints_back_per_min on the engine's matches",
         "band": "w_sprints_back_per_min",
-        "measure": "{\"den\":[\"shape.w.live_min.home\",\"shape.w.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.sprints_back.home\",\"shape.w.sprints_back.away\"]}"
+        "measure": "{\"den\":[\"trk.w.live_min.home\",\"trk.w.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"trk.w.sprints_back.home\",\"trk.w.sprints_back.away\"]}"
       },
       "per_match": [
         0.068738,
@@ -45862,7 +45862,7 @@
       "engine_count": {
         "text": "the band w_sprints_fwd_per_min on the engine's matches",
         "band": "w_sprints_fwd_per_min",
-        "measure": "{\"den\":[\"shape.w.live_min.home\",\"shape.w.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.sprints_fwd.home\",\"shape.w.sprints_fwd.away\"]}"
+        "measure": "{\"den\":[\"trk.w.live_min.home\",\"trk.w.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"trk.w.sprints_fwd.home\",\"trk.w.sprints_fwd.away\"]}"
       },
       "per_match": [
         0.260221,
@@ -45895,7 +45895,7 @@
       "engine_count": {
         "text": "the band w_sprints_lat_per_min on the engine's matches",
         "band": "w_sprints_lat_per_min",
-        "measure": "{\"den\":[\"shape.w.live_min.home\",\"shape.w.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.sprints_lat.home\",\"shape.w.sprints_lat.away\"]}"
+        "measure": "{\"den\":[\"trk.w.live_min.home\",\"trk.w.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"trk.w.sprints_lat.home\",\"trk.w.sprints_lat.away\"]}"
       },
       "per_match": [
         0.00982,
@@ -45928,7 +45928,7 @@
       "engine_count": {
         "text": "the band w_width_far_in on the engine's matches",
         "band": "w_width_far_in",
-        "measure": "{\"den\":[\"shape.w.width_far_in_n.home\",\"shape.w.width_far_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.width_far_in_sum.home\",\"shape.w.width_far_in_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.w.width_far_in_n.home\",\"trk.w.width_far_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.w.width_far_in_sum.home\",\"trk.w.width_far_in_sum.away\"]}"
       },
       "per_match": [
         13.899443,
@@ -45961,7 +45961,7 @@
       "engine_count": {
         "text": "the band w_width_far_out on the engine's matches",
         "band": "w_width_far_out",
-        "measure": "{\"den\":[\"shape.w.width_far_out_n.home\",\"shape.w.width_far_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.width_far_out_sum.home\",\"shape.w.width_far_out_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.w.width_far_out_n.home\",\"trk.w.width_far_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.w.width_far_out_sum.home\",\"trk.w.width_far_out_sum.away\"]}"
       },
       "per_match": [
         10.67176,
@@ -45994,7 +45994,7 @@
       "engine_count": {
         "text": "the band w_width_near_in on the engine's matches",
         "band": "w_width_near_in",
-        "measure": "{\"den\":[\"shape.w.width_near_in_n.home\",\"shape.w.width_near_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.width_near_in_sum.home\",\"shape.w.width_near_in_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.w.width_near_in_n.home\",\"trk.w.width_near_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.w.width_near_in_sum.home\",\"trk.w.width_near_in_sum.away\"]}"
       },
       "per_match": [
         22.483206,
@@ -46027,7 +46027,7 @@
       "engine_count": {
         "text": "the band w_width_near_out on the engine's matches",
         "band": "w_width_near_out",
-        "measure": "{\"den\":[\"shape.w.width_near_out_n.home\",\"shape.w.width_near_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.width_near_out_sum.home\",\"shape.w.width_near_out_sum.away\"]}"
+        "measure": "{\"den\":[\"trk.w.width_near_out_n.home\",\"trk.w.width_near_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"trk.w.width_near_out_sum.home\",\"trk.w.width_near_out_sum.away\"]}"
       },
       "per_match": [
         21.064602,

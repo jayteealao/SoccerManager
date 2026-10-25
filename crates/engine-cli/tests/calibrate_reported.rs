@@ -251,7 +251,6 @@ fn a_band_of_a_report_only_group_only_reports_and_a_plain_run_counts_its_matches
         text.contains("matches: 4 in total; 0 pairs; observations: this engine 4"),
         "{text}"
     );
-    let _ = std::fs::remove_dir_all(&data);
 }
 
 /// A not-sure band is accepted with `calibrate accept`; the next judgement marks it
@@ -407,7 +406,8 @@ fn a_base_without_measures_judges_a_measures_band_by_its_range() {
 }
 
 /// The shipped team-shape bands, the bands of the `shape_` groups: each name, and whether it
-/// reads the measures (every band but ball in play, a summary field).
+/// reads the shared report's figures (every one of them does: they exist only in a measures
+/// build).
 fn shape_bands() -> Vec<(String, bool)> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content/realism-bands.json");
     let doc: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
@@ -418,28 +418,57 @@ fn shape_bands() -> Vec<(String, bool)> {
         .filter(|b| b["group"].as_str().is_some_and(|g| g.starts_with("shape_")))
         .map(|b| {
             let name = b["band"].as_str().unwrap().to_string();
-            (name, b["measure"].to_string().contains("shape."))
+            (name, b["measure"].to_string().contains("trk."))
         })
         .collect()
 }
 
+/// A tracked-match target planted in a copy of the reference file: seven matches whose mean
+/// is `mean`, the jackknife error of that mean (the sample deviation over the root of 7).
+fn plant_tracked(targets: &mut Value, band: &str, per_match: [f64; 7]) {
+    let n = per_match.len() as f64;
+    let mean = per_match.iter().sum::<f64>() / n;
+    let var = per_match.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (n - 1.0);
+    let t = &mut targets["targets"][format!("trk.dfl.{band}")];
+    assert!(t.is_object(), "the reference file has no trk.dfl.{band}");
+    t["value"] = json!(mean);
+    t["se"] = json!((var / n).sqrt());
+    t["per_match"] = json!(per_match);
+}
+
 /// The team-shape bands gate and the figures report: each shape band sits in the gating rows
-/// and never in `calib.reported`; in a measures build it has a word, and a planted real value
-/// gives its real column and gap; a build without the measures says so. The figures sit in `calib.figures`, each beside its
-/// earlier build's value with the change, and without a value in a build without the
-/// measures. Runs in both builds.
+/// and never in `calib.reported`; in a measures build it has a word, and a tracked-match
+/// target planted in the reference file gives its real column and gap; a build without the
+/// measures says so. The figures sit in `calib.figures`, each beside its earlier build's value
+/// with the change, and without a value in a build without the measures. Runs in both builds.
 #[test]
 fn the_shape_bands_gate_and_the_figures_report_with_their_real_values() {
-    let data = temp("engine-cli-reported", "shape");
+    let tmp = tempfile::TempDir::new().unwrap();
+    let data = tmp.path().to_path_buf();
     let content = edited_content(&data, "tuning.json", |_| {});
-    // Two planted matches: centre-back depth in possession 10 and 12 metres, calm 0.8 and 0.9.
+    // The reference file beside the content folder, with two planted tracked targets:
+    // centre-back depth in possession 10 to 12 metres (mean 11), calm 0.8 to 0.9 (mean 0.85).
+    let shipped = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../gate/real-targets.json");
+    let mut targets: Value =
+        serde_json::from_str(&std::fs::read_to_string(shipped).unwrap()).unwrap();
+    plant_tracked(
+        &mut targets,
+        "cb_depth_in",
+        [10.0, 12.0, 10.0, 12.0, 10.0, 12.0, 11.0],
+    );
+    plant_tracked(
+        &mut targets,
+        "dead_ball_calm_share",
+        [0.8, 0.9, 0.8, 0.9, 0.8, 0.9, 0.85],
+    );
+    std::fs::create_dir_all(data.join("gate")).unwrap();
+    std::fs::write(
+        data.join("gate/real-targets.json"),
+        serde_json::to_string_pretty(&targets).unwrap(),
+    )
+    .unwrap();
     let real = data.join("real-data");
     std::fs::create_dir_all(&real).unwrap();
-    let planted = json!({ "per_match": {
-        "a": { "cb": { "depth_in": 10.0 }, "team": { "calm": 0.8 } },
-        "b": { "cb": { "depth_in": 12.0 }, "team": { "calm": 0.9 } }
-    }});
-    std::fs::write(real.join("shape3_real.json"), planted.to_string()).unwrap();
     let run = data.join("run");
     let real_arg = real.display().to_string();
     let out = calibrate(
@@ -458,7 +487,10 @@ fn the_shape_bands_gate_and_the_figures_report_with_their_real_values() {
         .iter()
         .map(|b| b["band"].as_str().unwrap())
         .collect();
-    assert_eq!(bands.iter().filter(|(_, m)| !m).count(), 1);
+    assert!(
+        bands.iter().all(|(_, m)| *m),
+        "a shape band outside the shared report"
+    );
     for (band, needs_measures) in &bands {
         assert!(
             row(&r, "calib.reported", band).is_none(),
@@ -521,5 +553,4 @@ fn the_shape_bands_gate_and_the_figures_report_with_their_real_values() {
         text.contains("figures (beside an earlier build; never judged):"),
         "{text}"
     );
-    let _ = std::fs::remove_dir_all(&data);
 }

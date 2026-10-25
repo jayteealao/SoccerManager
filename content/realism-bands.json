@@ -4471,7 +4471,7 @@
         "real": {}
       },
       "margin": {
-        "value": 0.037610000000000005,
+        "value": 0.03761,
         "league_spread": 0.0,
         "noticeable_error": 0.035,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -4551,7 +4551,7 @@
         "real": {}
       },
       "margin": {
-        "value": 0.025070000000000002,
+        "value": 0.02507,
         "league_spread": 0.0,
         "noticeable_error": 0.0125,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -5290,7 +5290,7 @@
         "real": {}
       },
       "margin": {
-        "value": 2.6870000000000003,
+        "value": 2.687,
         "league_spread": 0.0,
         "noticeable_error": 1.06,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -5363,7 +5363,7 @@
         "real": {}
       },
       "margin": {
-        "value": 3.6399999999999997,
+        "value": 3.64,
         "league_spread": 0.0,
         "noticeable_error": 1.595,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -5582,7 +5582,7 @@
         "real": {}
       },
       "margin": {
-        "value": 1.8290000000000002,
+        "value": 1.829,
         "league_spread": 0.0,
         "noticeable_error": 0.785,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -5801,7 +5801,7 @@
         "real": {}
       },
       "margin": {
-        "value": 0.07275000000000001,
+        "value": 0.07275,
         "league_spread": 0.0,
         "noticeable_error": 0.02998,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -6093,14 +6093,14 @@
         "real": {}
       },
       "margin": {
-        "value": 0.002345,
+        "value": 0.002346,
         "league_spread": 0.0,
         "noticeable_error": 0.0011,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
         "spread_reason": "one population: the band's real pool gives no between-league spread",
         "design_choice": true,
         "widening": {
-          "value": 0.001245,
+          "value": 0.001246,
           "reason": "real error from 7 tracked matches",
           "provisional": true
         }
@@ -6239,7 +6239,7 @@
         "real": {}
       },
       "margin": {
-        "value": 0.22960000000000003,
+        "value": 0.2296,
         "league_spread": 0.0,
         "noticeable_error": 0.1063,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -6312,7 +6312,7 @@
         "real": {}
       },
       "margin": {
-        "value": 0.011699999999999999,
+        "value": 0.0117,
         "league_spread": 0.0,
         "noticeable_error": 0.00347,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -7188,14 +7188,14 @@
         "real": {}
       },
       "margin": {
-        "value": 0.02915,
+        "value": 0.02916,
         "league_spread": 0.0,
         "noticeable_error": 0.0258,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
         "spread_reason": "one population: the band's real pool gives no between-league spread",
         "design_choice": true,
         "widening": {
-          "value": 0.00335,
+          "value": 0.00336,
           "reason": "real error from 7 tracked matches",
           "provisional": true
         }
@@ -7334,7 +7334,7 @@
         "real": {}
       },
       "margin": {
-        "value": 0.004007999999999999,
+        "value": 0.004008,
         "league_spread": 0.0,
         "noticeable_error": 0.00183,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -7626,14 +7626,14 @@
         "real": {}
       },
       "margin": {
-        "value": 0.06623,
+        "value": 0.06624,
         "league_spread": 0.0,
         "noticeable_error": 0.04598,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
         "spread_reason": "one population: the band's real pool gives no between-league spread",
         "design_choice": true,
         "widening": {
-          "value": 0.02025,
+          "value": 0.02026,
           "reason": "real error from 7 tracked matches",
           "provisional": true
         }
@@ -7699,14 +7699,14 @@
         "real": {}
       },
       "margin": {
-        "value": 0.007565,
+        "value": 0.007566,
         "league_spread": 0.0,
         "noticeable_error": 0.00315,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
         "spread_reason": "one population: the band's real pool gives no between-league spread",
         "design_choice": true,
         "widening": {
-          "value": 0.004415,
+          "value": 0.004416,
           "reason": "real error from 7 tracked matches",
           "provisional": true
         }
@@ -7991,7 +7991,7 @@
         "real": {}
       },
       "margin": {
-        "value": 1.8639999999999999,
+        "value": 1.864,
         "league_spread": 0.0,
         "noticeable_error": 0.69,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -8210,14 +8210,14 @@
         "real": {}
       },
       "margin": {
-        "value": 0.004109,
+        "value": 0.004111,
         "league_spread": 0.0,
         "noticeable_error": 0.00172,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
         "spread_reason": "one population: the band's real pool gives no between-league spread",
         "design_choice": true,
         "widening": {
-          "value": 0.002389,
+          "value": 0.002391,
           "reason": "real error from 7 tracked matches",
           "provisional": true
         }
@@ -8502,14 +8502,14 @@
         "real": {}
       },
       "margin": {
-        "value": 0.008758,
+        "value": 0.00876,
         "league_spread": 0.0,
         "noticeable_error": 0.00337,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
         "spread_reason": "one population: the band's real pool gives no between-league spread",
         "design_choice": true,
         "widening": {
-          "value": 0.005388,
+          "value": 0.00539,
           "reason": "real error from 7 tracked matches",
           "provisional": true
         }
@@ -8575,14 +8575,14 @@
         "real": {}
       },
       "margin": {
-        "value": 0.002268,
+        "value": 0.00227,
         "league_spread": 0.0,
         "noticeable_error": 0.00088,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
         "spread_reason": "one population: the band's real pool gives no between-league spread",
         "design_choice": true,
         "widening": {
-          "value": 0.001388,
+          "value": 0.00139,
           "reason": "real error from 7 tracked matches",
           "provisional": true
         }
@@ -8794,7 +8794,7 @@
         "real": {}
       },
       "margin": {
-        "value": 0.037540000000000004,
+        "value": 0.03754,
         "league_spread": 0.0,
         "noticeable_error": 0.01765,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -9086,7 +9086,7 @@
         "real": {}
       },
       "margin": {
-        "value": 7.795999999999999,
+        "value": 7.796,
         "league_spread": 0.0,
         "noticeable_error": 3.07,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -9159,7 +9159,7 @@
         "real": {}
       },
       "margin": {
-        "value": 3.8970000000000002,
+        "value": 3.897,
         "league_spread": 0.0,
         "noticeable_error": 1.692,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -9451,14 +9451,14 @@
         "real": {}
       },
       "margin": {
-        "value": 0.011779999999999999,
+        "value": 0.01179,
         "league_spread": 0.0,
         "noticeable_error": 0.00482,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
         "spread_reason": "one population: the band's real pool gives no between-league spread",
         "design_choice": true,
         "widening": {
-          "value": 0.00696,
+          "value": 0.00697,
           "reason": "real error from 7 tracked matches",
           "provisional": true
         }
@@ -9597,7 +9597,7 @@
         "real": {}
       },
       "margin": {
-        "value": 0.061119999999999994,
+        "value": 0.06112,
         "league_spread": 0.0,
         "noticeable_error": 0.02385,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -9816,14 +9816,14 @@
         "real": {}
       },
       "margin": {
-        "value": 0.004762,
+        "value": 0.004764,
         "league_spread": 0.0,
         "noticeable_error": 0.00193,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
         "spread_reason": "one population: the band's real pool gives no between-league spread",
         "design_choice": true,
         "widening": {
-          "value": 0.002832,
+          "value": 0.002834,
           "reason": "real error from 7 tracked matches",
           "provisional": true
         }
@@ -9962,7 +9962,7 @@
         "real": {}
       },
       "margin": {
-        "value": 0.33340000000000003,
+        "value": 0.3334,
         "league_spread": 0.0,
         "noticeable_error": 0.1565,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -10035,7 +10035,7 @@
         "real": {}
       },
       "margin": {
-        "value": 0.11069999999999999,
+        "value": 0.1107,
         "league_spread": 0.0,
         "noticeable_error": 0.04738,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -10108,7 +10108,7 @@
         "real": {}
       },
       "margin": {
-        "value": 0.045399999999999996,
+        "value": 0.0454,
         "league_spread": 0.0,
         "noticeable_error": 0.01928,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -10327,7 +10327,7 @@
         "real": {}
       },
       "margin": {
-        "value": 3.1159999999999997,
+        "value": 3.116,
         "league_spread": 0.0,
         "noticeable_error": 1.188,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -10546,7 +10546,7 @@
         "real": {}
       },
       "margin": {
-        "value": 1.1760000000000002,
+        "value": 1.176,
         "league_spread": 0.0,
         "noticeable_error": 0.505,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -10619,7 +10619,7 @@
         "real": {}
       },
       "margin": {
-        "value": 1.0110000000000001,
+        "value": 1.011,
         "league_spread": 0.0,
         "noticeable_error": 0.495,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -10984,14 +10984,14 @@
         "real": {}
       },
       "margin": {
-        "value": 0.01787,
+        "value": 0.01788,
         "league_spread": 0.0,
         "noticeable_error": 0.00743,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
         "spread_reason": "one population: the band's real pool gives no between-league spread",
         "design_choice": true,
         "widening": {
-          "value": 0.01044,
+          "value": 0.01045,
           "reason": "real error from 7 tracked matches",
           "provisional": true
         }
@@ -11057,14 +11057,14 @@
         "real": {}
       },
       "margin": {
-        "value": 0.0053360000000000005,
+        "value": 0.005337,
         "league_spread": 0.0,
         "noticeable_error": 0.00205,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
         "spread_reason": "one population: the band's real pool gives no between-league spread",
         "design_choice": true,
         "widening": {
-          "value": 0.003286,
+          "value": 0.003287,
           "reason": "real error from 7 tracked matches",
           "provisional": true
         }
@@ -11130,7 +11130,7 @@
         "real": {}
       },
       "margin": {
-        "value": 0.42279999999999995,
+        "value": 0.4228,
         "league_spread": 0.0,
         "noticeable_error": 0.1863,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -11349,7 +11349,7 @@
         "real": {}
       },
       "margin": {
-        "value": 0.038720000000000004,
+        "value": 0.03872,
         "league_spread": 0.0,
         "noticeable_error": 0.0158,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -11631,7 +11631,7 @@
         "real": {}
       },
       "margin": {
-        "value": 0.08771999999999999,
+        "value": 0.08772,
         "league_spread": 0.0,
         "noticeable_error": 0.0393,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -11777,7 +11777,7 @@
         "real": {}
       },
       "margin": {
-        "value": 0.012629999999999999,
+        "value": 0.01263,
         "league_spread": 0.0,
         "noticeable_error": 0.0063,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -11850,7 +11850,7 @@
         "real": {}
       },
       "margin": {
-        "value": 0.009822999999999998,
+        "value": 0.009823,
         "league_spread": 0.0,
         "noticeable_error": 0.0045,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -11996,7 +11996,7 @@
         "real": {}
       },
       "margin": {
-        "value": 0.041370000000000004,
+        "value": 0.04137,
         "league_spread": 0.0,
         "noticeable_error": 0.0178,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -12344,7 +12344,7 @@
         "real": {}
       },
       "margin": {
-        "value": 8.600999999999999,
+        "value": 8.601,
         "league_spread": 0.0,
         "noticeable_error": 4.06,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -12484,7 +12484,7 @@
         "real": {}
       },
       "margin": {
-        "value": 1.0859999999999999,
+        "value": 1.086,
         "league_spread": 0.0,
         "noticeable_error": 0.575,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
@@ -12553,7 +12553,7 @@
         "real": {}
       },
       "margin": {
-        "value": 9.344999999999999,
+        "value": 9.345,
         "league_spread": 0.0,
         "noticeable_error": 3.7,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
