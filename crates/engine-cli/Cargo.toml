@@ -45,6 +45,7 @@ serde = { workspace = true }
 garde = { workspace = true }
 sha2 = { workspace = true }
 flate2 = { workspace = true }
+bzip2-rs = { workspace = true }
 
 # Below-normal priority for the background matchday's threads and the process affinity mask
 # (std counts every core on Windows under an affinity mask and sets no thread priority).

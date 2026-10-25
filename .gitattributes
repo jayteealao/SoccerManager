@@ -6,3 +6,6 @@ packaging/unix/* text eol=lf
 
 # Replay files are binary: git must never change their bytes.
 *.smfx binary
+
+# Compressed fixtures are binary: git must never change their bytes.
+*.bz2 binary
