@@ -113,9 +113,12 @@ pub enum RealTargetsAction {
     #[command(
         long_about = "Count the raw data files the reference file is built from: the\n\
                       110 football-data.co.uk result files, the 25 FotMob tables,\n\
-                      the 20 SoccerTrack v2 annotation files and a ClubElo snapshot.\n\
-                      Names each missing file, and each file that differs from its\n\
-                      manifest. Exits 1 when a file is missing or differs."
+                      the 20 SoccerTrack v2 annotation files, a ClubElo snapshot, and\n\
+                      the open data: the StatsBomb list and its matches files, two\n\
+                      Bundesliga foul files and the scan-rate table. Names each missing\n\
+                      file, and each file that differs from its manifest. Exits 1 when\n\
+                      a file is missing or differs; the local side file's source is\n\
+                      counted but not required."
     )]
     CheckData {
         /// The raw data folder.
@@ -135,7 +138,11 @@ pub enum RealTargetsAction {
                       contests and pass completion. Each target carries its full record\n\
                       and credit. Also writes the real club names to\n\
                       real-names/football-data.json beside it, for the packaging check.\n\
-                      Prints the blocked-shot cross-check."
+                      Adds StatsBomb targets per competition-season and a men's senior\n\
+                      pool, Germany's referee strictness and the scan-rate study figure.\n\
+                      Writes the local side files (targets of data that may not be\n\
+                      shared, and StatsBomb's per-match histograms) to the side folder.\n\
+                      Prints the blocked-shot cross-check and the targets per source."
     )]
     Build {
         /// The raw data folder.
@@ -153,6 +160,15 @@ pub enum RealTargetsAction {
                          beside the content folder."
         )]
         out: Option<PathBuf>,
+        /// The local side folder.
+        #[arg(
+            long,
+            value_name = "DIR",
+            long_help = "The local side folder; default the main checkout's\n\
+                         .scratch/real-targets. A folder inside a checkout but outside\n\
+                         its .scratch/ is refused."
+        )]
+        side_dir: Option<PathBuf>,
     },
 }
 

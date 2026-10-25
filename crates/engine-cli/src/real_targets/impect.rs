@@ -27,6 +27,8 @@ pub const CONTEXT: &str = "men's club, Germany, 2023/24";
 pub const MATCHES: &str = "impect-open-data/data/matches/matches_743.json";
 /// The folder of the event files, relative to the data folder.
 pub const EVENTS: &str = "impect-open-data/data/events";
+/// The credit the side file carries.
+pub const CREDIT: &str = "IMPECT open data, https://github.com/ImpectAPI/open-data";
 /// The licence note the side file carries.
 pub const LICENCE: &str = "IMPECT open data licence: no editing or redistribution, no \
                            commercial use, credit IMPECT";
@@ -341,7 +343,6 @@ pub fn targets(matches: &[MatchTerms]) -> BTreeMap<String, Target> {
 /// What the IMPECT step read and built.
 #[derive(Debug, Clone)]
 pub struct Built {
-    pub matches: usize,
     pub targets: BTreeMap<String, Target>,
     /// Files read, relative to the data folder.
     pub files: Vec<String>,
@@ -370,7 +371,6 @@ pub fn build(data: &Path) -> anyhow::Result<Option<Built>> {
         files.push(rel);
     }
     Ok(Some(Built {
-        matches: matches.len(),
         targets: targets(&matches),
         files,
     }))

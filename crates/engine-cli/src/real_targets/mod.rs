@@ -34,6 +34,7 @@ pub mod impect;
 pub mod layers;
 pub mod literature;
 pub mod shots_check;
+pub mod side;
 pub mod statsbomb;
 pub mod strictness;
 pub mod tables;
@@ -306,7 +307,11 @@ pub fn run(content_dir: Option<&Path>, opts: &RealTargetsOpts) -> anyhow::Result
             print!("{}", report.text());
             Ok(i32::from(!report.complete()))
         }
-        RealTargetsAction::Build { data: flag, out } => {
+        RealTargetsAction::Build {
+            data: flag,
+            out,
+            side_dir,
+        } => {
             let folder = data(flag)?;
             let out = out.clone().unwrap_or_else(|| default_file(dir.root()));
             let tracking = gate_dir(dir.root()).join(TRACKING_FILE);
@@ -321,8 +326,19 @@ pub fn run(content_dir: Option<&Path>, opts: &RealTargetsOpts) -> anyhow::Result
             };
             let built = build::build(&folder, tracked.as_ref(), &git_head(dir.root()))?;
             build::write(&built, &out)?;
+            let side_folder = match side_dir {
+                Some(d) => d.clone(),
+                None => side::default_dir(dir.root()).context(
+                    "no side folder: pass --side-dir, or run inside a checkout of this \
+                     repository",
+                )?,
+            };
+            let written = build::write_side(&built, &side_folder, &side::checkouts(dir.root()))?;
             print!("{}", built.summary());
             println!("wrote {}", out.display());
+            for p in &written {
+                println!("wrote {} (local, never committed)", p.display());
+            }
             Ok(0)
         }
     }

@@ -72,9 +72,9 @@
       }
     },
     "targets": {
-      "description": "Every target by key: fd.<div>.<stat>, tier.<n>.<stat>, group.t<n>.e<elo>.<stat>, wy.<league>.<stat>, fotmob.<div>.<stat>.",
+      "description": "Every target by key: fd.<div>.<stat>, tier.<n>.<stat>, group.t<n>.e<elo>.<stat>, wy.<league>.<stat>, fotmob.<div>.<stat>, trk.<source>.<stat>, sb.<competition>_<season>.<stat> and sb.men.<stat> (StatsBomb, one competition-season and the men's senior pool), strict.<div>.<stat> (a referee strictness), lit.<study>.<stat> (a published figure).",
       "type": "object",
-      "propertyNames": { "pattern": "^(fd|tier|group|wy|fotmob|trk)\\.[A-Za-z0-9_.]+$" },
+      "propertyNames": { "pattern": "^(fd|tier|group|wy|fotmob|trk|sb|strict|lit)\\.[A-Za-z0-9_.]+$" },
       "additionalProperties": { "$ref": "#/$defs/target" }
     },
     "absent": {
@@ -84,6 +84,22 @@
     }
   },
   "$defs": {
+    "side_file": {
+      "description": "A local side file in the side folder (default the main checkout's .scratch/real-targets), never committed: the targets of a source whose terms forbid redistribution, read by the calibration report as cross-source comparisons only. Its targets have the record of a reference-file target.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["side", "licence", "credit", "built_from", "targets"],
+      "properties": {
+        "side": { "type": "string", "minLength": 1 },
+        "licence": { "type": "string", "minLength": 1 },
+        "credit": { "type": "string", "minLength": 1 },
+        "built_from": { "$ref": "#/properties/built_from" },
+        "targets": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/target" }
+        }
+      }
+    },
     "target": {
       "type": "object",
       "additionalProperties": false,

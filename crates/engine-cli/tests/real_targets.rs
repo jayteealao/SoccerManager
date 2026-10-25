@@ -139,6 +139,32 @@ fn full_data(dir: &Path) {
         serde_json::json!({ "files": st }).to_string().as_bytes(),
     );
     write("clubelo/clubelo-2026-10-11.csv", b"Rank,Club\n");
+    // The open data: two StatsBomb seasons, the two neighbour foul files, the scan table.
+    write(
+        "sb/competitions.json",
+        serde_json::json!([
+            {"competition_id": 2, "season_id": 27, "competition_name": "P",
+             "season_name": "2015/2016", "competition_gender": "male"},
+            {"competition_id": 43, "season_id": 3, "competition_name": "W",
+             "season_name": "2018", "competition_gender": "male"}
+        ])
+        .to_string()
+        .as_bytes(),
+    );
+    for rel in [
+        "sb/matches/2_27.json",
+        "sb/matches/43_3.json",
+        "football-data/1617/D1.csv",
+        "football-data/1819/D1.csv",
+        "scanning-studies/scan-rates.csv",
+    ] {
+        write(rel, b"x\n");
+    }
+}
+
+/// A group's line of the check: its name padded as the check prints it.
+fn group_line(name: &str, found: usize, expected: usize) -> String {
+    format!("{name:<16} {found:>3} of {expected:>3}")
 }
 
 #[test]
@@ -158,6 +184,15 @@ fn the_data_check_counts_every_group_and_names_each_missing_file() {
     ] {
         assert!(out.contains(line), "{line} not in {out}");
     }
+    assert!(out.contains(&group_line("open-data", 6, 6)), "{out}");
+    // The local side file's source is counted, not required.
+    assert!(
+        out.contains(&format!(
+            "{}  (not required: the IMPECT side file will not be built)",
+            group_line("impect", 0, 1)
+        )),
+        "{out}"
+    );
 
     // One file gone from each group, and one changed.
     for rel in [
@@ -165,6 +200,7 @@ fn the_data_check_counts_every_group_and_names_each_missing_file() {
         "fotmob/laliga-2122.csv",
         "soccertrack-v2/100003_2nd.json",
         "clubelo/clubelo-2026-10-11.csv",
+        "scanning-studies/scan-rates.csv",
     ] {
         std::fs::remove_file(data.join(rel)).unwrap();
     }
@@ -182,9 +218,11 @@ fn the_data_check_counts_every_group_and_names_each_missing_file() {
         "missing: soccertrack-v2/100003_2nd.json",
         "missing: clubelo/clubelo-<date>.csv",
         "not as recorded: football-data/2526/E0.csv",
+        "missing: scanning-studies/scan-rates.csv",
     ] {
         assert!(out.contains(line), "{line} not in {out}");
     }
+    assert!(out.contains(&group_line("open-data", 5, 6)), "{out}");
 }
 
 /// The matches of one fixture result file: (home, away, home goals, away goals).

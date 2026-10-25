@@ -13,7 +13,8 @@ use serde::Deserialize;
 use super::data_check::{DIVISIONS, SEASONS, clubelo_snapshots, sha256_file};
 use super::{
     Builder, Credit, Definitions, InputFile, Layer, NAMES_DIR, ReferenceFile, SCHEMA_VERSION,
-    Target, duels, football_data, fotmob, layers, shots_check, tables,
+    Target, duels, football_data, fotmob, impect, layers, literature, shots_check, side, statsbomb,
+    strictness, tables,
 };
 use crate::stats::round_to;
 
@@ -32,6 +33,15 @@ pub struct Built {
     /// Result rows left out (no result or no teams), per file.
     pub skipped: BTreeMap<String, u32>,
     pub banding_groups: BTreeMap<String, Vec<String>>,
+    /// What the StatsBomb step read, when the data folder holds its competition list.
+    pub statsbomb: Option<statsbomb::Built>,
+    /// Germany's strictness, when both neighbour files are there.
+    pub strictness: Option<strictness::Built>,
+    /// The local side file of the second event source, when the data folder holds it; never
+    /// part of the reference file.
+    pub impect: Option<side::ImpectFile>,
+    /// The StatsBomb per-match histograms of the men's senior pool, as CSV text.
+    pub histograms: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -107,10 +117,18 @@ fn credits() -> BTreeMap<String, Credit> {
             "derived figures with credit",
         ),
         c(
-            "StatsBomb",
+            statsbomb::PROVIDER,
             "StatsBomb open data, https://github.com/statsbomb/open-data",
             "StatsBomb open data user agreement, with credit",
-            "used here only for the blocked-shot cross-check",
+            "the blocked-shot cross-check and derived event targets per competition-season, \
+             with credit; World Cup 2018 is held out and two seasons other sources cover are \
+             left out; the game ships none of the data",
+        ),
+        c(
+            literature::PROVIDER,
+            literature::SOURCE,
+            literature::LICENCE,
+            "one published figure with credit",
         ),
         c(
             "ClubElo",
@@ -243,6 +261,92 @@ pub fn build(data: &Path, tracked: Option<&TrackedInput>, git_head: &str) -> any
         super::tracked::targets(&t.file, &t.registry, &mut targets, &mut absent);
     }
 
+    // The open data, after every other source, under prefixes of their own (`sb`, `strict`,
+    // `lit`), so no earlier step pools them.
+    let statsbomb = statsbomb::build(data)?;
+    let mut groups: Vec<InputFile> = Vec::new();
+    match &statsbomb {
+        Some(sb) => {
+            read.extend(sb.files.iter().cloned());
+            groups.extend(sb.event_groups.iter().cloned());
+            targets.extend(sb.targets.clone());
+        }
+        None => {
+            absent.insert(
+                "sb.men".into(),
+                format!(
+                    "no StatsBomb competition list {} in the data folder",
+                    statsbomb::COMPETITIONS
+                ),
+            );
+        }
+    }
+    let histograms = statsbomb
+        .as_ref()
+        .map(|sb| statsbomb::histogram_rows(&sb.seasons))
+        .filter(|rows| !rows.is_empty())
+        .map(|rows| statsbomb::histogram_csv(&rows));
+    let strictness = strictness::germany(data)?;
+    match &strictness {
+        Some(s) => {
+            read.extend(s.opened.iter().cloned());
+            targets.insert(strictness::KEY.into(), s.target.clone());
+        }
+        None => {
+            absent.insert(
+                strictness::KEY.into(),
+                format!(
+                    "the neighbour foul files {} are not both in the data folder",
+                    strictness::FILES.join(" and ")
+                ),
+            );
+        }
+    }
+    match literature::scan_rate(data)? {
+        Some(t) => {
+            read.push(literature::FILE.into());
+            targets.insert(literature::KEY.into(), t);
+        }
+        None => {
+            absent.insert(
+                literature::KEY.into(),
+                format!(
+                    "no scan-rate study table {} in the data folder",
+                    literature::FILE
+                ),
+            );
+        }
+    }
+    let impect = match impect::build(data)? {
+        Some(b) => {
+            let mut side_targets = b.targets;
+            for t in side_targets.values_mut() {
+                round(t);
+            }
+            let built_from = b
+                .files
+                .iter()
+                .map(|rel| {
+                    let (sha256, bytes) = sha256_file(&data.join(rel))
+                        .with_context(|| format!("cannot hash {rel}"))?;
+                    Ok(InputFile {
+                        path: rel.clone(),
+                        bytes,
+                        sha256,
+                    })
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            Some(side::ImpectFile {
+                side: "impect".into(),
+                licence: impect::LICENCE.into(),
+                credit: impect::CREDIT.into(),
+                built_from,
+                targets: side_targets,
+            })
+        }
+        None => None,
+    };
+
     for t in targets.values_mut() {
         round(t);
     }
@@ -264,6 +368,7 @@ pub fn build(data: &Path, tracked: Option<&TrackedInput>, git_head: &str) -> any
     if let Some(t) = tracked {
         built_from.push(t.record.clone());
     }
+    built_from.extend(groups);
     let mut credits = credits();
     if let Some(t) = tracked {
         credits.insert(
@@ -305,6 +410,10 @@ pub fn build(data: &Path, tracked: Option<&TrackedInput>, git_head: &str) -> any
         unpaired,
         skipped: rows.skipped,
         banding_groups,
+        statsbomb,
+        strictness,
+        impect,
+        histograms,
     })
 }
 
@@ -321,6 +430,25 @@ pub fn write(built: &Built, out: &Path) -> anyhow::Result<()> {
     std::fs::write(&names_path, names)
         .with_context(|| format!("cannot write {}", names_path.display()))?;
     Ok(())
+}
+
+/// Writes the local side files of `built` into `dir` (the second event source's targets,
+/// the StatsBomb per-match histograms), each only when the build made it; refuses a `dir`
+/// inside one of `checkouts` outside its `.scratch/`. Returns each path written.
+pub fn write_side(
+    built: &Built,
+    dir: &Path,
+    checkouts: &[std::path::PathBuf],
+) -> anyhow::Result<Vec<std::path::PathBuf>> {
+    let mut out = Vec::new();
+    if let Some(f) = &built.impect {
+        let text = serde_json::to_string_pretty(f)? + "\n";
+        out.push(side::write(dir, side::IMPECT_FILE, &text, checkouts)?);
+    }
+    if let Some(text) = &built.histograms {
+        out.push(side::write(dir, side::HISTOGRAM_FILE, text, checkouts)?);
+    }
+    Ok(out)
 }
 
 impl Built {
@@ -366,6 +494,49 @@ impl Built {
             let _ = writeln!(out, "  {key}: {why}");
         }
         let _ = writeln!(out, "real club names: {}", self.names.len());
+        let mut labels: BTreeMap<&str, u32> = BTreeMap::new();
+        for t in self.file.targets.values() {
+            *labels.entry(t.source_label.as_str()).or_default() += 1;
+        }
+        let _ = writeln!(out, "targets per source label:");
+        for (label, n) in &labels {
+            let _ = writeln!(out, "  {n:>5}  {label}");
+        }
+        if let Some(sb) = &self.statsbomb {
+            out.push_str(&sb.summary());
+        }
+        for key in [
+            "sb.men.shots_on_target_share",
+            "sb.men.goals_per_xg",
+            "sb.men.shot_distance_mean",
+        ] {
+            if let Some(v) = self.file.target(key).and_then(|t| t.value) {
+                let _ = writeln!(out, "  {key} = {v:.4}");
+            }
+        }
+        if let Some(s) = &self.strictness {
+            let _ = writeln!(
+                out,
+                "germany strictness: {:.4} fouls per team per match ({})",
+                s.target.value.unwrap_or_default(),
+                s.seasons
+                    .iter()
+                    .zip(strictness::SEASONS)
+                    .map(|(m, name)| format!("{name} {:.4} over {} matches", m.mean, m.matches))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            let _ = writeln!(out, "  opened: {}", s.opened.join(", "));
+        }
+        if let Some(f) = &self.impect {
+            let _ = writeln!(
+                out,
+                "local side file: {} targets of {}, {} matches",
+                f.targets.len(),
+                impect::SOURCE,
+                f.built_from.len().saturating_sub(1)
+            );
+        }
         out
     }
 }

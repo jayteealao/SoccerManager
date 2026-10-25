@@ -1,6 +1,9 @@
 //! The data check: counts the raw files the reference file is built from and names each
 //! missing one. football-data.co.uk and FotMob files are also checked against the sha256
-//! of their manifest; the SoccerTrack v2 annotation files (about 56 GB) by size only.
+//! of their manifest; the SoccerTrack v2 annotation files (about 56 GB) by size only. The
+//! open-data group counts the StatsBomb competition list and the matches file of each
+//! season it lists, the two Bundesliga foul files of Germany's strictness and the scan-rate
+//! study table; the files of the local side file are counted but not required.
 
 use std::fmt::Write as _;
 use std::io::Read;
@@ -60,6 +63,8 @@ pub struct Group {
     pub missing: Vec<String>,
     /// Files there but not as their manifest records them.
     pub wrong: Vec<String>,
+    /// `false` for a group the reference file does not need (the side file's source).
+    pub required: bool,
 }
 
 /// What the check found.
@@ -74,6 +79,7 @@ impl Report {
     pub fn complete(&self) -> bool {
         self.groups
             .iter()
+            .filter(|g| g.required)
             .all(|g| g.found == g.expected && g.missing.is_empty() && g.wrong.is_empty())
     }
 
@@ -81,7 +87,16 @@ impl Report {
     pub fn text(&self) -> String {
         let mut out = format!("data folder: {}\n", self.folder);
         for g in &self.groups {
-            let _ = writeln!(out, "{:<16} {:>3} of {:>3}", g.name, g.found, g.expected);
+            let note = if g.required || g.missing.is_empty() {
+                ""
+            } else {
+                "  (not required: the IMPECT side file will not be built)"
+            };
+            let _ = writeln!(
+                out,
+                "{:<16} {:>3} of {:>3}{note}",
+                g.name, g.found, g.expected
+            );
         }
         for g in &self.groups {
             for m in &g.missing {
@@ -156,6 +171,7 @@ fn hashed_group(
         found: 0,
         missing: Vec::new(),
         wrong: Vec::new(),
+        required: true,
     };
     for file in expected {
         let path = base.join(file);
@@ -221,6 +237,7 @@ pub fn check(data: &Path) -> anyhow::Result<Report> {
         found: 0,
         missing: Vec::new(),
         wrong: Vec::new(),
+        required: true,
     };
     if listed.is_empty() {
         group
@@ -261,11 +278,63 @@ pub fn check(data: &Path) -> anyhow::Result<Report> {
             Vec::new()
         },
         wrong: Vec::new(),
+        required: true,
     });
+    groups.push(open_data(data));
+    groups.push(impect_group(data));
     Ok(Report {
         folder: data.display().to_string(),
         groups,
     })
+}
+
+/// Counts `expected` files of `data` into a group.
+fn counted(name: &'static str, data: &Path, expected: &[String], required: bool) -> Group {
+    let missing: Vec<String> = expected
+        .iter()
+        .filter(|f| !data.join(f).is_file())
+        .cloned()
+        .collect();
+    Group {
+        name,
+        expected: expected.len(),
+        found: expected.len() - missing.len(),
+        missing,
+        wrong: Vec::new(),
+        required,
+    }
+}
+
+/// The open-data group: the StatsBomb list and the matches file of each season it lists
+/// (the refused ones too, as the list names them), the two neighbour foul files and the
+/// scan-rate table.
+fn open_data(data: &Path) -> Group {
+    let mut expected = vec![super::statsbomb::COMPETITIONS.to_string()];
+    if let Ok(all) = super::statsbomb::competitions(data) {
+        expected.extend(all.iter().map(|c| format!("sb/matches/{}.json", c.label())));
+    }
+    expected.extend(super::strictness::FILES.iter().map(|f| (*f).to_string()));
+    expected.push(super::literature::FILE.to_string());
+    counted("open-data", data, &expected, true)
+}
+
+/// The side file's source: its matches file and the event file of each match it lists.
+fn impect_group(data: &Path) -> Group {
+    #[derive(Deserialize)]
+    struct Entry {
+        id: u64,
+    }
+    let mut expected = vec![super::impect::MATCHES.to_string()];
+    if let Some(list) = std::fs::read_to_string(data.join(super::impect::MATCHES))
+        .ok()
+        .and_then(|t| serde_json::from_str::<Vec<Entry>>(&t).ok())
+    {
+        expected.extend(
+            list.iter()
+                .map(|m| format!("{}/events_{}.json", super::impect::EVENTS, m.id)),
+        );
+    }
+    counted("impect", data, &expected, false)
 }
 
 /// The ClubElo snapshot files `clubelo/clubelo-<YYYY-MM-DD>.csv`, latest last.
