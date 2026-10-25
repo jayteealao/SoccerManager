@@ -30,6 +30,7 @@ pub mod data_check;
 pub mod duels;
 pub mod football_data;
 pub mod fotmob;
+pub mod impect;
 pub mod layers;
 pub mod shots_check;
 pub mod statsbomb;
