@@ -74,7 +74,7 @@
     "targets": {
       "description": "Every target by key: fd.<div>.<stat>, tier.<n>.<stat>, group.t<n>.e<elo>.<stat>, wy.<league>.<stat>, fotmob.<div>.<stat>.",
       "type": "object",
-      "propertyNames": { "pattern": "^(fd|tier|group|wy|fotmob)\\.[A-Za-z0-9_.]+$" },
+      "propertyNames": { "pattern": "^(fd|tier|group|wy|fotmob|trk)\\.[A-Za-z0-9_.]+$" },
       "additionalProperties": { "$ref": "#/$defs/target" }
     },
     "absent": {
@@ -125,6 +125,7 @@
         },
         "context": { "type": "string", "minLength": 1 },
         "extrapolated": { "type": "boolean" },
+        "per_match": { "type": "array", "items": { "type": "number" }, "minItems": 1 },
         "formula": {
           "type": "object",
           "additionalProperties": false,

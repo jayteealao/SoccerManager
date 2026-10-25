@@ -140,6 +140,11 @@ fn round(t: &mut Target) {
             *p = r(*p);
         }
     }
+    if let Some(v) = &mut t.per_match {
+        for p in v.iter_mut() {
+            *p = r(*p);
+        }
+    }
     if let Some(f) = &mut t.formula {
         // The strength coefficient is per rating point: keep more places.
         f.intercept = r(f.intercept);
@@ -149,9 +154,40 @@ fn round(t: &mut Target) {
     }
 }
 
-/// Builds the reference file from the raw files of `data`; `git_head` names the builder's
-/// commit.
-pub fn build(data: &Path, git_head: &str) -> anyhow::Result<Built> {
+/// The tracked matches a build reads beside the raw files: the tracking file, the band file
+/// whose tracked bands take a target, and the tracking file's record in `built_from`.
+#[derive(Debug)]
+pub struct TrackedInput {
+    pub file: crate::tracking::measure::TrackingFile,
+    pub registry: serde_json::Value,
+    pub record: InputFile,
+}
+
+impl TrackedInput {
+    /// The tracking file at `tracking` (named `label` in `built_from`) and the band file at
+    /// `registry`.
+    pub fn read(tracking: &Path, label: &str, registry: &Path) -> anyhow::Result<Self> {
+        let file = super::tracked::read_tracking(tracking)?;
+        let text = std::fs::read_to_string(registry)
+            .with_context(|| format!("cannot read the band file {}", registry.display()))?;
+        let (sha256, bytes) =
+            sha256_file(tracking).with_context(|| format!("cannot hash {}", tracking.display()))?;
+        Ok(Self {
+            file,
+            registry: serde_json::from_str(&text)
+                .with_context(|| format!("{} is not JSON", registry.display()))?,
+            record: InputFile {
+                path: label.into(),
+                bytes,
+                sha256,
+            },
+        })
+    }
+}
+
+/// Builds the reference file from the raw files of `data` and, when given, the tracked
+/// matches; `git_head` names the builder's commit.
+pub fn build(data: &Path, tracked: Option<&TrackedInput>, git_head: &str) -> anyhow::Result<Built> {
     let mut targets = BTreeMap::new();
     let mut absent = BTreeMap::new();
     let mut read: Vec<String> = Vec::new();
@@ -203,6 +239,9 @@ pub fn build(data: &Path, git_head: &str) -> anyhow::Result<Built> {
     let (unpaired, opened) = duels::targets(data, &mut targets, &mut absent)?;
     read.extend(opened);
     read.extend(fotmob::targets(data, &mut targets, &mut absent)?);
+    if let Some(t) = tracked {
+        super::tracked::targets(&t.file, &t.registry, &mut targets, &mut absent);
+    }
 
     for t in targets.values_mut() {
         round(t);
@@ -221,6 +260,22 @@ pub fn build(data: &Path, git_head: &str) -> anyhow::Result<Built> {
             })
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
+    let mut built_from = built_from;
+    if let Some(t) = tracked {
+        built_from.push(t.record.clone());
+    }
+    let mut credits = credits();
+    if let Some(t) = tracked {
+        credits.insert(
+            t.file.source.clone(),
+            Credit {
+                name: t.file.source.clone(),
+                source: t.file.credit.clone(),
+                licence: "CC BY 4.0".into(),
+                use_note: "derived figures with credit; the game ships none of the data".into(),
+            },
+        );
+    }
     let file = ReferenceFile {
         schema_version: SCHEMA_VERSION,
         builder: Builder {
@@ -228,7 +283,7 @@ pub fn build(data: &Path, git_head: &str) -> anyhow::Result<Built> {
             git_head: git_head.into(),
         },
         built_from,
-        credits: credits(),
+        credits,
         definitions: Definitions {
             shots_include_blocked: shots.include_blocked,
             shots_check: shots,

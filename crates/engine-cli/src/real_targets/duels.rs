@@ -162,6 +162,7 @@ fn target(values: &[f64], layer: Layer, leagues: Option<Vec<String>>) -> Option<
         context: None,
         extrapolated: None,
         formula: None,
+        per_match: None,
     })
 }
 

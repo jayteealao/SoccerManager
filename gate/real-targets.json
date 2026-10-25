@@ -2,7 +2,7 @@
   "schema_version": 1,
   "builder": {
     "version": "0.2.0-dev",
-    "git_head": "131a878f1b9198d2cfd863dc10fab6d8199d36cb"
+    "git_head": "7c27501084cf42578e164f44403e7a8405e7e1b1"
   },
   "built_from": [
     {
@@ -884,6 +884,11 @@
       "path": "wyscout/events_Spain.json",
       "bytes": 184164406,
       "sha256": "b55fabec6624e469b9396100de915eaca334d4457de2c61a887a7a67de79a154"
+    },
+    {
+      "path": "gate/tracking/dfl-matches.json",
+      "bytes": 109966,
+      "sha256": "0c636a5cea844bd3d073fde9f0687896dff9a04601bdb45c2209ef8fef46ef91"
     }
   ],
   "credits": {
@@ -892,6 +897,12 @@
       "source": "http://clubelo.com, Lars Schiefler; ranking snapshot",
       "licence": "not stated; cited",
       "use_note": "club strength for the banding groups, measuring only"
+    },
+    "DFL": {
+      "name": "DFL",
+      "source": "DFL tracking and event data, Bassek, Rein, Weber and Memmert (2025), figshare doi 10.6084/m9.figshare.28196177.v1, CC BY 4.0",
+      "licence": "CC BY 4.0",
+      "use_note": "derived figures with credit; the game ships none of the data"
     },
     "Opta via FotMob": {
       "name": "Opta via FotMob",
@@ -42430,6 +42441,3603 @@
         "band": "yellow_cards_per_team",
         "measure": "mean per team of yellow.{side}"
       }
+    },
+    "trk.dfl.ball_in_play_minutes": {
+      "value": 52.676667,
+      "se": 1.737044,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band ball_in_play_minutes's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band ball_in_play_minutes on the engine's matches",
+        "band": "ball_in_play_minutes",
+        "measure": "{\"kind\":\"mean\",\"of\":[\"ball_in_play_min\"],\"per\":\"match\"}"
+      },
+      "per_match": [
+        56.912667,
+        45.584667,
+        47.963333,
+        50.857333,
+        54.306667,
+        56.234667,
+        56.877333
+      ]
+    },
+    "trk.dfl.cb_depth_in": {
+      "value": 10.198767,
+      "se": 0.496221,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cb_depth_in's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cb_depth_in on the engine's matches",
+        "band": "cb_depth_in",
+        "measure": "{\"den\":[\"shape.cb.depth_in_n.home\",\"shape.cb.depth_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.depth_in_sum.home\",\"shape.cb.depth_in_sum.away\"]}"
+      },
+      "per_match": [
+        12.133502,
+        10.252604,
+        11.891399,
+        9.701295,
+        8.874794,
+        9.246013,
+        9.291764
+      ]
+    },
+    "trk.dfl.cb_depth_out": {
+      "value": 20.982487,
+      "se": 0.672516,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cb_depth_out's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cb_depth_out on the engine's matches",
+        "band": "cb_depth_out",
+        "measure": "{\"den\":[\"shape.cb.depth_out_n.home\",\"shape.cb.depth_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.depth_out_sum.home\",\"shape.cb.depth_out_sum.away\"]}"
+      },
+      "per_match": [
+        21.440983,
+        18.252106,
+        23.264517,
+        19.670177,
+        20.611096,
+        20.622947,
+        23.01558
+      ]
+    },
+    "trk.dfl.cb_pace_hs_share": {
+      "value": 0.022648,
+      "se": 0.001291,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cb_pace_hs_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cb_pace_hs_share on the engine's matches",
+        "band": "cb_pace_hs_share",
+        "measure": "{\"den\":[\"shape.cb.live_ticks.home\",\"shape.cb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.pace_hs.home\",\"shape.cb.pace_hs.away\"]}"
+      },
+      "per_match": [
+        0.020262,
+        0.024182,
+        0.024244,
+        0.027119,
+        0.023352,
+        0.022956,
+        0.016419
+      ]
+    },
+    "trk.dfl.cb_pace_jog_share": {
+      "value": 0.391254,
+      "se": 0.010268,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cb_pace_jog_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cb_pace_jog_share on the engine's matches",
+        "band": "cb_pace_jog_share",
+        "measure": "{\"den\":[\"shape.cb.live_ticks.home\",\"shape.cb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.pace_jog.home\",\"shape.cb.pace_jog.away\"]}"
+      },
+      "per_match": [
+        0.411016,
+        0.342688,
+        0.39862,
+        0.413507,
+        0.411585,
+        0.396374,
+        0.364989
+      ]
+    },
+    "trk.dfl.cb_pace_run_share": {
+      "value": 0.091839,
+      "se": 0.005538,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cb_pace_run_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cb_pace_run_share on the engine's matches",
+        "band": "cb_pace_run_share",
+        "measure": "{\"den\":[\"shape.cb.live_ticks.home\",\"shape.cb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.pace_run.home\",\"shape.cb.pace_run.away\"]}"
+      },
+      "per_match": [
+        0.076357,
+        0.088922,
+        0.113632,
+        0.106363,
+        0.088335,
+        0.095542,
+        0.073721
+      ]
+    },
+    "trk.dfl.cb_pace_sprint_share": {
+      "value": 0.004576,
+      "se": 0.000436,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cb_pace_sprint_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cb_pace_sprint_share on the engine's matches",
+        "band": "cb_pace_sprint_share",
+        "measure": "{\"den\":[\"shape.cb.live_ticks.home\",\"shape.cb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.pace_sprint.home\",\"shape.cb.pace_sprint.away\"]}"
+      },
+      "per_match": [
+        0.004229,
+        0.005353,
+        0.004875,
+        0.00473,
+        0.005714,
+        0.004944,
+        0.002184
+      ]
+    },
+    "trk.dfl.cb_pace_stand_share": {
+      "value": 0.010657,
+      "se": 0.001063,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cb_pace_stand_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cb_pace_stand_share on the engine's matches",
+        "band": "cb_pace_stand_share",
+        "measure": "{\"den\":[\"shape.cb.live_ticks.home\",\"shape.cb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.pace_stand.home\",\"shape.cb.pace_stand.away\"]}"
+      },
+      "per_match": [
+        0.008941,
+        0.015349,
+        0.008215,
+        0.007863,
+        0.01084,
+        0.013503,
+        0.009893
+      ]
+    },
+    "trk.dfl.cb_pace_walk_share": {
+      "value": 0.479026,
+      "se": 0.013528,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cb_pace_walk_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cb_pace_walk_share on the engine's matches",
+        "band": "cb_pace_walk_share",
+        "measure": "{\"den\":[\"shape.cb.live_ticks.home\",\"shape.cb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.pace_walk.home\",\"shape.cb.pace_walk.away\"]}"
+      },
+      "per_match": [
+        0.479196,
+        0.523506,
+        0.450414,
+        0.440419,
+        0.460174,
+        0.466682,
+        0.532794
+      ]
+    },
+    "trk.dfl.cb_speed_far": {
+      "value": 2.252936,
+      "se": 0.04261,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cb_speed_far's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cb_speed_far on the engine's matches",
+        "band": "cb_speed_far",
+        "measure": "{\"den\":[\"shape.cb.speed_far_n.home\",\"shape.cb.speed_far_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.speed_far_sum.home\",\"shape.cb.speed_far_sum.away\"]}"
+      },
+      "per_match": [
+        2.212725,
+        2.155583,
+        2.437104,
+        2.336569,
+        2.273196,
+        2.256788,
+        2.098583
+      ]
+    },
+    "trk.dfl.cb_speed_near": {
+      "value": 2.453761,
+      "se": 0.043918,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cb_speed_near's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cb_speed_near on the engine's matches",
+        "band": "cb_speed_near",
+        "measure": "{\"den\":[\"shape.cb.speed_near_n.home\",\"shape.cb.speed_near_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.speed_near_sum.home\",\"shape.cb.speed_near_sum.away\"]}"
+      },
+      "per_match": [
+        2.414761,
+        2.328175,
+        2.604759,
+        2.591762,
+        2.449113,
+        2.47955,
+        2.308209
+      ]
+    },
+    "trk.dfl.cb_sprints_back_per_min": {
+      "value": 0.094142,
+      "se": 0.008866,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cb_sprints_back_per_min's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cb_sprints_back_per_min on the engine's matches",
+        "band": "cb_sprints_back_per_min",
+        "measure": "{\"den\":[\"shape.cb.live_min.home\",\"shape.cb.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.sprints_back.home\",\"shape.cb.sprints_back.away\"]}"
+      },
+      "per_match": [
+        0.101032,
+        0.109686,
+        0.109459,
+        0.090449,
+        0.10588,
+        0.099331,
+        0.04316
+      ]
+    },
+    "trk.dfl.cb_sprints_fwd_per_min": {
+      "value": 0.009567,
+      "se": 0.00217,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cb_sprints_fwd_per_min's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cb_sprints_fwd_per_min on the engine's matches",
+        "band": "cb_sprints_fwd_per_min",
+        "measure": "{\"den\":[\"shape.cb.live_min.home\",\"shape.cb.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.sprints_fwd.home\",\"shape.cb.sprints_fwd.away\"]}"
+      },
+      "per_match": [
+        0.013178,
+        0.005484,
+        0.0,
+        0.01573,
+        0.009207,
+        0.01552,
+        0.007847
+      ]
+    },
+    "trk.dfl.cb_sprints_lat_per_min": {
+      "value": 0.001846,
+      "se": 0.000902,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cb_sprints_lat_per_min's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cb_sprints_lat_per_min on the engine's matches",
+        "band": "cb_sprints_lat_per_min",
+        "measure": "{\"den\":[\"shape.cb.live_min.home\",\"shape.cb.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.sprints_lat.home\",\"shape.cb.sprints_lat.away\"]}"
+      },
+      "per_match": [
+        0.0,
+        0.0,
+        0.005212,
+        0.0,
+        0.004603,
+        0.003104,
+        0.0
+      ]
+    },
+    "trk.dfl.cb_width_far_in": {
+      "value": 8.414895,
+      "se": 0.339508,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cb_width_far_in's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cb_width_far_in on the engine's matches",
+        "band": "cb_width_far_in",
+        "measure": "{\"den\":[\"shape.cb.width_far_in_n.home\",\"shape.cb.width_far_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.width_far_in_sum.home\",\"shape.cb.width_far_in_sum.away\"]}"
+      },
+      "per_match": [
+        7.735598,
+        6.847012,
+        8.092698,
+        9.016453,
+        8.754845,
+        9.141555,
+        9.316103
+      ]
+    },
+    "trk.dfl.cb_width_far_out": {
+      "value": 5.986725,
+      "se": 0.156944,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cb_width_far_out's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cb_width_far_out on the engine's matches",
+        "band": "cb_width_far_out",
+        "measure": "{\"den\":[\"shape.cb.width_far_out_n.home\",\"shape.cb.width_far_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.width_far_out_sum.home\",\"shape.cb.width_far_out_sum.away\"]}"
+      },
+      "per_match": [
+        5.742882,
+        6.533119,
+        5.685026,
+        6.615865,
+        5.841884,
+        5.903843,
+        5.584457
+      ]
+    },
+    "trk.dfl.cb_width_near_in": {
+      "value": 15.923893,
+      "se": 0.368415,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cb_width_near_in's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cb_width_near_in on the engine's matches",
+        "band": "cb_width_near_in",
+        "measure": "{\"den\":[\"shape.cb.width_near_in_n.home\",\"shape.cb.width_near_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.width_near_in_sum.home\",\"shape.cb.width_near_in_sum.away\"]}"
+      },
+      "per_match": [
+        16.132237,
+        13.741256,
+        16.119598,
+        16.235903,
+        16.53908,
+        16.257925,
+        16.441251
+      ]
+    },
+    "trk.dfl.cb_width_near_out": {
+      "value": 13.282784,
+      "se": 0.279796,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cb_width_near_out's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cb_width_near_out on the engine's matches",
+        "band": "cb_width_near_out",
+        "measure": "{\"den\":[\"shape.cb.width_near_out_n.home\",\"shape.cb.width_near_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cb.width_near_out_sum.home\",\"shape.cb.width_near_out_sum.away\"]}"
+      },
+      "per_match": [
+        14.370458,
+        12.756511,
+        12.74877,
+        14.118639,
+        12.786373,
+        13.614377,
+        12.584358
+      ]
+    },
+    "trk.dfl.cm_depth_in": {
+      "value": -5.35647,
+      "se": 0.535819,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cm_depth_in's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cm_depth_in on the engine's matches",
+        "band": "cm_depth_in",
+        "measure": "{\"den\":[\"shape.cm.depth_in_n.home\",\"shape.cm.depth_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.depth_in_sum.home\",\"shape.cm.depth_in_sum.away\"]}"
+      },
+      "per_match": [
+        -4.084965,
+        -3.300457,
+        -7.678005,
+        -5.739298,
+        -5.077113,
+        -5.49711,
+        -6.11834
+      ]
+    },
+    "trk.dfl.cm_depth_out": {
+      "value": 7.127365,
+      "se": 0.604845,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cm_depth_out's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cm_depth_out on the engine's matches",
+        "band": "cm_depth_out",
+        "measure": "{\"den\":[\"shape.cm.depth_out_n.home\",\"shape.cm.depth_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.depth_out_sum.home\",\"shape.cm.depth_out_sum.away\"]}"
+      },
+      "per_match": [
+        6.26122,
+        5.101927,
+        5.681699,
+        6.892142,
+        8.339618,
+        8.016222,
+        9.59873
+      ]
+    },
+    "trk.dfl.cm_pace_hs_share": {
+      "value": 0.03652,
+      "se": 0.001583,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cm_pace_hs_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cm_pace_hs_share on the engine's matches",
+        "band": "cm_pace_hs_share",
+        "measure": "{\"den\":[\"shape.cm.live_ticks.home\",\"shape.cm.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.pace_hs.home\",\"shape.cm.pace_hs.away\"]}"
+      },
+      "per_match": [
+        0.032472,
+        0.040668,
+        0.039869,
+        0.040073,
+        0.034213,
+        0.038143,
+        0.030204
+      ]
+    },
+    "trk.dfl.cm_pace_jog_share": {
+      "value": 0.432552,
+      "se": 0.007309,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cm_pace_jog_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cm_pace_jog_share on the engine's matches",
+        "band": "cm_pace_jog_share",
+        "measure": "{\"den\":[\"shape.cm.live_ticks.home\",\"shape.cm.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.pace_jog.home\",\"shape.cm.pace_jog.away\"]}"
+      },
+      "per_match": [
+        0.455325,
+        0.410902,
+        0.427942,
+        0.462424,
+        0.432131,
+        0.421244,
+        0.417897
+      ]
+    },
+    "trk.dfl.cm_pace_run_share": {
+      "value": 0.144998,
+      "se": 0.006079,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cm_pace_run_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cm_pace_run_share on the engine's matches",
+        "band": "cm_pace_run_share",
+        "measure": "{\"den\":[\"shape.cm.live_ticks.home\",\"shape.cm.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.pace_run.home\",\"shape.cm.pace_run.away\"]}"
+      },
+      "per_match": [
+        0.144864,
+        0.147462,
+        0.158576,
+        0.155821,
+        0.135,
+        0.159042,
+        0.114221
+      ]
+    },
+    "trk.dfl.cm_pace_sprint_share": {
+      "value": 0.006343,
+      "se": 0.000365,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cm_pace_sprint_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cm_pace_sprint_share on the engine's matches",
+        "band": "cm_pace_sprint_share",
+        "measure": "{\"den\":[\"shape.cm.live_ticks.home\",\"shape.cm.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.pace_sprint.home\",\"shape.cm.pace_sprint.away\"]}"
+      },
+      "per_match": [
+        0.006392,
+        0.007259,
+        0.005167,
+        0.005611,
+        0.007939,
+        0.00622,
+        0.00581
+      ]
+    },
+    "trk.dfl.cm_pace_stand_share": {
+      "value": 0.007636,
+      "se": 0.000748,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cm_pace_stand_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cm_pace_stand_share on the engine's matches",
+        "band": "cm_pace_stand_share",
+        "measure": "{\"den\":[\"shape.cm.live_ticks.home\",\"shape.cm.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.pace_stand.home\",\"shape.cm.pace_stand.away\"]}"
+      },
+      "per_match": [
+        0.004187,
+        0.007364,
+        0.005963,
+        0.009607,
+        0.008427,
+        0.008334,
+        0.009573
+      ]
+    },
+    "trk.dfl.cm_pace_walk_share": {
+      "value": 0.371951,
+      "se": 0.011194,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cm_pace_walk_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cm_pace_walk_share on the engine's matches",
+        "band": "cm_pace_walk_share",
+        "measure": "{\"den\":[\"shape.cm.live_ticks.home\",\"shape.cm.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.pace_walk.home\",\"shape.cm.pace_walk.away\"]}"
+      },
+      "per_match": [
+        0.356761,
+        0.386346,
+        0.362483,
+        0.326464,
+        0.38229,
+        0.367017,
+        0.422295
+      ]
+    },
+    "trk.dfl.cm_speed_far": {
+      "value": 2.688273,
+      "se": 0.041994,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cm_speed_far's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cm_speed_far on the engine's matches",
+        "band": "cm_speed_far",
+        "measure": "{\"den\":[\"shape.cm.speed_far_n.home\",\"shape.cm.speed_far_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.speed_far_sum.home\",\"shape.cm.speed_far_sum.away\"]}"
+      },
+      "per_match": [
+        2.700653,
+        2.651064,
+        2.832874,
+        2.786561,
+        2.626083,
+        2.724232,
+        2.496447
+      ]
+    },
+    "trk.dfl.cm_speed_near": {
+      "value": 2.818942,
+      "se": 0.035319,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cm_speed_near's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cm_speed_near on the engine's matches",
+        "band": "cm_speed_near",
+        "measure": "{\"den\":[\"shape.cm.speed_near_n.home\",\"shape.cm.speed_near_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.speed_near_sum.home\",\"shape.cm.speed_near_sum.away\"]}"
+      },
+      "per_match": [
+        2.85233,
+        2.817573,
+        2.888203,
+        2.897593,
+        2.714975,
+        2.896283,
+        2.665637
+      ]
+    },
+    "trk.dfl.cm_sprints_back_per_min": {
+      "value": 0.069819,
+      "se": 0.009112,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cm_sprints_back_per_min's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cm_sprints_back_per_min on the engine's matches",
+        "band": "cm_sprints_back_per_min",
+        "measure": "{\"den\":[\"shape.cm.live_min.home\",\"shape.cm.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.sprints_back.home\",\"shape.cm.sprints_back.away\"]}"
+      },
+      "per_match": [
+        0.088837,
+        0.058385,
+        0.038508,
+        0.060833,
+        0.112232,
+        0.07158,
+        0.058358
+      ]
+    },
+    "trk.dfl.cm_sprints_fwd_per_min": {
+      "value": 0.065718,
+      "se": 0.006193,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cm_sprints_fwd_per_min's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cm_sprints_fwd_per_min on the engine's matches",
+        "band": "cm_sprints_fwd_per_min",
+        "measure": "{\"den\":[\"shape.cm.live_min.home\",\"shape.cm.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.sprints_fwd.home\",\"shape.cm.sprints_fwd.away\"]}"
+      },
+      "per_match": [
+        0.061267,
+        0.094876,
+        0.059512,
+        0.060833,
+        0.041152,
+        0.068468,
+        0.07392
+      ]
+    },
+    "trk.dfl.cm_sprints_lat_per_min": {
+      "value": 0.004582,
+      "se": 0.000771,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cm_sprints_lat_per_min's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cm_sprints_lat_per_min on the engine's matches",
+        "band": "cm_sprints_lat_per_min",
+        "measure": "{\"den\":[\"shape.cm.live_min.home\",\"shape.cm.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.sprints_lat.home\",\"shape.cm.sprints_lat.away\"]}"
+      },
+      "per_match": [
+        0.003063,
+        0.007298,
+        0.003501,
+        0.003578,
+        0.003741,
+        0.003112,
+        0.007781
+      ]
+    },
+    "trk.dfl.cm_width_far_in": {
+      "value": 10.268059,
+      "se": 0.265047,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cm_width_far_in's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cm_width_far_in on the engine's matches",
+        "band": "cm_width_far_in",
+        "measure": "{\"den\":[\"shape.cm.width_far_in_n.home\",\"shape.cm.width_far_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.width_far_in_sum.home\",\"shape.cm.width_far_in_sum.away\"]}"
+      },
+      "per_match": [
+        10.942962,
+        11.344882,
+        10.357815,
+        9.962449,
+        9.644139,
+        10.275166,
+        9.349001
+      ]
+    },
+    "trk.dfl.cm_width_far_out": {
+      "value": 9.814212,
+      "se": 0.419981,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cm_width_far_out's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cm_width_far_out on the engine's matches",
+        "band": "cm_width_far_out",
+        "measure": "{\"den\":[\"shape.cm.width_far_out_n.home\",\"shape.cm.width_far_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.width_far_out_sum.home\",\"shape.cm.width_far_out_sum.away\"]}"
+      },
+      "per_match": [
+        10.356398,
+        11.61178,
+        10.499228,
+        9.851273,
+        8.864274,
+        9.13234,
+        8.384193
+      ]
+    },
+    "trk.dfl.cm_width_near_in": {
+      "value": 13.610307,
+      "se": 0.490856,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cm_width_near_in's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cm_width_near_in on the engine's matches",
+        "band": "cm_width_near_in",
+        "measure": "{\"den\":[\"shape.cm.width_near_in_n.home\",\"shape.cm.width_near_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.width_near_in_sum.home\",\"shape.cm.width_near_in_sum.away\"]}"
+      },
+      "per_match": [
+        13.972992,
+        15.132184,
+        12.408078,
+        14.040948,
+        12.048804,
+        15.157846,
+        12.511299
+      ]
+    },
+    "trk.dfl.cm_width_near_out": {
+      "value": 13.315004,
+      "se": 0.344563,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band cm_width_near_out's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band cm_width_near_out on the engine's matches",
+        "band": "cm_width_near_out",
+        "measure": "{\"den\":[\"shape.cm.width_near_out_n.home\",\"shape.cm.width_near_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.cm.width_near_out_sum.home\",\"shape.cm.width_near_out_sum.away\"]}"
+      },
+      "per_match": [
+        13.857841,
+        14.31353,
+        12.245217,
+        13.819811,
+        12.30374,
+        14.129981,
+        12.534908
+      ]
+    },
+    "trk.dfl.dead_ball_calm_share": {
+      "value": 0.892872,
+      "se": 0.004679,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band dead_ball_calm_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band dead_ball_calm_share on the engine's matches",
+        "band": "dead_ball_calm_share",
+        "measure": "{\"den\":[\"shape.dead_ticks.home\",\"shape.dead_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.calm_ticks.home\",\"shape.calm_ticks.away\"]}"
+      },
+      "per_match": [
+        0.898892,
+        0.907875,
+        0.897876,
+        0.876156,
+        0.9001,
+        0.875529,
+        0.893673
+      ]
+    },
+    "trk.dfl.distance_per_minute": {
+      "value": 108.131381,
+      "se": 1.849726,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band distance_per_minute's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band distance_per_minute on the engine's matches",
+        "band": "distance_per_minute",
+        "measure": "{\"den\":[\"minutes_on.home\",\"minutes_on.away\"],\"kind\":\"ratio\",\"num\":[\"distance_m.home\",\"distance_m.away\"]}"
+      },
+      "per_match": [
+        109.166456,
+        98.876249,
+        110.326473,
+        111.101473,
+        108.537428,
+        113.908924,
+        105.002667
+      ]
+    },
+    "trk.dfl.far_gain_10s_30_45": {
+      "value": 0.278995,
+      "se": 0.00336,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band far_gain_10s_30_45's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band far_gain_10s_30_45 on the engine's matches",
+        "band": "far_gain_10s_30_45",
+        "measure": "{\"den\":[\"shape.far_10s_30_45_qq.home\",\"shape.far_10s_30_45_qq.away\"],\"kind\":\"ratio\",\"num\":[\"shape.far_10s_30_45_pq.home\",\"shape.far_10s_30_45_pq.away\"]}"
+      },
+      "per_match": [
+        0.273795,
+        0.275826,
+        0.288598,
+        0.277726,
+        0.288706,
+        0.284207,
+        0.264105
+      ]
+    },
+    "trk.dfl.far_gain_10s_gt45": {
+      "value": 0.186786,
+      "se": 0.007689,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band far_gain_10s_gt45's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band far_gain_10s_gt45 on the engine's matches",
+        "band": "far_gain_10s_gt45",
+        "measure": "{\"den\":[\"shape.far_10s_gt45_qq.home\",\"shape.far_10s_gt45_qq.away\"],\"kind\":\"ratio\",\"num\":[\"shape.far_10s_gt45_pq.home\",\"shape.far_10s_gt45_pq.away\"]}"
+      },
+      "per_match": [
+        0.161025,
+        0.215788,
+        0.187761,
+        0.203306,
+        0.189024,
+        0.160539,
+        0.190058
+      ]
+    },
+    "trk.dfl.far_gain_1s_30_45": {
+      "value": 0.121289,
+      "se": 0.002311,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band far_gain_1s_30_45's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band far_gain_1s_30_45 on the engine's matches",
+        "band": "far_gain_1s_30_45",
+        "measure": "{\"den\":[\"shape.far_1s_30_45_qq.home\",\"shape.far_1s_30_45_qq.away\"],\"kind\":\"ratio\",\"num\":[\"shape.far_1s_30_45_pq.home\",\"shape.far_1s_30_45_pq.away\"]}"
+      },
+      "per_match": [
+        0.119813,
+        0.114488,
+        0.132732,
+        0.124242,
+        0.122555,
+        0.119514,
+        0.115676
+      ]
+    },
+    "trk.dfl.far_gain_1s_gt45": {
+      "value": 0.094734,
+      "se": 0.001807,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band far_gain_1s_gt45's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band far_gain_1s_gt45 on the engine's matches",
+        "band": "far_gain_1s_gt45",
+        "measure": "{\"den\":[\"shape.far_1s_gt45_qq.home\",\"shape.far_1s_gt45_qq.away\"],\"kind\":\"ratio\",\"num\":[\"shape.far_1s_gt45_pq.home\",\"shape.far_1s_gt45_pq.away\"]}"
+      },
+      "per_match": [
+        0.090635,
+        0.094202,
+        0.10286,
+        0.098759,
+        0.093642,
+        0.088696,
+        0.094341
+      ]
+    },
+    "trk.dfl.fb_depth_in": {
+      "value": -0.716566,
+      "se": 0.986403,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band fb_depth_in's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band fb_depth_in on the engine's matches",
+        "band": "fb_depth_in",
+        "measure": "{\"den\":[\"shape.fb.depth_in_n.home\",\"shape.fb.depth_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.depth_in_sum.home\",\"shape.fb.depth_in_sum.away\"]}"
+      },
+      "per_match": [
+        1.118232,
+        2.830101,
+        0.811166,
+        -0.751943,
+        -1.866967,
+        -5.140789,
+        -2.015765
+      ]
+    },
+    "trk.dfl.fb_depth_out": {
+      "value": 16.327548,
+      "se": 0.870479,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band fb_depth_out's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band fb_depth_out on the engine's matches",
+        "band": "fb_depth_out",
+        "measure": "{\"den\":[\"shape.fb.depth_out_n.home\",\"shape.fb.depth_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.depth_out_sum.home\",\"shape.fb.depth_out_sum.away\"]}"
+      },
+      "per_match": [
+        15.405086,
+        13.613026,
+        19.158377,
+        15.12663,
+        16.395868,
+        14.820494,
+        19.773356
+      ]
+    },
+    "trk.dfl.fb_pace_hs_share": {
+      "value": 0.034203,
+      "se": 0.002074,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band fb_pace_hs_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band fb_pace_hs_share on the engine's matches",
+        "band": "fb_pace_hs_share",
+        "measure": "{\"den\":[\"shape.fb.live_ticks.home\",\"shape.fb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.pace_hs.home\",\"shape.fb.pace_hs.away\"]}"
+      },
+      "per_match": [
+        0.027198,
+        0.032895,
+        0.034068,
+        0.038959,
+        0.036949,
+        0.041724,
+        0.027632
+      ]
+    },
+    "trk.dfl.fb_pace_jog_share": {
+      "value": 0.361138,
+      "se": 0.00822,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band fb_pace_jog_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band fb_pace_jog_share on the engine's matches",
+        "band": "fb_pace_jog_share",
+        "measure": "{\"den\":[\"shape.fb.live_ticks.home\",\"shape.fb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.pace_jog.home\",\"shape.fb.pace_jog.away\"]}"
+      },
+      "per_match": [
+        0.37813,
+        0.328513,
+        0.392626,
+        0.372509,
+        0.358746,
+        0.343738,
+        0.353701
+      ]
+    },
+    "trk.dfl.fb_pace_run_share": {
+      "value": 0.10565,
+      "se": 0.005421,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band fb_pace_run_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band fb_pace_run_share on the engine's matches",
+        "band": "fb_pace_run_share",
+        "measure": "{\"den\":[\"shape.fb.live_ticks.home\",\"shape.fb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.pace_run.home\",\"shape.fb.pace_run.away\"]}"
+      },
+      "per_match": [
+        0.093836,
+        0.087467,
+        0.113232,
+        0.111161,
+        0.118332,
+        0.123678,
+        0.091845
+      ]
+    },
+    "trk.dfl.fb_pace_sprint_share": {
+      "value": 0.009839,
+      "se": 0.000745,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band fb_pace_sprint_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band fb_pace_sprint_share on the engine's matches",
+        "band": "fb_pace_sprint_share",
+        "measure": "{\"den\":[\"shape.fb.live_ticks.home\",\"shape.fb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.pace_sprint.home\",\"shape.fb.pace_sprint.away\"]}"
+      },
+      "per_match": [
+        0.006521,
+        0.01227,
+        0.010713,
+        0.008294,
+        0.010669,
+        0.011268,
+        0.00914
+      ]
+    },
+    "trk.dfl.fb_pace_stand_share": {
+      "value": 0.013803,
+      "se": 0.001184,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band fb_pace_stand_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band fb_pace_stand_share on the engine's matches",
+        "band": "fb_pace_stand_share",
+        "measure": "{\"den\":[\"shape.fb.live_ticks.home\",\"shape.fb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.pace_stand.home\",\"shape.fb.pace_stand.away\"]}"
+      },
+      "per_match": [
+        0.011199,
+        0.012753,
+        0.010657,
+        0.012581,
+        0.013131,
+        0.018968,
+        0.017333
+      ]
+    },
+    "trk.dfl.fb_pace_walk_share": {
+      "value": 0.475366,
+      "se": 0.011286,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band fb_pace_walk_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band fb_pace_walk_share on the engine's matches",
+        "band": "fb_pace_walk_share",
+        "measure": "{\"den\":[\"shape.fb.live_ticks.home\",\"shape.fb.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.pace_walk.home\",\"shape.fb.pace_walk.away\"]}"
+      },
+      "per_match": [
+        0.483116,
+        0.526102,
+        0.438703,
+        0.456496,
+        0.462173,
+        0.460623,
+        0.50035
+      ]
+    },
+    "trk.dfl.fb_speed_far": {
+      "value": 2.231106,
+      "se": 0.045908,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band fb_speed_far's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band fb_speed_far on the engine's matches",
+        "band": "fb_speed_far",
+        "measure": "{\"den\":[\"shape.fb.speed_far_n.home\",\"shape.fb.speed_far_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.speed_far_sum.home\",\"shape.fb.speed_far_sum.away\"]}"
+      },
+      "per_match": [
+        2.126641,
+        2.095508,
+        2.389832,
+        2.221353,
+        2.343504,
+        2.323081,
+        2.117819
+      ]
+    },
+    "trk.dfl.fb_speed_near": {
+      "value": 2.643367,
+      "se": 0.039624,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band fb_speed_near's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band fb_speed_near on the engine's matches",
+        "band": "fb_speed_near",
+        "measure": "{\"den\":[\"shape.fb.speed_near_n.home\",\"shape.fb.speed_near_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.speed_near_sum.home\",\"shape.fb.speed_near_sum.away\"]}"
+      },
+      "per_match": [
+        2.59692,
+        2.494736,
+        2.750473,
+        2.763131,
+        2.631488,
+        2.721556,
+        2.545263
+      ]
+    },
+    "trk.dfl.fb_sprints_back_per_min": {
+      "value": 0.104614,
+      "se": 0.012324,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band fb_sprints_back_per_min's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band fb_sprints_back_per_min on the engine's matches",
+        "band": "fb_sprints_back_per_min",
+        "measure": "{\"den\":[\"shape.fb.live_min.home\",\"shape.fb.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.sprints_back.home\",\"shape.fb.sprints_back.away\"]}"
+      },
+      "per_match": [
+        0.10228,
+        0.164529,
+        0.130308,
+        0.098314,
+        0.085796,
+        0.071131,
+        0.079938
+      ]
+    },
+    "trk.dfl.fb_sprints_fwd_per_min": {
+      "value": 0.101681,
+      "se": 0.013981,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band fb_sprints_fwd_per_min's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band fb_sprints_fwd_per_min on the engine's matches",
+        "band": "fb_sprints_fwd_per_min",
+        "measure": "{\"den\":[\"shape.fb.live_min.home\",\"shape.fb.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.sprints_fwd.home\",\"shape.fb.sprints_fwd.away\"]}"
+      },
+      "per_match": [
+        0.061368,
+        0.098717,
+        0.130308,
+        0.058989,
+        0.117404,
+        0.160044,
+        0.084934
+      ]
+    },
+    "trk.dfl.fb_sprints_lat_per_min": {
+      "value": 0.004373,
+      "se": 0.001407,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band fb_sprints_lat_per_min's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band fb_sprints_lat_per_min on the engine's matches",
+        "band": "fb_sprints_lat_per_min",
+        "measure": "{\"den\":[\"shape.fb.live_min.home\",\"shape.fb.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.sprints_lat.home\",\"shape.fb.sprints_lat.away\"]}"
+      },
+      "per_match": [
+        0.0,
+        0.010969,
+        0.005212,
+        0.004916,
+        0.004516,
+        0.0,
+        0.004996
+      ]
+    },
+    "trk.dfl.fb_width_far_in": {
+      "value": 16.309124,
+      "se": 1.050909,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band fb_width_far_in's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band fb_width_far_in on the engine's matches",
+        "band": "fb_width_far_in",
+        "measure": "{\"den\":[\"shape.fb.width_far_in_n.home\",\"shape.fb.width_far_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.width_far_in_sum.home\",\"shape.fb.width_far_in_sum.away\"]}"
+      },
+      "per_match": [
+        15.791425,
+        10.689247,
+        16.786345,
+        16.077365,
+        16.963222,
+        18.697399,
+        19.158865
+      ]
+    },
+    "trk.dfl.fb_width_far_out": {
+      "value": 10.823172,
+      "se": 0.677196,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band fb_width_far_out's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band fb_width_far_out on the engine's matches",
+        "band": "fb_width_far_out",
+        "measure": "{\"den\":[\"shape.fb.width_far_out_n.home\",\"shape.fb.width_far_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.width_far_out_sum.home\",\"shape.fb.width_far_out_sum.away\"]}"
+      },
+      "per_match": [
+        11.115928,
+        8.441975,
+        9.82925,
+        10.62248,
+        10.508346,
+        14.340469,
+        10.903759
+      ]
+    },
+    "trk.dfl.fb_width_near_in": {
+      "value": 25.384575,
+      "se": 0.698479,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band fb_width_near_in's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band fb_width_near_in on the engine's matches",
+        "band": "fb_width_near_in",
+        "measure": "{\"den\":[\"shape.fb.width_near_in_n.home\",\"shape.fb.width_near_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.width_near_in_sum.home\",\"shape.fb.width_near_in_sum.away\"]}"
+      },
+      "per_match": [
+        24.398385,
+        22.050346,
+        26.192551,
+        25.939136,
+        24.633826,
+        27.234451,
+        27.243332
+      ]
+    },
+    "trk.dfl.fb_width_near_out": {
+      "value": 22.190226,
+      "se": 0.390565,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band fb_width_near_out's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band fb_width_near_out on the engine's matches",
+        "band": "fb_width_near_out",
+        "measure": "{\"den\":[\"shape.fb.width_near_out_n.home\",\"shape.fb.width_near_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.fb.width_near_out_sum.home\",\"shape.fb.width_near_out_sum.away\"]}"
+      },
+      "per_match": [
+        21.949858,
+        20.499962,
+        21.967631,
+        23.316891,
+        21.658652,
+        23.550916,
+        22.387671
+      ]
+    },
+    "trk.dfl.high_speed_share": {
+      "value": 0.03886,
+      "se": 0.001531,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band high_speed_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band high_speed_share on the engine's matches",
+        "band": "high_speed_share",
+        "measure": "{\"den\":[\"zone_ticks.walk.home\",\"zone_ticks.walk.away\",\"zone_ticks.jog.home\",\"zone_ticks.jog.away\",\"zone_ticks.run.home\",\"zone_ticks.run.away\",\"zone_ticks.hi.home\",\"zone_ticks.hi.away\",\"zone_ticks.sprint.home\",\"zone_ticks.sprint.away\"],\"kind\":\"ratio\",\"num\":[\"zone_ticks.hi.home\",\"zone_ticks.hi.away\",\"zone_ticks.sprint.home\",\"zone_ticks.sprint.away\"]}"
+      },
+      "per_match": [
+        0.035285,
+        0.039234,
+        0.043249,
+        0.040929,
+        0.04211,
+        0.039497,
+        0.031715
+      ]
+    },
+    "trk.dfl.peak_speed_mean": {
+      "value": 8.607763,
+      "se": 0.073047,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band peak_speed_mean's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band peak_speed_mean on the engine's matches",
+        "band": "peak_speed_mean",
+        "measure": "{\"den\":[\"players_used.home\",\"players_used.away\"],\"kind\":\"ratio\",\"num\":[\"peak_mps.home\",\"peak_mps.away\"]}"
+      },
+      "per_match": [
+        8.345397,
+        8.549864,
+        8.656294,
+        8.433311,
+        8.851349,
+        8.849195,
+        8.568931
+      ]
+    },
+    "trk.dfl.slide_across_in": {
+      "value": 0.35634,
+      "se": 0.016327,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band slide_across_in's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band slide_across_in on the engine's matches",
+        "band": "slide_across_in",
+        "measure": "{\"den\":[\"shape.slide_y_in_sxx.home\",\"shape.slide_y_in_sxx.away\"],\"kind\":\"ratio\",\"num\":[\"shape.slide_y_in_sxy.home\",\"shape.slide_y_in_sxy.away\"]}"
+      },
+      "per_match": [
+        0.359833,
+        0.440228,
+        0.346358,
+        0.38016,
+        0.316056,
+        0.32546,
+        0.326281
+      ]
+    },
+    "trk.dfl.slide_across_out": {
+      "value": 0.392988,
+      "se": 0.01334,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band slide_across_out's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band slide_across_out on the engine's matches",
+        "band": "slide_across_out",
+        "measure": "{\"den\":[\"shape.slide_y_out_sxx.home\",\"shape.slide_y_out_sxx.away\"],\"kind\":\"ratio\",\"num\":[\"shape.slide_y_out_sxy.home\",\"shape.slide_y_out_sxy.away\"]}"
+      },
+      "per_match": [
+        0.408803,
+        0.452295,
+        0.392603,
+        0.415865,
+        0.361993,
+        0.358344,
+        0.361016
+      ]
+    },
+    "trk.dfl.slide_up_in": {
+      "value": 0.557818,
+      "se": 0.009365,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band slide_up_in's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band slide_up_in on the engine's matches",
+        "band": "slide_up_in",
+        "measure": "{\"den\":[\"shape.slide_x_in_sxx.home\",\"shape.slide_x_in_sxx.away\"],\"kind\":\"ratio\",\"num\":[\"shape.slide_x_in_sxy.home\",\"shape.slide_x_in_sxy.away\"]}"
+      },
+      "per_match": [
+        0.569912,
+        0.5752,
+        0.534559,
+        0.549077,
+        0.567324,
+        0.589702,
+        0.518951
+      ]
+    },
+    "trk.dfl.slide_up_out": {
+      "value": 0.562483,
+      "se": 0.011028,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band slide_up_out's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band slide_up_out on the engine's matches",
+        "band": "slide_up_out",
+        "measure": "{\"den\":[\"shape.slide_x_out_sxx.home\",\"shape.slide_x_out_sxx.away\"],\"kind\":\"ratio\",\"num\":[\"shape.slide_x_out_sxy.home\",\"shape.slide_x_out_sxy.away\"]}"
+      },
+      "per_match": [
+        0.577739,
+        0.58959,
+        0.53736,
+        0.548786,
+        0.574124,
+        0.594077,
+        0.515704
+      ]
+    },
+    "trk.dfl.speed_hi_share": {
+      "value": 0.031706,
+      "se": 0.001376,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band speed_hi_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band speed_hi_share on the engine's matches",
+        "band": "speed_hi_share",
+        "measure": "{\"den\":[\"zone_ticks.walk.home\",\"zone_ticks.walk.away\",\"zone_ticks.jog.home\",\"zone_ticks.jog.away\",\"zone_ticks.run.home\",\"zone_ticks.run.away\",\"zone_ticks.hi.home\",\"zone_ticks.hi.away\",\"zone_ticks.sprint.home\",\"zone_ticks.sprint.away\"],\"kind\":\"ratio\",\"num\":[\"zone_ticks.hi.home\",\"zone_ticks.hi.away\"]}"
+      },
+      "per_match": [
+        0.028357,
+        0.031098,
+        0.035902,
+        0.034197,
+        0.033985,
+        0.032833,
+        0.025571
+      ]
+    },
+    "trk.dfl.speed_jog_share": {
+      "value": 0.363956,
+      "se": 0.006997,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band speed_jog_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band speed_jog_share on the engine's matches",
+        "band": "speed_jog_share",
+        "measure": "{\"den\":[\"zone_ticks.walk.home\",\"zone_ticks.walk.away\",\"zone_ticks.jog.home\",\"zone_ticks.jog.away\",\"zone_ticks.run.home\",\"zone_ticks.run.away\",\"zone_ticks.hi.home\",\"zone_ticks.hi.away\",\"zone_ticks.sprint.home\",\"zone_ticks.sprint.away\"],\"kind\":\"ratio\",\"num\":[\"zone_ticks.jog.home\",\"zone_ticks.jog.away\"]}"
+      },
+      "per_match": [
+        0.370193,
+        0.335808,
+        0.379445,
+        0.383364,
+        0.366357,
+        0.371827,
+        0.340702
+      ]
+    },
+    "trk.dfl.speed_run_share": {
+      "value": 0.107714,
+      "se": 0.004649,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band speed_run_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band speed_run_share on the engine's matches",
+        "band": "speed_run_share",
+        "measure": "{\"den\":[\"zone_ticks.walk.home\",\"zone_ticks.walk.away\",\"zone_ticks.jog.home\",\"zone_ticks.jog.away\",\"zone_ticks.run.home\",\"zone_ticks.run.away\",\"zone_ticks.hi.home\",\"zone_ticks.hi.away\",\"zone_ticks.sprint.home\",\"zone_ticks.sprint.away\"],\"kind\":\"ratio\",\"num\":[\"zone_ticks.run.home\",\"zone_ticks.run.away\"]}"
+      },
+      "per_match": [
+        0.100079,
+        0.100309,
+        0.12384,
+        0.113296,
+        0.11247,
+        0.116421,
+        0.087585
+      ]
+    },
+    "trk.dfl.speed_sprint_share": {
+      "value": 0.007153,
+      "se": 0.000286,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band speed_sprint_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band speed_sprint_share on the engine's matches",
+        "band": "speed_sprint_share",
+        "measure": "{\"den\":[\"zone_ticks.walk.home\",\"zone_ticks.walk.away\",\"zone_ticks.jog.home\",\"zone_ticks.jog.away\",\"zone_ticks.run.home\",\"zone_ticks.run.away\",\"zone_ticks.hi.home\",\"zone_ticks.hi.away\",\"zone_ticks.sprint.home\",\"zone_ticks.sprint.away\"],\"kind\":\"ratio\",\"num\":[\"zone_ticks.sprint.home\",\"zone_ticks.sprint.away\"]}"
+      },
+      "per_match": [
+        0.006928,
+        0.008137,
+        0.007347,
+        0.006731,
+        0.008124,
+        0.006664,
+        0.006143
+      ]
+    },
+    "trk.dfl.speed_walk_share": {
+      "value": 0.48947,
+      "se": 0.012197,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band speed_walk_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band speed_walk_share on the engine's matches",
+        "band": "speed_walk_share",
+        "measure": "{\"den\":[\"zone_ticks.walk.home\",\"zone_ticks.walk.away\",\"zone_ticks.jog.home\",\"zone_ticks.jog.away\",\"zone_ticks.run.home\",\"zone_ticks.run.away\",\"zone_ticks.hi.home\",\"zone_ticks.hi.away\",\"zone_ticks.sprint.home\",\"zone_ticks.sprint.away\"],\"kind\":\"ratio\",\"num\":[\"zone_ticks.walk.home\",\"zone_ticks.walk.away\"]}"
+      },
+      "per_match": [
+        0.494443,
+        0.524649,
+        0.453467,
+        0.462412,
+        0.479063,
+        0.472254,
+        0.539999
+      ]
+    },
+    "trk.dfl.st_depth_in": {
+      "value": -18.45167,
+      "se": 0.759999,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band st_depth_in's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band st_depth_in on the engine's matches",
+        "band": "st_depth_in",
+        "measure": "{\"den\":[\"shape.st.depth_in_n.home\",\"shape.st.depth_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.depth_in_sum.home\",\"shape.st.depth_in_sum.away\"]}"
+      },
+      "per_match": [
+        -17.68605,
+        -15.797638,
+        -21.206232,
+        -18.090656,
+        -17.330044,
+        -17.890493,
+        -21.160579
+      ]
+    },
+    "trk.dfl.st_depth_out": {
+      "value": -5.693408,
+      "se": 0.574278,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band st_depth_out's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band st_depth_out on the engine's matches",
+        "band": "st_depth_out",
+        "measure": "{\"den\":[\"shape.st.depth_out_n.home\",\"shape.st.depth_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.depth_out_sum.home\",\"shape.st.depth_out_sum.away\"]}"
+      },
+      "per_match": [
+        -5.393324,
+        -7.432672,
+        -6.948218,
+        -7.303596,
+        -3.8384,
+        -4.21507,
+        -4.722573
+      ]
+    },
+    "trk.dfl.st_pace_hs_share": {
+      "value": 0.03905,
+      "se": 0.003303,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band st_pace_hs_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band st_pace_hs_share on the engine's matches",
+        "band": "st_pace_hs_share",
+        "measure": "{\"den\":[\"shape.st.live_ticks.home\",\"shape.st.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.pace_hs.home\",\"shape.st.pace_hs.away\"]}"
+      },
+      "per_match": [
+        0.0393,
+        0.025879,
+        0.049131,
+        0.041752,
+        0.045399,
+        0.043571,
+        0.028321
+      ]
+    },
+    "trk.dfl.st_pace_jog_share": {
+      "value": 0.355596,
+      "se": 0.009066,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band st_pace_jog_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band st_pace_jog_share on the engine's matches",
+        "band": "st_pace_jog_share",
+        "measure": "{\"den\":[\"shape.st.live_ticks.home\",\"shape.st.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.pace_jog.home\",\"shape.st.pace_jog.away\"]}"
+      },
+      "per_match": [
+        0.362101,
+        0.334776,
+        0.388864,
+        0.347175,
+        0.337653,
+        0.386224,
+        0.332383
+      ]
+    },
+    "trk.dfl.st_pace_run_share": {
+      "value": 0.109076,
+      "se": 0.007662,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band st_pace_run_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band st_pace_run_share on the engine's matches",
+        "band": "st_pace_run_share",
+        "measure": "{\"den\":[\"shape.st.live_ticks.home\",\"shape.st.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.pace_run.home\",\"shape.st.pace_run.away\"]}"
+      },
+      "per_match": [
+        0.111311,
+        0.077065,
+        0.13786,
+        0.104637,
+        0.12068,
+        0.120719,
+        0.091259
+      ]
+    },
+    "trk.dfl.st_pace_sprint_share": {
+      "value": 0.008671,
+      "se": 0.000943,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band st_pace_sprint_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band st_pace_sprint_share on the engine's matches",
+        "band": "st_pace_sprint_share",
+        "measure": "{\"den\":[\"shape.st.live_ticks.home\",\"shape.st.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.pace_sprint.home\",\"shape.st.pace_sprint.away\"]}"
+      },
+      "per_match": [
+        0.006967,
+        0.005397,
+        0.010831,
+        0.010895,
+        0.011706,
+        0.008436,
+        0.006466
+      ]
+    },
+    "trk.dfl.st_pace_stand_share": {
+      "value": 0.01159,
+      "se": 0.00062,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band st_pace_stand_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band st_pace_stand_share on the engine's matches",
+        "band": "st_pace_stand_share",
+        "measure": "{\"den\":[\"shape.st.live_ticks.home\",\"shape.st.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.pace_stand.home\",\"shape.st.pace_stand.away\"]}"
+      },
+      "per_match": [
+        0.011588,
+        0.014493,
+        0.009485,
+        0.010713,
+        0.010937,
+        0.011007,
+        0.012905
+      ]
+    },
+    "trk.dfl.st_pace_walk_share": {
+      "value": 0.476017,
+      "se": 0.018669,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band st_pace_walk_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band st_pace_walk_share on the engine's matches",
+        "band": "st_pace_walk_share",
+        "measure": "{\"den\":[\"shape.st.live_ticks.home\",\"shape.st.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.pace_walk.home\",\"shape.st.pace_walk.away\"]}"
+      },
+      "per_match": [
+        0.468733,
+        0.54239,
+        0.403829,
+        0.484829,
+        0.473625,
+        0.430043,
+        0.528666
+      ]
+    },
+    "trk.dfl.st_speed_far": {
+      "value": 2.419531,
+      "se": 0.060073,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band st_speed_far's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band st_speed_far on the engine's matches",
+        "band": "st_speed_far",
+        "measure": "{\"den\":[\"shape.st.speed_far_n.home\",\"shape.st.speed_far_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.speed_far_sum.home\",\"shape.st.speed_far_sum.away\"]}"
+      },
+      "per_match": [
+        2.434577,
+        2.224428,
+        2.707174,
+        2.411577,
+        2.357693,
+        2.514514,
+        2.286754
+      ]
+    },
+    "trk.dfl.st_speed_near": {
+      "value": 2.520336,
+      "se": 0.078037,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band st_speed_near's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band st_speed_near on the engine's matches",
+        "band": "st_speed_near",
+        "measure": "{\"den\":[\"shape.st.speed_near_n.home\",\"shape.st.speed_near_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.speed_near_sum.home\",\"shape.st.speed_near_sum.away\"]}"
+      },
+      "per_match": [
+        2.509091,
+        2.18051,
+        2.769642,
+        2.493895,
+        2.672328,
+        2.672651,
+        2.344234
+      ]
+    },
+    "trk.dfl.st_sprints_back_per_min": {
+      "value": 0.034269,
+      "se": 0.00714,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band st_sprints_back_per_min's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band st_sprints_back_per_min on the engine's matches",
+        "band": "st_sprints_back_per_min",
+        "measure": "{\"den\":[\"shape.st.live_min.home\",\"shape.st.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.sprints_back.home\",\"shape.st.sprints_back.away\"]}"
+      },
+      "per_match": [
+        0.036748,
+        0.0,
+        0.020397,
+        0.041027,
+        0.05603,
+        0.049978,
+        0.035704
+      ]
+    },
+    "trk.dfl.st_sprints_fwd_per_min": {
+      "value": 0.146133,
+      "se": 0.018144,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band st_sprints_fwd_per_min's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band st_sprints_fwd_per_min on the engine's matches",
+        "band": "st_sprints_fwd_per_min",
+        "measure": "{\"den\":[\"shape.st.live_min.home\",\"shape.st.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.sprints_fwd.home\",\"shape.st.sprints_fwd.away\"]}"
+      },
+      "per_match": [
+        0.110243,
+        0.098717,
+        0.214174,
+        0.177783,
+        0.1905,
+        0.136303,
+        0.09521
+      ]
+    },
+    "trk.dfl.st_sprints_lat_per_min": {
+      "value": 0.016167,
+      "se": 0.002958,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band st_sprints_lat_per_min's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band st_sprints_lat_per_min on the engine's matches",
+        "band": "st_sprints_lat_per_min",
+        "measure": "{\"den\":[\"shape.st.live_min.home\",\"shape.st.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.sprints_lat.home\",\"shape.st.sprints_lat.away\"]}"
+      },
+      "per_match": [
+        0.014699,
+        0.010969,
+        0.030596,
+        0.020513,
+        0.016809,
+        0.01363,
+        0.005951
+      ]
+    },
+    "trk.dfl.st_width_far_in": {
+      "value": 9.334663,
+      "se": 0.218023,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band st_width_far_in's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band st_width_far_in on the engine's matches",
+        "band": "st_width_far_in",
+        "measure": "{\"den\":[\"shape.st.width_far_in_n.home\",\"shape.st.width_far_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.width_far_in_sum.home\",\"shape.st.width_far_in_sum.away\"]}"
+      },
+      "per_match": [
+        10.282634,
+        9.335619,
+        8.985033,
+        9.837007,
+        8.707971,
+        9.427075,
+        8.767299
+      ]
+    },
+    "trk.dfl.st_width_far_out": {
+      "value": 9.587788,
+      "se": 0.186332,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band st_width_far_out's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band st_width_far_out on the engine's matches",
+        "band": "st_width_far_out",
+        "measure": "{\"den\":[\"shape.st.width_far_out_n.home\",\"shape.st.width_far_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.width_far_out_sum.home\",\"shape.st.width_far_out_sum.away\"]}"
+      },
+      "per_match": [
+        9.853096,
+        9.309701,
+        9.662698,
+        9.513698,
+        8.815482,
+        10.424558,
+        9.53528
+      ]
+    },
+    "trk.dfl.st_width_near_in": {
+      "value": 12.137028,
+      "se": 0.403609,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band st_width_near_in's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band st_width_near_in on the engine's matches",
+        "band": "st_width_near_in",
+        "measure": "{\"den\":[\"shape.st.width_near_in_n.home\",\"shape.st.width_near_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.width_near_in_sum.home\",\"shape.st.width_near_in_sum.away\"]}"
+      },
+      "per_match": [
+        13.352809,
+        10.808662,
+        12.933595,
+        13.199066,
+        11.610384,
+        12.166046,
+        10.888634
+      ]
+    },
+    "trk.dfl.st_width_near_out": {
+      "value": 12.785979,
+      "se": 0.415579,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band st_width_near_out's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band st_width_near_out on the engine's matches",
+        "band": "st_width_near_out",
+        "measure": "{\"den\":[\"shape.st.width_near_out_n.home\",\"shape.st.width_near_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.st.width_near_out_sum.home\",\"shape.st.width_near_out_sum.away\"]}"
+      },
+      "per_match": [
+        14.166607,
+        10.794107,
+        13.35403,
+        13.667486,
+        12.345066,
+        12.528767,
+        12.64579
+      ]
+    },
+    "trk.dfl.stoppages_corner_per_match": {
+      "value": 8.142857,
+      "se": 1.59506,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band stoppages_corner_per_match's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band stoppages_corner_per_match on the engine's matches",
+        "band": "stoppages_corner_per_match",
+        "measure": "{\"kind\":\"mean\",\"of\":[\"shape.stops_corner.home\",\"shape.stops_corner.away\"],\"per\":\"match\"}"
+      },
+      "per_match": [
+        10.0,
+        7.0,
+        6.0,
+        2.0,
+        11.0,
+        15.0,
+        6.0
+      ]
+    },
+    "trk.dfl.stoppages_free_kick_per_match": {
+      "value": 24.571429,
+      "se": 1.770891,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band stoppages_free_kick_per_match's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band stoppages_free_kick_per_match on the engine's matches",
+        "band": "stoppages_free_kick_per_match",
+        "measure": "{\"kind\":\"mean\",\"of\":[\"shape.stops_free_kick.home\",\"shape.stops_free_kick.away\"],\"per\":\"match\"}"
+      },
+      "per_match": [
+        20.0,
+        27.0,
+        32.0,
+        27.0,
+        20.0,
+        20.0,
+        26.0
+      ]
+    },
+    "trk.dfl.stoppages_goal_kick_per_match": {
+      "value": 17.0,
+      "se": 0.617213,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band stoppages_goal_kick_per_match's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band stoppages_goal_kick_per_match on the engine's matches",
+        "band": "stoppages_goal_kick_per_match",
+        "measure": "{\"kind\":\"mean\",\"of\":[\"shape.stops_goal_kick.home\",\"shape.stops_goal_kick.away\"],\"per\":\"match\"}"
+      },
+      "per_match": [
+        14.0,
+        16.0,
+        17.0,
+        19.0,
+        18.0,
+        18.0,
+        17.0
+      ]
+    },
+    "trk.dfl.stoppages_kick_off_per_match": {
+      "value": 3.142857,
+      "se": 0.670059,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band stoppages_kick_off_per_match's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band stoppages_kick_off_per_match on the engine's matches",
+        "band": "stoppages_kick_off_per_match",
+        "measure": "{\"kind\":\"mean\",\"of\":[\"shape.stops_kick_off.home\",\"shape.stops_kick_off.away\"],\"per\":\"match\"}"
+      },
+      "per_match": [
+        4.0,
+        5.0,
+        5.0,
+        4.0,
+        1.0,
+        1.0,
+        2.0
+      ]
+    },
+    "trk.dfl.stoppages_penalty_per_match": {
+      "value": 0.428571,
+      "se": 0.202031,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band stoppages_penalty_per_match's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band stoppages_penalty_per_match on the engine's matches",
+        "band": "stoppages_penalty_per_match",
+        "measure": "{\"kind\":\"mean\",\"of\":[\"shape.stops_penalty.home\",\"shape.stops_penalty.away\"],\"per\":\"match\"}"
+      },
+      "per_match": [
+        1.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    "trk.dfl.stoppages_throw_in_per_match": {
+      "value": 44.0,
+      "se": 2.645751,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band stoppages_throw_in_per_match's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band stoppages_throw_in_per_match on the engine's matches",
+        "band": "stoppages_throw_in_per_match",
+        "measure": "{\"kind\":\"mean\",\"of\":[\"shape.stops_throw_in.home\",\"shape.stops_throw_in.away\"],\"per\":\"match\"}"
+      },
+      "per_match": [
+        52.0,
+        46.0,
+        36.0,
+        54.0,
+        41.0,
+        42.0,
+        37.0
+      ]
+    },
+    "trk.dfl.w_depth_in": {
+      "value": -12.553128,
+      "se": 0.567424,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band w_depth_in's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band w_depth_in on the engine's matches",
+        "band": "w_depth_in",
+        "measure": "{\"den\":[\"shape.w.depth_in_n.home\",\"shape.w.depth_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.depth_in_sum.home\",\"shape.w.depth_in_sum.away\"]}"
+      },
+      "per_match": [
+        -14.454075,
+        -12.371655,
+        -14.012377,
+        -11.529549,
+        -12.108473,
+        -10.110671,
+        -13.285093
+      ]
+    },
+    "trk.dfl.w_depth_out": {
+      "value": 4.169827,
+      "se": 1.426694,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band w_depth_out's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band w_depth_out on the engine's matches",
+        "band": "w_depth_out",
+        "measure": "{\"den\":[\"shape.w.depth_out_n.home\",\"shape.w.depth_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.depth_out_sum.home\",\"shape.w.depth_out_sum.away\"]}"
+      },
+      "per_match": [
+        0.121297,
+        -0.79665,
+        4.025894,
+        2.435405,
+        6.742188,
+        8.619431,
+        8.041221
+      ]
+    },
+    "trk.dfl.w_pace_hs_share": {
+      "value": 0.044674,
+      "se": 0.002118,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band w_pace_hs_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band w_pace_hs_share on the engine's matches",
+        "band": "w_pace_hs_share",
+        "measure": "{\"den\":[\"shape.w.live_ticks.home\",\"shape.w.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.pace_hs.home\",\"shape.w.pace_hs.away\"]}"
+      },
+      "per_match": [
+        0.040225,
+        0.04183,
+        0.054177,
+        0.044502,
+        0.048975,
+        0.045477,
+        0.037533
+      ]
+    },
+    "trk.dfl.w_pace_jog_share": {
+      "value": 0.369262,
+      "se": 0.011369,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band w_pace_jog_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band w_pace_jog_share on the engine's matches",
+        "band": "w_pace_jog_share",
+        "measure": "{\"den\":[\"shape.w.live_ticks.home\",\"shape.w.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.pace_jog.home\",\"shape.w.pace_jog.away\"]}"
+      },
+      "per_match": [
+        0.332049,
+        0.335511,
+        0.392338,
+        0.404944,
+        0.389787,
+        0.383035,
+        0.347173
+      ]
+    },
+    "trk.dfl.w_pace_run_share": {
+      "value": 0.125792,
+      "se": 0.00678,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band w_pace_run_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band w_pace_run_share on the engine's matches",
+        "band": "w_pace_run_share",
+        "measure": "{\"den\":[\"shape.w.live_ticks.home\",\"shape.w.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.pace_run.home\",\"shape.w.pace_run.away\"]}"
+      },
+      "per_match": [
+        0.106635,
+        0.111267,
+        0.143627,
+        0.129338,
+        0.146914,
+        0.137765,
+        0.105001
+      ]
+    },
+    "trk.dfl.w_pace_sprint_share": {
+      "value": 0.011914,
+      "se": 0.000876,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band w_pace_sprint_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band w_pace_sprint_share on the engine's matches",
+        "band": "w_pace_sprint_share",
+        "measure": "{\"den\":[\"shape.w.live_ticks.home\",\"shape.w.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.pace_sprint.home\",\"shape.w.pace_sprint.away\"]}"
+      },
+      "per_match": [
+        0.015135,
+        0.015226,
+        0.011398,
+        0.010997,
+        0.009352,
+        0.010718,
+        0.010571
+      ]
+    },
+    "trk.dfl.w_pace_stand_share": {
+      "value": 0.010968,
+      "se": 0.002186,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band w_pace_stand_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band w_pace_stand_share on the engine's matches",
+        "band": "w_pace_stand_share",
+        "measure": "{\"den\":[\"shape.w.live_ticks.home\",\"shape.w.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.pace_stand.home\",\"shape.w.pace_stand.away\"]}"
+      },
+      "per_match": [
+        0.016513,
+        0.021006,
+        0.005883,
+        0.006341,
+        0.00641,
+        0.010723,
+        0.0099
+      ]
+    },
+    "trk.dfl.w_pace_walk_share": {
+      "value": 0.437389,
+      "se": 0.017011,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band w_pace_walk_share's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band w_pace_walk_share on the engine's matches",
+        "band": "w_pace_walk_share",
+        "measure": "{\"den\":[\"shape.w.live_ticks.home\",\"shape.w.live_ticks.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.pace_walk.home\",\"shape.w.pace_walk.away\"]}"
+      },
+      "per_match": [
+        0.489442,
+        0.47516,
+        0.392578,
+        0.403877,
+        0.398563,
+        0.412282,
+        0.489823
+      ]
+    },
+    "trk.dfl.w_speed_far": {
+      "value": 2.365453,
+      "se": 0.062039,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band w_speed_far's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band w_speed_far on the engine's matches",
+        "band": "w_speed_far",
+        "measure": "{\"den\":[\"shape.w.speed_far_n.home\",\"shape.w.speed_far_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.speed_far_sum.home\",\"shape.w.speed_far_sum.away\"]}"
+      },
+      "per_match": [
+        2.118774,
+        2.369619,
+        2.61768,
+        2.417511,
+        2.417134,
+        2.421305,
+        2.196151
+      ]
+    },
+    "trk.dfl.w_speed_near": {
+      "value": 2.877383,
+      "se": 0.057237,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band w_speed_near's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band w_speed_near on the engine's matches",
+        "band": "w_speed_near",
+        "measure": "{\"den\":[\"shape.w.speed_near_n.home\",\"shape.w.speed_near_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.speed_near_sum.home\",\"shape.w.speed_near_sum.away\"]}"
+      },
+      "per_match": [
+        2.860738,
+        2.62133,
+        3.007645,
+        2.993296,
+        3.029154,
+        2.887124,
+        2.742394
+      ]
+    },
+    "trk.dfl.w_sprints_back_per_min": {
+      "value": 0.084931,
+      "se": 0.008395,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band w_sprints_back_per_min's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band w_sprints_back_per_min on the engine's matches",
+        "band": "w_sprints_back_per_min",
+        "measure": "{\"den\":[\"shape.w.live_min.home\",\"shape.w.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.sprints_back.home\",\"shape.w.sprints_back.away\"]}"
+      },
+      "per_match": [
+        0.068738,
+        0.100646,
+        0.06776,
+        0.082254,
+        0.069421,
+        0.128011,
+        0.077686
+      ]
+    },
+    "trk.dfl.w_sprints_fwd_per_min": {
+      "value": 0.178954,
+      "se": 0.020508,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band w_sprints_fwd_per_min's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band w_sprints_fwd_per_min on the engine's matches",
+        "band": "w_sprints_fwd_per_min",
+        "measure": "{\"den\":[\"shape.w.live_min.home\",\"shape.w.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.sprints_fwd.home\",\"shape.w.sprints_fwd.away\"]}"
+      },
+      "per_match": [
+        0.260221,
+        0.244426,
+        0.177219,
+        0.142075,
+        0.148758,
+        0.112951,
+        0.167026
+      ]
+    },
+    "trk.dfl.w_sprints_lat_per_min": {
+      "value": 0.007455,
+      "se": 0.002871,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band w_sprints_lat_per_min's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band w_sprints_lat_per_min on the engine's matches",
+        "band": "w_sprints_lat_per_min",
+        "measure": "{\"den\":[\"shape.w.live_min.home\",\"shape.w.live_min.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.sprints_lat.home\",\"shape.w.sprints_lat.away\"]}"
+      },
+      "per_match": [
+        0.00982,
+        0.007189,
+        0.005212,
+        0.022433,
+        0.0,
+        0.00753,
+        0.0
+      ]
+    },
+    "trk.dfl.w_width_far_in": {
+      "value": 12.395931,
+      "se": 0.982523,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band w_width_far_in's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band w_width_far_in on the engine's matches",
+        "band": "w_width_far_in",
+        "measure": "{\"den\":[\"shape.w.width_far_in_n.home\",\"shape.w.width_far_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.width_far_in_sum.home\",\"shape.w.width_far_in_sum.away\"]}"
+      },
+      "per_match": [
+        13.899443,
+        9.629155,
+        10.651194,
+        10.666123,
+        11.382292,
+        17.145921,
+        13.39739
+      ]
+    },
+    "trk.dfl.w_width_far_out": {
+      "value": 10.563729,
+      "se": 0.499033,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band w_width_far_out's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band w_width_far_out on the engine's matches",
+        "band": "w_width_far_out",
+        "measure": "{\"den\":[\"shape.w.width_far_out_n.home\",\"shape.w.width_far_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.width_far_out_sum.home\",\"shape.w.width_far_out_sum.away\"]}"
+      },
+      "per_match": [
+        10.67176,
+        9.242016,
+        9.636276,
+        9.174491,
+        10.710812,
+        12.543217,
+        11.967531
+      ]
+    },
+    "trk.dfl.w_width_near_in": {
+      "value": 21.901784,
+      "se": 0.725029,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band w_width_near_in's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band w_width_near_in on the engine's matches",
+        "band": "w_width_near_in",
+        "measure": "{\"den\":[\"shape.w.width_near_in_n.home\",\"shape.w.width_near_in_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.width_near_in_sum.home\",\"shape.w.width_near_in_sum.away\"]}"
+      },
+      "per_match": [
+        22.483206,
+        19.833529,
+        19.746978,
+        22.861757,
+        20.734137,
+        25.076552,
+        22.576326
+      ]
+    },
+    "trk.dfl.w_width_near_out": {
+      "value": 21.225252,
+      "se": 0.511443,
+      "n": 7,
+      "seasons": [
+        "2223"
+      ],
+      "layer": "pooled",
+      "leagues": [
+        "D1",
+        "D2"
+      ],
+      "provider": "DFL",
+      "source_label": "DFL tracked matches, measured at 25 frames a second by the shared shape report",
+      "event_definition": "the band w_width_near_out's measure in each tracked match",
+      "denominator": "tracked matches",
+      "unit_of_observation": "match",
+      "label": "calibration",
+      "engine_count": {
+        "text": "the band w_width_near_out on the engine's matches",
+        "band": "w_width_near_out",
+        "measure": "{\"den\":[\"shape.w.width_near_out_n.home\",\"shape.w.width_near_out_n.away\"],\"kind\":\"ratio\",\"num\":[\"shape.w.width_near_out_sum.home\",\"shape.w.width_near_out_sum.away\"]}"
+      },
+      "per_match": [
+        21.064602,
+        19.087864,
+        20.825487,
+        22.545798,
+        20.313915,
+        23.090267,
+        21.64883
+      ]
     },
     "wy.England.duel_contests_per_match": {
       "value": 253.589474,
