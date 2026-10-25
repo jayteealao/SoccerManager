@@ -1198,6 +1198,11 @@
       "group": "rare_real_error",
       "most": 4,
       "reason": "rare events whose real figure is too uncertain for any match count to hold the 97 percent floor; they gate again once a real source lowers that error"
+    },
+    {
+      "group": "scan",
+      "most": 1,
+      "reason": "the scan check stays in the registry as a report-only band until the engine counts scans"
     }
   ],
   "bands": [
@@ -1745,7 +1750,7 @@
       "estimator": "pooled ratio of the summed numerator over the summed denominator",
       "resampling": {
         "engine": "league",
-        "real": "summary"
+        "real": "target"
       },
       "min_exposure": {
         "unit": "matches",
@@ -1760,23 +1765,20 @@
       },
       "real": {
         "source": {
-          "dataset": "StatsBomb open data, 200 matches (Euro 2020 and 2024, World Cup 2022, Bundesliga 2023/24)",
-          "file": "sb_action_summary.json",
-          "key": "shot.on_target",
-          "reduce": "share"
+          "target": "sb.men.shots_on_target_share"
         },
-        "sample": 200,
-        "date": "2026-09-22"
+        "sample": 2516,
+        "date": "2026-10-25"
       },
       "evidence": "calibration",
       "confidence": {
         "measurement": {
-          "count": 200
+          "count": 2516
         },
         "generalisation": {
-          "competitions": 3,
-          "seasons": 4,
-          "clubs": 66
+          "competitions": 16,
+          "seasons": 63,
+          "clubs": 238
         }
       },
       "condition": "dry",
@@ -1819,7 +1821,7 @@
       "estimator": "pooled ratio of the summed numerator over the summed denominator",
       "resampling": {
         "engine": "league",
-        "real": "summary"
+        "real": "target"
       },
       "min_exposure": {
         "unit": "matches",
@@ -1834,23 +1836,20 @@
       },
       "real": {
         "source": {
-          "dataset": "StatsBomb open data, 200 matches (Euro 2020 and 2024, World Cup 2022, Bundesliga 2023/24)",
-          "file": "sb_action_summary.json",
-          "key": "shot.goals",
-          "den": "shot.xg_per_match"
+          "target": "sb.men.goals_per_xg"
         },
-        "sample": 200,
-        "date": "2026-09-22"
+        "sample": 2516,
+        "date": "2026-10-25"
       },
       "evidence": "calibration",
       "confidence": {
         "measurement": {
-          "count": 200
+          "count": 2516
         },
         "generalisation": {
-          "competitions": 3,
-          "seasons": 4,
-          "clubs": 66
+          "competitions": 16,
+          "seasons": 63,
+          "clubs": 238
         }
       },
       "condition": "dry",
@@ -2938,7 +2937,7 @@
       "estimator": "pooled ratio of the summed numerator over the summed denominator",
       "resampling": {
         "engine": "league",
-        "real": "match"
+        "real": "target"
       },
       "min_exposure": {
         "unit": "matches",
@@ -2953,32 +2952,20 @@
       },
       "real": {
         "source": {
-          "dataset": "StatsBomb open data, 200 matches (Euro 2020 and 2024, World Cup 2022, Bundesliga 2023/24); metres from the shot to the centre of the goal, the file's coordinates in metres on a 105 by 68 pitch",
-          "file": "sb_events.csv.gz",
-          "key": "x:y",
-          "reduce": "goal_distance",
-          "goal": [
-            105.0,
-            34.0
-          ],
-          "where": {
-            "type": [
-              "Shot"
-            ]
-          }
+          "target": "sb.men.shot_distance_mean"
         },
-        "sample": 5039,
-        "date": "2026-09-22"
+        "sample": 2516,
+        "date": "2026-10-25"
       },
       "evidence": "calibration",
       "confidence": {
         "measurement": {
-          "count": 5039
+          "count": 2516
         },
         "generalisation": {
-          "competitions": 3,
-          "seasons": 4,
-          "clubs": 66
+          "competitions": 16,
+          "seasons": 63,
+          "clubs": 238
         }
       },
       "condition": "dry",
@@ -3021,7 +3008,7 @@
       "estimator": "pooled ratio of the summed numerator over the summed denominator",
       "resampling": {
         "engine": "league",
-        "real": "match"
+        "real": "target"
       },
       "min_exposure": {
         "unit": "matches",
@@ -3036,39 +3023,20 @@
       },
       "real": {
         "source": {
-          "dataset": "StatsBomb open data, 200 matches (Euro 2020 and 2024, World Cup 2022, Bundesliga 2023/24); the duration of the possession team's passes and carries by the third where each starts (x in metres toward the opponent's goal)",
-          "file": "sb2_events.csv.gz",
-          "key": "x",
-          "reduce": "bin_share",
-          "bins": [
-            0.0,
-            35.0
-          ],
-          "weight": "dur",
-          "where": {
-            "type": [
-              "Pass",
-              "Carry"
-            ]
-          },
-          "same": [
-            "team",
-            "poss_team"
-          ],
-          "skip_blank": true
+          "target": "sb.men.possession_own_third_share"
         },
-        "sample": 200,
-        "date": "2026-09-22"
+        "sample": 2516,
+        "date": "2026-10-25"
       },
       "evidence": "calibration",
       "confidence": {
         "measurement": {
-          "count": 200
+          "count": 2516
         },
         "generalisation": {
-          "competitions": 3,
-          "seasons": 4,
-          "clubs": 66
+          "competitions": 16,
+          "seasons": 63,
+          "clubs": 238
         }
       },
       "condition": "dry",
@@ -3111,7 +3079,7 @@
       "estimator": "pooled ratio of the summed numerator over the summed denominator",
       "resampling": {
         "engine": "league",
-        "real": "match"
+        "real": "target"
       },
       "min_exposure": {
         "unit": "matches",
@@ -3126,39 +3094,20 @@
       },
       "real": {
         "source": {
-          "dataset": "StatsBomb open data, 200 matches (Euro 2020 and 2024, World Cup 2022, Bundesliga 2023/24); the duration of the possession team's passes and carries by the third where each starts (x in metres toward the opponent's goal)",
-          "file": "sb2_events.csv.gz",
-          "key": "x",
-          "reduce": "bin_share",
-          "bins": [
-            35.0,
-            70.0
-          ],
-          "weight": "dur",
-          "where": {
-            "type": [
-              "Pass",
-              "Carry"
-            ]
-          },
-          "same": [
-            "team",
-            "poss_team"
-          ],
-          "skip_blank": true
+          "target": "sb.men.possession_middle_third_share"
         },
-        "sample": 200,
-        "date": "2026-09-22"
+        "sample": 2516,
+        "date": "2026-10-25"
       },
       "evidence": "calibration",
       "confidence": {
         "measurement": {
-          "count": 200
+          "count": 2516
         },
         "generalisation": {
-          "competitions": 3,
-          "seasons": 4,
-          "clubs": 66
+          "competitions": 16,
+          "seasons": 63,
+          "clubs": 238
         }
       },
       "condition": "dry",
@@ -3201,7 +3150,7 @@
       "estimator": "pooled ratio of the summed numerator over the summed denominator",
       "resampling": {
         "engine": "league",
-        "real": "match"
+        "real": "target"
       },
       "min_exposure": {
         "unit": "matches",
@@ -3216,39 +3165,20 @@
       },
       "real": {
         "source": {
-          "dataset": "StatsBomb open data, 200 matches (Euro 2020 and 2024, World Cup 2022, Bundesliga 2023/24); the duration of the possession team's passes and carries by the third where each starts (x in metres toward the opponent's goal)",
-          "file": "sb2_events.csv.gz",
-          "key": "x",
-          "reduce": "bin_share",
-          "bins": [
-            70.0,
-            106.0
-          ],
-          "weight": "dur",
-          "where": {
-            "type": [
-              "Pass",
-              "Carry"
-            ]
-          },
-          "same": [
-            "team",
-            "poss_team"
-          ],
-          "skip_blank": true
+          "target": "sb.men.possession_final_third_share"
         },
-        "sample": 200,
-        "date": "2026-09-22"
+        "sample": 2516,
+        "date": "2026-10-25"
       },
       "evidence": "calibration",
       "confidence": {
         "measurement": {
-          "count": 200
+          "count": 2516
         },
         "generalisation": {
-          "competitions": 3,
-          "seasons": 4,
-          "clubs": 66
+          "competitions": 16,
+          "seasons": 63,
+          "clubs": 238
         }
       },
       "condition": "dry",
@@ -3292,7 +3222,7 @@
       "estimator": "pooled ratio of the summed numerator over the summed denominator",
       "resampling": {
         "engine": "league",
-        "real": "summary"
+        "real": "target"
       },
       "min_exposure": {
         "unit": "matches",
@@ -3307,23 +3237,20 @@
       },
       "real": {
         "source": {
-          "dataset": "StatsBomb open data, 200 matches (Euro 2020 and 2024, World Cup 2022, Bundesliga 2023/24); the share of goals by the play pattern of their possession",
-          "file": "gap_sb.json",
-          "key": "goal_origin.Regular Play+goal_origin.From Counter+goal_origin.Other",
-          "reduce": "share"
+          "target": "sb.men.goals_open_play_share"
         },
-        "sample": 613,
-        "date": "2026-09-22"
+        "sample": 2516,
+        "date": "2026-10-25"
       },
       "evidence": "calibration",
       "confidence": {
         "measurement": {
-          "count": 613
+          "count": 2516
         },
         "generalisation": {
-          "competitions": 3,
-          "seasons": 4,
-          "clubs": 66
+          "competitions": 16,
+          "seasons": 63,
+          "clubs": 238
         }
       },
       "condition": "dry",
@@ -3367,7 +3294,7 @@
       "estimator": "pooled ratio of the summed numerator over the summed denominator",
       "resampling": {
         "engine": "league",
-        "real": "summary"
+        "real": "target"
       },
       "min_exposure": {
         "unit": "matches",
@@ -3382,23 +3309,20 @@
       },
       "real": {
         "source": {
-          "dataset": "StatsBomb open data, 200 matches (Euro 2020 and 2024, World Cup 2022, Bundesliga 2023/24); the share of goals by the play pattern of their possession",
-          "file": "gap_sb.json",
-          "key": "goal_origin.From Corner",
-          "reduce": "share"
+          "target": "sb.men.goals_corner_share"
         },
-        "sample": 613,
-        "date": "2026-09-22"
+        "sample": 2516,
+        "date": "2026-10-25"
       },
       "evidence": "calibration",
       "confidence": {
         "measurement": {
-          "count": 613
+          "count": 2516
         },
         "generalisation": {
-          "competitions": 3,
-          "seasons": 4,
-          "clubs": 66
+          "competitions": 16,
+          "seasons": 63,
+          "clubs": 238
         }
       },
       "condition": "dry",
@@ -3442,7 +3366,7 @@
       "estimator": "pooled ratio of the summed numerator over the summed denominator",
       "resampling": {
         "engine": "league",
-        "real": "summary"
+        "real": "target"
       },
       "min_exposure": {
         "unit": "matches",
@@ -3457,23 +3381,20 @@
       },
       "real": {
         "source": {
-          "dataset": "StatsBomb open data, 200 matches (Euro 2020 and 2024, World Cup 2022, Bundesliga 2023/24); the share of goals by the play pattern of their possession",
-          "file": "gap_sb.json",
-          "key": "goal_origin.From Free Kick+goal_origin.Direct free kick",
-          "reduce": "share"
+          "target": "sb.men.goals_free_kick_share"
         },
-        "sample": 613,
-        "date": "2026-09-22"
+        "sample": 2516,
+        "date": "2026-10-25"
       },
       "evidence": "calibration",
       "confidence": {
         "measurement": {
-          "count": 613
+          "count": 2516
         },
         "generalisation": {
-          "competitions": 3,
-          "seasons": 4,
-          "clubs": 66
+          "competitions": 16,
+          "seasons": 63,
+          "clubs": 238
         }
       },
       "condition": "dry",
@@ -3517,7 +3438,7 @@
       "estimator": "pooled ratio of the summed numerator over the summed denominator",
       "resampling": {
         "engine": "league",
-        "real": "summary"
+        "real": "target"
       },
       "min_exposure": {
         "unit": "matches",
@@ -3532,23 +3453,20 @@
       },
       "real": {
         "source": {
-          "dataset": "StatsBomb open data, 200 matches (Euro 2020 and 2024, World Cup 2022, Bundesliga 2023/24); the share of goals by the play pattern of their possession",
-          "file": "gap_sb.json",
-          "key": "goal_origin.Penalty",
-          "reduce": "share"
+          "target": "sb.men.goals_penalty_share"
         },
-        "sample": 613,
-        "date": "2026-09-22"
+        "sample": 2516,
+        "date": "2026-10-25"
       },
       "evidence": "calibration",
       "confidence": {
         "measurement": {
-          "count": 613
+          "count": 2516
         },
         "generalisation": {
-          "competitions": 3,
-          "seasons": 4,
-          "clubs": 66
+          "competitions": 16,
+          "seasons": 63,
+          "clubs": 238
         }
       },
       "condition": "dry",
@@ -3592,7 +3510,7 @@
       "estimator": "pooled ratio of the summed numerator over the summed denominator",
       "resampling": {
         "engine": "league",
-        "real": "summary"
+        "real": "target"
       },
       "min_exposure": {
         "unit": "matches",
@@ -3607,23 +3525,20 @@
       },
       "real": {
         "source": {
-          "dataset": "StatsBomb open data, 200 matches (Euro 2020 and 2024, World Cup 2022, Bundesliga 2023/24); the share of goals by the play pattern of their possession",
-          "file": "gap_sb.json",
-          "key": "goal_origin.From Throw In",
-          "reduce": "share"
+          "target": "sb.men.goals_throw_in_share"
         },
-        "sample": 613,
-        "date": "2026-09-22"
+        "sample": 2516,
+        "date": "2026-10-25"
       },
       "evidence": "calibration",
       "confidence": {
         "measurement": {
-          "count": 613
+          "count": 2516
         },
         "generalisation": {
-          "competitions": 3,
-          "seasons": 4,
-          "clubs": 66
+          "competitions": 16,
+          "seasons": 63,
+          "clubs": 238
         }
       },
       "condition": "dry",
@@ -5071,7 +4986,7 @@
       "estimator": "Wasserstein-1 distance between the engine and real per-match histograms",
       "resampling": {
         "engine": "league",
-        "real": "match"
+        "real": "target"
       },
       "min_exposure": {
         "unit": "matches",
@@ -5087,33 +5002,20 @@
       },
       "real": {
         "source": {
-          "dataset": "StatsBomb open data, 200 matches (Euro 2020 and 2024, World Cup 2022, Bundesliga 2023/24); metres from each shot to the centre of the goal, 1 m bins, 40 m and over as one, the file's coordinates in metres on a 105 by 68 pitch",
-          "file": "sb_events.csv.gz",
-          "key": "x:y",
-          "reduce": "histogram",
-          "goal": [
-            105.0,
-            34.0
-          ],
-          "group_by": "mid",
-          "where": {
-            "type": [
-              "Shot"
-            ]
-          }
+          "target": "sb.men.dist.shot_distance"
         },
-        "sample": 200,
-        "date": "2026-09-22"
+        "sample": 2516,
+        "date": "2026-10-25"
       },
       "evidence": "calibration",
       "confidence": {
         "measurement": {
-          "count": 5039
+          "count": 2516
         },
         "generalisation": {
-          "competitions": 3,
-          "seasons": 4,
-          "clubs": 66
+          "competitions": 16,
+          "seasons": 63,
+          "clubs": 238
         }
       },
       "condition": "dry",
@@ -5146,7 +5048,7 @@
       "estimator": "Wasserstein-1 distance between the engine and real per-match histograms",
       "resampling": {
         "engine": "league",
-        "real": "match"
+        "real": "target"
       },
       "min_exposure": {
         "unit": "matches",
@@ -5162,33 +5064,20 @@
       },
       "real": {
         "source": {
-          "dataset": "StatsBomb open data, 200 matches (Euro 2020 and 2024, World Cup 2022, Bundesliga 2023/24); each StatsBomb possession as a chain, its passes by the team in possession, 15 or more as one bin (StatsBomb's possession rules, not the engine's chain rule: both start a chain at a gain or a restart)",
-          "file": "sb2_events.csv.gz",
-          "key": "type",
-          "reduce": "chains",
-          "group_by": "mid",
-          "chain": "poss",
-          "count": "passes",
-          "tokens": [
-            "Pass"
-          ],
-          "same": [
-            "team",
-            "poss_team"
-          ]
+          "target": "sb.men.dist.chain_passes"
         },
-        "sample": 200,
-        "date": "2026-09-22"
+        "sample": 2516,
+        "date": "2026-10-25"
       },
       "evidence": "calibration",
       "confidence": {
         "measurement": {
-          "count": 33550
+          "count": 2516
         },
         "generalisation": {
-          "competitions": 3,
-          "seasons": 4,
-          "clubs": 66
+          "competitions": 16,
+          "seasons": 63,
+          "clubs": 238
         }
       },
       "condition": "dry",
@@ -5226,7 +5115,7 @@
       "estimator": "Wasserstein-1 distance between the engine and real per-match histograms",
       "resampling": {
         "engine": "league",
-        "real": "match"
+        "real": "target"
       },
       "min_exposure": {
         "unit": "matches",
@@ -5242,28 +5131,20 @@
       },
       "real": {
         "source": {
-          "dataset": "StatsBomb open data, 200 matches (Euro 2020 and 2024, World Cup 2022, Bundesliga 2023/24); each StatsBomb possession as a chain, its seconds from its first event to the end of its last event within one period, 2-second bins, 60 s and over as one (StatsBomb's possession rules, not the engine's chain rule)",
-          "file": "sb2_events.csv.gz",
-          "key": "dur",
-          "reduce": "chains",
-          "group_by": "mid",
-          "chain": "poss",
-          "count": "seconds",
-          "time": "ts",
-          "period": "period"
+          "target": "sb.men.dist.chain_seconds"
         },
-        "sample": 200,
-        "date": "2026-09-22"
+        "sample": 2516,
+        "date": "2026-10-25"
       },
       "evidence": "calibration",
       "confidence": {
         "measurement": {
-          "count": 33550
+          "count": 2516
         },
         "generalisation": {
-          "competitions": 3,
-          "seasons": 4,
-          "clubs": 66
+          "competitions": 16,
+          "seasons": 63,
+          "clubs": 238
         }
       },
       "condition": "dry",
@@ -13013,6 +12894,61 @@
       },
       "condition": "dry",
       "gates": true
+    },
+    {
+      "band": "scan_rate",
+      "suites": [
+        "equal"
+      ],
+      "measure": {
+        "kind": "pending",
+        "reason": "the engine counts no scans yet; the off-ball decisions work adds the count"
+      },
+      "group": "scan",
+      "target": {
+        "real": {}
+      },
+      "margin": {
+        "value": 0.1,
+        "league_spread": 0.0,
+        "noticeable_error": 0.1,
+        "reason": "design value: a scan rate a tenth of a scan per second away is the smallest change a player would notice; the study's players spread wider than that between them",
+        "spread_reason": "one club, one season: no between-league spread",
+        "design_choice": true
+      },
+      "definition_version": 1,
+      "population": "the equal suite's outfield players of generated leagues, once the engine counts their scans",
+      "estimator": "scans per second in the window before each reception, the mean over possessions",
+      "resampling": {
+        "engine": "league",
+        "real": "target"
+      },
+      "min_exposure": {
+        "unit": "matches",
+        "value": 30.0,
+        "reason": "enough matches for every outfield role to receive often"
+      },
+      "rare": false,
+      "real": {
+        "source": {
+          "target": "lit.jordet2020.scans_per_second"
+        },
+        "sample": 9574,
+        "date": "2026-10-25"
+      },
+      "evidence": "calibration",
+      "confidence": {
+        "measurement": {
+          "count": 9574
+        },
+        "generalisation": {
+          "competitions": 1,
+          "seasons": 1,
+          "clubs": 1
+        }
+      },
+      "condition": "dry",
+      "gates": false
     }
   ],
   "figures": [

@@ -1996,7 +1996,7 @@ mod tests {
 
     /// The bands the slow tests judge as scenarios, and the two whole distributions of
     /// shots and cards from the reference file.
-    const ADDED: [&str; 7] = [
+    const ADDED: [&str; 8] = [
         "second_yellows_per_match",
         "penalty_conversion_share",
         "formation_goals_per_side",
@@ -2004,6 +2004,7 @@ mod tests {
         "attacking_minus_defensive_shots",
         "shots_total_distribution",
         "cards_total_distribution",
+        "scan_rate",
     ];
 
     /// The shipped file with a pending band `pending_probe` added in a group of its own
@@ -2110,13 +2111,14 @@ mod tests {
         for name in ADDED {
             assert!(r.band(name).is_some(), "{name}");
         }
-        // The named list: the facing pair (none on this branch) and the four rare bands.
+        // The named list: the facing pair (none on this branch), the four rare bands and
+        // the scan check.
         let groups: Vec<(&str, u32)> = r
             .report_only_groups
             .iter()
             .map(|g| (g.group.as_str(), g.most))
             .collect();
-        assert_eq!(groups, [("facing", 2), ("rare_real_error", 4)]);
+        assert_eq!(groups, [("facing", 2), ("rare_real_error", 4), ("scan", 1)]);
         let mut off: Vec<&str> = r
             .bands
             .iter()
@@ -2124,18 +2126,28 @@ mod tests {
             .map(|b| b.band.as_str())
             .collect();
         off.sort_unstable();
-        assert_eq!(off, RARE_REAL_ERROR);
-        for name in RARE_REAL_ERROR {
+        let mut want: Vec<&str> = RARE_REAL_ERROR.to_vec();
+        want.push("scan_rate");
+        assert_eq!(off, want);
+        for (name, group) in RARE_REAL_ERROR
+            .iter()
+            .map(|n| (*n, "rare_real_error"))
+            .chain([("scan_rate", "scan")])
+        {
             let b = r.band(name).unwrap();
-            assert_eq!(b.group.as_deref(), Some("rare_real_error"), "{name}");
+            assert_eq!(b.group.as_deref(), Some(group), "{name}");
             assert!(
                 b.report_only
                     .as_deref()
-                    .is_some_and(|w| w.starts_with("named report-only group rare_real_error")),
+                    .is_some_and(|w| w.starts_with(&format!("named report-only group {group}"))),
                 "{name}"
             );
         }
-        assert_eq!(r.gating(), r.bands.len() - RARE_REAL_ERROR.len());
+        assert!(matches!(
+            r.band("scan_rate").unwrap().measure,
+            Measure::Pending { .. }
+        ));
+        assert_eq!(r.gating(), r.bands.len() - RARE_REAL_ERROR.len() - 1);
         assert_eq!(
             r.band("possession_home_pct").unwrap().group.as_deref(),
             Some("possession_pct")
@@ -2216,8 +2228,17 @@ mod tests {
                     assert_eq!(real.sample, 7, "{}", b.band);
                 }
                 RealSource::Target(t) => {
-                    assert!(t.target.starts_with("tier.1.dist."), "{}", b.band);
+                    // The football-data distributions, the StatsBomb men's senior pool and
+                    // the scan-rate study figure.
+                    assert!(
+                        ["tier.1.dist.", "sb.men.", "lit."]
+                            .iter()
+                            .any(|p| t.target.starts_with(p)),
+                        "{}",
+                        b.band
+                    );
                     assert_eq!(rule.resampling.real, RealUnit::Target, "{}", b.band);
+                    assert!(real.sample > 0, "{}", b.band);
                 }
                 RealSource::Pointer(p) => {
                     assert!(!experiments.contains(&b.band.as_str()), "{}", b.band);

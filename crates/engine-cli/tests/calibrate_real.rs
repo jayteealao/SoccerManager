@@ -73,11 +73,16 @@ fn content(data: &Path) -> PathBuf {
                     "passes",
                     json!({ "reduce": "mean" }),
                 ),
-                "shots_on_target_share" => pointer(
-                    "sb_action_summary.json",
-                    "shot.on_target",
-                    json!({ "reduce": "share" }),
-                ),
+                "shots_on_target_share" => {
+                    // The shipped band reads the reference file; here it reads the fixture's
+                    // summary file, resampled as a summary.
+                    b["resampling"]["real"] = "summary".into();
+                    pointer(
+                        "sb_action_summary.json",
+                        "shot.on_target",
+                        json!({ "reduce": "share" }),
+                    )
+                }
                 "sending_off_share" => pointer(
                     "wy2_events.csv.gz",
                     "tags",
@@ -174,8 +179,9 @@ fn line<'a>(text: &'a str, band: &str) -> &'a str {
         .unwrap_or_else(|| panic!("no table line for {band}: {text}"))
 }
 
-/// The shipped file's bands: the 157 that gate and the 4 rare bands that only report.
-const BANDS: u64 = 161;
+/// The shipped file's bands: the 157 that gate and the 5 that only report (the 4 rare bands
+/// and the scan check).
+const BANDS: u64 = 162;
 
 /// The shipped bands with no real counterpart: the engine experiments and design values.
 const SHIPPED_NO_COUNTERPART: u64 = 8;

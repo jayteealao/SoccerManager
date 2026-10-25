@@ -723,9 +723,9 @@ fn band_result_holds_every_band(entry: &golden::LedgerEntry, index: usize) {
         .collect();
     let registry = read("content/realism-bands.json");
     // Every band gates except the bands of a group the file names as report-only: each such
-    // group holds at most its `most` bands and gives its reason. On this branch the
-    // non-gating set is exactly the four rare bands whose real figure is too uncertain to
-    // judge; the facing group is named and holds none of the bands here.
+    // group holds at most its `most` bands and gives its reason. On this branch the named
+    // list is the facing pair (none here), the four rare bands whose real figure is too
+    // uncertain to judge, and the scan check, which the engine does not count yet.
     let groups: Vec<(&str, u64)> = registry["report_only"]
         .as_array()
         .unwrap()
@@ -765,6 +765,8 @@ fn band_result_holds_every_band(entry: &golden::LedgerEntry, index: usize) {
             "group {group} holds {held} bands, at most {most}"
         );
     }
+    let names: Vec<&str> = groups.iter().map(|(g, _)| *g).collect();
+    assert_eq!(names, ["facing", "rare_real_error", "scan"]);
     non_gating.sort_unstable();
     assert_eq!(
         non_gating,
@@ -772,10 +774,14 @@ fn band_result_holds_every_band(entry: &golden::LedgerEntry, index: usize) {
             "five_one_share",
             "goals_free_kick_share",
             "goals_penalty_share",
-            "goals_throw_in_share"
+            "goals_throw_in_share",
+            "scan_rate"
         ],
-        "only the rare_real_error group does not gate"
+        "only the rare_real_error and scan groups do not gate"
     );
+    let scan = bands.iter().find(|b| b["band"] == "scan_rate").unwrap();
+    assert_eq!(scan["group"], "scan");
+    assert_eq!(scan["measure"]["kind"], "pending");
     // The recorded band run came before most bands gated: each band it judged is still a
     // band of the file, and the time budget has its verdict. A verdict for every gating band
     // returns with the next recorded band run.
