@@ -300,3 +300,149 @@ fn a_content_folder_with_a_record_a_key_or_a_real_name_fails() {
     .unwrap();
     assert!(!content_faults(pointer.path(), &forbidden).is_empty());
 }
+
+/// Every file under each of `dirs` (recursively), by its path relative to the dir.
+fn files_under(dir: &Path) -> Vec<(String, PathBuf)> {
+    fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) {
+        for e in std::fs::read_dir(dir).unwrap() {
+            let p = e.unwrap().path();
+            if p.is_dir() {
+                walk(root, &p, out);
+            } else {
+                let rel = p.strip_prefix(root).unwrap().display().to_string();
+                out.push((rel, p));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(dir, dir, &mut out);
+    out
+}
+
+/// Every trace of the local side file's source in the tracked folders `dirs`: its name in
+/// any text, a target key of its prefix `imp.`, or a record whose provider names it.
+fn side_source_faults(dirs: &[&Path]) -> Vec<String> {
+    fn walk_json(v: &Value, rel: &str, out: &mut Vec<String>) {
+        match v {
+            Value::Object(o) => {
+                for (k, x) in o {
+                    if k.starts_with("imp.") {
+                        out.push(format!("{rel}: key {k}"));
+                    }
+                    if k == "provider"
+                        && x.as_str().is_some_and(|p| p.eq_ignore_ascii_case("impect"))
+                    {
+                        out.push(format!("{rel}: provider {x}"));
+                    }
+                    walk_json(x, rel, out);
+                }
+            }
+            Value::Array(a) => a.iter().for_each(|x| walk_json(x, rel, out)),
+            _ => {}
+        }
+    }
+    let mut faults = Vec::new();
+    for dir in dirs {
+        for (rel, path) in files_under(dir) {
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            if text.to_lowercase().contains("impect") {
+                faults.push(format!("{rel}: names the source"));
+            }
+            if let Ok(v) = serde_json::from_str::<Value>(&text) {
+                walk_json(&v, &rel, &mut faults);
+            }
+        }
+    }
+    faults
+}
+
+/// The second event source's figures may not be shared: they stay in the local side
+/// folder, under `.scratch/`, which git ignores; no tracked folder holds them.
+#[test]
+fn no_tracked_folder_holds_a_figure_of_the_local_side_source() {
+    let faults = side_source_faults(&[&repo().join("gate"), &repo().join("content")]);
+    assert!(faults.is_empty(), "{faults:#?}");
+    let ignore = std::fs::read_to_string(repo().join(".gitignore")).unwrap();
+    assert!(ignore.lines().any(|l| l.trim() == ".scratch/"), "{ignore}");
+    let help = std::process::Command::new(env!("CARGO_BIN_EXE_engine-cli"))
+        .args(["real-targets", "build", "--help"])
+        .output()
+        .unwrap();
+    let help = String::from_utf8_lossy(&help.stdout);
+    assert!(help.contains(".scratch/real-targets"), "{help}");
+}
+
+#[test]
+fn a_planted_side_source_key_or_provider_fails() {
+    let tmp = TempDir::new().unwrap();
+    let gate = tmp.path().join("gate");
+    std::fs::create_dir_all(&gate).unwrap();
+    std::fs::write(
+        gate.join("planted.json"),
+        r#"{"targets": {"imp.bl2324.shots_per_team": {"value": 12.0}}}"#,
+    )
+    .unwrap();
+    let faults = side_source_faults(&[&gate]);
+    assert!(
+        faults
+            .iter()
+            .any(|f| f == "planted.json: key imp.bl2324.shots_per_team"),
+        "{faults:?}"
+    );
+    std::fs::write(
+        gate.join("planted.json"),
+        r#"{"targets": {"sb.x.y": {"provider": "IMPECT"}}}"#,
+    )
+    .unwrap();
+    let faults = side_source_faults(&[&gate]);
+    assert!(
+        faults
+            .iter()
+            .any(|f| f.starts_with("planted.json: provider")),
+        "{faults:?}"
+    );
+    assert!(faults.iter().any(|f| f == "planted.json: names the source"));
+    std::fs::write(gate.join("planted.json"), r#"{"targets": {}}"#).unwrap();
+    assert!(side_source_faults(&[&gate]).is_empty());
+}
+
+/// The committed reference file's StatsBomb targets carry their label and no refused
+/// season, and Germany's strictness is the mean of its two neighbour seasons.
+#[test]
+fn the_committed_open_data_targets_carry_their_label_and_values() {
+    let file: Value = serde_json::from_str(
+        &std::fs::read_to_string(repo().join("gate/real-targets.json")).unwrap(),
+    )
+    .unwrap();
+    let targets = file["targets"].as_object().unwrap();
+    let sb: Vec<(&String, &Value)> = targets
+        .iter()
+        .filter(|(k, _)| k.starts_with("sb."))
+        .collect();
+    assert!(sb.len() > 1000, "{} StatsBomb targets", sb.len());
+    for (key, t) in sb {
+        assert_eq!(t["provider"], "StatsBomb", "{key}");
+        assert!(
+            t["source_label"]
+                .as_str()
+                .unwrap()
+                .starts_with("StatsBomb open data, "),
+            "{key}"
+        );
+        for s in t["seasons"].as_array().unwrap() {
+            assert!(
+                !["43_3", "11_1", "9_281"].contains(&s.as_str().unwrap()),
+                "{key} reads {s}"
+            );
+        }
+    }
+    let pool = &targets["sb.men.goals_per_xg"];
+    assert_eq!(pool["n"], 2516);
+    assert_eq!(pool["seasons"].as_array().unwrap().len(), 63);
+    let strict = targets["strict.D1.fouls_per_team"]["value"]
+        .as_f64()
+        .unwrap();
+    assert!((strict - 12.75).abs() < 0.005, "{strict}");
+}
