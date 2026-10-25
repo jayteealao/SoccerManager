@@ -31,6 +31,7 @@ pub mod fotmob;
 pub mod layers;
 pub mod shots_check;
 pub mod tables;
+pub mod tracked;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

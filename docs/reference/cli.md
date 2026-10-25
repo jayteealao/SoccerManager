@@ -775,7 +775,7 @@ Exit codes: 0 when the file is written; 1 when the folder holds no DFL match or 
 engine-cli tracking live-check [--data <DIR>] [--out <FILE>]
 ```
 
-`live-check` applies the event-data live-time rule to each DFL match's events and compares it with the tracked ball status. The rule: in each half, from its first event to its last, the time from a stop to the next restart is dead. On DFL events a foul, an offside and a goal stop play, a restart's referee decision time is a stop at that time, and a throw-in, free kick, goal kick, corner, kick-off after a goal or penalty restarts it; on Wyscout events a foul (2), an interruption (5) or an offside (6) stops play and a free kick of any kind (3) restarts it. The tracked minutes are the frames whose ball is in play, at 25 a second. It prints the rule's minutes, the tracked minutes and their difference for each match, and the verdict: `pass` only when every match is within 2.0 minutes, in which case event-data rates may be taken per live minute; otherwise `fail`, and Wyscout rates stay per match. A test holds the band file to the committed verdict.
+`live-check` applies the event-data live-time rule to each DFL match's events and compares it with the tracked ball status. The rule: in each half, from its first event to its last, the time from a stop to the next restart is dead; a DFL half runs from its kick-off to its final whistle, as DFL also logs events outside play. On DFL events a foul, an offside and a goal stop play, a restart's referee decision time is a stop at that time, and a throw-in, free kick, goal kick, corner, kick-off after a goal or penalty restarts it; on Wyscout events a foul (2), an interruption (5) or an offside (6) stops play and a free kick of any kind (3) restarts it. The tracked minutes are the frames whose ball is in play, at 25 a second. It prints the rule's minutes, the tracked minutes and their difference for each match, and the verdict: `pass` only when every match is within 2.0 minutes, in which case event-data rates may be taken per live minute; otherwise `fail`, and Wyscout rates stay per match. A test holds the band file to the committed verdict.
 
 | Flag | Value | Default | Meaning |
 |---|---|---|---|
@@ -783,6 +783,20 @@ engine-cli tracking live-check [--data <DIR>] [--out <FILE>]
 | `--out` | file | `gate/tracking/live-time-check.json` of the checkout | The check file to write. |
 
 Exit codes: 0 when the file is written, whatever the verdict; 1 when the folder holds no DFL match or a file is malformed.
+
+```text
+engine-cli tracking contrast --soccertrack <DIR> [--tracking <FILE>] [--out <FILE>]
+```
+
+`contrast` sets the team shape and pass choice of the SoccerTrack v2 amateur matches beside the DFL elite matches of the tracking file, per half. It reads each SoccerTrack game-state file as a stream and keeps only the players and keepers (their side, track and pitch position): the pitch lines, the referees and any ball never reach it, and it computes no speed. The shape figures are the shared report's that need no ball: each side's length (deepest to highest outfield player), width and spread (the outfield players' mean distance from their centroid), the mean over a half's frames and both sides, then over the matches. Pass choice is the share of ground passes, high passes and crosses: for DFL from its events (flat and high passes, crosses), for SoccerTrack from its ball-action files (`bas/<match>/<match>_12_class_events.json`: Pass, High Pass, Cross; another of the twelve labels counts in none, a label outside them is refused); without those files the table says `pass choice: no ball-action files`. The contrast holds no other figure. SoccerTrack data sets no target: the contrast never writes under `gate/`, and the reference file's intake refuses a contrast file.
+
+| Flag | Value | Default | Meaning |
+|---|---|---|---|
+| `--soccertrack` | folder | required | The SoccerTrack v2 folder with `<match>_1st.json` and `<match>_2nd.json`, and `bas/` when present. |
+| `--tracking` | file | `gate/tracking/dfl-matches.json` of the checkout | The tracking file of the elite matches. |
+| `--out` | file | `.scratch/tracking-contrast/contrast.json` of the main checkout | The contrast file; a path under `gate/` is refused. |
+
+Exit codes: 0 when the contrast is written; 1 when a file is missing or malformed, a ball-action label is unknown, or the output is under `gate/`.
 
 ## primitives
 

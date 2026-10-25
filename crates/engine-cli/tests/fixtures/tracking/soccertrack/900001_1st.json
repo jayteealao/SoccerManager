@@ -1,0 +1,768 @@
+{
+ "info": {
+  "version": "1.3",
+  "name": "900001_1st",
+  "frame_rate": 25,
+  "seq_length": 3
+ },
+ "images": [
+  {
+   "is_labeled": true,
+   "image_id": "9001000001",
+   "file_name": "000001.jpg",
+   "height": 1906,
+   "width": 3840
+  },
+  {
+   "is_labeled": true,
+   "image_id": "9001000002",
+   "file_name": "000002.jpg",
+   "height": 1906,
+   "width": 3840
+  },
+  {
+   "is_labeled": true,
+   "image_id": "9001000003",
+   "file_name": "000003.jpg",
+   "height": 1906,
+   "width": 3840
+  }
+ ],
+ "annotations": [
+  {
+   "id": "9001000001P",
+   "image_id": "9001000001",
+   "video_id": "9",
+   "supercategory": "pitch",
+   "category_id": 5,
+   "lines": {
+    "Circle central": [
+     {
+      "x": 0.5,
+      "y": 0.3
+     }
+    ]
+   }
+  },
+  {
+   "id": "900100000101",
+   "image_id": "9001000001",
+   "track_id": 1,
+   "supercategory": "object",
+   "category_id": 2,
+   "attributes": {
+    "role": "goalkeeper",
+    "jersey": "1",
+    "team": "left",
+    "player_id": 1001
+   },
+   "bbox_image": {
+    "x": 1,
+    "y": 1,
+    "x_center": 1.0,
+    "y_center": 1.0,
+    "w": 2,
+    "h": 2
+   },
+   "bbox_pitch": {
+    "x_bottom_left": -50.0,
+    "y_bottom_left": 0.0,
+    "x_bottom_right": -50.0,
+    "y_bottom_right": 0.0,
+    "x_bottom_middle": -50.0,
+    "y_bottom_middle": 0.0
+   },
+   "bbox_pitch_raw": {
+    "x_bottom_middle": -50.0,
+    "y_bottom_middle": 0.0
+   }
+  },
+  {
+   "id": "900100000102",
+   "image_id": "9001000001",
+   "track_id": 2,
+   "supercategory": "object",
+   "category_id": 1,
+   "attributes": {
+    "role": "player",
+    "jersey": "2",
+    "team": "left",
+    "player_id": 1002
+   },
+   "bbox_image": {
+    "x": 1,
+    "y": 1,
+    "x_center": 1.0,
+    "y_center": 1.0,
+    "w": 2,
+    "h": 2
+   },
+   "bbox_pitch": {
+    "x_bottom_left": -10.0,
+    "y_bottom_left": 0.0,
+    "x_bottom_right": -10.0,
+    "y_bottom_right": 0.0,
+    "x_bottom_middle": -10.0,
+    "y_bottom_middle": 0.0
+   },
+   "bbox_pitch_raw": {
+    "x_bottom_middle": -10.0,
+    "y_bottom_middle": 0.0
+   }
+  },
+  {
+   "id": "900100000103",
+   "image_id": "9001000001",
+   "track_id": 3,
+   "supercategory": "object",
+   "category_id": 1,
+   "attributes": {
+    "role": "player",
+    "jersey": "3",
+    "team": "left",
+    "player_id": 1003
+   },
+   "bbox_image": {
+    "x": 1,
+    "y": 1,
+    "x_center": 1.0,
+    "y_center": 1.0,
+    "w": 2,
+    "h": 2
+   },
+   "bbox_pitch": {
+    "x_bottom_left": 10.0,
+    "y_bottom_left": 20.0,
+    "x_bottom_right": 10.0,
+    "y_bottom_right": 20.0,
+    "x_bottom_middle": 10.0,
+    "y_bottom_middle": 20.0
+   },
+   "bbox_pitch_raw": {
+    "x_bottom_middle": 10.0,
+    "y_bottom_middle": 20.0
+   }
+  },
+  {
+   "id": "900100000111",
+   "image_id": "9001000001",
+   "track_id": 11,
+   "supercategory": "object",
+   "category_id": 2,
+   "attributes": {
+    "role": "goalkeeper",
+    "jersey": "11",
+    "team": "right",
+    "player_id": 1011
+   },
+   "bbox_image": {
+    "x": 1,
+    "y": 1,
+    "x_center": 1.0,
+    "y_center": 1.0,
+    "w": 2,
+    "h": 2
+   },
+   "bbox_pitch": {
+    "x_bottom_left": 50.0,
+    "y_bottom_left": 0.0,
+    "x_bottom_right": 50.0,
+    "y_bottom_right": 0.0,
+    "x_bottom_middle": 50.0,
+    "y_bottom_middle": 0.0
+   },
+   "bbox_pitch_raw": {
+    "x_bottom_middle": 50.0,
+    "y_bottom_middle": 0.0
+   }
+  },
+  {
+   "id": "900100000112",
+   "image_id": "9001000001",
+   "track_id": 12,
+   "supercategory": "object",
+   "category_id": 1,
+   "attributes": {
+    "role": "player",
+    "jersey": "12",
+    "team": "right",
+    "player_id": 1012
+   },
+   "bbox_image": {
+    "x": 1,
+    "y": 1,
+    "x_center": 1.0,
+    "y_center": 1.0,
+    "w": 2,
+    "h": 2
+   },
+   "bbox_pitch": {
+    "x_bottom_left": -5.0,
+    "y_bottom_left": -10.0,
+    "x_bottom_right": -5.0,
+    "y_bottom_right": -10.0,
+    "x_bottom_middle": -5.0,
+    "y_bottom_middle": -10.0
+   },
+   "bbox_pitch_raw": {
+    "x_bottom_middle": -5.0,
+    "y_bottom_middle": -10.0
+   }
+  },
+  {
+   "id": "900100000113",
+   "image_id": "9001000001",
+   "track_id": 13,
+   "supercategory": "object",
+   "category_id": 1,
+   "attributes": {
+    "role": "player",
+    "jersey": "13",
+    "team": "right",
+    "player_id": 1013
+   },
+   "bbox_image": {
+    "x": 1,
+    "y": 1,
+    "x_center": 1.0,
+    "y_center": 1.0,
+    "w": 2,
+    "h": 2
+   },
+   "bbox_pitch": {
+    "x_bottom_left": 15.0,
+    "y_bottom_left": 10.0,
+    "x_bottom_right": 15.0,
+    "y_bottom_right": 10.0,
+    "x_bottom_middle": 15.0,
+    "y_bottom_middle": 10.0
+   },
+   "bbox_pitch_raw": {
+    "x_bottom_middle": 15.0,
+    "y_bottom_middle": 10.0
+   }
+  },
+  {
+   "id": "900100000199",
+   "image_id": "9001000001",
+   "track_id": 99,
+   "supercategory": "object",
+   "category_id": 4,
+   "attributes": {
+    "role": "ball",
+    "team": "left"
+   },
+   "bbox_pitch": {
+    "x_bottom_middle": 1.5,
+    "y_bottom_middle": 2.5
+   }
+  },
+  {
+   "id": "900100000198",
+   "image_id": "9001000001",
+   "track_id": 98,
+   "supercategory": "object",
+   "category_id": 3,
+   "attributes": {
+    "role": "referee",
+    "team": "left"
+   },
+   "bbox_pitch": {
+    "x_bottom_middle": 1.5,
+    "y_bottom_middle": 2.5
+   }
+  },
+  {
+   "id": "9001000002P",
+   "image_id": "9001000002",
+   "video_id": "9",
+   "supercategory": "pitch",
+   "category_id": 5,
+   "lines": {
+    "Circle central": [
+     {
+      "x": 0.5,
+      "y": 0.3
+     }
+    ]
+   }
+  },
+  {
+   "id": "900100000201",
+   "image_id": "9001000002",
+   "track_id": 1,
+   "supercategory": "object",
+   "category_id": 2,
+   "attributes": {
+    "role": "goalkeeper",
+    "jersey": "1",
+    "team": "left",
+    "player_id": 1001
+   },
+   "bbox_image": {
+    "x": 1,
+    "y": 1,
+    "x_center": 1.0,
+    "y_center": 1.0,
+    "w": 2,
+    "h": 2
+   },
+   "bbox_pitch": {
+    "x_bottom_left": -50.0,
+    "y_bottom_left": 0.0,
+    "x_bottom_right": -50.0,
+    "y_bottom_right": 0.0,
+    "x_bottom_middle": -50.0,
+    "y_bottom_middle": 0.0
+   },
+   "bbox_pitch_raw": {
+    "x_bottom_middle": -50.0,
+    "y_bottom_middle": 0.0
+   }
+  },
+  {
+   "id": "900100000202",
+   "image_id": "9001000002",
+   "track_id": 2,
+   "supercategory": "object",
+   "category_id": 1,
+   "attributes": {
+    "role": "player",
+    "jersey": "2",
+    "team": "left",
+    "player_id": 1002
+   },
+   "bbox_image": {
+    "x": 1,
+    "y": 1,
+    "x_center": 1.0,
+    "y_center": 1.0,
+    "w": 2,
+    "h": 2
+   },
+   "bbox_pitch": {
+    "x_bottom_left": -10.0,
+    "y_bottom_left": 0.0,
+    "x_bottom_right": -10.0,
+    "y_bottom_right": 0.0,
+    "x_bottom_middle": -10.0,
+    "y_bottom_middle": 0.0
+   },
+   "bbox_pitch_raw": {
+    "x_bottom_middle": -10.0,
+    "y_bottom_middle": 0.0
+   }
+  },
+  {
+   "id": "900100000203",
+   "image_id": "9001000002",
+   "track_id": 3,
+   "supercategory": "object",
+   "category_id": 1,
+   "attributes": {
+    "role": "player",
+    "jersey": "3",
+    "team": "left",
+    "player_id": 1003
+   },
+   "bbox_image": {
+    "x": 1,
+    "y": 1,
+    "x_center": 1.0,
+    "y_center": 1.0,
+    "w": 2,
+    "h": 2
+   },
+   "bbox_pitch": {
+    "x_bottom_left": 10.0,
+    "y_bottom_left": 20.0,
+    "x_bottom_right": 10.0,
+    "y_bottom_right": 20.0,
+    "x_bottom_middle": 10.0,
+    "y_bottom_middle": 20.0
+   },
+   "bbox_pitch_raw": {
+    "x_bottom_middle": 10.0,
+    "y_bottom_middle": 20.0
+   }
+  },
+  {
+   "id": "900100000211",
+   "image_id": "9001000002",
+   "track_id": 11,
+   "supercategory": "object",
+   "category_id": 2,
+   "attributes": {
+    "role": "goalkeeper",
+    "jersey": "11",
+    "team": "right",
+    "player_id": 1011
+   },
+   "bbox_image": {
+    "x": 1,
+    "y": 1,
+    "x_center": 1.0,
+    "y_center": 1.0,
+    "w": 2,
+    "h": 2
+   },
+   "bbox_pitch": {
+    "x_bottom_left": 50.0,
+    "y_bottom_left": 0.0,
+    "x_bottom_right": 50.0,
+    "y_bottom_right": 0.0,
+    "x_bottom_middle": 50.0,
+    "y_bottom_middle": 0.0
+   },
+   "bbox_pitch_raw": {
+    "x_bottom_middle": 50.0,
+    "y_bottom_middle": 0.0
+   }
+  },
+  {
+   "id": "900100000212",
+   "image_id": "9001000002",
+   "track_id": 12,
+   "supercategory": "object",
+   "category_id": 1,
+   "attributes": {
+    "role": "player",
+    "jersey": "12",
+    "team": "right",
+    "player_id": 1012
+   },
+   "bbox_image": {
+    "x": 1,
+    "y": 1,
+    "x_center": 1.0,
+    "y_center": 1.0,
+    "w": 2,
+    "h": 2
+   },
+   "bbox_pitch": {
+    "x_bottom_left": -5.0,
+    "y_bottom_left": -10.0,
+    "x_bottom_right": -5.0,
+    "y_bottom_right": -10.0,
+    "x_bottom_middle": -5.0,
+    "y_bottom_middle": -10.0
+   },
+   "bbox_pitch_raw": {
+    "x_bottom_middle": -5.0,
+    "y_bottom_middle": -10.0
+   }
+  },
+  {
+   "id": "900100000213",
+   "image_id": "9001000002",
+   "track_id": 13,
+   "supercategory": "object",
+   "category_id": 1,
+   "attributes": {
+    "role": "player",
+    "jersey": "13",
+    "team": "right",
+    "player_id": 1013
+   },
+   "bbox_image": {
+    "x": 1,
+    "y": 1,
+    "x_center": 1.0,
+    "y_center": 1.0,
+    "w": 2,
+    "h": 2
+   },
+   "bbox_pitch": {
+    "x_bottom_left": 15.0,
+    "y_bottom_left": 10.0,
+    "x_bottom_right": 15.0,
+    "y_bottom_right": 10.0,
+    "x_bottom_middle": 15.0,
+    "y_bottom_middle": 10.0
+   },
+   "bbox_pitch_raw": {
+    "x_bottom_middle": 15.0,
+    "y_bottom_middle": 10.0
+   }
+  },
+  {
+   "id": "900100000299",
+   "image_id": "9001000002",
+   "track_id": 99,
+   "supercategory": "object",
+   "category_id": 4,
+   "attributes": {
+    "role": "ball",
+    "team": "left"
+   },
+   "bbox_pitch": {
+    "x_bottom_middle": 1.5,
+    "y_bottom_middle": 2.5
+   }
+  },
+  {
+   "id": "900100000298",
+   "image_id": "9001000002",
+   "track_id": 98,
+   "supercategory": "object",
+   "category_id": 3,
+   "attributes": {
+    "role": "referee",
+    "team": "left"
+   },
+   "bbox_pitch": {
+    "x_bottom_middle": 1.5,
+    "y_bottom_middle": 2.5
+   }
+  },
+  {
+   "id": "9001000003P",
+   "image_id": "9001000003",
+   "video_id": "9",
+   "supercategory": "pitch",
+   "category_id": 5,
+   "lines": {
+    "Circle central": [
+     {
+      "x": 0.5,
+      "y": 0.3
+     }
+    ]
+   }
+  },
+  {
+   "id": "900100000301",
+   "image_id": "9001000003",
+   "track_id": 1,
+   "supercategory": "object",
+   "category_id": 2,
+   "attributes": {
+    "role": "goalkeeper",
+    "jersey": "1",
+    "team": "left",
+    "player_id": 1001
+   },
+   "bbox_image": {
+    "x": 1,
+    "y": 1,
+    "x_center": 1.0,
+    "y_center": 1.0,
+    "w": 2,
+    "h": 2
+   },
+   "bbox_pitch": {
+    "x_bottom_left": -50.0,
+    "y_bottom_left": 0.0,
+    "x_bottom_right": -50.0,
+    "y_bottom_right": 0.0,
+    "x_bottom_middle": -50.0,
+    "y_bottom_middle": 0.0
+   },
+   "bbox_pitch_raw": {
+    "x_bottom_middle": -50.0,
+    "y_bottom_middle": 0.0
+   }
+  },
+  {
+   "id": "900100000302",
+   "image_id": "9001000003",
+   "track_id": 2,
+   "supercategory": "object",
+   "category_id": 1,
+   "attributes": {
+    "role": "player",
+    "jersey": "2",
+    "team": "left",
+    "player_id": 1002
+   },
+   "bbox_image": {
+    "x": 1,
+    "y": 1,
+    "x_center": 1.0,
+    "y_center": 1.0,
+    "w": 2,
+    "h": 2
+   },
+   "bbox_pitch": {
+    "x_bottom_left": -10.0,
+    "y_bottom_left": 0.0,
+    "x_bottom_right": -10.0,
+    "y_bottom_right": 0.0,
+    "x_bottom_middle": -10.0,
+    "y_bottom_middle": 0.0
+   },
+   "bbox_pitch_raw": {
+    "x_bottom_middle": -10.0,
+    "y_bottom_middle": 0.0
+   }
+  },
+  {
+   "id": "900100000303",
+   "image_id": "9001000003",
+   "track_id": 3,
+   "supercategory": "object",
+   "category_id": 1,
+   "attributes": {
+    "role": "player",
+    "jersey": "3",
+    "team": "left",
+    "player_id": 1003
+   },
+   "bbox_image": {
+    "x": 1,
+    "y": 1,
+    "x_center": 1.0,
+    "y_center": 1.0,
+    "w": 2,
+    "h": 2
+   },
+   "bbox_pitch": {
+    "x_bottom_left": 10.0,
+    "y_bottom_left": 20.0,
+    "x_bottom_right": 10.0,
+    "y_bottom_right": 20.0,
+    "x_bottom_middle": 10.0,
+    "y_bottom_middle": 20.0
+   },
+   "bbox_pitch_raw": {
+    "x_bottom_middle": 10.0,
+    "y_bottom_middle": 20.0
+   }
+  },
+  {
+   "id": "900100000311",
+   "image_id": "9001000003",
+   "track_id": 11,
+   "supercategory": "object",
+   "category_id": 2,
+   "attributes": {
+    "role": "goalkeeper",
+    "jersey": "11",
+    "team": "right",
+    "player_id": 1011
+   },
+   "bbox_image": {
+    "x": 1,
+    "y": 1,
+    "x_center": 1.0,
+    "y_center": 1.0,
+    "w": 2,
+    "h": 2
+   },
+   "bbox_pitch": {
+    "x_bottom_left": 50.0,
+    "y_bottom_left": 0.0,
+    "x_bottom_right": 50.0,
+    "y_bottom_right": 0.0,
+    "x_bottom_middle": 50.0,
+    "y_bottom_middle": 0.0
+   },
+   "bbox_pitch_raw": {
+    "x_bottom_middle": 50.0,
+    "y_bottom_middle": 0.0
+   }
+  },
+  {
+   "id": "900100000312",
+   "image_id": "9001000003",
+   "track_id": 12,
+   "supercategory": "object",
+   "category_id": 1,
+   "attributes": {
+    "role": "player",
+    "jersey": "12",
+    "team": "right",
+    "player_id": 1012
+   },
+   "bbox_image": {
+    "x": 1,
+    "y": 1,
+    "x_center": 1.0,
+    "y_center": 1.0,
+    "w": 2,
+    "h": 2
+   },
+   "bbox_pitch": {
+    "x_bottom_left": -5.0,
+    "y_bottom_left": -10.0,
+    "x_bottom_right": -5.0,
+    "y_bottom_right": -10.0,
+    "x_bottom_middle": -5.0,
+    "y_bottom_middle": -10.0
+   },
+   "bbox_pitch_raw": {
+    "x_bottom_middle": -5.0,
+    "y_bottom_middle": -10.0
+   }
+  },
+  {
+   "id": "900100000313",
+   "image_id": "9001000003",
+   "track_id": 13,
+   "supercategory": "object",
+   "category_id": 1,
+   "attributes": {
+    "role": "player",
+    "jersey": "13",
+    "team": "right",
+    "player_id": 1013
+   },
+   "bbox_image": {
+    "x": 1,
+    "y": 1,
+    "x_center": 1.0,
+    "y_center": 1.0,
+    "w": 2,
+    "h": 2
+   },
+   "bbox_pitch": {
+    "x_bottom_left": 15.0,
+    "y_bottom_left": 10.0,
+    "x_bottom_right": 15.0,
+    "y_bottom_right": 10.0,
+    "x_bottom_middle": 15.0,
+    "y_bottom_middle": 10.0
+   },
+   "bbox_pitch_raw": {
+    "x_bottom_middle": 15.0,
+    "y_bottom_middle": 10.0
+   }
+  },
+  {
+   "id": "900100000399",
+   "image_id": "9001000003",
+   "track_id": 99,
+   "supercategory": "object",
+   "category_id": 4,
+   "attributes": {
+    "role": "ball",
+    "team": "left"
+   },
+   "bbox_pitch": {
+    "x_bottom_middle": 1.5,
+    "y_bottom_middle": 2.5
+   }
+  },
+  {
+   "id": "900100000398",
+   "image_id": "9001000003",
+   "track_id": 98,
+   "supercategory": "object",
+   "category_id": 3,
+   "attributes": {
+    "role": "referee",
+    "team": "left"
+   },
+   "bbox_pitch": {
+    "x_bottom_middle": 1.5,
+    "y_bottom_middle": 2.5
+   }
+  }
+ ],
+ "categories": [
+  {
+   "id": 4,
+   "name": "ball"
+  }
+ ]
+}

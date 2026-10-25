@@ -20,7 +20,9 @@ use anyhow::Context;
 use engine::record::TickRecord;
 use serde::{Deserialize, Serialize};
 
+use super::contrast::{FreeShape, PassChoice};
 use super::side::{ClockOffset, Side};
+use super::{EventKind, Height};
 use crate::report::tracked_shape::{
     FRAMES_PER_SECOND, Frame, Holder, Mode, Restart, TrackedShape, TrackedValues, field_names,
 };
@@ -182,6 +184,40 @@ pub struct MatchFigures {
     pub checks: Checks,
     /// Every figure of the shared report, home and away.
     pub figures: BTreeMap<String, [f64; 2]>,
+    /// Each half's team shape and pass choice, for the amateur-against-elite contrast.
+    pub halves: Vec<HalfFigures>,
+}
+
+/// One half's team shape (the figures that need no ball) and pass choice.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HalfFigures {
+    pub shape: FreeShape,
+    pub passes: PassChoice,
+}
+
+/// The passes of each half of a DFL match by choice: a pass the events call flat is a
+/// ground pass, one they call high a high pass; a cross is its own; a pass of no height
+/// counts in neither. The halves split at each half-opening kick-off.
+pub fn dfl_pass_choice(m: &super::TrackedMatch) -> Vec<PassChoice> {
+    let mut out: Vec<PassChoice> = Vec::new();
+    for (e, h) in m.events.iter().zip(super::event_halves(&m.events)) {
+        if out.len() <= h {
+            out.resize(h + 1, PassChoice::default());
+        }
+        let c = &mut out[h];
+        match e.kind {
+            EventKind::Pass {
+                height: Some(Height::Ground),
+            } => c.ground += 1,
+            EventKind::Pass {
+                height: Some(Height::High),
+            } => c.high += 1,
+            EventKind::Cross => c.cross += 1,
+            _ => {}
+        }
+    }
+    out
 }
 
 /// The converter's checks of one match.
@@ -236,10 +272,22 @@ impl TrackingFile {
     }
 }
 
-/// The figures of a converted match.
-pub fn figures_of(records: &[TickRecord], side: &Side) -> anyhow::Result<MatchFigures> {
+/// The figures of a converted match, with each half's passes by choice.
+pub fn figures_of(
+    records: &[TickRecord],
+    side: &Side,
+    passes: &[PassChoice],
+) -> anyhow::Result<MatchFigures> {
     let frames = frames_of(records, side)?;
     let v = measure_frames(&frames, side.pitch[0], Mode::Full)?;
+    let mut halves = Vec::new();
+    for h in 0..side.halves.len() {
+        let own: Vec<Frame> = frames.iter().filter(|f| f.half == h).cloned().collect();
+        halves.push(HalfFigures {
+            shape: FreeShape::of(&measure_frames(&own, side.pitch[0], Mode::BallFree)?),
+            passes: passes.get(h).copied().unwrap_or_default(),
+        });
+    }
     let mut live = vec![0u32; side.halves.len()];
     for f in &frames {
         if f.live == Some(true) {
@@ -263,6 +311,7 @@ pub fn figures_of(records: &[TickRecord], side: &Side) -> anyhow::Result<MatchFi
             events_unplaced: side.unplaced,
         },
         figures: named(&v),
+        halves,
     })
 }
 
@@ -272,7 +321,7 @@ pub fn measure_dfl(data: &Path) -> anyhow::Result<TrackingFile> {
     for files in super::dfl::matches(data)? {
         let m = super::dfl::read(&files)?;
         let c = super::convert::to_ticks(&m)?;
-        let figures = figures_of(&c.records, &c.side)
+        let figures = figures_of(&c.records, &c.side, &dfl_pass_choice(&m))
             .with_context(|| format!("cannot measure {}", m.match_id))?;
         matches.push(figures);
     }
@@ -345,7 +394,7 @@ mod tests {
     #[test]
     fn the_figures_of_a_match_name_every_figure() {
         let c = fixture();
-        let f = figures_of(&c.records, &c.side).unwrap();
+        let f = figures_of(&c.records, &c.side, &[]).unwrap();
         assert_eq!(f.figures.len(), field_names().len());
         assert_eq!(f.live_minutes.len(), 2);
         assert_eq!(f.checks.off_pitch_spells, 3);
@@ -354,6 +403,34 @@ mod tests {
         let total: f64 = f.live_minutes.iter().sum();
         let live = f.figures["team.live_frames"][0] / (25.0 * 60.0);
         assert!((total - live).abs() < 1e-12);
+    }
+
+    /// The fixture's passes count by half and choice: flat, high and the cross.
+    #[test]
+    fn the_dfl_pass_choice_counts_by_half() {
+        let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tracking/dfl");
+        let m = dfl::read(&dfl::find(&data, "DFL-MAT-FIX001").unwrap()).unwrap();
+        let c = dfl_pass_choice(&m);
+        assert_eq!(c.len(), 2);
+        let passes = m
+            .events
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e.kind,
+                    EventKind::Pass { height: Some(_) } | EventKind::Cross
+                )
+            })
+            .count() as u32;
+        assert_eq!(
+            c.iter().map(|p| p.ground + p.high + p.cross).sum::<u32>(),
+            passes
+        );
+        assert!(c.iter().any(|p| p.high > 0) && c.iter().any(|p| p.cross > 0));
+        let f = figures_of(&fixture().records, &fixture().side, &c).unwrap();
+        assert_eq!(f.halves.len(), 2);
+        assert_eq!(f.halves[1].passes, c[1]);
+        assert!(f.halves[0].shape.length_m > 0.0);
     }
 
     /// A side file of another tick step is refused.

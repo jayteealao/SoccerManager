@@ -1,19 +1,19 @@
 {
   "schema": 1,
-  "rule": "in each half, from its first event to its last, the time from a stop to the next restart is dead",
+  "rule": "in each half, from its first event to its last (on DFL events, its kick-off to its final whistle), the time from a stop to the next restart is dead",
   "tolerance_minutes": 2.0,
   "matches": [
     {
       "match_id": "DFL-MAT-J03WMX",
-      "rule_minutes": 60.054,
+      "rule_minutes": 60.036,
       "tracked_minutes": 56.913,
-      "difference": 3.141
+      "difference": 3.123
     },
     {
       "match_id": "DFL-MAT-J03WN1",
-      "rule_minutes": 50.616,
+      "rule_minutes": 50.609,
       "tracked_minutes": 45.585,
-      "difference": 5.032
+      "difference": 5.024
     },
     {
       "match_id": "DFL-MAT-J03WOH",
@@ -23,9 +23,9 @@
     },
     {
       "match_id": "DFL-MAT-J03WOY",
-      "rule_minutes": 70.39,
+      "rule_minutes": 54.903,
       "tracked_minutes": 50.857,
-      "difference": 19.533
+      "difference": 4.046
     },
     {
       "match_id": "DFL-MAT-J03WPY",
@@ -41,9 +41,9 @@
     },
     {
       "match_id": "DFL-MAT-J03WR9",
-      "rule_minutes": 76.533,
+      "rule_minutes": 61.144,
       "tracked_minutes": 56.877,
-      "difference": 19.656
+      "difference": 4.266
     }
   ],
   "verdict": "fail",

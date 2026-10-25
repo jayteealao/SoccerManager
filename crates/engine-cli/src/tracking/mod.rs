@@ -7,12 +7,14 @@
 //! his team, starting place and position group, and the events. The converter and the
 //! shape report read only this type, so a second source needs only its own reader.
 
+pub mod contrast;
 pub mod convert;
 pub mod dfl;
 pub mod live_rule;
 pub mod measure;
 pub mod place;
 pub mod side;
+pub mod soccertrack;
 pub mod time;
 pub mod xml;
 
@@ -204,6 +206,25 @@ pub struct TrackedMatch {
     pub events: Vec<Event>,
 }
 
+/// The half of each event, from 0: each half-opening kick-off after the first opens the
+/// next half, and the events before the first belong to the first half.
+pub fn event_halves(events: &[Event]) -> Vec<usize> {
+    let mut half = 0;
+    let mut opened = false;
+    events
+        .iter()
+        .map(|e| {
+            if matches!(e.kind, EventKind::KickOff { half_start: true }) {
+                if opened {
+                    half += 1;
+                }
+                opened = true;
+            }
+            half
+        })
+        .collect()
+}
+
 /// The raw data folder: `--data`, or the main checkout's `.scratch/data`.
 fn data_folder(content_root: &Path, flag: Option<&Path>) -> anyhow::Result<PathBuf> {
     match flag {
@@ -265,6 +286,25 @@ pub fn run(content_dir: Option<&Path>, opts: &TrackingOpts) -> anyhow::Result<i3
             println!("wrote {}", path.display());
             Ok(0)
         }
+        TrackingAction::Contrast {
+            soccertrack,
+            tracking,
+            out,
+        } => {
+            let tracking = tracking
+                .clone()
+                .unwrap_or_else(|| measure::default_out(dir.root()));
+            let file = measure::TrackingFile::read(&tracking)?;
+            let c = contrast::contrast(soccertrack, &file)?;
+            print!("{}", c.table());
+            let path = match out {
+                Some(p) => p.clone(),
+                None => contrast::default_out(&data_folder(dir.root(), None)?),
+            };
+            c.write(&path, &crate::real_targets::gate_dir(dir.root()))?;
+            println!("wrote {}", path.display());
+            Ok(0)
+        }
         TrackingAction::Measure { data, out } => {
             let folder = data_folder(dir.root(), data.as_deref())?;
             let file = measure::measure_dfl(&folder)?;
@@ -297,6 +337,29 @@ pub fn run(content_dir: Option<&Path>, opts: &TrackingOpts) -> anyhow::Result<i3
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Events before the first half-opening kick-off belong to the first half.
+    #[test]
+    fn the_events_before_the_first_kick_off_are_in_the_first_half() {
+        let e = |kind: EventKind| Event {
+            kind,
+            team: None,
+            person: None,
+            time_ms: Some(0),
+            clock: None,
+            decision_ms: None,
+            recipient: None,
+        };
+        let events = [
+            e(EventKind::Foul),
+            e(EventKind::KickOff { half_start: true }),
+            e(EventKind::Cross),
+            e(EventKind::KickOff { half_start: false }),
+            e(EventKind::KickOff { half_start: true }),
+            e(EventKind::Cross),
+        ];
+        assert_eq!(event_halves(&events), [0, 0, 0, 0, 1, 1]);
+    }
 
     #[test]
     fn every_dfl_code_of_the_seven_matches_has_a_group() {

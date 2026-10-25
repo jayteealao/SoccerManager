@@ -220,6 +220,37 @@ pub enum TrackingAction {
         )]
         out: Option<PathBuf>,
     },
+    /// Contrast amateur and elite team shape and pass choice.
+    #[command(
+        long_about = "Contrast the team shape (length, width, spread) and pass choice of
+                      the SoccerTrack v2 amateur matches with the DFL elite matches of the
+                      tracking file, per half. SoccerTrack data sets no target: the
+                      contrast holds no other figure and never writes under gate/. Pass
+                      choice of the amateur matches needs SoccerTrack's ball-action
+                      files; without them the contrast says so."
+    )]
+    Contrast {
+        /// The SoccerTrack v2 folder with the game-state files.
+        #[arg(long, value_name = "DIR")]
+        soccertrack: PathBuf,
+        /// The tracking file of the elite matches.
+        #[arg(
+            long,
+            value_name = "FILE",
+            long_help = "The tracking file of the elite matches; default
+                         gate/tracking/dfl-matches.json of the checkout."
+        )]
+        tracking: Option<PathBuf>,
+        /// The contrast file to write.
+        #[arg(
+            long,
+            value_name = "FILE",
+            long_help = "The contrast file to write; default
+                         .scratch/tracking-contrast/contrast.json of the main checkout. A
+                         path under gate/ is refused."
+        )]
+        out: Option<PathBuf>,
+    },
     /// Measure every DFL tracked match with the shared shape report.
     #[command(
         long_about = "Convert every DFL tracked match of the data folder and measure it

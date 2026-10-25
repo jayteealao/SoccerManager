@@ -30,8 +30,9 @@ pub const TOLERANCE_MIN: f64 = 2.0;
 /// The check file's schema.
 pub const SCHEMA: u32 = 1;
 /// The rule in words, as the check file states it.
-pub const RULE: &str = "in each half, from its first event to its last, the time from a stop \
-                        to the next restart is dead";
+pub const RULE: &str = "in each half, from its first event to its last (on DFL events, its \
+                        kick-off to its final whistle), the time from a stop to the next \
+                        restart is dead";
 
 /// What an event does to play.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,17 +89,30 @@ pub fn live_minutes(halves: &[Vec<Marked>]) -> f64 {
 }
 
 /// The DFL mapping: each half's marked events, the halves split at each half-opening
-/// kick-off.
+/// kick-off, each bounded by its kick-off and its final whistle (an event the provider logs
+/// before the kick-off or after the whistle, such as a line-up change, is no play).
 pub fn dfl_halves(m: &TrackedMatch) -> Vec<Vec<Marked>> {
+    let halves_of = super::event_halves(&m.events);
+    let mut bounds: Vec<(Option<i64>, Option<i64>)> = Vec::new();
+    for (e, &h) in m.events.iter().zip(&halves_of) {
+        if bounds.len() <= h {
+            bounds.resize(h + 1, (None, None));
+        }
+        match e.kind {
+            EventKind::KickOff { half_start: true } => bounds[h].0 = bounds[h].0.or(e.time_ms),
+            EventKind::FinalWhistle => bounds[h].1 = e.time_ms.or(bounds[h].1),
+            _ => {}
+        }
+    }
     let mut halves: Vec<Vec<Marked>> = Vec::new();
-    for e in &m.events {
+    for (e, h) in m.events.iter().zip(super::event_halves(&m.events)) {
         let Some(t) = e.time_ms else {
             continue;
         };
-        if matches!(e.kind, EventKind::KickOff { half_start: true }) || halves.is_empty() {
-            halves.push(Vec::new());
+        if halves.len() <= h {
+            halves.resize(h + 1, Vec::new());
         }
-        let half = halves.last_mut().expect("a half was opened");
+        let half = &mut halves[h];
         let restart = matches!(
             e.kind,
             EventKind::ThrowIn
@@ -126,6 +140,10 @@ pub fn dfl_halves(m: &TrackedMatch) -> Vec<Vec<Marked>> {
             _ => Mark::Other,
         };
         half.push(Marked { t_ms: t, mark });
+    }
+    for (h, half) in halves.iter_mut().enumerate() {
+        let (from, to) = bounds.get(h).copied().unwrap_or((None, None));
+        half.retain(|e| from.is_none_or(|f| e.t_ms >= f) && to.is_none_or(|z| e.t_ms <= z));
     }
     halves
 }
@@ -383,11 +401,11 @@ mod tests {
             .iter_mut()
             .find(|e| e.kind == EventKind::ThrowIn)
             .unwrap();
-        throw.decision_ms = throw.time_ms.map(|t| t - 6000);
+        throw.decision_ms = throw.time_ms.map(|t| t - 200);
         let t = throw.time_ms.unwrap();
         let halves = dfl_halves(&m);
         assert!(
-            dead_spans(&halves[0]).contains(&(t - 6000, t)),
+            dead_spans(&halves[0]).contains(&(t - 200, t)),
             "{:?} {base}",
             dead_spans(&halves[0])
         );

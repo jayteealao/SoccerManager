@@ -450,3 +450,46 @@ fn live_check_writes_the_rule_against_the_tracked_minutes() {
     let within = (rule - tracked).abs() <= 2.0;
     assert_eq!(v["verdict"], if within { "pass" } else { "fail" });
 }
+
+/// `tracking contrast` prints the amateur and elite table and writes the contrast; an
+/// output under `gate/` is refused.
+#[test]
+fn contrast_writes_amateur_and_elite_and_never_under_gate() {
+    let dir = TempDir::new().unwrap();
+    let tracking = dir.path().join("matches.json");
+    let out = bin()
+        .args(["tracking", "measure", "--data"])
+        .arg(fixtures().join("dfl"))
+        .arg("--out")
+        .arg(&tracking)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", text(&out));
+    let file = dir.path().join("contrast.json");
+    let run = |out: &Path| {
+        bin()
+            .args(["tracking", "contrast", "--soccertrack"])
+            .arg(fixtures().join("soccertrack"))
+            .arg("--tracking")
+            .arg(&tracking)
+            .arg("--out")
+            .arg(out)
+            .output()
+            .unwrap()
+    };
+    let o = run(&file);
+    assert!(o.status.success(), "{}", text(&o));
+    assert!(
+        text(&o).contains("amateur") && text(&o).contains("elite"),
+        "{}",
+        text(&o)
+    );
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(v["source"], "SoccerTrack");
+    assert_eq!(v["amateur"]["mean"].as_array().unwrap().len(), 2);
+    let gate = repo().join("gate/tracking/contrast-refused.json");
+    let o = run(&gate);
+    assert_eq!(o.status.code(), Some(1), "{}", text(&o));
+    assert!(text(&o).contains("never writes under"), "{}", text(&o));
+    assert!(!gate.exists());
+}

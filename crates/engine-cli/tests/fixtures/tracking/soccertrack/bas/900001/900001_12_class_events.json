@@ -1,0 +1,54 @@
+{
+ "UrlLocal": "",
+ "annotations": [
+  {
+   "gameTime": "1 - 00:05",
+   "label": "Pass",
+   "position": "5000",
+   "team": "left",
+   "visibility": "visible"
+  },
+  {
+   "gameTime": "1 - 00:09",
+   "label": "Pass",
+   "position": "9000",
+   "team": "right",
+   "visibility": "visible"
+  },
+  {
+   "gameTime": "1 - 00:12",
+   "label": "High Pass",
+   "position": "12000",
+   "team": "left",
+   "visibility": "visible"
+  },
+  {
+   "gameTime": "1 - 00:15",
+   "label": "Cross",
+   "position": "15000",
+   "team": "left",
+   "visibility": "visible"
+  },
+  {
+   "gameTime": "1 - 00:20",
+   "label": "Drive",
+   "position": "20000",
+   "team": "right",
+   "visibility": "visible"
+  },
+  {
+   "gameTime": "2 - 00:02",
+   "label": "Pass",
+   "position": "2000",
+   "team": "right",
+   "visibility": "visible"
+  },
+  {
+   "gameTime": "2 - 00:07",
+   "label": "Cross",
+   "position": "7000",
+   "team": "left",
+   "visibility": "visible"
+  }
+ ]
+}
