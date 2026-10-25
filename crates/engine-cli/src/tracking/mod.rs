@@ -12,6 +12,7 @@ pub mod convert;
 pub mod dfl;
 pub mod live_rule;
 pub mod measure;
+pub mod pff;
 pub mod place;
 pub mod side;
 pub mod soccertrack;
@@ -57,6 +58,21 @@ impl Group {
             "DML" | "DMR" | "DMZ" | "ZO" | "HL" | "HR" => Group::Cm,
             "OLM" | "ORM" | "LM" | "RM" | "LA" | "RA" => Group::W,
             "STL" | "STR" | "STZ" => Group::St,
+            _ => return None,
+        })
+    }
+
+    /// The group of a PFF `positionGroupType`: GK keeper; LCB, RCB, MCB centre-back; LB, RB
+    /// and the wing-backs LWB, RWB full-back; DM, CM, AM central midfield; LM, RM, LW, RW
+    /// winger; CF striker. `None` for any other code.
+    pub fn from_pff(code: &str) -> Option<Self> {
+        Some(match code {
+            "GK" => Group::Keeper,
+            "LCB" | "RCB" | "MCB" => Group::Cb,
+            "LB" | "RB" | "LWB" | "RWB" => Group::Fb,
+            "DM" | "CM" | "AM" => Group::Cm,
+            "LM" | "RM" | "LW" | "RW" => Group::W,
+            "CF" => Group::St,
             _ => return None,
         })
     }
