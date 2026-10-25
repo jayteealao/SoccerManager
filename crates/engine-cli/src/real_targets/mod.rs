@@ -19,7 +19,9 @@
 //! - `fd.<div>.dist.<scorelines|goals|shots|cards>`, `tier.<n>.dist.…`: whole
 //!   distributions;
 //! - `wy.<league>.duel_contests_per_match`, `wy.pooled.duel_contests_per_match`;
-//! - `fotmob.<div>.pass_completion`, `fotmob.pooled.pass_completion`.
+//! - `fotmob.<div>.pass_completion`, `fotmob.pooled.pass_completion`;
+//! - `sb.<competition>_<season>.<stat>`, `sb.<…>.dist.<kind>`: one StatsBomb
+//!   competition-season; `sb.men.<stat>`, `sb.men.dist.<kind>`: the men's senior pool.
 
 pub mod build;
 pub mod calibration;
@@ -30,6 +32,7 @@ pub mod football_data;
 pub mod fotmob;
 pub mod layers;
 pub mod shots_check;
+pub mod statsbomb;
 pub mod tables;
 pub mod tracked;
 
