@@ -177,7 +177,7 @@ Each band's word compares the engine with its target, real football or a design 
 - `fail`: the whole interval sits outside the margin.
 - `not sure`: the interval crosses an edge of the margin, or the run is under the band's minimum exposure, or the band has no target value here. Not sure is never a pass; play more matches or more leagues to narrow the interval.
 
-The table prints each band's interval and margin, and `report.json` holds them on each row (`pass_rule`: the interval's ends, the point, the margin, the target, the exposure). Every band can block a change except the bands of a report-only group of the band file (today the four rare goal and scoreline bands whose real figures are too uncertain to judge).
+The table prints each band's interval and margin, and `report.json` holds them on each row (`pass_rule`: the interval's ends, the point, the margin, the target, the exposure). Every band can block a change except the bands of a report-only group of the band file (today the four rare goal and scoreline bands whose real figures are too uncertain to judge, and the scan-rate band, which the engine does not count yet).
 
 The headline counts the provisional margins:
 
@@ -186,6 +186,8 @@ margins: 36 provisional, widened to hold the 97 percent floor on today's 3 gener
 ```
 
 `calib.provisional_margins` in `report.json` names them. After it, each report-only band prints its needed margin and whether it would hold now; `calib.report_only_floor` holds the same rows.
+
+For a rare band, `would hold now: yes` means its margin already meets the floor with the real error read here, so it could gate if the band file moved it out of its group; `no` gives the margin it would need. The report never moves a band: that is an edit to the band file. A pending band has no engine count and prints no floor row.
 
 ## Read the band history and drifts
 
@@ -415,6 +417,19 @@ The proof prints its summary and writes it under `proof` in `content/gate-proof.
 - `copies`: for each broken copy, its fail rate (runs whose joint word is `fail`), its `detection_rate` (runs in which the band it names moved), `missed` (runs in which no band moved), and `moved` (each band that moved, with the number of runs it did). A copy with misses is a broken engine that the gate did not catch every time.
 - `distribution_bands`: for each whole-distribution band, the copies that moved it. An empty list means that no copy moved it, so the proof does not show that this band catches a broken engine.
 - `counts`: the total matches, the pairs, and the matches of each engine over every run.
+
+## Rebuild the real targets and the side files
+
+After new raw data arrives in the main checkout's `.scratch/data`, check it and rebuild:
+
+```bash
+target/release/engine-cli real-targets check-data
+target/release/engine-cli real-targets build
+```
+
+The build rewrites `gate/real-targets.json` and the side files in `.scratch/real-targets`. Commit the reference file; the side files stay on this PC. IMPECT's terms do not allow its figures to be shared, so its targets live only in the side file, and a test fails if one reaches `gate/` or `content/`.
+
+`calibrate report` reads the side file and ends with its side line. `IMPECT side file: read from <path> (<n> targets)` means the IMPECT targets are in the table beside the bands they name. `IMPECT side file absent at <path>` means this PC has no side file there (a CI runner, a fresh checkout, or another `--side-dir`): the report is complete except for the IMPECT comparisons, which never set a verdict.
 
 ## Point at another real-data folder
 

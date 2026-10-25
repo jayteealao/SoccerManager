@@ -527,15 +527,16 @@ Standard error carries structured lines beside the tables. Each line has a `sign
 ### Calibration report
 
 ```bash
-engine-cli calibrate report --run <DIR> [--targets <FILE>]
+engine-cli calibrate report --run <DIR> [--targets <FILE>] [--side-dir <DIR>]
 ```
 
-`calibrate report` shows the engine against the real targets of the reference file (see [real-targets](#real-targets)), band by band, from the stored rows of a finished run folder. It plays nothing and needs no `--seed`. It reads the matches of the equal suite (clubs of the same strength) and, for each registry band that a target names in its `engine_count.band`, prints the engine's value with its standard error and each real target with its value, standard error and `engine less real`; for a whole-distribution band it prints the engine's shares, each target's shares, and their distance (total variation for the scoreline cells, Wasserstein-1 otherwise). Banding-group targets are left to the file. The bands no target names are listed last. It writes `calibration.json` in the run folder, with every target, and never writes `report.json`: the run's verdict does not change. A folder without a finished match of the equal suite is refused, with exit code 1.
+`calibrate report` shows the engine against the real targets of the reference file (see [real-targets](#real-targets)), band by band, from the stored rows of a finished run folder. It plays nothing and needs no `--seed`. It reads the matches of the equal suite (clubs of the same strength) and, for each registry band that a target names in its `engine_count.band`, prints the engine's value with its standard error and each real target with its value, standard error and `engine less real`; for a whole-distribution band it prints the engine's shares, each target's shares, and their distance (total variation for the scoreline cells, Wasserstein-1 otherwise). Each target's line names its source label. Banding-group targets and the StatsBomb targets of one competition-season (`sb.<competition>_<season>.…`) are counted and left to the file; the StatsBomb men's senior pool (`sb.men.…`) is shown. The targets of the local IMPECT side file join the bands they name when the side folder holds it, and the report ends with `IMPECT side file: read from <path> (<n> targets)`, or `IMPECT side file absent at <path>: IMPECT-derived targets not shown`. The bands no target names are listed last. It writes `calibration.json` in the run folder, with every target, its source label and the side line (`side`), and never writes `report.json`: the run's verdict does not change. A folder without a finished match of the equal suite is refused, with exit code 1.
 
 | Argument | Value | Default | Meaning |
 |---|---|---|---|
 | `--run` | folder | required | The run folder of a finished calibrate run. |
 | `--targets` | file | `gate/real-targets.json` beside the content folder | The reference file of real targets. |
+| `--side-dir` | folder | the main checkout's `.scratch/real-targets` | The local side folder, where the IMPECT side file is read. |
 
 ### Real values
 
@@ -705,19 +706,22 @@ Check the raw real data, or build the reference file of real targets, `gate/real
 
 ```text
 engine-cli real-targets check-data [--data <DIR>]
-engine-cli real-targets build [--data <DIR>] [--out <FILE>]
+engine-cli real-targets build [--data <DIR>] [--out <FILE>] [--side-dir <DIR>]
 ```
 
-`check-data` counts the 110 football-data.co.uk result files (22 divisions, 2021/22 to 2025/26), the 25 FotMob tables, the 20 SoccerTrack v2 annotation files named in their download record, and a ClubElo snapshot `clubelo/clubelo-<date>.csv`. It prints each group's count against the expected count, then names each missing file (`missing: <path>`) and each file that differs from its manifest's sha256, or for SoccerTrack its recorded size (`not as recorded: <path>`).
+`check-data` counts the 110 football-data.co.uk result files (22 divisions, 2021/22 to 2025/26), the 25 FotMob tables, the 20 SoccerTrack v2 annotation files named in their download record, a ClubElo snapshot `clubelo/clubelo-<date>.csv`, the open-data group (StatsBomb's competition list and the match files of every competition-season it builds, Germany's two neighbour seasons of fouls and the scanning-studies table) and the IMPECT group (its match list and event files), which is not required: without it the IMPECT side file is not built. It prints each group's count against the expected count, then names each missing file (`missing: <path>`) and each file that differs from its manifest's sha256, or for SoccerTrack its recorded size (`not as recorded: <path>`).
 
 `build` writes the reference file: per-league targets over the five seasons (goals, results, shots, fouls, corners and cards, with each target's standard error over whole matches and its spread between seasons), a target set per tier (each league with equal weight, with the spread between leagues), banding-group targets for the leagues without data (by tier and a 50-point ClubElo strength bin, the prediction of a formula fitted on the leagues with data, with its prediction error, marked `extrapolated` outside the fitted range), league-table targets (champion points, the points of the first direct relegation place, the spread of points per game, the title margin), whole distributions (every scoreline cell, goals, shots and cards per match), Wyscout duel contests per match (two rows of one duel count as one contest), and pass completion by Opta's count from the FotMob tables. Every target carries its provider, event definition, denominator, unit of observation, calibration or validation label and how the engine counts the same thing; the file credits each provider and records each raw file read with its sha256. Before any shot target, a cross-check on StatsBomb's Bundesliga 2023/24 events decides whether the result files' shot counts include blocked shots; it prints its table, and when they do not, no shot target is built. Beside the file it writes `real-names/football-data.json`, the real club names of the result files, which the packaging check keeps out of the shipped content. Two builds of the same files write the same bytes. The Wyscout held-out sets (Germany 2017/18, World Cup 2018, Euro 2016) are never opened.
+
+The build also reads the open data. StatsBomb gives a target set for every competition-season of its open data (`sb.<competition>_<season>.<stat>` and `.dist.<kind>`: shots on target, goals per expected goal, shot distance, possession by third, goals by how the move began, and the shot-distance and possession-chain distributions), each labelled with its competition, season and context (men's or women's, club or international, youth); and a pool of the men's senior seasons (`sb.men.…`) with the spread between seasons. World Cup 2018 (a held-out set), La Liga 2017/18 (the Wyscout Spain season) and Bundesliga 2023/24 (the IMPECT season) never give a StatsBomb target. Germany's referee strictness (`strict.D1.fouls_per_team`) is the mean of the 2016/17 and 2018/19 result files' fouls per team; the held-out 2017/18 file is never opened. Jordet and others' 2020 scanning study gives `lit.jordet2020.scans_per_second`. IMPECT's Bundesliga 2023/24 events give targets whose terms keep them off the committed tree: the build writes them to `impect-targets.json` in the local side folder, with the StatsBomb per-match histograms of the men's pool (`statsbomb-match-histograms.csv`, read by the bands that resample StatsBomb by match). The build refuses a side folder inside a checkout that is not under its `.scratch/`, and prints each side file it wrote. A missing open-data input leaves its targets out, with the reason under `absent`.
 
 | Flag | Value | Default | Meaning |
 |---|---|---|---|
 | `--data` | folder | the main checkout's `.scratch/data` | The raw data folder. |
 | `--out` | file | `gate/real-targets.json` beside the content folder | The reference file to write. |
+| `--side-dir` | folder | the main checkout's `.scratch/real-targets` | The local side folder for the files that are never committed. |
 
-Exit codes: `check-data` 0 when every file is there and as recorded, 1 otherwise; `build` 0 when the file is written, 1 when a raw file cannot be read.
+Exit codes: `check-data` 0 when every required file is there and as recorded, 1 otherwise; `build` 0 when the file is written, 1 when a raw file cannot be read or the side folder is refused.
 
 ## world-database
 

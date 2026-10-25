@@ -6,6 +6,7 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 
 ### Added
 
+- The real targets now include every StatsBomb open-data season (with World Cup 2018 and two repeated seasons left out), IMPECT 2023/24 kept in a local file, Germany's referee strictness from the neighbour seasons, and a report-only scan-rate band; the calibration report names each target's source.
 - Real tracked matches are converted into the engine's tick format and measured by the same team-shape report as engine matches, at 25 frames a second; the event-based live-time rule is checked against the tracked ball status; SoccerTrack gives an amateur-against-elite contrast of team shape that never sets a target. `engine-cli tracking convert`, `measure`, `live-check` and `contrast` do each step, and `engine-cli real-targets build` adds a `trk.dfl.<band>` target for each tracked band.
 - Content: the 101 team-shape bands and the 8 running bands now read the shared shape report and judge against the tracked-match targets, resampled by tracked match. The real error of 7 tracked matches puts 100 of their margins under the 97 percent floor, so each is widened to the needed value, marked provisional with the reason "real error from 7 tracked matches"; a margin may narrow back when more tracked matches exist.
 - A world database of every country and tier the open sources cover, with generated club names and Elo strengths, and a command that rebuilds it from local snapshots.
