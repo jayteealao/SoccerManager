@@ -1,10 +1,13 @@
 //! The converter: a tracked match into the engine's tick records and a side file, the tick
 //! format unchanged.
 //!
-//! - Engine tick `base + 2k` holds frame `k` of a half, counted from the half's first frame
-//!   with a ball position; half 1's base is 0, each later half's the previous half's last
-//!   tick plus 2, as the engine's ticks run on across half time. The odd ticks get no record,
-//!   and the side file says so.
+//! - Engine tick `base + s k` holds frame `k` of a half, counted from the half's first frame
+//!   with a ball position, where `s` is the match's ticks per frame: 2 for a source of 25
+//!   frames a second, whose odd ticks get no record, and 1 for frames resampled to 50 a
+//!   second ([super::resample]), one on every tick; the side file says which. Half 1's base
+//!   is 0, each later half's the previous half's last tick plus `s`, as the engine's ticks
+//!   run on across half time. The side file names the report's 25 frames a second either
+//!   way: every second tick from a half's start.
 //! - Team 0 is the home team. Each team's starters hold slots 0 to 10 in their starting
 //!   order with the keeper in slot 0; a substitute takes the replaced player's slot from the
 //!   substitution's tick. A slot whose player is not on the pitch (not tracked in a frame,
@@ -13,7 +16,9 @@
 //! - Coordinates stay in metres as recorded, centred on the stadium's pitch. Each half's
 //!   attack direction comes from the keepers' mean x; the whole match is turned by 180
 //!   degrees when needed so team 0 attacks towards positive x in the first half, as in the
-//!   engine, and a match whose direction does not change at half time is refused.
+//!   engine, and a match whose direction does not change at half time is refused, as is
+//!   one whose first-half direction disagrees with the end the match information says the
+//!   home team starts on.
 //! - Every event is placed on a frame ([super::place]); a restart sets the restart bit of
 //!   its tick, and the side file lists each placed event and how it was placed.
 
@@ -41,6 +46,7 @@ pub fn credit(source: &str) -> &'static str {
             "DFL tracking and event data, Bassek, Rein, Weber and Memmert (2025), \
              figshare doi 10.6084/m9.figshare.28196177.v1, CC BY 4.0"
         }
+        "PFF" => "PFF FC, FIFA World Cup 2022 broadcast tracking (data-request form)",
         _ => "",
     }
 }
@@ -86,7 +92,8 @@ fn half_ticks(m: &TrackedMatch) -> anyhow::Result<Vec<HalfTicks>> {
     ensure!(!m.halves.is_empty(), "match {} has no half", m.match_id);
     ensure!(
         matches!(m.ticks_per_frame, 1 | 2),
-        "match {}: {} ticks per frame; the converter takes 1 (frames at 50 a second) or 2          (25 a second)",
+        "match {}: {} ticks per frame; the converter takes 1 (frames at 50 a second) or 2 \
+         (25 a second)",
         m.match_id,
         m.ticks_per_frame
     );
@@ -208,6 +215,21 @@ pub struct Converted {
 pub fn to_ticks(m: &TrackedMatch) -> anyhow::Result<Converted> {
     let ticks = half_ticks(m)?;
     let dirs = directions(m, &ticks)?;
+    if let Some(left) = m.notes.home_starts_left
+        && left != (dirs[0] > 0.0)
+    {
+        bail!(
+            "match {}: the keepers put the home team's first-half attack {} but the match \
+             information says the home team starts on the {} end; the converter refuses it",
+            m.match_id,
+            if dirs[0] > 0.0 {
+                "towards positive x"
+            } else {
+                "towards negative x"
+            },
+            if left { "negative-x" } else { "positive-x" }
+        );
+    }
     let rotate = dirs[0] < 0.0;
     let turn = |v: f32| if rotate { -v } else { v };
     let pitch = Pitch::new(m.pitch[0], m.pitch[1])
@@ -416,7 +438,12 @@ pub fn to_ticks(m: &TrackedMatch) -> anyhow::Result<Converted> {
         pitch: m.pitch,
         frame_rate: FRAME_RATE,
         tick_step: TICK_STEP,
-        odd_ticks: "absent".into(),
+        odd_ticks: if m.ticks_per_frame == 1 {
+            "resampled"
+        } else {
+            "absent"
+        }
+        .into(),
         rotated: rotate,
         halves: m
             .halves
@@ -438,6 +465,10 @@ pub fn to_ticks(m: &TrackedMatch) -> anyhow::Result<Converted> {
         events: placed,
         unplaced,
         clock_offset: offset,
+        resampled_from: m.resampled_from,
+        ball_status_from: m.notes.ball_status_from.clone(),
+        estimated_share: m.notes.estimated_share,
+        left_out: m.notes.left_out.clone(),
     };
     Ok(Converted { records, side })
 }

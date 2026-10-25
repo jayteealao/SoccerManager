@@ -184,24 +184,30 @@ pub struct TrackingOpts {
 pub enum TrackingAction {
     /// Convert one tracked match into a tick file and a side file.
     #[command(
-        long_about = "Convert one DFL tracked match into the engine's tick format and a\n\
-                      side file, the format unchanged: engine tick 2k holds frame k\n\
-                      from the first ball frame of each half, the odd ticks are absent,\n\
-                      a player off the pitch stands on his slot's parking spot, and the\n\
+        long_about = "Convert one DFL or PFF tracked match into the engine's tick format\n\
+                      and a side file, the format unchanged. DFL: engine tick 2k holds\n\
+                      frame k from the first ball frame of each half, the odd ticks are\n\
+                      absent. PFF: the 29.97 frames a second are resampled to 50 a\n\
+                      second from the first ball frame of each half, one per tick. A\n\
+                      player off the pitch stands on his slot's parking spot, and the\n\
                       side file holds the halves, the slots, the off-pitch spells, the\n\
                       ball status and possession, and the placed events. Writes\n\
                       <ID>.ticks and <ID>.side.json in the output folder."
     )]
     Convert {
+        /// The provider of the match.
+        #[arg(long, value_enum, default_value = "dfl")]
+        source: TrackSource,
         /// The raw data folder.
         #[arg(
             long,
             value_name = "DIR",
-            long_help = "The raw data folder holding idsse/ with the DFL files; default\n\
-                         the main checkout's .scratch/data."
+            long_help = "The raw data folder holding idsse/ with the DFL files or\n\
+                         pff-wc2022/ with the PFF files; default the main checkout's\n\
+                         .scratch/data."
         )]
         data: Option<PathBuf>,
-        /// The DFL match id, such as DFL-MAT-J03WMX.
+        /// The match id, such as DFL-MAT-J03WMX or the PFF 3812.
         #[arg(long = "match", value_name = "ID")]
         match_id: String,
         /// The folder the tick file and the side file go to.
@@ -267,32 +273,51 @@ pub enum TrackingAction {
         )]
         out: Option<PathBuf>,
     },
-    /// Measure every DFL tracked match with the shared shape report.
+    /// Measure every tracked match of one provider with the shared shape report.
     #[command(
-        long_about = "Convert every DFL tracked match of the data folder and measure it
-                      with the shared shape report, the code that measures an engine
-                      match, at 25 frames a second. Writes each match's figures, frames,
-                      ball-in-play minutes per half, clock offset and converter checks
-                      into one file, and prints one line per match."
+        long_about = "Convert every tracked match of one provider in the data folder and\n\
+                      measure it with the shared shape report, the code that measures an\n\
+                      engine match, at 25 frames a second. Writes each match's figures,\n\
+                      frames, ball-in-play minutes per half, clock offset and converter\n\
+                      checks into one file, and prints one line per match; for PFF also\n\
+                      the frame lines read, the share of estimated player rows, the\n\
+                      frames without a ball and the periods left out, and a totals line."
     )]
     Measure {
+        /// The provider of the matches.
+        #[arg(long, value_enum, default_value = "dfl")]
+        source: TrackSource,
         /// The raw data folder.
         #[arg(
             long,
             value_name = "DIR",
-            long_help = "The raw data folder holding idsse/ with the DFL files; default
-                         the main checkout's .scratch/data."
+            long_help = "The raw data folder holding idsse/ with the DFL files or\n\
+                         pff-wc2022/ with the PFF files; default the main checkout's\n\
+                         .scratch/data."
         )]
         data: Option<PathBuf>,
+        /// Matches converted at the same time (PFF); default 1.
+        #[arg(long, value_name = "N")]
+        jobs: Option<u32>,
         /// The tracking file to write.
         #[arg(
             long,
             value_name = "FILE",
-            long_help = "The tracking file to write; default gate/tracking/dfl-matches.json
+            long_help = "The tracking file to write; default\n\
+                         gate/tracking/dfl-matches.json or gate/tracking/pff-matches.json\n\
                          of the checkout."
         )]
         out: Option<PathBuf>,
     },
+}
+
+/// The provider of a tracked match.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum TrackSource {
+    /// DFL Bundesliga tracking, 25 frames a second.
+    Dfl,
+    /// PFF FC World Cup 2022 broadcast tracking, 29.97 frames a second.
+    Pff,
 }
 
 /// The world database command.

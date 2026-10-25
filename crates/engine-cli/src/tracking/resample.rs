@@ -6,8 +6,9 @@
 //! both hold him and lie at most 100 ms apart, the frame's own position when the instant
 //! falls on a frame, and none otherwise: the converter then parks him for that tick and lists
 //! the spell. The ball the same, height included; without one the converter repeats the last
-//! ball and lists the tick. The ball status and possession are the earlier frame's. Times are
-//! the native frames' unrounded milliseconds.
+//! ball and lists the tick. The ball status and possession are those of the nearer frame, the
+//! earlier on a tie, as an event goes to its nearest frame. Times are the native frames'
+//! unrounded milliseconds.
 
 use anyhow::ensure;
 
@@ -79,12 +80,13 @@ pub fn resample(m: &TrackedMatch, times: &[Vec<f64>], fps: f64) -> anyhow::Resul
             let j = (i + 1).min(t.len() - 1);
             let span = (t[i], t[j], at);
             let (a, b) = (&half.frames[i], &half.frames[j]);
+            let near = if t[j] - at < at - t[i] { b } else { a };
             frames.push(Frame {
                 n: a.n,
                 t_ms: at.round() as i64,
                 ball: between(a.ball, b.ball, span),
-                live: a.live,
-                possession: a.possession,
+                live: near.live,
+                possession: near.possession,
             });
             for (p, out) in half.positions.iter().zip(&mut positions) {
                 out.push(between(p[i], p[j], span));
@@ -183,7 +185,7 @@ mod tests {
     }
 
     /// A pair of frames 33.4 ms apart is drawn across: the instant between them takes the
-    /// weighted mean of the two positions; the ball status is the earlier frame's.
+    /// weighted mean of the two positions; the ball status is the nearer frame's.
     #[test]
     fn an_instant_between_two_frames_takes_their_weighted_mean() {
         let (n, r) = fixture();
@@ -199,7 +201,15 @@ mod tests {
         let want = f64::from(a[0]) + w * (f64::from(b[0]) - f64::from(a[0]));
         let got = r.halves[0].positions[p][1].unwrap();
         assert!((f64::from(got[0]) - want).abs() < 1e-5);
-        assert_eq!(r.halves[0].frames[1].live, n.m.halves[0].frames[2].live);
+        assert_eq!(r.halves[0].frames[1].live, n.m.halves[0].frames[3].live);
+        // The OUT at frame 40 of half 1 is dead from the instant nearest it.
+        let out = t[40];
+        for (k, f) in r.halves[0].frames.iter().enumerate() {
+            let when = t[2] + 20.0 * k as f64;
+            if (when - out).abs() < 10.0 {
+                assert_eq!(f.live, Some(false), "instant {k}");
+            }
+        }
         // The ball is missing at frames 40 and 41 of half 2: no ball between 39 and 42.
         let t2 = &n.times[1];
         for (k, f) in r.halves[1].frames.iter().enumerate() {

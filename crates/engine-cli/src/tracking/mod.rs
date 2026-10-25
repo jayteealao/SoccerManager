@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
-use crate::cli::{TrackingAction, TrackingOpts};
+use crate::cli::{TrackSource, TrackingAction, TrackingOpts};
 
 /// A player's position group: the keeper and the five outfield groups of the shape report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -273,17 +273,85 @@ fn data_folder(content_root: &Path, flag: Option<&Path>) -> anyhow::Result<PathB
     }
 }
 
+/// Prints one line per measured PFF match, each refused match, and the totals.
+fn print_pff(run: &measure::PffRun) {
+    let mut live = Vec::new();
+    for (m, c) in run.file.matches.iter().zip(&run.counts) {
+        let halves: Vec<String> = m.live_minutes.iter().map(|v| format!("{v:.1}")).collect();
+        live.push(m.live_minutes.iter().sum::<f64>());
+        let left: Vec<String> = c
+            .left_out
+            .iter()
+            .map(|l| format!("period {} {} frames", l.period, l.frames))
+            .collect();
+        println!(
+            "{}: {} frames, ball in play {} minutes by half, {} frame lines, {:.1}% of \
+             player rows estimated, {} of {} frames without a ball, left out {}, direction \
+             checked{}",
+            m.match_id,
+            m.frames,
+            halves.join(" + "),
+            c.lines,
+            100.0 * c.estimated_share,
+            c.ball_absent,
+            c.native_frames,
+            if left.is_empty() {
+                "nothing".to_string()
+            } else {
+                left.join(", ")
+            },
+            if c.rotated {
+                ", turned by 180 degrees"
+            } else {
+                ""
+            }
+        );
+    }
+    for (id, why) in &run.refused {
+        println!("{id}: refused: {why}");
+    }
+    let n = run.counts.len();
+    let sum = |f: &dyn Fn(&measure::PffCounts) -> f64| run.counts.iter().map(f).sum::<f64>();
+    let frames: u64 = run.file.matches.iter().map(|m| u64::from(m.frames)).sum();
+    let native = sum(&|c| c.native_frames as f64);
+    println!(
+        "totals: {n} matches measured, {} refused; {frames} frames; {:.0} frame lines; ball in \
+         play {:.1} minutes a match on average; {:.1}% of player rows estimated (mean of \
+         matches); {:.1}% of frames without a ball",
+        run.refused.len(),
+        sum(&|c| c.lines as f64),
+        live.iter().sum::<f64>() / n.max(1) as f64,
+        100.0 * sum(&|c| c.estimated_share) / n.max(1) as f64,
+        100.0 * sum(&|c| f64::from(c.ball_absent)) / native.max(1.0)
+    );
+}
+
 /// Runs `engine-cli tracking`.
 pub fn run(content_dir: Option<&Path>, opts: &TrackingOpts) -> anyhow::Result<i32> {
     let dir = engine::ContentDir::resolve(content_dir)?;
     match &opts.action {
         TrackingAction::Convert {
+            source,
             data,
             match_id,
             out,
         } => {
             let folder = data_folder(dir.root(), data.as_deref())?;
-            let m = dfl::read(&dfl::find(&folder, match_id)?)?;
+            let m = match source {
+                TrackSource::Dfl => dfl::read(&dfl::find(&folder, match_id)?)?,
+                TrackSource::Pff => {
+                    let r = pff::read(&folder, match_id)?;
+                    println!(
+                        "{}: {} frame lines read, {} frames of the two halves resampled from \
+                         {} a second",
+                        r.m.match_id,
+                        r.lines,
+                        r.native_frames,
+                        r.m.resampled_from.unwrap_or_default()
+                    );
+                    r.m
+                }
+            };
             let converted = convert::to_ticks(&m)?;
             let (ticks, side) = convert::write(&converted, out)?;
             println!(
@@ -342,7 +410,37 @@ pub fn run(content_dir: Option<&Path>, opts: &TrackingOpts) -> anyhow::Result<i3
             println!("wrote {}", path.display());
             Ok(0)
         }
-        TrackingAction::Measure { data, out } => {
+        TrackingAction::Measure {
+            source: TrackSource::Pff,
+            data,
+            jobs,
+            out,
+        } => {
+            let folder = data_folder(dir.root(), data.as_deref())?;
+            let start = std::time::Instant::now();
+            let progress = |id: &str, done: &anyhow::Result<()>| match done {
+                Ok(()) => eprintln!(
+                    "{id}: measured after {:.0} s",
+                    start.elapsed().as_secs_f64()
+                ),
+                Err(e) => eprintln!("{id}: refused: {e}"),
+            };
+            let run = measure::measure_pff(&folder, jobs.unwrap_or(1) as usize, &progress)?;
+            print_pff(&run);
+            println!("wall time {:.0} s", start.elapsed().as_secs_f64());
+            let path = out
+                .clone()
+                .unwrap_or_else(|| measure::default_pff_out(dir.root()));
+            run.file.write(&path)?;
+            println!("wrote {}", path.display());
+            Ok(if run.refused.is_empty() { 0 } else { 1 })
+        }
+        TrackingAction::Measure {
+            source: TrackSource::Dfl,
+            data,
+            jobs: _,
+            out,
+        } => {
             let folder = data_folder(dir.root(), data.as_deref())?;
             let file = measure::measure_dfl(&folder)?;
             for m in &file.matches {

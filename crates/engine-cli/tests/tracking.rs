@@ -493,3 +493,235 @@ fn contrast_writes_amateur_and_elite_and_never_under_gate() {
     assert!(text(&o).contains("never writes under"), "{}", text(&o));
     assert!(!gate.exists());
 }
+
+const PFF: &str = "9001";
+
+/// The PFF fixture match `id` of `data` converted into `out`.
+fn convert_pff(data: &Path, id: &str, out: &Path) -> Output {
+    bin()
+        .args([
+            "tracking", "convert", "--source", "pff", "--match", id, "--data",
+        ])
+        .arg(data)
+        .arg("--out")
+        .arg(out)
+        .output()
+        .unwrap()
+}
+
+/// The PFF fixture match converted: its records and its side file.
+fn converted_pff() -> (TempDir, Vec<TickRecord>, Value) {
+    let dir = TempDir::new().unwrap();
+    let out = convert_pff(&fixtures().join("pff"), PFF, dir.path());
+    assert!(out.status.success(), "{}", text(&out));
+    assert!(
+        text(&out).contains("182 frame lines read"),
+        "{}",
+        text(&out)
+    );
+    let ticks = read_ticks(&dir.path().join(format!("{PFF}.ticks"))).unwrap();
+    let side: Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.path().join(format!("{PFF}.side.json"))).unwrap(),
+    )
+    .unwrap();
+    (dir, ticks.records, side)
+}
+
+/// Half 1 of the PFF fixture starts at its first ball frame, 100,066.733 ms of video time.
+const PFF_T0: f64 = 100_066.733;
+
+/// The PFF fixture's native frame times as its file writes them, half 1 from 100 s.
+fn pff_frame_ms(k: u32) -> f64 {
+    ((100_000.0 + f64::from(k) * 1000.0 / 29.97) * 1000.0).round() / 1000.0
+}
+
+/// The tick nearest native frame `k` of half 1 of the PFF fixture, the earlier on a tie.
+fn pff_nearest_tick(k: u32) -> u64 {
+    let ms = pff_frame_ms(k) - PFF_T0;
+    let below = (ms / 20.0).floor();
+    let pick = if ms - 20.0 * below <= 20.0 * (below + 1.0) - ms {
+        below
+    } else {
+        below + 1.0
+    };
+    pick as u64
+}
+
+/// Every tick of each half holds a frame resampled to 50 a second from the half's first
+/// ball frame: no tick is missing; the player running at 5 m/s sits on his line at each
+/// tick; the file is the engine's own format.
+#[test]
+fn a_pff_match_fills_every_tick_with_a_frame_resampled_to_fifty_a_second() {
+    let (dir, records, side) = converted_pff();
+    let ticks: Vec<u32> = records.iter().map(|r| r.tick).collect();
+    assert_eq!(ticks, (0..=294).collect::<Vec<u32>>());
+    let halves = side["halves"].as_array().unwrap();
+    assert_eq!(
+        (
+            halves[0]["start_tick"].as_u64(),
+            halves[0]["end_tick"].as_u64(),
+            halves[1]["start_tick"].as_u64(),
+            halves[1]["end_tick"].as_u64()
+        ),
+        (Some(0), Some(145), Some(146), Some(294))
+    );
+    assert_eq!(halves[0]["first_frame"], 3002);
+    // Home shirt 9 (slot 8) runs at 5 m/s along x in half 1.
+    for r in records.iter().filter(|r| r.tick <= 145) {
+        let t = PFF_T0 + 20.0 * f64::from(r.tick);
+        let want = -12.0 + 5.0 * (t - 100_000.0) / 1000.0;
+        let got = r.players[place(0, 8)];
+        assert!(
+            (f64::from(got[0]) - want).abs() < 1e-4 && (got[1] - 5.0).abs() < 1e-4,
+            "tick {}: {got:?}, want x {want}",
+            r.tick
+        );
+    }
+    let bytes = std::fs::read(dir.path().join(format!("{PFF}.ticks"))).unwrap();
+    assert_eq!(&bytes[0..4], b"SMTK");
+    assert_eq!(u16::from_le_bytes([bytes[4], bytes[5]]), 4);
+}
+
+/// The home team starts on the negative-x end, as the match information says, so the match
+/// is not turned; it attacks the other way after half time.
+#[test]
+fn a_pff_match_flips_its_play_direction_at_half_time() {
+    let (_dir, records, side) = converted_pff();
+    assert_eq!(side["rotated"], false);
+    let halves = side["halves"].as_array().unwrap();
+    assert_eq!(halves[0]["team0_attack"], 1.0);
+    assert_eq!(halves[1]["team0_attack"], -1.0);
+    let keeper = place(0, 0);
+    assert!(
+        records
+            .iter()
+            .filter(|r| r.tick <= 145)
+            .all(|r| r.players[keeper][0] < 0.0)
+    );
+    assert!(
+        records
+            .iter()
+            .filter(|r| r.tick >= 146)
+            .all(|r| r.players[keeper][0] > 0.0)
+    );
+}
+
+/// A match whose match information names the other starting end than its keepers show is
+/// refused, naming the match.
+#[test]
+fn a_pff_match_whose_starting_end_disagrees_with_its_keepers_is_refused() {
+    let data = TempDir::new().unwrap();
+    let from = fixtures().join("pff/pff-wc2022");
+    let to = data.path().join("pff-wc2022");
+    for (dir, name) in [
+        ("Metadata", "9001.json"),
+        ("Rosters", "9001.json"),
+        ("Event Data", "9001.json"),
+        ("Tracking Data", "9001.jsonl"),
+    ] {
+        std::fs::create_dir_all(to.join(dir)).unwrap();
+        let mut text = std::fs::read_to_string(from.join(dir).join(name)).unwrap();
+        if dir == "Metadata" {
+            let mut v: Value = serde_json::from_str(&text).unwrap();
+            v[0]["homeTeamStartLeft"] = false.into();
+            v[0]["id"] = "9003".into();
+            text = v.to_string();
+        }
+        std::fs::write(to.join(dir).join(name.replace("9001", "9003")), text).unwrap();
+    }
+    let out_dir = TempDir::new().unwrap();
+    let out = convert_pff(data.path(), "9003", out_dir.path());
+    assert_eq!(out.status.code(), Some(1), "{}", text(&out));
+    assert!(
+        text(&out).contains("match 9003") && text(&out).contains("starts on the positive-x end"),
+        "{}",
+        text(&out)
+    );
+    assert!(!out_dir.path().join("9003.ticks").exists());
+}
+
+/// The side file holds the ball status from the events, dead from the OUT's tick to the
+/// throw-in's, and the possession runs; it names the resampling and what was left out.
+#[test]
+fn a_pff_side_file_holds_ball_status_possession_and_the_resampling() {
+    let (_dir, _records, side) = converted_pff();
+    assert_eq!(side["odd_ticks"], "resampled");
+    assert_eq!(
+        (side["frame_rate"].as_u64(), side["tick_step"].as_u64()),
+        (Some(25), Some(2))
+    );
+    assert_eq!(side["resampled_from"], 29.97);
+    assert_eq!(side["ball_status_from"], "events");
+    assert_eq!(side["estimated_share"], 3.0 / 3914.0);
+    assert_eq!(
+        side["left_out"],
+        serde_json::json!([{"period": "0", "frames": 1}, {"period": "3", "frames": 1}])
+    );
+    assert!(side["credit"].as_str().unwrap().starts_with("PFF FC"));
+    let events = side["events"].as_array().unwrap();
+    let at = |kind: &str| -> Vec<u64> {
+        events
+            .iter()
+            .filter(|e| e["kind"] == kind)
+            .map(|e| e["tick"].as_u64().unwrap())
+            .collect()
+    };
+    // The OUT at native frame 40 and the throw-in at frame 55, each on its nearest tick.
+    let (out, throw_in) = (at("out")[0], at("throw_in")[0]);
+    assert_eq!(
+        (out, throw_in),
+        (pff_nearest_tick(40), pff_nearest_tick(55))
+    );
+    let runs = side["ball"].as_array().unwrap();
+    let run_at = |t: u64| {
+        runs.iter()
+            .find(|r| r["from_tick"].as_u64().unwrap() <= t && t <= r["to_tick"].as_u64().unwrap())
+            .unwrap()
+    };
+    let dead = run_at(out);
+    assert_eq!(dead["live"], false);
+    assert_eq!(dead["from_tick"].as_u64(), Some(out));
+    assert_eq!(dead["to_tick"].as_u64(), Some(throw_in - 1));
+    assert_eq!(run_at(throw_in)["live"], true);
+    assert_eq!(run_at(out - 1)["live"], true);
+    // Possession: home from the kick-off, away from the away pass, home from the throw-in.
+    assert_eq!(run_at(0)["possession"], 0);
+    assert_eq!(run_at(out)["possession"], 1);
+    assert_eq!(run_at(throw_in)["possession"], 0);
+    assert_eq!(at("sending_off").len(), 1);
+    assert_eq!(at("kick_off"), vec![0, 146]);
+}
+
+/// A DFL match converts byte for byte as before the resampling was added.
+#[test]
+fn a_dfl_match_converts_byte_for_byte_as_before() {
+    use sha2::{Digest, Sha256};
+    let (dir, _records, _side) = converted();
+    let hash = |name: &str| {
+        let bytes = std::fs::read(dir.path().join(name)).unwrap();
+        format!("{:x}", Sha256::digest(&bytes))
+    };
+    assert_eq!(
+        hash(&format!("{FIX}.ticks")),
+        "14375d5224ff7efed40d6ca2113755ced4a78c986bcd788c3a550aad92c87f23"
+    );
+    assert_eq!(
+        hash(&format!("{FIX}.side.json")),
+        "5a49b91c6bccafb590e9866821442c9e1cdf5b65e1bd393a1975a538c404e8d8"
+    );
+}
+
+/// The help of the tracking commands names both providers within 80 columns.
+#[test]
+fn the_tracking_help_names_both_providers_within_eighty_columns() {
+    for action in ["convert", "measure"] {
+        let out = bin().args(["tracking", action, "--help"]).output().unwrap();
+        assert!(out.status.success(), "{}", text(&out));
+        let help = String::from_utf8_lossy(&out.stdout);
+        assert!(help.contains("PFF") && help.contains("DFL"), "{help}");
+        assert!(help.contains("--source"), "{help}");
+        for line in help.lines() {
+            assert!(line.len() <= 80, "{action}: {} columns: {line}", line.len());
+        }
+    }
+}

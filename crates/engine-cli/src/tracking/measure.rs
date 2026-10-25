@@ -337,10 +337,128 @@ pub fn measure_dfl(data: &Path) -> anyhow::Result<TrackingFile> {
     })
 }
 
+/// What reading one PFF match counted, for its printed line.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PffCounts {
+    pub match_id: String,
+    /// Frame lines read, of every period.
+    pub lines: u64,
+    /// Native frames of the two halves.
+    pub native_frames: usize,
+    /// Native frames of the two halves without a ball.
+    pub ball_absent: u32,
+    /// The share of the kept player rows estimated off camera.
+    pub estimated_share: f64,
+    /// The frames left out, by period.
+    pub left_out: Vec<super::side::LeftOut>,
+    /// Whether the match was turned so team 0 attacks towards positive x first.
+    pub rotated: bool,
+}
+
+/// A measured set of PFF matches: the tracking file, each match's counts in match order,
+/// and each match the converter refused with the reason.
+#[derive(Debug, Clone)]
+pub struct PffRun {
+    pub file: TrackingFile,
+    pub counts: Vec<PffCounts>,
+    pub refused: Vec<(String, String)>,
+}
+
+/// Reads, resamples, converts and measures one PFF match in memory.
+fn measure_one_pff(data: &Path, id: &str) -> anyhow::Result<(MatchFigures, PffCounts)> {
+    let r = super::pff::read(data, id)?;
+    let c = super::convert::to_ticks(&r.m)?;
+    let figures = figures_of(&c.records, &c.side, &dfl_pass_choice(&r.m))
+        .with_context(|| format!("cannot measure {id}"))?;
+    let counts = PffCounts {
+        match_id: r.m.match_id.clone(),
+        lines: r.lines,
+        native_frames: r.native_frames,
+        ball_absent: r.ball_absent,
+        estimated_share: r.m.notes.estimated_share.unwrap_or(0.0),
+        left_out: r.m.notes.left_out.clone(),
+        rotated: c.side.rotated,
+    };
+    Ok((figures, counts))
+}
+
+/// Converts and measures every PFF match of `data`, `jobs` at a time, in memory (no tick
+/// file is written); the matches stay in match-id order, and a match the converter refuses
+/// is listed with its reason. `progress` hears each match as it ends.
+pub fn measure_pff(
+    data: &Path,
+    jobs: usize,
+    progress: &(dyn Fn(&str, &anyhow::Result<()>) + Sync),
+) -> anyhow::Result<PffRun> {
+    let ids = super::pff::matches(data)?;
+    anyhow::ensure!(
+        !ids.is_empty(),
+        "no PFF match in {}",
+        super::pff::folder(data).display()
+    );
+    type Done = anyhow::Result<(MatchFigures, PffCounts)>;
+    let results: std::sync::Mutex<Vec<Option<Done>>> =
+        std::sync::Mutex::new((0..ids.len()).map(|_| None).collect());
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    std::thread::scope(|scope| {
+        for _ in 0..jobs.clamp(1, ids.len()) {
+            scope.spawn(|| {
+                loop {
+                    let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let Some(id) = ids.get(i) else {
+                        break;
+                    };
+                    let done = measure_one_pff(data, id);
+                    progress(
+                        id,
+                        &done
+                            .as_ref()
+                            .map(|_| ())
+                            .map_err(|e| anyhow::anyhow!("{e:#}")),
+                    );
+                    if let Ok(mut r) = results.lock() {
+                        r[i] = Some(done);
+                    }
+                }
+            });
+        }
+    });
+    let results = results
+        .into_inner()
+        .map_err(|_| anyhow::anyhow!("a measuring thread panicked"))?;
+    let (mut matches, mut counts, mut refused) = (Vec::new(), Vec::new(), Vec::new());
+    for (id, r) in ids.iter().zip(results) {
+        match r {
+            Some(Ok((f, c))) => {
+                matches.push(f);
+                counts.push(c);
+            }
+            Some(Err(e)) => refused.push((id.clone(), format!("{e:#}"))),
+            None => refused.push((id.clone(), "not measured".into())),
+        }
+    }
+    Ok(PffRun {
+        file: TrackingFile {
+            schema: TRACKING_SCHEMA,
+            source: super::pff::SOURCE.into(),
+            credit: super::convert::credit(super::pff::SOURCE).into(),
+            frame_rate: 25,
+            matches,
+        },
+        counts,
+        refused,
+    })
+}
+
 /// The tracking file's default place: `gate/tracking/dfl-matches.json` of the checkout
 /// holding the content folder.
 pub fn default_out(content_root: &Path) -> PathBuf {
     crate::real_targets::gate_dir(content_root).join("tracking/dfl-matches.json")
+}
+
+/// The PFF tracking file's default place: `gate/tracking/pff-matches.json`.
+pub fn default_pff_out(content_root: &Path) -> PathBuf {
+    crate::real_targets::gate_dir(content_root).join("tracking/pff-matches.json")
 }
 
 #[cfg(test)]

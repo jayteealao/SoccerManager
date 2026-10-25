@@ -418,6 +418,30 @@ fn read_events(
     Ok(out)
 }
 
+/// A match read and resampled to 50 frames a second, with what the reading counted.
+#[derive(Debug, Clone)]
+pub struct Resampled {
+    pub m: TrackedMatch,
+    /// Frame lines read, of every period.
+    pub lines: u64,
+    /// Native frames kept: those of periods 1 and 2.
+    pub native_frames: usize,
+    /// Kept native frames without a ball position.
+    pub ball_absent: u32,
+}
+
+/// Reads match `id` of `data` and resamples it to 50 frames a second.
+pub fn read(data: &Path, id: &str) -> anyhow::Result<Resampled> {
+    let n = read_native(data, id)?;
+    let m = super::resample::resample(&n.m, &n.times, n.fps)?;
+    Ok(Resampled {
+        m,
+        lines: n.lines,
+        native_frames: n.m.halves.iter().map(|h| h.frames.len()).sum(),
+        ball_absent: n.ball_absent,
+    })
+}
+
 /// The frame of `times` nearest `ms`, the earlier on a tie.
 fn nearest(times: &[f64], ms: f64) -> usize {
     let at = times.partition_point(|t| *t < ms);

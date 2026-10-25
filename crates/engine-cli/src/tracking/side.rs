@@ -34,7 +34,9 @@ pub struct Side {
     pub frame_rate: u32,
     /// Engine ticks between two frames.
     pub tick_step: u32,
-    /// What the ticks between two frames hold: `absent`, no record.
+    /// What the odd ticks from a half's start hold: `absent`, no record (frames at 25 a
+    /// second), `resampled`, a frame resampled to 50 a second, or `recorded` (an engine
+    /// match).
     pub odd_ticks: String,
     /// The whole match was turned by 180 degrees so team 0 attacks the engine's first-half
     /// direction.
@@ -55,6 +57,19 @@ pub struct Side {
     pub unplaced: u32,
     /// The match's clock offset fitted on the passes, when any pass gave one.
     pub clock_offset: Option<ClockOffset>,
+    /// The native frames a second the ticks were resampled from, when they were: every tick
+    /// of a half then holds a resampled frame. A DFL side file has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resampled_from: Option<f64>,
+    /// Where the ball status comes from when the frames do not carry it: `events`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ball_status_from: Option<String>,
+    /// The share of the converted player rows that the provider estimated off camera.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub estimated_share: Option<f64>,
+    /// The frames left out, by period, such as extra time.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub left_out: Vec<LeftOut>,
 }
 
 /// Frames of one period that the converter left out.
@@ -225,6 +240,13 @@ mod tests {
                 passes: 2,
                 iqr_ms: 0.0,
             }),
+            resampled_from: Some(29.97),
+            ball_status_from: Some("events".into()),
+            estimated_share: Some(0.5),
+            left_out: vec![LeftOut {
+                period: "3".into(),
+                frames: 10,
+            }],
         }
     }
 
@@ -234,6 +256,30 @@ mod tests {
         let path = dir.path().join(Side::file_name("M"));
         sample().write(&path).unwrap();
         assert_eq!(Side::read(&path).unwrap(), sample());
+    }
+
+    /// A side file without the resampling fields writes none of them, so a DFL side file
+    /// keeps its bytes; a reader takes it with the fields empty.
+    #[test]
+    fn the_resampling_fields_are_written_only_when_present() {
+        let mut plain = sample();
+        plain.resampled_from = None;
+        plain.ball_status_from = None;
+        plain.estimated_share = None;
+        plain.left_out.clear();
+        let text = serde_json::to_string(&plain).unwrap();
+        for field in [
+            "resampled_from",
+            "ball_status_from",
+            "estimated_share",
+            "left_out",
+        ] {
+            assert!(!text.contains(field), "{field}");
+        }
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join(Side::file_name("M"));
+        plain.write(&path).unwrap();
+        assert_eq!(Side::read(&path).unwrap(), plain);
     }
 
     #[test]

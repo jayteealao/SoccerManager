@@ -352,6 +352,10 @@ mod tests {
             events,
             unplaced: 0,
             clock_offset: None,
+            resampled_from: None,
+            ball_status_from: None,
+            estimated_share: None,
+            left_out: Vec::new(),
         }
     }
 
