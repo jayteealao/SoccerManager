@@ -14,6 +14,7 @@ pub mod live_rule;
 pub mod measure;
 pub mod pff;
 pub mod place;
+pub mod resample;
 pub mod side;
 pub mod soccertrack;
 pub mod time;
