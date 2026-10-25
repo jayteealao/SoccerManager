@@ -1083,6 +1083,13 @@ impl Margin {
 /// was measured at the design count on 3 generated leagues, so the floor sits again on more.
 pub const PROVISIONAL_REASON: &str = "engine spread at the design count, 3 leagues";
 
+/// The key prefix of a reference-file target measured on the PFF World Cup matches.
+pub const PFF_KEY_PREFIX: &str = "trk.pff.";
+
+/// The context label a band with a PFF real value begins with: its real side is national
+/// teams at a tournament, not club league football. Such a band may gate.
+pub const PFF_LABEL: &str = "tournament, national teams";
+
 /// A part of a margin added so it holds the 97 percent floor. A provisional one holds the
 /// floor until the floor is set again on more leagues, when it may shrink or go; any other
 /// widening cites a noticeable error.
@@ -1893,6 +1900,21 @@ impl Registry {
                     at("resampling.real"),
                     "is target or tracked-match when the real source names a reference-file                      target, and neither target otherwise"
                         .into(),
+                ));
+            }
+            if let Some(key) = b.real.as_ref().and_then(RealRecord::target_key)
+                && key.starts_with(PFF_KEY_PREFIX)
+                && !rule
+                    .context
+                    .as_deref()
+                    .is_some_and(|c| c.starts_with(PFF_LABEL))
+            {
+                out.push((
+                    at("context"),
+                    format!(
+                        "the real value {key} comes from PFF, national teams at a tournament: \
+                         the band's context begins with the label \"{PFF_LABEL}\""
+                    ),
                 ));
             }
             if !b.gates {
@@ -3151,5 +3173,58 @@ mod tests {
             ),
             "{err}"
         );
+    }
+
+    /// The shipped file with the tracked band `cb_depth_in` reading the PFF target
+    /// `trk.pff.cb_depth_in`, its context set to `context` (none when `None`) and its gate
+    /// to `gates`.
+    fn pff_band(context: Option<&str>, gates: bool) -> String {
+        edited("cb_depth_in", |b| {
+            b["real"]["source"]["target"] = "trk.pff.cb_depth_in".into();
+            match context {
+                Some(c) => b["context"] = c.into(),
+                None => {
+                    b.as_object_mut().unwrap().remove("context");
+                }
+            }
+            b["gates"] = gates.into();
+        })
+    }
+
+    /// A band whose real value comes from the PFF tournament may gate when its context
+    /// begins with the label "tournament, national teams"; without the label, or with a
+    /// context that does not begin with it, the load is refused naming the band and the
+    /// label; and like any band it may not stop gating outside a named report-only group.
+    #[test]
+    fn a_pff_band_gates_only_with_the_tournament_label() {
+        let shipped = Registry::from_bytes(shipped_text().as_bytes()).unwrap();
+        let labelled = pff_band(
+            Some("tournament, national teams; measured at 25 frames a second by the shared report"),
+            true,
+        );
+        let r = Registry::from_bytes(labelled.as_bytes()).unwrap();
+        assert_eq!(r.gating(), shipped.gating());
+        let band = r.bands.iter().find(|b| b.band == "cb_depth_in").unwrap();
+        assert!(band.gates);
+        assert_eq!(
+            band.real.as_ref().and_then(RealRecord::target_key),
+            Some("trk.pff.cb_depth_in")
+        );
+        for context in [None, Some("national teams, tournament"), Some("")] {
+            let err = refusal(&pff_band(context, true));
+            assert!(
+                err.contains("bands[") && err.contains("(cb_depth_in).context"),
+                "{err}"
+            );
+            assert!(err.contains("\"tournament, national teams\""), "{err}");
+        }
+        let err = refusal(&pff_band(Some("tournament, national teams"), false));
+        assert!(err.contains("(cb_depth_in).gates"), "{err}");
+        assert!(err.contains("every band gates"), "{err}");
+        // A DFL band needs no label.
+        let dfl = edited("cb_depth_in", |b| {
+            b.as_object_mut().unwrap().remove("context");
+        });
+        assert!(Registry::from_bytes(dfl.as_bytes()).is_ok());
     }
 }
