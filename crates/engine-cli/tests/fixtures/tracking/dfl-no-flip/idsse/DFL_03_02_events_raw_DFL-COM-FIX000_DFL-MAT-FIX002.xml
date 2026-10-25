@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<PutDataRequest RequestId="fixture" MessageTime="2030-03-03T08:00:00.000+00:00" TransmissionComplete="true" TransmissionSuspended="false" DataStatus="postmatch">
+<Event MatchId="DFL-MAT-FIX002" EventTime="2030-03-09T15:00:00.000+01:00" EventId="900001">
+ <KickOff TeamLeft="DFL-CLU-FIXH" TeamRight="DFL-CLU-FIXA" GameSection="firstHalf">
+ </KickOff>
+</Event>
+<Event MatchId="DFL-MAT-FIX002" EventTime="2030-03-09T15:00:00.360+01:00" EventId="900002">
+ <FinalWhistle GameSection="firstHalf" FinalResult="0:0" BreakingOff="false"/>
+</Event>
+<Event MatchId="DFL-MAT-FIX002" EventTime="2030-03-09T15:50:00.000+01:00" EventId="900003">
+ <KickOff TeamLeft="DFL-CLU-FIXA" TeamRight="DFL-CLU-FIXH" GameSection="secondHalf">
+ </KickOff>
+</Event>
+<Event MatchId="DFL-MAT-FIX002" EventTime="2030-03-09T15:50:00.360+01:00" EventId="900004">
+ <FinalWhistle GameSection="secondHalf" FinalResult="0:0" BreakingOff="false"/>
+</Event>
+</PutDataRequest>

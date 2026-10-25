@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<PutDataRequest RequestId="fixture" MessageTime="2030-03-03T08:00:00.000+00:00" TransmissionComplete="true" TransmissionSuspended="false">
+  <MatchInformation>
+    <General TypeOfSport="Fixture" CompetitionName="Fixture League" CompetitionId="DFL-COM-FIX000" Season="2029/2030" MatchDay="1" MatchId="DFL-MAT-FIX002" MatchTitle="Home Fixture:Away Fixture" HomeTeamName="Home Fixture" HomeTeamId="DFL-CLU-FIXH" GuestTeamName="Away Fixture" GuestTeamId="DFL-CLU-FIXA" Result="0:0" />
+    <Environment Country="Fixture" StadiumId="DFL-STA-FIX" StadiumName="Fixture Ground" PitchX="104.00" PitchY="67.00" />
+    <Teams>
+          <Team TeamId="DFL-CLU-FIXA" TeamName="Away Fixture" Role="guest" LineUp="4-3-3">
+            <Players>
+                  <Player PersonId="DFL-OBJ-FIXA02" ShirtNumber="2" FirstName="Fixture" LastName="Player 2" Shortname="F. Player 2" Starting="true" PlayingPosition="RV" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXA01" ShirtNumber="1" FirstName="Fixture" LastName="Player 1" Shortname="F. Player 1" Starting="true" PlayingPosition="TW" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXA03" ShirtNumber="3" FirstName="Fixture" LastName="Player 3" Shortname="F. Player 3" Starting="true" PlayingPosition="IVR" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXA04" ShirtNumber="4" FirstName="Fixture" LastName="Player 4" Shortname="F. Player 4" Starting="true" PlayingPosition="IVL" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXA05" ShirtNumber="5" FirstName="Fixture" LastName="Player 5" Shortname="F. Player 5" Starting="true" PlayingPosition="LV" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXA06" ShirtNumber="6" FirstName="Fixture" LastName="Player 6" Shortname="F. Player 6" Starting="true" PlayingPosition="DML" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXA07" ShirtNumber="7" FirstName="Fixture" LastName="Player 7" Shortname="F. Player 7" Starting="true" PlayingPosition="DMR" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXA08" ShirtNumber="8" FirstName="Fixture" LastName="Player 8" Shortname="F. Player 8" Starting="true" PlayingPosition="ZO" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXA09" ShirtNumber="9" FirstName="Fixture" LastName="Player 9" Shortname="F. Player 9" Starting="true" PlayingPosition="ORM" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXA10" ShirtNumber="10" FirstName="Fixture" LastName="Player 10" Shortname="F. Player 10" Starting="true" PlayingPosition="STZ" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXA11" ShirtNumber="11" FirstName="Fixture" LastName="Player 11" Shortname="F. Player 11" Starting="true" PlayingPosition="OLM" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXA12" ShirtNumber="12" FirstName="Fixture" LastName="Player 12" Shortname="F. Player 12" Starting="false" TeamLeader="false" />
+            </Players>
+          </Team>
+          <Team TeamId="DFL-CLU-FIXH" TeamName="Home Fixture" Role="home" LineUp="4-3-3">
+            <Players>
+                  <Player PersonId="DFL-OBJ-FIXH02" ShirtNumber="2" FirstName="Fixture" LastName="Player 2" Shortname="F. Player 2" Starting="true" PlayingPosition="RV" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXH01" ShirtNumber="1" FirstName="Fixture" LastName="Player 1" Shortname="F. Player 1" Starting="true" PlayingPosition="TW" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXH03" ShirtNumber="3" FirstName="Fixture" LastName="Player 3" Shortname="F. Player 3" Starting="true" PlayingPosition="IVR" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXH04" ShirtNumber="4" FirstName="Fixture" LastName="Player 4" Shortname="F. Player 4" Starting="true" PlayingPosition="IVL" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXH05" ShirtNumber="5" FirstName="Fixture" LastName="Player 5" Shortname="F. Player 5" Starting="true" PlayingPosition="LV" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXH06" ShirtNumber="6" FirstName="Fixture" LastName="Player 6" Shortname="F. Player 6" Starting="true" PlayingPosition="DML" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXH07" ShirtNumber="7" FirstName="Fixture" LastName="Player 7" Shortname="F. Player 7" Starting="true" PlayingPosition="DMR" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXH08" ShirtNumber="8" FirstName="Fixture" LastName="Player 8" Shortname="F. Player 8" Starting="true" PlayingPosition="ZO" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXH09" ShirtNumber="9" FirstName="Fixture" LastName="Player 9" Shortname="F. Player 9" Starting="true" PlayingPosition="ORM" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXH10" ShirtNumber="10" FirstName="Fixture" LastName="Player 10" Shortname="F. Player 10" Starting="true" PlayingPosition="STZ" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXH11" ShirtNumber="11" FirstName="Fixture" LastName="Player 11" Shortname="F. Player 11" Starting="true" PlayingPosition="OLM" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXH12" ShirtNumber="12" FirstName="Fixture" LastName="Player 12" Shortname="F. Player 12" Starting="false" PlayingPosition="ORM" TeamLeader="false" />
+                  <Player PersonId="DFL-OBJ-FIXH13" ShirtNumber="13" FirstName="Fixture" LastName="Player 13" Shortname="F. Player 13" Starting="false" TeamLeader="false" />
+            </Players>
+          </Team>
+    </Teams>
+  </MatchInformation>
+</PutDataRequest>

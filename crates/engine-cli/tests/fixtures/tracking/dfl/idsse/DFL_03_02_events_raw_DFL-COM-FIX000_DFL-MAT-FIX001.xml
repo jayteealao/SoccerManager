@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<PutDataRequest RequestId="fixture" MessageTime="2030-03-03T08:00:00.000+00:00" TransmissionComplete="true" TransmissionSuspended="false" DataStatus="postmatch">
+<Event MatchId="DFL-MAT-FIX001" EventTime="2030-03-02T15:00:00.080+01:00" EventId="900001">
+ <KickOff TeamLeft="DFL-CLU-FIXH" TeamRight="DFL-CLU-FIXA" GameSection="firstHalf">
+  <Play Player="DFL-OBJ-FIXH10" Team="DFL-CLU-FIXH" FromOpenPlay="true" Height="flat" Recipient="DFL-OBJ-FIXH08" Evaluation="successfullyCompleted">
+   <Pass/>
+  </Play>
+ </KickOff>
+</Event>
+<Event MatchId="DFL-MAT-FIX001" EventTime="2030-03-02T15:00:00.800+01:00" EventId="900002">
+ <Play Player="DFL-OBJ-FIXH08" Team="DFL-CLU-FIXH" FromOpenPlay="true" Height="flat" Recipient="DFL-OBJ-FIXH09" Evaluation="successfullyCompleted">
+  <Pass/>
+ </Play>
+</Event>
+<Event MatchId="DFL-MAT-FIX001" EventTime="2030-03-02T15:00:02.120+01:00" EventId="900003">
+ <ThrowIn Team="DFL-CLU-FIXA" Side="right" DecisionTimestamp="2030-03-02T15:00:01.800+01:00">
+  <Play Player="DFL-OBJ-FIXA02" Team="DFL-CLU-FIXA" FromOpenPlay="true" Height="high" Recipient="DFL-OBJ-FIXA06" Evaluation="successfullyCompleted">
+   <Pass/>
+  </Play>
+ </ThrowIn>
+</Event>
+<Event MatchId="DFL-MAT-FIX001" EventTime="2030-03-02T15:00:02.360+01:00" EventId="900004">
+ <FinalWhistle GameSection="firstHalf" FinalResult="0:0" BreakingOff="false"/>
+</Event>
+<Event MatchId="DFL-MAT-FIX001" EventTime="2030-03-02T15:50:00.000+01:00" EventId="900005">
+ <KickOff TeamLeft="DFL-CLU-FIXA" TeamRight="DFL-CLU-FIXH" GameSection="secondHalf">
+  <Play Player="DFL-OBJ-FIXA10" Team="DFL-CLU-FIXA" FromOpenPlay="true" Height="flat" Recipient="DFL-OBJ-FIXA08" Evaluation="successfullyCompleted">
+   <Pass/>
+  </Play>
+ </KickOff>
+</Event>
+<Event MatchId="DFL-MAT-FIX001" EventTime="2030-03-02T15:50:00.320+01:00" EventId="900006">
+ <Play Player="DFL-OBJ-FIXH06" Team="DFL-CLU-FIXH" FromOpenPlay="true" Height="high" Recipient="DFL-OBJ-FIXH08" Evaluation="successfullyCompleted">
+  <Pass/>
+ </Play>
+</Event>
+<Event MatchId="DFL-MAT-FIX001" EventTime="2030-03-02T15:50:00.800+01:00" EventId="900007">
+ <Substitution PlayerIn="DFL-OBJ-FIXH12" Team="DFL-CLU-FIXH" PlayerOut="DFL-OBJ-FIXH09" PlayingPosition="ORM"/>
+</Event>
+<Event MatchId="DFL-MAT-FIX001" EventTime="2030-03-02T15:50:01.200+01:00" EventId="900008">
+ <Foul TeamFouler="DFL-CLU-FIXA" Fouler="DFL-OBJ-FIXA06" Fouled="DFL-OBJ-FIXH08" TeamFouled="DFL-CLU-FIXH" FoulType="foul"/>
+</Event>
+<Event MatchId="DFL-MAT-FIX001" EventTime="2030-03-02T15:50:01.440+01:00" EventId="900009">
+ <FreeKick Team="DFL-CLU-FIXH" DecisionTimestamp="2030-03-02T15:50:01.240+01:00" ExecutionMode="direct">
+  <Play Player="DFL-OBJ-FIXH04" Team="DFL-CLU-FIXH" FromOpenPlay="true" Height="flat" Recipient="DFL-OBJ-FIXH07" Evaluation="successfullyCompleted">
+   <Pass/>
+  </Play>
+ </FreeKick>
+</Event>
+<Event MatchId="DFL-MAT-FIX001" EventTime="2030-03-02T15:50:01.600+01:00" EventId="900010">
+ <Caution Player="DFL-OBJ-FIXA04" Team="DFL-CLU-FIXA" Reason="foul" CardRating="red" CardColor="red"/>
+</Event>
+<Event MatchId="DFL-MAT-FIX001" EventId="900011">
+ <Play Player="DFL-OBJ-FIXH07" Team="DFL-CLU-FIXH" FromOpenPlay="true" Height="flat" Recipient="DFL-OBJ-FIXH10" Evaluation="successfullyCompleted">
+  <Cross Side="left"/>
+ </Play>
+</Event>
+<Event MatchId="DFL-MAT-FIX001" EventTime="2030-03-02T15:50:02.000+01:00" EventId="900012">
+ <ShotAtGoal Team="DFL-CLU-FIXH" Player="DFL-OBJ-FIXH10" TypeOfShot="rightLeg">
+  <SuccessfulShot CurrentResult="1:0" GoalZone="5"/>
+ </ShotAtGoal>
+</Event>
+<Event MatchId="DFL-MAT-FIX001" EventTime="2030-03-02T15:50:02.320+01:00" EventId="900013">
+ <KickOff TeamLeft="DFL-CLU-FIXA" TeamRight="DFL-CLU-FIXH">
+  <Play Player="DFL-OBJ-FIXA10" Team="DFL-CLU-FIXA" FromOpenPlay="true" Height="flat" Recipient="DFL-OBJ-FIXA07" Evaluation="successfullyCompleted">
+   <Pass/>
+  </Play>
+ </KickOff>
+</Event>
+<Event MatchId="DFL-MAT-FIX001" EventTime="2030-03-02T15:50:02.360+01:00" EventId="900014">
+ <FinalWhistle GameSection="secondHalf" FinalResult="1:0" BreakingOff="false"/>
+</Event>
+</PutDataRequest>

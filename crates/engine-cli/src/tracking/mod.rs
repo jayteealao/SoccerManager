@@ -7,6 +7,7 @@
 //! his team, starting place and position group, and the events. The converter and the
 //! shape report read only this type, so a second source needs only its own reader.
 
+pub mod dfl;
 pub mod time;
 pub mod xml;
 
