@@ -148,6 +148,7 @@ pub fn measure_frames(frames: &[Frame], length: f64, mode: Mode) -> anyhow::Resu
 }
 
 /// The records of a tick file.
+#[cfg(all(test, feature = "measures"))]
 pub fn read_records(ticks: &Path) -> anyhow::Result<Vec<TickRecord>> {
     Ok(engine::read_ticks(ticks)
         .with_context(|| format!("cannot read {}", ticks.display()))?
@@ -155,6 +156,7 @@ pub fn read_records(ticks: &Path) -> anyhow::Result<Vec<TickRecord>> {
 }
 
 /// The figures of the match in `ticks` with its side file `side`.
+#[cfg(all(test, feature = "measures"))]
 pub fn measure_files(ticks: &Path, side: &Path) -> anyhow::Result<TrackedValues> {
     let side = Side::read(side)?;
     let frames = frames_of(&read_records(ticks)?, &side)?;

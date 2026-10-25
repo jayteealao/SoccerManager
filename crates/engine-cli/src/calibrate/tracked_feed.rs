@@ -151,6 +151,7 @@ impl TrackedFeed {
     }
 
     /// The same feed keeping every frame it feeds.
+    #[cfg(test)]
     pub fn keeping(mut self) -> Self {
         self.kept = Some(Vec::new());
         self

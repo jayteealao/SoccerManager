@@ -148,7 +148,9 @@ pub fn dfl_halves(m: &TrackedMatch) -> Vec<Vec<Marked>> {
     halves
 }
 
-/// The Wyscout mapping of one event id.
+/// The Wyscout mapping of one event id. The mapping serves the rule's fixture test today:
+/// no command reads Wyscout events while the check's verdict keeps Wyscout per match.
+#[cfg(test)]
 pub fn wyscout_mark(event_id: u32) -> Mark {
     match event_id {
         2 | 5 | 6 => Mark::Stop,
@@ -159,6 +161,7 @@ pub fn wyscout_mark(event_id: u32) -> Mark {
 
 /// The Wyscout mapping: a match's events (`eventId`, `eventSec`, `matchPeriod`) as each
 /// half's marked events, in the order of their periods.
+#[cfg(test)]
 pub fn wyscout_halves(events: &[serde_json::Value]) -> anyhow::Result<Vec<Vec<Marked>>> {
     let mut periods: Vec<(String, Vec<Marked>)> = Vec::new();
     for e in events {
@@ -260,20 +263,6 @@ pub fn check_dfl(data: &Path) -> anyhow::Result<LiveCheck> {
 }
 
 impl LiveCheck {
-    pub fn read(path: &Path) -> anyhow::Result<Self> {
-        let text = std::fs::read_to_string(path)
-            .with_context(|| format!("cannot read {}", path.display()))?;
-        let check: Self = serde_json::from_str(&text)
-            .with_context(|| format!("{} is not a live-time check", path.display()))?;
-        anyhow::ensure!(
-            check.schema == SCHEMA,
-            "the live-time check {} has schema {}; this program reads {SCHEMA}",
-            path.display(),
-            check.schema
-        );
-        Ok(check)
-    }
-
     pub fn write(&self, path: &Path) -> anyhow::Result<()> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)

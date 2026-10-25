@@ -138,6 +138,7 @@ impl Side {
     }
 
     /// Reads the side file at `path`, refusing an unknown field or another schema.
+    #[cfg(test)]
     pub fn read(path: &Path) -> anyhow::Result<Self> {
         let text = std::fs::read_to_string(path)
             .with_context(|| format!("cannot read {}", path.display()))?;

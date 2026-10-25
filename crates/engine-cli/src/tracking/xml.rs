@@ -41,6 +41,7 @@ impl Tag<'_> {
     }
 
     /// `true` for a start or empty tag named `name`.
+    #[cfg(test)]
     pub fn opens(&self, name: &str) -> bool {
         self.kind != TagKind::End && self.name == name
     }
@@ -209,8 +210,11 @@ fn decode(raw: &str) -> Result<Cow<'_, str>, String> {
 mod tests {
     use super::*;
 
-    /// Every tag of `text` as (kind, name, attributes, line).
-    fn tags(text: &str) -> Result<Vec<(TagKind, String, Vec<(String, String)>, usize)>, String> {
+    /// A tag as (kind, name, attributes, line).
+    type Owned = (TagKind, String, Vec<(String, String)>, usize);
+
+    /// Every tag of `text`.
+    fn tags(text: &str) -> Result<Vec<Owned>, String> {
         let mut out = Vec::new();
         read_tags(text.as_bytes(), |t| {
             out.push((

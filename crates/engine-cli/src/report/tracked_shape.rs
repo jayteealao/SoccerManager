@@ -247,6 +247,7 @@ impl Restart {
     }
 
     /// The side file's word.
+    #[cfg(all(test, feature = "measures"))]
     pub fn word(self) -> &'static str {
         match self {
             Restart::ThrowIn => "throw_in",
@@ -387,7 +388,7 @@ impl TrackedShape {
     pub fn frame(&mut self, f: &Frame) -> Result<(), String> {
         match self.half {
             Some((h, start, last)) if h == f.half => {
-                if (f.tick - start) % 2 != 0 || f.tick <= last {
+                if !(f.tick - start).is_multiple_of(2) || f.tick <= last {
                     return Err(format!(
                         "tick {} is not an even step after tick {last} from its half's first \
                          tick {start}: the report reads every second engine tick",
