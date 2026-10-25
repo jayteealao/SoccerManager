@@ -32,8 +32,10 @@ pub mod football_data;
 pub mod fotmob;
 pub mod impect;
 pub mod layers;
+pub mod literature;
 pub mod shots_check;
 pub mod statsbomb;
+pub mod strictness;
 pub mod tables;
 pub mod tracked;
 
