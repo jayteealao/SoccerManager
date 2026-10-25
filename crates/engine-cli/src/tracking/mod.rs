@@ -9,6 +9,7 @@
 
 pub mod convert;
 pub mod dfl;
+pub mod place;
 pub mod side;
 pub mod time;
 pub mod xml;
@@ -140,6 +141,32 @@ pub enum EventKind {
     DroppedBall,
     /// Any other event, by the provider's name.
     Other(String),
+}
+
+impl EventKind {
+    /// The kind's word in a side file.
+    pub fn word(&self) -> &str {
+        match self {
+            EventKind::Pass { .. } => "pass",
+            EventKind::Cross => "cross",
+            EventKind::Shot { goal: true } => "goal",
+            EventKind::Shot { goal: false } => "shot",
+            EventKind::ThrowIn => "throw_in",
+            EventKind::FreeKick => "free_kick",
+            EventKind::GoalKick => "goal_kick",
+            EventKind::Corner => "corner",
+            EventKind::KickOff { .. } => "kick_off",
+            EventKind::Penalty => "penalty",
+            EventKind::Foul => "foul",
+            EventKind::Offside => "offside",
+            EventKind::Card { sending_off: true } => "sending_off",
+            EventKind::Card { sending_off: false } => "card",
+            EventKind::Substitution { .. } => "substitution",
+            EventKind::FinalWhistle => "final_whistle",
+            EventKind::DroppedBall => "dropped_ball",
+            EventKind::Other(name) => name,
+        }
+    }
 }
 
 /// One event.

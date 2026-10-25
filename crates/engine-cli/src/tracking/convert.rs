@@ -14,7 +14,8 @@
 //!   attack direction comes from the keepers' mean x; the whole match is turned by 180
 //!   degrees when needed so team 0 attacks towards positive x in the first half, as in the
 //!   engine, and a match whose direction does not change at half time is refused.
-//! - A restart event sets the restart bit of the tick it is placed on.
+//! - Every event is placed on a frame ([super::place]); a restart sets the restart bit of
+//!   its tick, and the side file lists each placed event and how it was placed.
 
 use std::path::{Path, PathBuf};
 
@@ -23,7 +24,8 @@ use engine::pitch::Pitch;
 use engine::record::{FileSink, PLAYER_COUNT, TickHeader, TickRecord, TickSink};
 use engine::team::PLAYERS_PER_TEAM;
 
-use super::side::{BallRun, OffPitch, SCHEMA, Side, SideHalf, Spell};
+use super::place;
+use super::side::{BallRun, OffPitch, Placed, SCHEMA, Side, SideHalf, Spell};
 use super::{EventKind, Group, TrackedMatch};
 
 /// Engine ticks between two frames of a 25-frames-a-second source.
@@ -231,11 +233,21 @@ pub fn to_ticks(m: &TrackedMatch) -> anyhow::Result<Converted> {
     let person_of = |id: &str| m.persons.iter().position(|p| p.id == id);
     let mut sent_off: Vec<(usize, u32)> = Vec::new();
     let mut restarts: Vec<u32> = Vec::new();
+    let offset = place::fit_offset(m, &frames);
+    let mut placed: Vec<Placed> = Vec::new();
+    let mut unplaced = 0u32;
     for e in &m.events {
-        let Some(t) = e.time_ms else { continue };
-        let Some((tick, _, _)) = nearest(&frames, t) else {
+        let Some(at) = place::place(m, &frames, offset.as_ref(), e) else {
+            unplaced += 1;
             continue;
         };
+        let tick = at.tick;
+        placed.push(Placed {
+            tick,
+            kind: e.kind.word().into(),
+            team: e.team,
+            placed: at.how.word().into(),
+        });
         match &e.kind {
             EventKind::Substitution { on, off } => {
                 let (Some(on), Some(off)) = (person_of(on), person_of(off)) else {
@@ -405,9 +417,9 @@ pub fn to_ticks(m: &TrackedMatch) -> anyhow::Result<Converted> {
         off_pitch: off,
         ball: ball_runs,
         ball_missing,
-        events: Vec::new(),
-        unplaced: 0,
-        clock_offset: None,
+        events: placed,
+        unplaced,
+        clock_offset: offset,
     };
     Ok(Converted { records, side })
 }
@@ -463,4 +475,46 @@ pub fn write(c: &Converted, out: &Path) -> anyhow::Result<(PathBuf, PathBuf)> {
     sink.finish()?;
     c.side.write(&side)?;
     Ok((ticks, side))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::dfl;
+    use super::*;
+
+    fn fixture() -> TrackedMatch {
+        let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tracking/dfl");
+        dfl::read(&dfl::find(&data, "DFL-MAT-FIX001").unwrap()).unwrap()
+    }
+
+    /// The side file names how each event was placed: by its event time, or by its game
+    /// clock plus the match's offset; an event with neither is counted, not placed.
+    #[test]
+    fn the_side_file_names_both_placements() {
+        let mut m = fixture();
+        let plain = to_ticks(&m).unwrap().side;
+        assert_eq!(plain.unplaced, 1);
+        assert!(plain.events.iter().all(|e| e.placed == "event-time"));
+        let e = m.events.iter_mut().find(|e| e.time_ms.is_none()).unwrap();
+        e.clock = Some((0, 400));
+        let side = to_ticks(&m).unwrap().side;
+        assert_eq!(side.unplaced, 0);
+        let by_clock: Vec<&Placed> = side
+            .events
+            .iter()
+            .filter(|e| e.placed == "clock-offset")
+            .collect();
+        assert_eq!(by_clock.len(), 1);
+        assert_eq!((by_clock[0].tick, by_clock[0].kind.as_str()), (44, "cross"));
+        assert_eq!(side.clock_offset.map(|o| o.ms), Some(480.0));
+        let sub = side
+            .events
+            .iter()
+            .find(|e| e.kind == "substitution")
+            .unwrap();
+        assert_eq!(
+            (sub.tick, sub.team, sub.placed.as_str()),
+            (156, Some(0), "event-time")
+        );
+    }
 }

@@ -304,3 +304,30 @@ fn the_side_file_holds_the_fixtures_ball_status_and_possession_and_restarts_set_
     // Kick-off, throw-in, kick-off, free kick, kick-off after the goal.
     assert_eq!(restarts, vec![0, 102, 116, 188, 232]);
 }
+
+/// Each event goes to the frame nearest its event time, and the side file names how; the
+/// fixture's passes give the planted clock offset of 0.48 s; its one event with neither an
+/// event time nor a game clock is counted, not placed.
+#[test]
+fn every_timed_event_is_placed_on_its_nearest_frame_and_the_offset_is_fitted() {
+    let (_dir, _records, side) = converted();
+    let events = side["events"].as_array().unwrap();
+    assert!(events.iter().all(|e| e["placed"] == "event-time"));
+    let at = |kind: &str| -> Vec<u64> {
+        events
+            .iter()
+            .filter(|e| e["kind"] == kind)
+            .map(|e| e["tick"].as_u64().unwrap())
+            .collect()
+    };
+    // The kick-offs at frames 10002, 100000 and 100058; the pass at 10020 (tick 36); the
+    // goal at 100050; the throw-in at 10053.
+    assert_eq!(at("kick_off"), vec![0, 116, 232]);
+    assert_eq!(at("pass"), vec![36, 132]);
+    assert_eq!(at("goal"), vec![216]);
+    assert_eq!(at("throw_in"), vec![102]);
+    assert_eq!(at("sending_off"), vec![196]);
+    assert_eq!(side["unplaced"], 1);
+    assert_eq!(side["clock_offset"]["ms"], 480.0);
+    assert_eq!(side["clock_offset"]["passes"], 2);
+}
