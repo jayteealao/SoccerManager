@@ -7,11 +7,18 @@
 //! his team, starting place and position group, and the events. The converter and the
 //! shape report read only this type, so a second source needs only its own reader.
 
+pub mod convert;
 pub mod dfl;
+pub mod side;
 pub mod time;
 pub mod xml;
 
+use std::path::{Path, PathBuf};
+
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
+
+use crate::cli::{TrackingAction, TrackingOpts};
 
 /// A player's position group: the keeper and the five outfield groups of the shape report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -168,6 +175,48 @@ pub struct TrackedMatch {
     pub events: Vec<Event>,
 }
 
+/// The raw data folder: `--data`, or the main checkout's `.scratch/data`.
+fn data_folder(content_root: &Path, flag: Option<&Path>) -> anyhow::Result<PathBuf> {
+    match flag {
+        Some(d) => Ok(d.to_path_buf()),
+        None => crate::real_targets::default_data(content_root).context(
+            "no data folder: pass --data, or run inside a checkout of this repository whose \
+             main checkout holds .scratch/data",
+        ),
+    }
+}
+
+/// Runs `engine-cli tracking`.
+pub fn run(content_dir: Option<&Path>, opts: &TrackingOpts) -> anyhow::Result<i32> {
+    let dir = engine::ContentDir::resolve(content_dir)?;
+    match &opts.action {
+        TrackingAction::Convert {
+            data,
+            match_id,
+            out,
+        } => {
+            let folder = data_folder(dir.root(), data.as_deref())?;
+            let m = dfl::read(&dfl::find(&folder, match_id)?)?;
+            let converted = convert::to_ticks(&m)?;
+            let (ticks, side) = convert::write(&converted, out)?;
+            println!(
+                "{}: {} records, {} halves, {} off-pitch spells{}",
+                m.match_id,
+                converted.records.len(),
+                converted.side.halves.len(),
+                converted.side.off_pitch.len(),
+                if converted.side.rotated {
+                    ", turned by 180 degrees"
+                } else {
+                    ""
+                }
+            );
+            println!("wrote {}", ticks.display());
+            println!("wrote {}", side.display());
+            Ok(0)
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

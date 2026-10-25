@@ -136,6 +136,7 @@ fn main() {
         cli::Command::Signatures(opts) => signatures::run(content_dir, &opts),
         cli::Command::RealTargets(opts) => real_targets::run(content_dir, &opts),
         cli::Command::WorldDatabase(opts) => world_build::run(content_dir, &opts),
+        cli::Command::Tracking(opts) => tracking::run(content_dir, &opts),
         #[cfg(feature = "measures")]
         cli::Command::Primitives(opts) => calibrate::primitives::run(content_dir, &opts),
         cli::Command::MatchdayTiming(opts) => matchday::timing::run(content_dir, &opts),

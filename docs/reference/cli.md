@@ -740,6 +740,23 @@ In the gate folder, which never ships, it writes `real-names/world.json` (the re
 
 Exit codes: 0 when the files are written; 1 when a snapshot is missing or malformed (the error names the file and line), a facsimile name cannot be drawn, or the world file would hold a real name.
 
+## tracking
+
+Convert real tracked matches into the engine's tick format and measure them. The raw files are read in place, by default from `.scratch/data` in the main checkout (found as `real-targets` finds it); the DFL files sit in its `idsse/` folder.
+
+```text
+engine-cli tracking convert --match <ID> --out <DIR> [--data <DIR>]
+```
+
+`convert` reads one DFL match (its match information, raw event and raw position files) and writes `<ID>.ticks` and `<ID>.side.json` in the output folder. The tick file is the engine's own format, unchanged: engine tick 2k holds frame k of a half counted from the half's first frame with a ball position, half 1 starting at tick 0 and each later half at the previous half's last tick plus 2; the odd ticks have no record. Team 0 is the home team; each team's starters hold slots 0 to 10 in their starting order with the keeper in slot 0, and a substitute takes the replaced player's slot from the substitution's tick. A player who is not on the pitch in a frame (not tracked, sent off, or no player for the slot) stands on his slot's parking spot on the stadium's pitch. Positions stay in metres as recorded; the whole match is turned by 180 degrees when needed so team 0 attacks towards positive x in the first half, and a match whose play direction does not change at half time is refused. A restart event sets the restart bit of its tick. The side file (schema 1) holds the source and its credit, the pitch, the frame rate and tick step, the halves with their first frame, start and end tick and team 0's attack direction, each slot's holders, each off-pitch spell with its reason, the ball status and possession as runs of ticks, and the placed events.
+
+| Flag | Value | Default | Meaning |
+|---|---|---|---|
+| `--data` | folder | the main checkout's `.scratch/data` | The raw data folder. |
+| `--match` | id | required | The DFL match id, such as `DFL-MAT-J03WMX`. |
+| `--out` | folder | required | Where the tick file and the side file go. |
+
+Exit codes: 0 when both files are written; 1 when a file is missing or malformed, the pitch is outside the Laws, no keeper is tracked in a half, or the play direction does not change at half time.
 ## primitives
 
 Check or fit a tactical primitive from played matches. Only a build with the `measures` cargo feature has this command.

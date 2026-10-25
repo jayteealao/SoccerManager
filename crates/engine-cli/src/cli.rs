@@ -65,6 +65,8 @@ pub enum Command {
     RealTargets(RealTargetsOpts),
     /// Build the world database from local snapshots.
     WorldDatabase(WorldDatabaseOpts),
+    /// Convert real tracked matches into ticks and measure them.
+    Tracking(TrackingOpts),
     /// Check or fit a tactical primitive from played matches.
     #[cfg(feature = "measures")]
     Primitives(PrimitivesOpts),
@@ -151,6 +153,44 @@ pub enum RealTargetsAction {
                          beside the content folder."
         )]
         out: Option<PathBuf>,
+    },
+}
+
+/// The tracking command.
+#[derive(Debug, Args)]
+pub struct TrackingOpts {
+    #[command(subcommand)]
+    pub action: TrackingAction,
+}
+
+/// What `tracking` does.
+#[derive(Debug, Subcommand)]
+pub enum TrackingAction {
+    /// Convert one tracked match into a tick file and a side file.
+    #[command(
+        long_about = "Convert one DFL tracked match into the engine's tick format and a\n\
+                      side file, the format unchanged: engine tick 2k holds frame k\n\
+                      from the first ball frame of each half, the odd ticks are absent,\n\
+                      a player off the pitch stands on his slot's parking spot, and the\n\
+                      side file holds the halves, the slots, the off-pitch spells, the\n\
+                      ball status and possession, and the placed events. Writes\n\
+                      <ID>.ticks and <ID>.side.json in the output folder."
+    )]
+    Convert {
+        /// The raw data folder.
+        #[arg(
+            long,
+            value_name = "DIR",
+            long_help = "The raw data folder holding idsse/ with the DFL files; default\n\
+                         the main checkout's .scratch/data."
+        )]
+        data: Option<PathBuf>,
+        /// The DFL match id, such as DFL-MAT-J03WMX.
+        #[arg(long = "match", value_name = "ID")]
+        match_id: String,
+        /// The folder the tick file and the side file go to.
+        #[arg(long, value_name = "DIR")]
+        out: PathBuf,
     },
 }
 
