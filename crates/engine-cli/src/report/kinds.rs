@@ -392,7 +392,9 @@ fn floor_inputs(
         if matches!(b.measure, Measure::Scenario { .. }) {
             continue;
         }
-        let spread = &rule.engine_spread;
+        let Some(spread) = &rule.engine_spread else {
+            continue;
+        };
         let rate = spread.per_match_sd.powi(2);
         let min_exposure = match rule.min_exposure.unit {
             ExposureUnit::Matches => rule.min_exposure.value,
@@ -443,7 +445,7 @@ fn old_inputs(
             let a = head.bands.get(&b.band)?;
             Some(pass_rule::count::OldInput {
                 band: b.band.clone(),
-                per_match_sd: rule.engine_spread.per_match_sd,
+                per_match_sd: rule.engine_spread.as_ref()?.per_match_sd,
                 rho_lo: a.lo,
                 noticeable: rule.margin.noticeable_error,
             })

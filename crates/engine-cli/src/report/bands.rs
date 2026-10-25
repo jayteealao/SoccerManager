@@ -179,6 +179,12 @@ pub enum Measure {
     Scenario {
         test: String,
     },
+    /// A band the engine has no count for yet, such as the players' scans: it stays in the
+    /// registry with its real target and reports only, and its row reads not sure with
+    /// `reason`. It has no engine spread, and it is in no count and no floor.
+    Pending {
+        reason: String,
+    },
 }
 
 /// What a distribution band takes from each match.
@@ -822,6 +828,7 @@ impl Registry {
                     | Measure::Distribution { .. }
                     | Measure::Cells { .. }
                     | Measure::Scenario { .. }
+                    | Measure::Pending { .. }
             ) {
                 return Err((
                     at("measure"),
@@ -1168,7 +1175,10 @@ pub struct Rule {
     pub resampling: Resampling,
     pub min_exposure: MinExposure,
     pub rare: bool,
-    pub engine_spread: EngineSpread,
+    /// The engine's measured spread; `None` only for a pending band, which has no engine
+    /// count to measure.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub engine_spread: Option<EngineSpread>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context: Option<String>,
 }
@@ -1238,7 +1248,8 @@ struct BandV6 {
     resampling: Resampling,
     min_exposure: MinExposure,
     rare: bool,
-    engine_spread: EngineSpread,
+    #[serde(default)]
+    engine_spread: Option<EngineSpread>,
     #[serde(default)]
     context: Option<String>,
     real: RealRecord,
@@ -1393,7 +1404,12 @@ fn required(doc: &Value) -> Vec<(String, String)> {
         let name = b["band"].as_str().unwrap_or("?");
         let at = |field: &str| format!("bands[{i}] ({name}).{field}");
         let get = |path: &str| path.split('.').try_fold(b, |v, k| v.get(k));
+        // A pending band has no engine count, so no engine spread to record.
+        let pending = b["measure"]["kind"] == "pending";
         for field in REQUIRED {
+            if pending && field.starts_with("engine_spread.") {
+                continue;
+            }
             if get(field).is_none_or(Value::is_null) {
                 out.push((at(field), "is required".into()));
             }
@@ -1570,7 +1586,10 @@ impl Registry {
         } else {
             rule.margin.value
         };
-        let spread = &rule.engine_spread;
+        // A pending band has no engine spread: no floor to check.
+        let Some(spread) = &rule.engine_spread else {
+            return Vec::new();
+        };
         let one = |margin: f64, needed: f64, sigma_e: f64, sigma_r: f64, which| FloorRefusal {
             band: b.band.clone(),
             margin,
@@ -1724,7 +1743,7 @@ impl Registry {
         let k = self.gating() + 1;
         self.bands
             .iter()
-            .filter(|b| !b.gates)
+            .filter(|b| !b.gates && !matches!(b.measure, Measure::Pending { .. }))
             .filter_map(|b| {
                 let group = b.group.clone()?;
                 let at = *self.floor_runs(b).first()?;
@@ -1823,14 +1842,31 @@ impl Registry {
             if !(rule.min_exposure.value.is_finite() && rule.min_exposure.value > 0.0) {
                 out.push((at("min_exposure.value"), "must be above 0".into()));
             }
-            let spread = &rule.engine_spread;
-            if !(spread.per_match_sd >= 0.0 && spread.between_league_sd >= 0.0) {
-                out.push((at("engine_spread"), "the spreads must be 0 or above".into()));
+            let pending = matches!(b.measure, Measure::Pending { .. });
+            match &rule.engine_spread {
+                Some(spread) => {
+                    if !(spread.per_match_sd >= 0.0 && spread.between_league_sd >= 0.0) {
+                        out.push((at("engine_spread"), "the spreads must be 0 or above".into()));
+                    }
+                    if b.is_distribution() && spread.noise_floor.is_none() {
+                        out.push((
+                            at("engine_spread.noise_floor"),
+                            "a distribution band needs its noise floor".into(),
+                        ));
+                    }
+                }
+                None if !pending => out.push((
+                    at("engine_spread"),
+                    "is required: only a pending band, with no engine count yet, has none".into(),
+                )),
+                None => {}
             }
-            if b.is_distribution() && spread.noise_floor.is_none() {
+            if pending && b.gates {
                 out.push((
-                    at("engine_spread.noise_floor"),
-                    "a distribution band needs its noise floor".into(),
+                    at("gates"),
+                    "a pending band has no engine count yet, so it reports only: gates false \
+                     in a named report-only group"
+                        .into(),
                 ));
             }
             if let Target::Design { value, cap } = rule.target {
@@ -1970,6 +2006,100 @@ mod tests {
         "cards_total_distribution",
     ];
 
+    /// The shipped file with a pending band `pending_probe` added in a group of its own
+    /// (`pending_test`, at most `most` bands), cloned from goals_per_match and changed by
+    /// `edit`.
+    fn with_pending(most: u32, edit: impl FnOnce(&mut serde_json::Value)) -> String {
+        let mut doc: serde_json::Value = serde_json::from_str(&shipped_text()).unwrap();
+        let mut band = doc["bands"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|b| b["band"] == "goals_per_match")
+            .unwrap()
+            .clone();
+        band["band"] = "pending_probe".into();
+        band["measure"] = serde_json::json!({"kind": "pending", "reason": "no count yet"});
+        band["group"] = "pending_test".into();
+        band["gates"] = false.into();
+        band.as_object_mut().unwrap().remove("engine_spread");
+        edit(&mut band);
+        doc["bands"].as_array_mut().unwrap().push(band);
+        doc["report_only"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!({
+                "group": "pending_test",
+                "most": most,
+                "reason": "a test group of bands with no engine count yet"
+            }));
+        doc.to_string()
+    }
+
+    #[test]
+    fn a_pending_band_in_a_listed_group_loads_with_no_spread_and_no_floor() {
+        let r = Registry::from_bytes(with_pending(1, |_| {}).as_bytes()).unwrap();
+        let b = r.band("pending_probe").unwrap();
+        assert!(matches!(b.measure, Measure::Pending { .. }));
+        assert!(b.rule.as_ref().unwrap().engine_spread.is_none());
+        assert!(
+            b.report_only
+                .as_deref()
+                .is_some_and(|w| w.starts_with("named report-only group pending_test"))
+        );
+        assert!(
+            r.report_only_floor(&|_| None)
+                .iter()
+                .all(|f| f.band != "pending_probe")
+        );
+        assert!(
+            r.floor_refusals(&|_| None)
+                .iter()
+                .all(|f| f.band != "pending_probe")
+        );
+    }
+
+    #[test]
+    fn a_pending_band_that_gates_is_refused() {
+        let e = refusal(&with_pending(1, |b| b["gates"] = true.into()));
+        assert!(
+            e.contains("pending_probe") && e.contains("reports only"),
+            "{e}"
+        );
+        let blank = refusal(&with_pending(1, |b| {
+            b["measure"] = serde_json::json!({"kind": "pending", "reason": " "});
+        }));
+        assert!(blank.contains("pending band says why"), "{blank}");
+    }
+
+    #[test]
+    fn a_band_that_is_not_pending_needs_its_engine_spread() {
+        let text = edited("goals_per_match", |b| {
+            b.as_object_mut().unwrap().remove("engine_spread");
+        });
+        let e = refusal(&text);
+        assert!(
+            e.contains("goals_per_match") && e.contains("engine_spread"),
+            "{e}"
+        );
+    }
+
+    #[test]
+    fn a_group_of_at_most_one_refuses_a_second_band() {
+        let mut doc: serde_json::Value = serde_json::from_str(&with_pending(1, |_| {})).unwrap();
+        let mut second = doc["bands"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|b| b["band"] == "pending_probe")
+            .unwrap()
+            .clone();
+        second["band"] = "pending_probe_two".into();
+        doc["bands"].as_array_mut().unwrap().push(second);
+        let e = refusal(&doc.to_string());
+        assert!(e.contains("pending_test") && e.contains("at most 1"), "{e}");
+    }
+
     #[test]
     fn the_shipped_registry_is_version_6_and_every_band_gates_but_the_named_groups() {
         let r = Registry::load(&shipped()).unwrap();
@@ -2062,7 +2192,10 @@ mod tests {
             assert!(!rule.margin.reason.trim().is_empty(), "{}", b.band);
             assert!(!rule.population.trim().is_empty(), "{}", b.band);
             assert!(!rule.estimator.trim().is_empty(), "{}", b.band);
-            assert!(!rule.engine_spread.measured.trim().is_empty(), "{}", b.band);
+            match &rule.engine_spread {
+                Some(s) => assert!(!s.measured.trim().is_empty(), "{}", b.band),
+                None => assert!(matches!(b.measure, Measure::Pending { .. }), "{}", b.band),
+            }
             match &real.source {
                 RealSource::NoCounterpart(n) => {
                     let scenario = matches!(b.measure, Measure::Scenario { .. });

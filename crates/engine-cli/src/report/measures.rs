@@ -154,7 +154,8 @@ pub fn fields_of(m: &Measure) -> Vec<&str> {
         | Measure::Builtin { .. }
         | Measure::Distribution { .. }
         | Measure::Cells { .. }
-        | Measure::Scenario { .. } => Vec::new(),
+        | Measure::Scenario { .. }
+        | Measure::Pending { .. } => Vec::new(),
     }
 }
 
@@ -344,6 +345,12 @@ pub fn check(m: &Measure) -> Result<(), String> {
         Measure::Scenario { test } => {
             if test.trim().is_empty() {
                 return Err("a scenario names the slow test that plays it".into());
+            }
+            Ok(())
+        }
+        Measure::Pending { reason } => {
+            if reason.trim().is_empty() {
+                return Err("a pending band says why the engine counts nothing yet".into());
             }
             Ok(())
         }
@@ -796,6 +803,15 @@ pub fn terms(def: &BandDef, obs: &[Obs<'_>], scope: Scope) -> Terms {
             t.why_none = Some(format!("a scenario band is judged by its slow test {test}"));
             return t;
         }
+        // A pending band has no engine count yet: no value, and its reason.
+        Measure::Pending { reason } => {
+            t.error = Error::Fixed;
+            for _ in obs {
+                push(&mut t, false, || ([0.0], [0.0]));
+            }
+            t.why_none = Some(format!("no engine count yet: {reason}"));
+            return t;
+        }
         // A whole distribution has no per-match terms: it is judged by its distance, from
         // [`histograms`].
         Measure::Distribution { .. } | Measure::Cells { .. } => {
@@ -1020,6 +1036,25 @@ mod tests {
 
     fn of(names: &[&str]) -> Vec<String> {
         names.iter().map(|s| (*s).to_string()).collect()
+    }
+
+    #[test]
+    fn a_pending_band_has_no_value_and_says_why() {
+        let matches = vec![stats([1, 0], [3, 2], [1, 1]); 2];
+        let t = terms(
+            &band(Measure::Pending {
+                reason: "the engine counts no scans yet".into(),
+            }),
+            &obs(&matches),
+            Scope::All,
+        );
+        assert_eq!(t.value(), None);
+        assert_eq!(
+            t.why_none(),
+            Some("no engine count yet: the engine counts no scans yet")
+        );
+        assert!(check(&Measure::Pending { reason: " ".into() }).is_err());
+        assert!(fields_of(&Measure::Pending { reason: "x".into() }).is_empty());
     }
 
     #[test]
