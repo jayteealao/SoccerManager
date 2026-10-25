@@ -12,6 +12,13 @@
 //! is a roster player, matched in the frames by team and shirt number; it keeps the
 //! provider's player id and never a name. It counts the share of the kept player rows the
 //! provider estimated off camera and the frames without a ball.
+//!
+//! The frames carry no ball status, so it comes from the events (the side file says
+//! `ball_status_from: "events"`): the ball is dead from the frame of a stop (the ball out of
+//! play, the end of a half, a foul or offside given) to the frame of the next event with a
+//! player on the ball, set piece or open play, and dead before each half's kick-off. The
+//! team in possession is the team of the last event with a player on the ball, held until
+//! the next. Each event acts from the frame nearest its event time.
 
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
@@ -411,6 +418,49 @@ fn read_events(
     Ok(out)
 }
 
+/// The frame of `times` nearest `ms`, the earlier on a tie.
+fn nearest(times: &[f64], ms: f64) -> usize {
+    let at = times.partition_point(|t| *t < ms);
+    match (at.checked_sub(1), times.get(at)) {
+        (Some(a), Some(b)) if ms - times[a] > b - ms => at,
+        (Some(a), _) => a,
+        _ => at.min(times.len().saturating_sub(1)),
+    }
+}
+
+/// Marks each frame's ball status and possession from the events: each event acts from the
+/// frame nearest its time. The ball is dead before a half's first event with a player on
+/// the ball, dead from a stop to the next such event, live otherwise; possession is the team
+/// of the last event with a player on the ball.
+fn mark_ball(halves: &mut [Half], times: &[Vec<f64>], read: &[Read1]) {
+    for (h, half) in halves.iter_mut().enumerate() {
+        let mut changes: Vec<(usize, Flow, Option<usize>)> = read
+            .iter()
+            .filter(|r| r.half == h)
+            .map(|r| (nearest(&times[h], r.ms), r.flow, r.team))
+            .collect();
+        changes.sort_by_key(|c| c.0);
+        let (mut live, mut possession, mut c) = (false, None, 0);
+        for (i, f) in half.frames.iter_mut().enumerate() {
+            while let Some(&(at, flow, team)) = changes.get(c)
+                && at <= i
+            {
+                match flow {
+                    Flow::OnBall => live = true,
+                    Flow::Stop => live = false,
+                    Flow::None => {}
+                }
+                if team.is_some() {
+                    possession = team;
+                }
+                c += 1;
+            }
+            f.live = Some(live);
+            f.possession = possession;
+        }
+    }
+}
+
 /// The tracking file of match `id`: `<id>.jsonl` when present (a fixture), else
 /// `<id>.jsonl.bz2`.
 fn tracking_file(dir: &Path, id: &str) -> anyhow::Result<PathBuf> {
@@ -589,6 +639,7 @@ pub fn read_native(data: &Path, id: &str) -> anyhow::Result<Native> {
         &teams,
         &team_of_person,
     )?;
+    mark_ball(&mut halves, &times, &read);
     let events: Vec<Event> = read.iter().flat_map(|r| r.events.clone()).collect();
     let m = TrackedMatch {
         source: SOURCE.into(),
@@ -766,5 +817,62 @@ mod tests {
         // The 5 m/s player: x from -12 m at the half's first frame.
         let fast = person(&m, "90009");
         assert_eq!(m.halves[0].positions[fast][0], Some([-12.0, 5.0]));
+    }
+
+    fn live(m: &TrackedMatch, h: usize, i: usize) -> Option<bool> {
+        m.halves[h].frames[i].live
+    }
+
+    fn possession(m: &TrackedMatch, h: usize, i: usize) -> Option<usize> {
+        m.halves[h].frames[i].possession
+    }
+
+    /// The ball is dead from a stop's frame (the OUT, the foul, the end of the half) to the
+    /// frame of the next event with a player on the ball, and dead before each kick-off.
+    #[test]
+    fn the_throw_in_after_the_out_ends_the_dead_span_on_its_frame() {
+        let m = fixture().m;
+        let dead =
+            |h: usize, from: usize, to: usize| (from..to).all(|i| live(&m, h, i) == Some(false));
+        // Half 1: the kick-off at frame 2, the OUT at 40, the throw-in at 55, the foul at 65,
+        // the free kick at 75, the end at 89.
+        assert!(dead(0, 0, 2));
+        assert!((2..40).all(|i| live(&m, 0, i) == Some(true)));
+        assert!(dead(0, 40, 55));
+        assert_eq!(live(&m, 0, 55), Some(true));
+        assert!(dead(0, 65, 75));
+        assert_eq!(live(&m, 0, 75), Some(true));
+        assert_eq!(live(&m, 0, 88), Some(true));
+        assert_eq!(live(&m, 0, 89), Some(false));
+        // Half 2: the sending-off's foul at 40 to the free kick at 50; the OUT at 72 to the
+        // goal kick at 80.
+        assert_eq!(live(&m, 1, 0), Some(true));
+        assert!(dead(1, 40, 50));
+        assert_eq!(live(&m, 1, 50), Some(true));
+        assert!(dead(1, 72, 80));
+        assert_eq!(live(&m, 1, 80), Some(true));
+    }
+
+    /// The away pass logged 13 ms after frame 20 goes to frame 20, the nearer.
+    #[test]
+    fn the_event_between_frames_goes_to_the_nearest_frame() {
+        let m = fixture().m;
+        assert_eq!(possession(&m, 0, 19), Some(0));
+        assert_eq!(possession(&m, 0, 20), Some(1));
+    }
+
+    /// Possession is the team of the last event with a player on the ball, from its frame.
+    #[test]
+    fn possession_switches_on_the_possession_events_frame() {
+        let m = fixture().m;
+        assert_eq!(possession(&m, 0, 1), None);
+        assert_eq!(possession(&m, 0, 2), Some(0));
+        assert_eq!(possession(&m, 0, 54), Some(1));
+        assert_eq!(possession(&m, 0, 55), Some(0));
+        assert_eq!(possession(&m, 1, 0), Some(1));
+        assert_eq!(possession(&m, 1, 39), Some(1));
+        assert_eq!(possession(&m, 1, 40), Some(0));
+        assert_eq!(possession(&m, 1, 79), Some(0));
+        assert_eq!(possession(&m, 1, 80), Some(1));
     }
 }
