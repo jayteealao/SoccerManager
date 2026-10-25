@@ -57,13 +57,16 @@ fn the_report_shows_engine_against_real_and_leaves_the_verdict_alone() {
     let real = tmp.path().join("no-real-data");
     std::fs::create_dir_all(&real).unwrap();
 
-    // A reference file from the invented fixture data.
+    // A reference file from the invented fixture data; its side folder stays in the TempDir.
     let targets = tmp.path().join("gate/real-targets.json");
+    let side = tmp.path().join("side");
     let built = bin(&data)
         .args(["real-targets", "build", "--data"])
         .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/real-targets"))
         .arg("--out")
         .arg(&targets)
+        .arg("--side-dir")
+        .arg(&side)
         .output()
         .unwrap();
     assert!(built.status.success(), "{}", text(&built));
@@ -77,6 +80,8 @@ fn the_report_shows_engine_against_real_and_leaves_the_verdict_alone() {
         .arg(&run)
         .arg("--targets")
         .arg(&targets)
+        .arg("--side-dir")
+        .arg(&side)
         .output()
         .unwrap();
     let out = text(&o);
@@ -165,4 +170,117 @@ fn a_folder_without_finished_matches_is_refused() {
         "{}",
         text(&o)
     );
+}
+
+fn copy_dir(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for e in std::fs::read_dir(from).unwrap() {
+        let e = e.unwrap();
+        let dest = to.join(e.file_name());
+        if e.file_type().unwrap().is_dir() {
+            copy_dir(&e.path(), &dest);
+        } else {
+            std::fs::copy(e.path(), dest).unwrap();
+        }
+    }
+}
+
+#[test]
+fn each_line_names_its_source_and_the_side_file_joins_when_there() {
+    let tmp = TempDir::new().unwrap();
+    let data = tmp.path().join("data");
+    let run = tmp.path().join("run");
+    let real = tmp.path().join("no-real-data");
+    std::fs::create_dir_all(&real).unwrap();
+
+    // The reference fixture with the open-data fixture laid over it, built into a reference
+    // file and a side folder of its own.
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let source = tmp.path().join("source");
+    copy_dir(&fixtures.join("real-targets"), &source);
+    copy_dir(&fixtures.join("open-data"), &source);
+    let targets = tmp.path().join("gate/real-targets.json");
+    let side = tmp.path().join(".scratch/real-targets");
+    let built = bin(&data)
+        .args(["real-targets", "build", "--data"])
+        .arg(&source)
+        .arg("--out")
+        .arg(&targets)
+        .arg("--side-dir")
+        .arg(&side)
+        .output()
+        .unwrap();
+    assert!(built.status.success(), "{}", text(&built));
+    assert!(side.join("impect-targets.json").is_file());
+
+    calibrate(&data, &run, &real);
+    let before = std::fs::read(run.join("report.json")).unwrap();
+
+    let with = |side_dir: &Path| {
+        let o = bin(&data)
+            .args(["calibrate", "report", "--run"])
+            .arg(&run)
+            .arg("--targets")
+            .arg(&targets)
+            .arg("--side-dir")
+            .arg(side_dir)
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "{}", text(&o));
+        text(&o)
+    };
+
+    // With the side file: each line names its source, the men's senior pool beside the
+    // other labels, the per-season targets counted apart, and the side file's targets in.
+    let out = with(&side);
+    assert!(
+        out.contains("StatsBomb open data, men's senior matches, 2 competition-seasons"),
+        "{out}"
+    );
+    assert!(out.contains("sb.men.shots_on_target_share"), "{out}");
+    assert!(
+        out.contains("StatsBomb competition-season targets in calibration.json"),
+        "{out}"
+    );
+    assert!(!out.contains("sb.2_27."), "{out}");
+    assert!(
+        out.contains("IMPECT open data, 1. Bundesliga 2023/24"),
+        "{out}"
+    );
+    let file = side.join("impect-targets.json");
+    let side_file: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    let n = side_file["targets"].as_object().unwrap().len();
+    assert!(
+        out.contains(&format!(
+            "IMPECT side file: read from {} ({n} targets)",
+            file.display()
+        )),
+        "{out}"
+    );
+    let cal: Value =
+        serde_json::from_str(&std::fs::read_to_string(run.join("calibration.json")).unwrap())
+            .unwrap();
+    assert_eq!(cal["side"]["targets"], n);
+    let lines: Vec<&Value> = cal["bands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|b| b["targets"].as_array().unwrap())
+        .collect();
+    assert!(lines.iter().all(|t| t["source_label"].is_string()));
+    assert!(
+        lines
+            .iter()
+            .any(|t| t["target"].as_str().unwrap().starts_with("imp."))
+    );
+
+    // An empty side folder: the report says the side targets are not shown.
+    let empty = TempDir::new().unwrap();
+    let out = with(empty.path());
+    assert!(out.contains("IMPECT side file absent at "), "{out}");
+    assert!(out.contains("IMPECT-derived targets not shown"), "{out}");
+    assert!(!out.contains("IMPECT open data, 1. Bundesliga"), "{out}");
+
+    // The run's report stays byte-equal.
+    assert_eq!(std::fs::read(run.join("report.json")).unwrap(), before);
 }

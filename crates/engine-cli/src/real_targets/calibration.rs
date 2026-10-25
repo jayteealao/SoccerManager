@@ -7,6 +7,10 @@
 //! the real leagues compare with): a mean or share with its error, or a whole distribution
 //! with its distance from each real one (total variation for scoreline cells, Wasserstein-1
 //! otherwise). Every other band is listed as having no target.
+//!
+//! Each line names its target's source label. The targets of the local side file (a source
+//! whose figures may not be shared) join the bands they name when the side folder holds the
+//! file, and the report says when it does not.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
@@ -17,7 +21,7 @@ use engine::ContentDir;
 use engine::observe::MatchStats;
 use serde::Serialize;
 
-use super::{Layer, ReferenceFile, Target, default_file};
+use super::{Layer, ReferenceFile, Target, default_file, side};
 use crate::calibrate::fixtures::FixtureKey;
 use crate::calibrate::rows;
 use crate::calibrate::run_folder::{self, UnitLine};
@@ -34,6 +38,9 @@ pub const FILE: &str = "calibration.json";
 pub struct Line {
     pub target: String,
     pub layer: Layer,
+    pub source_label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub real: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -76,6 +83,27 @@ pub struct Report {
     pub without_target: Vec<String>,
     /// Targets naming a band the registry does not hold.
     pub unknown_bands: Vec<String>,
+    /// The local side file: where it was looked for, and how many targets it gave.
+    pub side: SideLine,
+}
+
+/// Where the local side file was looked for and what it gave; `targets` is `None` when it
+/// is not there.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct SideLine {
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub targets: Option<usize>,
+}
+
+/// A StatsBomb competition-season target (`sb.<competition>_<season>.…`), which the table
+/// counts and leaves to `calibration.json`, as it does banding-group targets.
+fn per_season(key: &str) -> bool {
+    key.strip_prefix("sb.")
+        .and_then(|rest| rest.split('.').next())
+        .is_some_and(|label| {
+            label.contains('_') && label.chars().all(|c| c.is_ascii_digit() || c == '_')
+        })
 }
 
 /// The suite of every finished fixture, from the ledger lines of `dir`.
@@ -148,12 +176,15 @@ fn shares_of(hists: &[Option<Vec<(u32, f64)>>], bins: u32) -> Option<Vec<f64>> {
     (total > 0.0).then(|| counts.iter().map(|c| c / total).collect())
 }
 
-/// Builds the report of the run folder `run` against `file`.
+/// Builds the report of the run folder `run` against `file` and, when given, the side
+/// file's targets (`side_targets`) found at `side_path`.
 pub fn report(
     run: &Path,
     registry: &Registry,
     file: &ReferenceFile,
     targets_path: &Path,
+    side_targets: Option<&BTreeMap<String, Target>>,
+    side_path: &Path,
 ) -> anyhow::Result<Report> {
     let records = equal_records(run)?;
     anyhow::ensure!(
@@ -174,7 +205,11 @@ pub fn report(
         })
         .collect();
     let mut linked: BTreeMap<&str, Vec<(&String, &Target)>> = BTreeMap::new();
-    for (key, t) in &file.targets {
+    for (key, t) in file
+        .targets
+        .iter()
+        .chain(side_targets.into_iter().flatten())
+    {
         if let Some(band) = &t.engine_count.band {
             linked.entry(band).or_default().push((key, t));
         }
@@ -210,6 +245,8 @@ pub fn report(
                 line.targets.push(Line {
                     target: (*key).clone(),
                     layer: t.layer,
+                    source_label: t.source_label.clone(),
+                    context: t.context.clone(),
                     real: None,
                     real_se: Some(t.se),
                     difference: None,
@@ -226,6 +263,8 @@ pub fn report(
                 line.targets.push(Line {
                     target: (*key).clone(),
                     layer: t.layer,
+                    source_label: t.source_label.clone(),
+                    context: t.context.clone(),
                     real: t.value,
                     real_se: Some(t.se),
                     difference: line.engine.zip(t.value).map(|(e, r)| e - r),
@@ -251,6 +290,10 @@ pub fn report(
         bands,
         without_target,
         unknown_bands: unknown,
+        side: SideLine {
+            path: side_path.display().to_string(),
+            targets: side_targets.map(BTreeMap::len),
+        },
     })
 }
 
@@ -282,37 +325,50 @@ impl Report {
                 }
             }
             let mut groups = 0;
+            let mut seasons = 0;
             for t in &b.targets {
                 if t.layer == Layer::Group {
                     groups += 1;
+                    continue;
+                }
+                if per_season(&t.target) {
+                    seasons += 1;
                     continue;
                 }
                 match &b.metric {
                     Some(_) => {
                         let _ = writeln!(
                             out,
-                            "  {:<36} distance {}  real shares: {}",
+                            "  {:<36} distance {}  real shares: {}\n    {}",
                             t.target,
                             f(t.distance),
                             t.real_shares
                                 .as_deref()
-                                .map_or_else(String::new, shares_text)
+                                .map_or_else(String::new, shares_text),
+                            t.source_label
                         );
                     }
                     None => {
                         let _ = writeln!(
                             out,
-                            "  {:<36} real {} (se {})  engine less real {}",
+                            "  {:<36} real {} (se {})  engine less real {}\n    {}",
                             t.target,
                             f(t.real),
                             f(t.real_se),
-                            f(t.difference)
+                            f(t.difference),
+                            t.source_label
                         );
                     }
                 }
             }
             if groups > 0 {
                 let _ = writeln!(out, "  and {groups} banding-group targets in {FILE}");
+            }
+            if seasons > 0 {
+                let _ = writeln!(
+                    out,
+                    "  and {seasons} StatsBomb competition-season targets in {FILE}"
+                );
             }
         }
         if !self.without_target.is_empty() {
@@ -328,6 +384,22 @@ impl Report {
                 "targets naming a band the registry does not hold: {}",
                 self.unknown_bands.join(", ")
             );
+        }
+        match self.side.targets {
+            Some(n) => {
+                let _ = writeln!(
+                    out,
+                    "\nIMPECT side file: read from {} ({n} targets)",
+                    self.side.path
+                );
+            }
+            None => {
+                let _ = writeln!(
+                    out,
+                    "\nIMPECT side file absent at {}: IMPECT-derived targets not shown",
+                    self.side.path
+                );
+            }
         }
         out
     }
@@ -347,12 +419,25 @@ pub fn run(
     content_dir: Option<&Path>,
     run: &Path,
     targets: Option<&PathBuf>,
+    side_dir: Option<&PathBuf>,
 ) -> anyhow::Result<i32> {
     let dir = ContentDir::resolve(content_dir)?;
     let registry = Registry::load(&dir)?;
     let path = targets.cloned().unwrap_or_else(|| default_file(dir.root()));
     let file = ReferenceFile::load(&path)?;
-    let report = report(run, &registry, &file, &path)?;
+    let side_folder = side_dir
+        .cloned()
+        .or_else(|| side::default_dir(dir.root()))
+        .unwrap_or_else(|| PathBuf::from(".scratch").join(side::DIR));
+    let side_file = side::read_impect(&side_folder)?;
+    let report = report(
+        run,
+        &registry,
+        &file,
+        &path,
+        side_file.as_ref().map(|f| &f.targets),
+        &side_folder.join(side::IMPECT_FILE),
+    )?;
     print!("{}", report.text());
     let out = run.join(FILE);
     std::fs::write(&out, serde_json::to_string_pretty(&report)? + "\n")

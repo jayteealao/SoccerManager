@@ -1479,8 +1479,10 @@ pub enum CalibrateAction {
         long_about = "Show the engine against the real targets, band by band, from a\n\
                       run folder's stored rows: a mean with its error, or a whole\n\
                       distribution with its distance from the real one. Reads the\n\
-                      equal suite's matches. Writes calibration.json in the run folder;\n\
-                      never report.json, so the run's verdict does not change."
+                      equal suite's matches. Each line names its target's source; the\n\
+                      local side file's targets join their bands when it is there, and\n\
+                      the report says when it is not. Writes calibration.json in the run\n\
+                      folder; never report.json, so the run's verdict does not change."
     )]
     Report {
         /// The run folder of a finished calibrate run.
@@ -1494,6 +1496,14 @@ pub enum CalibrateAction {
                          gate/real-targets.json beside the content folder."
         )]
         targets: Option<PathBuf>,
+        /// The local side folder.
+        #[arg(
+            long,
+            value_name = "DIR",
+            long_help = "The local side folder; default the main checkout's\n\
+                         .scratch/real-targets."
+        )]
+        side_dir: Option<PathBuf>,
     },
     /// Accept a not-sure band of a run: accepted, not shown equivalent.
     #[command(

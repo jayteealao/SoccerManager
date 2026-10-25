@@ -104,9 +104,16 @@ fn main() {
             Some(cli::CalibrateAction::Agreement { a, b, out }) => {
                 report::agreement::command(a, b, out.as_deref())
             }
-            Some(cli::CalibrateAction::Report { run, targets }) => {
-                real_targets::calibration::run(content_dir, run, targets.as_ref())
-            }
+            Some(cli::CalibrateAction::Report {
+                run,
+                targets,
+                side_dir,
+            }) => real_targets::calibration::run(
+                content_dir,
+                run,
+                targets.as_ref(),
+                side_dir.as_ref(),
+            ),
             Some(cli::CalibrateAction::Proof {
                 seed,
                 out,

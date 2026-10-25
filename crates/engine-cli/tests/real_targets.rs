@@ -55,14 +55,17 @@ fn copy_dir(from: &Path, to: &Path) {
     }
 }
 
-/// Builds the reference file of `data` into `out/real-targets.json`.
+/// Builds the reference file of `data` into `out/real-targets.json`, with its side folder
+/// in `out` too, so no test writes to the checkout's own side folder.
 fn build(data: &Path, out: &Path) -> (Value, Output) {
     let file = out.join("real-targets.json");
     let mut cmd = bin();
     cmd.args(["real-targets", "build", "--data"])
         .arg(data)
         .arg("--out")
-        .arg(&file);
+        .arg(&file)
+        .arg("--side-dir")
+        .arg(out.join("side"));
     let o = cmd.output().unwrap();
     assert!(o.status.success(), "{}", text(&o));
     let v = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
