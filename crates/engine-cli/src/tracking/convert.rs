@@ -237,7 +237,7 @@ pub fn to_ticks(m: &TrackedMatch) -> anyhow::Result<Converted> {
     let mut placed: Vec<Placed> = Vec::new();
     let mut unplaced = 0u32;
     for e in &m.events {
-        let Some(at) = place::place(m, &frames, offset.as_ref(), e) else {
+        let Some(at) = place::place(&frames, offset.as_ref(), e) else {
             unplaced += 1;
             continue;
         };

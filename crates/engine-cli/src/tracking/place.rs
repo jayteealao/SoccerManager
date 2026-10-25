@@ -103,7 +103,6 @@ fn quantile(sorted: &[i64], q: f64) -> f64 {
 /// The placement of `e`: by its event time, else by its game clock and the offset; `None`
 /// when it has neither, or a clock and no offset.
 pub fn place(
-    m: &TrackedMatch,
     frames: &[(i64, u32, usize, usize)],
     offset: Option<&ClockOffset>,
     e: &Event,
@@ -164,16 +163,13 @@ mod tests {
         let frames = frame_ticks(&m).unwrap();
         let t0 = m.halves[0].frames[2].t_ms; // the first ball frame: tick 0
         for (dt, tick) in [(0, 0), (19, 0), (20, 0), (21, 2), (39, 2), (60, 2), (61, 4)] {
-            let p = place(&m, &frames, None, &timed(t0 + dt)).unwrap();
+            let p = place(&frames, None, &timed(t0 + dt)).unwrap();
             assert_eq!((p.tick, p.how), (tick, How::EventTime), "{dt} ms");
         }
         // Before the first ball frame and after the last: the end frames.
-        assert_eq!(place(&m, &frames, None, &timed(t0 - 5000)).unwrap().tick, 0);
+        assert_eq!(place(&frames, None, &timed(t0 - 5000)).unwrap().tick, 0);
         let end = m.halves[1].frames[59].t_ms;
-        assert_eq!(
-            place(&m, &frames, None, &timed(end + 5000)).unwrap().tick,
-            234
-        );
+        assert_eq!(place(&frames, None, &timed(end + 5000)).unwrap().tick, 234);
     }
 
     /// The fixture's passes move the ball 0.48 s after their event time.
@@ -202,15 +198,15 @@ mod tests {
         let mut e = timed(0);
         e.time_ms = None;
         e.clock = Some((0, 400));
-        let p = place(&m, &frames, fit.as_ref(), &e).unwrap();
+        let p = place(&frames, fit.as_ref(), &e).unwrap();
         assert_eq!((p.tick, p.how), (44, How::ClockOffset));
         // In half 2, 1 s after its first ball frame (tick 116) plus 0.48 s: 37 frames on.
         e.clock = Some((1, 1000));
-        assert_eq!(place(&m, &frames, fit.as_ref(), &e).unwrap().tick, 116 + 74);
+        assert_eq!(place(&frames, fit.as_ref(), &e).unwrap().tick, 116 + 74);
         // No offset, or neither a time nor a clock: no placement.
-        assert_eq!(place(&m, &frames, None, &e), None);
+        assert_eq!(place(&frames, None, &e), None);
         e.clock = None;
-        assert_eq!(place(&m, &frames, fit.as_ref(), &e), None);
+        assert_eq!(place(&frames, fit.as_ref(), &e), None);
     }
 
     #[test]

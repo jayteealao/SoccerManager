@@ -18,6 +18,7 @@ pub mod proof;
 pub mod real;
 pub mod styles;
 pub mod substitutions;
+pub mod tracked_shape;
 pub mod verdict;
 
 use std::collections::BTreeMap;
