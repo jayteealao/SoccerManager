@@ -745,6 +745,9 @@ impl Built {
     }
 }
 
+/// One match file read: its season index, match id, terms and sha256.
+type ReadMatch = (usize, u64, MatchTerms, String);
+
 /// Reads the kept seasons of `data`, their matches files and each match's event file
 /// (several at once), and builds their targets; `None` when the data folder holds no
 /// competition list.
@@ -770,8 +773,7 @@ pub fn build(data: &Path) -> anyhow::Result<Option<Built>> {
         jobs.extend(ids.into_iter().map(|id| (i, id)));
     }
     let next = AtomicUsize::new(0);
-    let done: Mutex<Vec<anyhow::Result<(usize, u64, MatchTerms, String)>>> =
-        Mutex::new(Vec::with_capacity(jobs.len()));
+    let done: Mutex<Vec<anyhow::Result<ReadMatch>>> = Mutex::new(Vec::with_capacity(jobs.len()));
     let workers = std::thread::available_parallelism()
         .map_or(4, std::num::NonZero::get)
         .min(8);

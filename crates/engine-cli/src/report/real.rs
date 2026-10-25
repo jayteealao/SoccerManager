@@ -2297,9 +2297,9 @@ A,0,0
         assert_eq!(
             (info.missing, info.no_counterpart),
             // The 101 team-shape bands read a file this folder lacks, and the shots and cards
-            // distributions a reference file it lacks; the three experiment bands and the five
-            // bands only the slow tests judge have no real counterpart.
-            (15 + 35 + 101 + 2, 3 + 5)
+            // distributions and the scan check a reference file it lacks; the three experiment
+            // bands and the five bands only the slow tests judge have no real counterpart.
+            (15 + 35 + 101 + 2 + 1, 3 + 5)
         );
 
         let mut joint = Joint {
@@ -2476,16 +2476,9 @@ A,0,0
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    fn gz(path: &Path, text: &str) {
-        let file = File::create(path).unwrap();
-        let mut gz = flate2::write::GzEncoder::new(file, flate2::Compression::default());
-        gz.write_all(text.as_bytes()).unwrap();
-        gz.finish().unwrap();
-    }
-
     /// The shipped distribution bands' pointers over small synthetic files: histograms
-    /// grouped by match, cells from a score, shot distances from a compressed file, and
-    /// possession chains in passes and seconds from one compressed file read once.
+    /// grouped by match and cells from a score; the bands that read reference-file targets
+    /// say so.
     #[test]
     fn each_whole_sample_reads_one_histogram_per_match() {
         let dir = temp("samples");
@@ -2499,28 +2492,20 @@ A,0,0
             "match,team,passes\n1,10,400\n1,11,500\n2,12,1600\n",
         )
         .unwrap();
-        gz(
-            &dir.join("sb_events.csv.gz"),
-            "mid,type,x,y\n7,Shot,93,34\n7,Pass,10,10\n8,Shot,105,0\n8,Shot,50,34\n",
-        );
-        gz(
-            &dir.join("sb2_events.csv.gz"),
-            "mid,period,ts,type,team,poss,poss_team,dur\n\
-             5,1,00:00:00.000,Starting XI,A,1,A,0.0\n\
-             5,1,00:00:01.000,Pass,A,1,A,1.5\n\
-             5,1,00:00:03.000,Pass,A,1,A,2.0\n\
-             5,1,00:00:05.500,Pass,B,1,A,1.0\n\
-             5,1,00:00:06.000,Pass,A,1,A,0.5\n\
-             5,1,00:00:10.000,Carry,B,2,B,4.0\n\
-             6,1,00:44:50.000,Pass,A,1,A,1.0\n\
-             6,2,00:00:05.000,Pass,A,1,A,\n",
-        );
         let r = registry(&[]);
         let got = samples(&at(&dir), &r);
-        // The shots and cards distributions read reference-file targets, which this
+        // The shots and cards distributions, and the shot-distance and chain distributions
+        // (which read StatsBomb's men's pool), read reference-file targets, which this
         // registry, read without the reference file, does not hold.
         assert_eq!(got.len(), 8, "{got:?}");
-        for band in ["shots_total_distribution", "cards_total_distribution"] {
+        let target_backed = [
+            "shots_total_distribution",
+            "cards_total_distribution",
+            "shot_distance_distribution",
+            "chain_passes_distribution",
+            "chain_seconds_distribution",
+        ];
+        for band in target_backed {
             let why = got[band].as_ref().unwrap_err();
             assert!(why.contains("is not a target"), "{band}: {why}");
         }
@@ -2545,22 +2530,6 @@ A,0,0
             hist("passes_per_team_distribution"),
             [vec![(400, 1.0), (500, 1.0)], vec![(1499, 1.0)]]
         );
-        // Shots 12 m, 34 m and 55 m from the goal; the pass is not a shot.
-        assert_eq!(
-            hist("shot_distance_distribution"),
-            [vec![(12, 1.0)], vec![(34, 1.0), (40, 1.0)]]
-        );
-        // Match 5: a chain of 3 passes by the team in possession (the other team's pass
-        // is not one of them), from 0 s to 6.5 s; and a chain of a carry, 4 s. Match 6: one
-        // chain of 2 passes whose seconds stay in its first period: 1 s.
-        assert_eq!(
-            hist("chain_passes_distribution"),
-            [vec![(0, 1.0), (3, 1.0)], vec![(2, 1.0)]]
-        );
-        assert_eq!(
-            hist("chain_seconds_distribution"),
-            [vec![(2, 1.0), (3, 1.0)], vec![(0, 1.0)]]
-        );
         // calib.real shows a whole sample's mean and its error over matches.
         let info = read_all(&at(&dir), &r, &got);
         let goals = info.band("goals_distribution").unwrap();
@@ -2583,7 +2552,6 @@ A,0,0
         assert_eq!(passes.status, "not_here");
         // An absent folder: every band not here.
         let none = samples(&at(&dir.join("absent")), &r);
-        let target_backed = ["shots_total_distribution", "cards_total_distribution"];
         assert!(
             none.iter()
                 .filter(|(b, _)| !target_backed.contains(&b.as_str()))
