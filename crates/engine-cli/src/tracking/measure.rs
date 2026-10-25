@@ -553,6 +553,37 @@ mod tests {
         assert!(f.halves[0].shape.length_m > 0.0);
     }
 
+    /// A converted PFF match goes through the same functions as an engine match's files
+    /// (`frames_of`, `measure_frames`): the report reads every second resampled tick from
+    /// each half's start, 25 frames a second, as it reads an engine match.
+    #[test]
+    fn the_frames_of_a_resampled_pff_match_take_the_engine_path() {
+        let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tracking/pff");
+        let r = super::super::pff::read(&data, "9001").unwrap();
+        let c = convert::to_ticks(&r.m).unwrap();
+        assert_eq!(c.records.len(), 295, "a record on every tick");
+        let frames = frames_of(&c.records, &c.side).unwrap();
+        let mut want = 0;
+        for (h, half) in c.side.halves.iter().enumerate() {
+            let ticks = half.end_tick - half.start_tick + 1;
+            let own: Vec<&Frame> = frames.iter().filter(|f| f.half == h).collect();
+            assert_eq!(own.len() as u32, ticks.div_ceil(2), "half {h}");
+            assert!(
+                own.iter()
+                    .all(|f| (f.tick - half.start_tick).is_multiple_of(2))
+            );
+            want += own.len();
+        }
+        assert_eq!(frames.len(), want);
+        assert_eq!(want, 73 + 75);
+        let v = measure_frames(&frames, c.side.pitch[0], Mode::Full).unwrap();
+        let n = crate::report::tracked_shape::place("team.frames").unwrap();
+        assert_eq!(v[0][n], want as f64);
+        let f = figures_of(&c.records, &c.side, &dfl_pass_choice(&r.m)).unwrap();
+        assert_eq!(f.frames as usize, want);
+        assert_eq!(f.figures.len(), field_names().len());
+    }
+
     /// A side file of another tick step is refused.
     #[test]
     fn a_side_file_of_another_tick_step_is_refused() {
