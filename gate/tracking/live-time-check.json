@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "rule": "in each half, from its first event to its last, the time from a stop to the next restart is dead",
+  "tolerance_minutes": 2.0,
+  "matches": [
+    {
+      "match_id": "DFL-MAT-J03WMX",
+      "rule_minutes": 60.054,
+      "tracked_minutes": 56.913,
+      "difference": 3.141
+    },
+    {
+      "match_id": "DFL-MAT-J03WN1",
+      "rule_minutes": 50.616,
+      "tracked_minutes": 45.585,
+      "difference": 5.032
+    },
+    {
+      "match_id": "DFL-MAT-J03WOH",
+      "rule_minutes": 52.239,
+      "tracked_minutes": 47.963,
+      "difference": 4.276
+    },
+    {
+      "match_id": "DFL-MAT-J03WOY",
+      "rule_minutes": 70.39,
+      "tracked_minutes": 50.857,
+      "difference": 19.533
+    },
+    {
+      "match_id": "DFL-MAT-J03WPY",
+      "rule_minutes": 62.968,
+      "tracked_minutes": 54.307,
+      "difference": 8.661
+    },
+    {
+      "match_id": "DFL-MAT-J03WQQ",
+      "rule_minutes": 61.739,
+      "tracked_minutes": 56.235,
+      "difference": 5.504
+    },
+    {
+      "match_id": "DFL-MAT-J03WR9",
+      "rule_minutes": 76.533,
+      "tracked_minutes": 56.877,
+      "difference": 19.656
+    }
+  ],
+  "verdict": "fail",
+  "wyscout_rates": "per match"
+}

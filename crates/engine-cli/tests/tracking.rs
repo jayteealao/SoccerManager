@@ -375,3 +375,78 @@ fn measure_writes_every_figure_of_every_match() {
         .unwrap();
     assert_eq!(out.status.code(), Some(1), "{}", text(&out));
 }
+
+/// While the committed live-time check does not pass, no band with a Wyscout real value
+/// takes it per live minute: no such band's measure reads a ball-in-play field, and no
+/// Wyscout target it names counts per live minute.
+#[test]
+fn wyscout_rates_stay_per_match_while_the_live_time_rule_fails() {
+    let read = |p: &str| -> Value {
+        serde_json::from_str(&std::fs::read_to_string(repo().join(p)).unwrap()).unwrap()
+    };
+    let check = read("gate/tracking/live-time-check.json");
+    assert_eq!(check["matches"].as_array().unwrap().len(), 7);
+    let pass = check["verdict"] == "pass";
+    assert_eq!(
+        check["wyscout_rates"],
+        if pass { "per live minute" } else { "per match" }
+    );
+    if pass {
+        return;
+    }
+    let targets = read("gate/real-targets.json");
+    let registry = read("content/realism-bands.json");
+    let live =
+        |s: &str| s.contains("ball_in_play") || s.contains("live_min") || s.contains("live minute");
+    let mut wyscout = 0;
+    for band in registry["bands"].as_array().unwrap() {
+        let source = &band["real"]["source"];
+        let from_target = source["target"].as_str().map(|k| &targets["targets"][k]);
+        let is_wyscout = source["dataset"]
+            .as_str()
+            .is_some_and(|d| d.contains("Wyscout"))
+            || from_target.is_some_and(|t| t["provider"] == "Wyscout");
+        if !is_wyscout {
+            continue;
+        }
+        wyscout += 1;
+        let name = band["band"].as_str().unwrap();
+        assert!(
+            !live(&band["measure"].to_string()),
+            "{name} reads live time"
+        );
+        assert!(
+            !live(&band["estimator"].to_string()),
+            "{name} is per live minute"
+        );
+        if let Some(t) = from_target {
+            assert!(!live(&t["denominator"].to_string()), "{name}'s target");
+        }
+    }
+    assert!(wyscout > 0, "the registry has Wyscout bands");
+}
+
+/// `tracking live-check` prints a line per match and writes the check with its verdict.
+#[test]
+fn live_check_writes_the_rule_against_the_tracked_minutes() {
+    let dir = TempDir::new().unwrap();
+    let file = dir.path().join("check.json");
+    let out = bin()
+        .args(["tracking", "live-check", "--data"])
+        .arg(fixtures().join("dfl"))
+        .arg("--out")
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", text(&out));
+    assert!(text(&out).contains(FIX), "{}", text(&out));
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    let m = &v["matches"][0];
+    let (rule, tracked) = (
+        m["rule_minutes"].as_f64().unwrap(),
+        m["tracked_minutes"].as_f64().unwrap(),
+    );
+    assert!((m["difference"].as_f64().unwrap() - (rule - tracked)).abs() < 2e-3);
+    let within = (rule - tracked).abs() <= 2.0;
+    assert_eq!(v["verdict"], if within { "pass" } else { "fail" });
+}

@@ -192,6 +192,34 @@ pub enum TrackingAction {
         #[arg(long, value_name = "DIR")]
         out: PathBuf,
     },
+    /// Check the event-data live-time rule against the tracked ball status.
+    #[command(
+        name = "live-check",
+        long_about = "Apply the event-data live-time rule (in each half, the time from a
+                      stop to the next restart is dead) to each DFL match's events and
+                      compare it with the tracked ball status. The check passes only when
+                      every match is within 2.0 minutes; otherwise event-data rates from
+                      Wyscout stay per match. Prints one line per match and writes the
+                      check file."
+    )]
+    LiveCheck {
+        /// The raw data folder.
+        #[arg(
+            long,
+            value_name = "DIR",
+            long_help = "The raw data folder holding idsse/ with the DFL files; default
+                         the main checkout's .scratch/data."
+        )]
+        data: Option<PathBuf>,
+        /// The check file to write.
+        #[arg(
+            long,
+            value_name = "FILE",
+            long_help = "The check file to write; default gate/tracking/live-time-check.json
+                         of the checkout."
+        )]
+        out: Option<PathBuf>,
+    },
     /// Measure every DFL tracked match with the shared shape report.
     #[command(
         long_about = "Convert every DFL tracked match of the data folder and measure it

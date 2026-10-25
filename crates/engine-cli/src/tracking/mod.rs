@@ -9,6 +9,7 @@
 
 pub mod convert;
 pub mod dfl;
+pub mod live_rule;
 pub mod measure;
 pub mod place;
 pub mod side;
@@ -241,6 +242,27 @@ pub fn run(content_dir: Option<&Path>, opts: &TrackingOpts) -> anyhow::Result<i3
             );
             println!("wrote {}", ticks.display());
             println!("wrote {}", side.display());
+            Ok(0)
+        }
+        TrackingAction::LiveCheck { data, out } => {
+            let folder = data_folder(dir.root(), data.as_deref())?;
+            let check = live_rule::check_dfl(&folder)?;
+            println!("match            rule min  tracked min  difference");
+            for m in &check.matches {
+                println!(
+                    "{:<16} {:>8.1}  {:>11.1}  {:>+10.1}",
+                    m.match_id, m.rule_minutes, m.tracked_minutes, m.difference
+                );
+            }
+            println!(
+                "verdict: {} (every match within {:.1} minutes); Wyscout rates {}",
+                check.verdict, check.tolerance_minutes, check.wyscout_rates
+            );
+            let path = out
+                .clone()
+                .unwrap_or_else(|| live_rule::default_out(dir.root()));
+            check.write(&path)?;
+            println!("wrote {}", path.display());
             Ok(0)
         }
         TrackingAction::Measure { data, out } => {
