@@ -1,0 +1,56 @@
+[
+ {
+  "index": 0,
+  "squadId": 20,
+  "actionType": "PASS",
+  "result": "SUCCESS",
+  "periodId": 1,
+  "shot": null
+ },
+ {
+  "index": 1,
+  "squadId": 20,
+  "actionType": "PASS",
+  "result": "SUCCESS",
+  "periodId": 1,
+  "shot": null
+ },
+ {
+  "index": 2,
+  "squadId": 20,
+  "actionType": "SHOT",
+  "result": "FAIL",
+  "periodId": 1,
+  "shot": {
+   "distance": 20.0,
+   "angle": 10.0
+  }
+ },
+ {
+  "index": 3,
+  "squadId": 21,
+  "actionType": "SHOT",
+  "result": "FAIL",
+  "periodId": 1,
+  "shot": {
+   "distance": 8.0,
+   "angle": 10.0
+  }
+ },
+ {
+  "index": 4,
+  "squadId": 20,
+  "actionType": "FOUL",
+  "result": null,
+  "periodId": 1,
+  "shot": null
+ },
+ {
+  "index": 5,
+  "squadId": 21,
+  "actionType": "FOUL",
+  "result": null,
+  "periodId": 1,
+  "shot": null
+ }
+]

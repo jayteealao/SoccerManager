@@ -1,0 +1,85 @@
+[
+ {
+  "index": 0,
+  "squadId": 10,
+  "actionType": "PASS",
+  "result": "SUCCESS",
+  "periodId": 1,
+  "shot": null
+ },
+ {
+  "index": 1,
+  "squadId": 11,
+  "actionType": "PASS",
+  "result": "FAIL",
+  "periodId": 1,
+  "shot": null
+ },
+ {
+  "index": 2,
+  "squadId": 10,
+  "actionType": "PASS",
+  "result": "NEUTRAL",
+  "periodId": 1,
+  "shot": null
+ },
+ {
+  "index": 3,
+  "squadId": 10,
+  "actionType": "SHOT",
+  "result": "SUCCESS",
+  "periodId": 1,
+  "shot": {
+   "distance": 12.0,
+   "angle": 10.0
+  }
+ },
+ {
+  "index": 4,
+  "squadId": 10,
+  "actionType": "GOAL",
+  "result": null,
+  "periodId": 1,
+  "shot": null
+ },
+ {
+  "index": 5,
+  "squadId": 11,
+  "actionType": "FOUL",
+  "result": null,
+  "periodId": 1,
+  "shot": null
+ },
+ {
+  "index": 6,
+  "squadId": 10,
+  "actionType": "CORNER",
+  "result": "SUCCESS",
+  "periodId": 1,
+  "shot": null
+ },
+ {
+  "index": 7,
+  "squadId": 11,
+  "actionType": "THROW_IN",
+  "result": "SUCCESS",
+  "periodId": 1,
+  "shot": null
+ },
+ {
+  "index": 8,
+  "squadId": 11,
+  "actionType": "GOAL_KICK",
+  "result": "SUCCESS",
+  "periodId": 1,
+  "shot": null
+ },
+ {
+  "index": 9,
+  "squadId": 10,
+  "actionType": "OFFSIDE",
+  "result": null,
+  "periodId": 1,
+  "shot": null
+ }
+]

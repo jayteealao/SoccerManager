@@ -1,0 +1,80 @@
+[
+ {
+  "index": 1,
+  "period": 1,
+  "timestamp": "00:00:00.000",
+  "type": {
+   "name": "Pass"
+  },
+  "team": {
+   "name": "Nation X"
+  },
+  "possession": 1,
+  "possession_team": {
+   "name": "Nation X"
+  },
+  "play_pattern": {
+   "name": "Regular Play"
+  },
+  "location": [
+   40,
+   40
+  ],
+  "duration": 4.0
+ },
+ {
+  "index": 2,
+  "period": 1,
+  "timestamp": "00:00:04.000",
+  "type": {
+   "name": "Shot"
+  },
+  "team": {
+   "name": "Nation X"
+  },
+  "possession": 1,
+  "possession_team": {
+   "name": "Nation X"
+  },
+  "play_pattern": {
+   "name": "Regular Play"
+  },
+  "location": [
+   88,
+   40
+  ],
+  "duration": 0.5,
+  "shot": {
+   "outcome": {
+    "name": "Blocked"
+   },
+   "statsbomb_xg": 0.02,
+   "type": {
+    "name": "Open Play"
+   }
+  }
+ },
+ {
+  "index": 3,
+  "period": 1,
+  "timestamp": "00:00:10.000",
+  "type": {
+   "name": "Carry"
+  },
+  "team": {
+   "name": "Nation Y"
+  },
+  "possession": 2,
+  "possession_team": {
+   "name": "Nation Y"
+  },
+  "play_pattern": {
+   "name": "From Goal Kick"
+  },
+  "location": [
+   10,
+   40
+  ],
+  "duration": 2.0
+ }
+]

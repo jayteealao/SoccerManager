@@ -1,0 +1,4 @@
+study,year,doi_or_url,open_access,population,level,sex,method,scan_definition,window_s,position_group,condition,measure,value,unit,sd_or_ci,n,quote_location,notes
+"Jordet, Invented et al. - fixture study",2020,10.0/fixture,yes (CC BY),"one club, 2017/18",elite,men,video,head turn,10,all outfield,all,scans in window,3.5,scans per <=10 s,SD 1.0,1000 possessions,Results,a decoy measure
+"Jordet, Invented et al. - fixture study",2020,10.0/fixture,yes (CC BY),"one club, 2017/18",elite,men,video,head turn,10,all outfield,all,scan frequency,0.5,scans/s,SD 0.2,1000 possessions,Results,the chosen row
+"Jordet, Invented et al. - fixture study",2020,10.0/fixture,yes (CC BY),"one club, 2017/18",elite,men,video,head turn,10,CM (central midfielder),all,scan frequency,0.6,scans/s,SD 0.3,not reported,Figure 2,a decoy position

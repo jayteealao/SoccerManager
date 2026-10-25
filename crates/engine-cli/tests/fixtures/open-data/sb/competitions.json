@@ -1,0 +1,62 @@
+[
+ {
+  "competition_id": 2,
+  "season_id": 27,
+  "country_name": "England",
+  "competition_name": "Invented Premier",
+  "competition_gender": "male",
+  "competition_youth": false,
+  "competition_international": false,
+  "season_name": "2015/2016"
+ },
+ {
+  "competition_id": 55,
+  "season_id": 43,
+  "country_name": "Europe",
+  "competition_name": "Invented Euro",
+  "competition_gender": "male",
+  "competition_youth": false,
+  "competition_international": true,
+  "season_name": "2020"
+ },
+ {
+  "competition_id": 37,
+  "season_id": 90,
+  "country_name": "England",
+  "competition_name": "Invented Women's League",
+  "competition_gender": "female",
+  "competition_youth": false,
+  "competition_international": false,
+  "season_name": "2020/2021"
+ },
+ {
+  "competition_id": 43,
+  "season_id": 3,
+  "country_name": "International",
+  "competition_name": "Invented World Cup",
+  "competition_gender": "male",
+  "competition_youth": false,
+  "competition_international": true,
+  "season_name": "2018"
+ },
+ {
+  "competition_id": 11,
+  "season_id": 1,
+  "country_name": "Spain",
+  "competition_name": "Invented La Liga",
+  "competition_gender": "male",
+  "competition_youth": false,
+  "competition_international": false,
+  "season_name": "2017/2018"
+ },
+ {
+  "competition_id": 9,
+  "season_id": 281,
+  "country_name": "Germany",
+  "competition_name": "Invented Bundesliga",
+  "competition_gender": "male",
+  "competition_youth": false,
+  "competition_international": false,
+  "season_name": "2023/2024"
+ }
+]

@@ -1,0 +1,265 @@
+[
+ {
+  "index": 1,
+  "period": 1,
+  "timestamp": "00:00:00.000",
+  "type": {
+   "name": "Starting XI"
+  },
+  "team": {
+   "name": "Club Alpha"
+  },
+  "possession": 1,
+  "possession_team": {
+   "name": "Club Alpha"
+  },
+  "play_pattern": {
+   "name": "Regular Play"
+  },
+  "location": null,
+  "duration": 0.0
+ },
+ {
+  "index": 2,
+  "period": 1,
+  "timestamp": "00:00:00.000",
+  "type": {
+   "name": "Pass"
+  },
+  "team": {
+   "name": "Club Alpha"
+  },
+  "possession": 1,
+  "possession_team": {
+   "name": "Club Alpha"
+  },
+  "play_pattern": {
+   "name": "Regular Play"
+  },
+  "location": [
+   60,
+   40
+  ],
+  "duration": 2.0
+ },
+ {
+  "index": 3,
+  "period": 1,
+  "timestamp": "00:00:02.000",
+  "type": {
+   "name": "Carry"
+  },
+  "team": {
+   "name": "Club Alpha"
+  },
+  "possession": 1,
+  "possession_team": {
+   "name": "Club Alpha"
+  },
+  "play_pattern": {
+   "name": "Regular Play"
+  },
+  "location": [
+   90,
+   40
+  ],
+  "duration": 3.0
+ },
+ {
+  "index": 4,
+  "period": 1,
+  "timestamp": "00:00:05.000",
+  "type": {
+   "name": "Shot"
+  },
+  "team": {
+   "name": "Club Alpha"
+  },
+  "possession": 1,
+  "possession_team": {
+   "name": "Club Alpha"
+  },
+  "play_pattern": {
+   "name": "Regular Play"
+  },
+  "location": [
+   112,
+   40
+  ],
+  "duration": 0.5,
+  "shot": {
+   "outcome": {
+    "name": "Goal"
+   },
+   "statsbomb_xg": 0.4,
+   "type": {
+    "name": "Open Play"
+   }
+  }
+ },
+ {
+  "index": 5,
+  "period": 1,
+  "timestamp": "00:00:10.000",
+  "type": {
+   "name": "Pass"
+  },
+  "team": {
+   "name": "Club Beta"
+  },
+  "possession": 2,
+  "possession_team": {
+   "name": "Club Beta"
+  },
+  "play_pattern": {
+   "name": "Regular Play"
+  },
+  "location": [
+   20,
+   40
+  ],
+  "duration": 1.5
+ },
+ {
+  "index": 6,
+  "period": 1,
+  "timestamp": "00:00:11.500",
+  "type": {
+   "name": "Pass"
+  },
+  "team": {
+   "name": "Club Beta"
+  },
+  "possession": 2,
+  "possession_team": {
+   "name": "Club Beta"
+  },
+  "play_pattern": {
+   "name": "Regular Play"
+  },
+  "location": [
+   50,
+   40
+  ],
+  "duration": 1.0
+ },
+ {
+  "index": 7,
+  "period": 1,
+  "timestamp": "00:00:12.500",
+  "type": {
+   "name": "Shot"
+  },
+  "team": {
+   "name": "Club Beta"
+  },
+  "possession": 2,
+  "possession_team": {
+   "name": "Club Beta"
+  },
+  "play_pattern": {
+   "name": "Regular Play"
+  },
+  "location": [
+   96,
+   40
+  ],
+  "duration": 0.5,
+  "shot": {
+   "outcome": {
+    "name": "Saved"
+   },
+   "statsbomb_xg": 0.1,
+   "type": {
+    "name": "Open Play"
+   }
+  }
+ },
+ {
+  "index": 8,
+  "period": 2,
+  "timestamp": "00:00:00.000",
+  "type": {
+   "name": "Pass"
+  },
+  "team": {
+   "name": "Club Alpha"
+  },
+  "possession": 3,
+  "possession_team": {
+   "name": "Club Alpha"
+  },
+  "play_pattern": {
+   "name": "From Corner"
+  },
+  "location": [
+   119,
+   1
+  ],
+  "duration": 1.0
+ },
+ {
+  "index": 9,
+  "period": 2,
+  "timestamp": "00:00:01.000",
+  "type": {
+   "name": "Shot"
+  },
+  "team": {
+   "name": "Club Alpha"
+  },
+  "possession": 3,
+  "possession_team": {
+   "name": "Club Alpha"
+  },
+  "play_pattern": {
+   "name": "From Corner"
+  },
+  "location": [
+   112,
+   40
+  ],
+  "duration": 0.4,
+  "shot": {
+   "outcome": {
+    "name": "Goal"
+   },
+   "statsbomb_xg": 0.3,
+   "type": {
+    "name": "Open Play"
+   }
+  }
+ },
+ {
+  "index": 10,
+  "period": 5,
+  "timestamp": "00:00:00.000",
+  "type": {
+   "name": "Shot"
+  },
+  "team": {
+   "name": "Club Beta"
+  },
+  "possession": 4,
+  "possession_team": {
+   "name": "Club Beta"
+  },
+  "play_pattern": {
+   "name": "Other"
+  },
+  "location": [
+   108,
+   40
+  ],
+  "duration": 0.5,
+  "shot": {
+   "outcome": {
+    "name": "Goal"
+   },
+   "statsbomb_xg": 0.78,
+   "type": {
+    "name": "Penalty"
+   }
+  }
+ }
+]

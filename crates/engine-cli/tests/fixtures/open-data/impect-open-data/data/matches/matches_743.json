@@ -1,0 +1,14 @@
+[
+ {
+  "iterationId": 743,
+  "id": 1,
+  "homeSquadId": 10,
+  "awaySquadId": 11
+ },
+ {
+  "iterationId": 743,
+  "id": 2,
+  "homeSquadId": 20,
+  "awaySquadId": 21
+ }
+]

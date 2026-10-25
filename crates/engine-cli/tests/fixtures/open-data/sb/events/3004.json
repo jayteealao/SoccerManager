@@ -1,0 +1,57 @@
+[
+ {
+  "index": 1,
+  "period": 1,
+  "timestamp": "00:00:00.000",
+  "type": {
+   "name": "Pass"
+  },
+  "team": {
+   "name": "Women A"
+  },
+  "possession": 1,
+  "possession_team": {
+   "name": "Women A"
+  },
+  "play_pattern": {
+   "name": "Regular Play"
+  },
+  "location": [
+   60,
+   40
+  ],
+  "duration": 1.0
+ },
+ {
+  "index": 2,
+  "period": 1,
+  "timestamp": "00:00:01.000",
+  "type": {
+   "name": "Shot"
+  },
+  "team": {
+   "name": "Women A"
+  },
+  "possession": 1,
+  "possession_team": {
+   "name": "Women A"
+  },
+  "play_pattern": {
+   "name": "Regular Play"
+  },
+  "location": [
+   116,
+   40
+  ],
+  "duration": 0.5,
+  "shot": {
+   "outcome": {
+    "name": "Goal"
+   },
+   "statsbomb_xg": 0.9,
+   "type": {
+    "name": "Open Play"
+   }
+  }
+ }
+]
