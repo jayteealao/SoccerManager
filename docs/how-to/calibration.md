@@ -229,7 +229,16 @@ A build with the measures also reports how the teams move. These bands only repo
 - The team: how its block slides with the ball up the pitch and across it, with and without the ball (`slide_up_in`, `slide_across_out`); how far a player 30 to 45 m, or more than 45 m, from the ball follows it over 1 s and 10 s (`far_gain_1s_30_45`); and the share of dead-ball time players spend under 2 m/s (`dead_ball_calm_share`).
 - Stoppages per match by kind (`stoppages_throw_in_per_match`) and the minutes of ball in play (`ball_in_play_minutes`).
 
-The reported table groups them by `group` (`shape_cb`, `shape_slide`, `shape_stoppages`, and so on). Each real value comes from `shape3_real.json` in the real-data folder: one value per real match from 7 tracked Bundesliga and 2. Bundesliga matches. With 7 matches the real sample is under the bands' floor of 30, so the bands would only report even with `gates: true`. A checkout without that file reads `no real data here` for them.
+The table groups them by `group` (`shape_cb`, `shape_slide`, `shape_stoppages`, and so on). They gate. Each one reads a figure of the shared shape report (`trk.*`), the same code that measures the 7 tracked DFL matches (Bundesliga and 2. Bundesliga), at 25 frames a second. Its real value is the target `trk.dfl.<band>` of the reference file `gate/real-targets.json`: the band's measure in each tracked match, their mean and the jackknife error of that mean. The real side is resampled by tracked match. With only 7 matches the real error is wide, so 100 of these margins carry a provisional widening, `real error from 7 tracked matches`; a margin may narrow back when more tracked matches are measured. The eight running bands (`distance_per_minute`, `high_speed_share`, the five speed-zone shares and `peak_speed_mean`) read the same report and targets.
+
+To measure the tracked matches again, after a change to the shared report or with new tracking files:
+
+```bash
+target/release/engine-cli tracking measure --data <data folder>
+target/release/engine-cli real-targets build
+```
+
+The first writes `gate/tracking/dfl-matches.json`; the second rebuilds the reference file from it. Commit both together with any band change that reads the new targets.
 
 The slide up the pitch reads low while the off-ball stands are off, because players then hold their formation places. To see the band with them on, pair the run with the stands flag:
 
@@ -378,7 +387,7 @@ A band gates once you trust its range: its real value is measured, its range sta
 
 Some promoted bands still do not gate as you might expect:
 
-- A band whose real sample is under its own floor (`real.floor`) stays in the reported table, with `report only: real sample too small to gate (sample <s> under floor <f>)`. The running bands are in this state: their real value comes from 7 tracked matches.
+- A band whose real sample is under its own floor (`real.floor`) stays in the reported table, with `report only: real sample too small to gate (sample <s> under floor <f>)`.
 - A band of the measures is judged by its range alone while the old engine of a change run has no measures (`range only: base has no measures`).
 - A promotion changes the gate, so [run the gate proof](#run-the-gate-proof) again.
 

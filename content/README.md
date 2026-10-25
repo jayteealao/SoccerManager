@@ -61,7 +61,7 @@ The 4 bands that only report (`gates: false`, group `rare_real_error`) are judge
 - `sb2_events.csv.gz`: possession by third, by the duration of passes and carries of the team in possession.
 - `gap_sb.json`: goals by how the move began.
 - `wyscout_actions.csv.gz`: pass completion by kind and length.
-- `idsse_players.csv`: running, from 7 matches. A real sample that small no longer makes a band report only: its real error widens the band's interval, so these eight bands read not sure until more matches are measured.
+- The eight running bands (distance per minute, the high-speed share, the speed-zone shares and peak speed) read the tracked-match targets of the reference file, as the team-shape bands do (below).
 
 | Band | Unit | Range | Real value |
 |---|---|---|---|
@@ -86,7 +86,7 @@ The pass curve has nine cells, three kinds by three lengths (under 10 m, 10 to 2
 
 ### Team-shape bands
 
-101 of the bands measure how the teams move, in a build with the `measures` feature. They read `shape3_real.json` of the measured results: one value per real match from 7 tracked Bundesliga and 2. Bundesliga matches, so their real error is wide and they read not sure until more tracked matches are measured. A checkout without that file reads `no real data here` for them. The report groups them by `group`:
+101 of the bands measure how the teams move, in a build with the `measures` feature. They read the shared shape report's figures (`trk.*`), at 25 frames a second, and their real value is the reference file's target `trk.dfl.<band>`: the same report run on 7 tracked Bundesliga and 2. Bundesliga matches (DFL/IDSSE tracking, Bassek, Rein, Weber and Memmert 2025, CC BY 4.0), resampled by tracked match. With 7 matches the real error is wide: 100 of these margins (and of the running bands) carry a provisional widening, `real error from 7 tracked matches`, and may narrow back when more tracked matches are measured. The report groups them by `group`:
 
 | Group | Bands | What they measure |
 |---|---|---|
