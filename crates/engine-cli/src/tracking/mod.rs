@@ -204,6 +204,26 @@ pub struct TrackedMatch {
     pub halves: Vec<Half>,
     /// The events in time order.
     pub events: Vec<Event>,
+    /// Engine ticks between two frames: 2 for a source of 25 frames a second, 1 for frames
+    /// resampled to the engine's 50 ticks a second.
+    pub ticks_per_frame: u32,
+    /// The native frames a second the frames were resampled from, when they were.
+    pub resampled_from: Option<f64>,
+    /// What the source adds beyond its frames and events, for the side file.
+    pub notes: Notes,
+}
+
+/// What a source adds beyond its frames and events; nothing for DFL.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Notes {
+    /// Where the ball status comes from when the frames do not carry it: `events`.
+    pub ball_status_from: Option<String>,
+    /// The share of the kept player rows that the provider estimated off camera.
+    pub estimated_share: Option<f64>,
+    /// The frames left out, by period.
+    pub left_out: Vec<side::LeftOut>,
+    /// Whether the home team starts the match on the negative-x end, when the source says.
+    pub home_starts_left: Option<bool>,
 }
 
 /// The half of each event, from 0: each half-opening kick-off after the first opens the

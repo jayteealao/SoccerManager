@@ -28,9 +28,10 @@ use super::place;
 use super::side::{BallRun, OffPitch, Placed, SCHEMA, Side, SideHalf, Spell};
 use super::{EventKind, Group, TrackedMatch};
 
-/// Engine ticks between two frames of a 25-frames-a-second source.
+/// Engine ticks between two of the report's frames, which a side file names: the report
+/// reads 25 frames a second, every second engine tick.
 pub const TICK_STEP: u32 = 2;
-/// The source's frame rate this converter takes.
+/// The report's frame rate, which a side file names.
 pub const FRAME_RATE: u32 = 25;
 
 /// The credit of a source's data, for the side file.
@@ -53,11 +54,13 @@ struct HalfTicks {
     base: u32,
     /// Frames used: from `first` to the half's last frame.
     count: usize,
+    /// Engine ticks between two frames: the match's ticks per frame.
+    step: u32,
 }
 
 impl HalfTicks {
     fn tick(&self, k: usize) -> u32 {
-        self.base + TICK_STEP * k as u32
+        self.base + self.step * k as u32
     }
 
     fn end(&self) -> u32 {
@@ -81,6 +84,12 @@ pub fn frame_ticks(m: &TrackedMatch) -> anyhow::Result<Vec<(i64, u32, usize, usi
 
 fn half_ticks(m: &TrackedMatch) -> anyhow::Result<Vec<HalfTicks>> {
     ensure!(!m.halves.is_empty(), "match {} has no half", m.match_id);
+    ensure!(
+        matches!(m.ticks_per_frame, 1 | 2),
+        "match {}: {} ticks per frame; the converter takes 1 (frames at 50 a second) or 2          (25 a second)",
+        m.match_id,
+        m.ticks_per_frame
+    );
     let mut out: Vec<HalfTicks> = Vec::with_capacity(m.halves.len());
     for half in &m.halves {
         let first = half
@@ -93,11 +102,13 @@ fn half_ticks(m: &TrackedMatch) -> anyhow::Result<Vec<HalfTicks>> {
                     m.match_id, half.section
                 )
             })?;
-        let base = out.last().map_or(0, |p| p.end() + TICK_STEP);
+        let step = m.ticks_per_frame;
+        let base = out.last().map_or(0, |p| p.end() + step);
         out.push(HalfTicks {
             first,
             base,
             count: half.frames.len() - first,
+            step,
         });
     }
     Ok(out)
@@ -346,7 +357,14 @@ pub fn to_ticks(m: &TrackedMatch) -> anyhow::Result<Converted> {
                 Ok(pos) => pos,
                 Err((p, reason)) => {
                     let person = p.map(|p| m.persons[p].id.clone());
-                    extend_off(&mut off, team, slot, person, tick, reason);
+                    extend_off(
+                        &mut off,
+                        team,
+                        slot,
+                        person,
+                        (tick, m.ticks_per_frame),
+                        reason,
+                    );
                     let spot = pitch.parking_spot(team, slot);
                     [spot.x as f32, spot.y as f32]
                 }
@@ -377,7 +395,7 @@ pub fn to_ticks(m: &TrackedMatch) -> anyhow::Result<Converted> {
         for (j, (from, holder)) in tl.iter().enumerate() {
             let to = tl
                 .get(j + 1)
-                .map_or(end, |next| next.0.saturating_sub(TICK_STEP));
+                .map_or(end, |next| next.0.saturating_sub(m.ticks_per_frame));
             if let Holder::Person(p) = holder {
                 spells.push(Spell {
                     team,
@@ -424,13 +442,14 @@ pub fn to_ticks(m: &TrackedMatch) -> anyhow::Result<Converted> {
     Ok(Converted { records, side })
 }
 
-/// Adds `tick` to the slot's open off-pitch spell for `person` and `reason`, or opens one.
+/// Adds `tick` to the slot's open off-pitch spell for `person` and `reason` when it follows
+/// the spell's last tick by `step`, or opens one.
 fn extend_off(
     off: &mut Vec<OffPitch>,
     team: usize,
     slot: usize,
     person: Option<String>,
-    tick: u32,
+    (tick, step): (u32, u32),
     reason: &str,
 ) {
     if let Some(s) = off
@@ -439,7 +458,7 @@ fn extend_off(
         .find(|s| s.team == team && s.slot == slot)
         && s.person == person
         && s.reason == reason
-        && s.to_tick + TICK_STEP == tick
+        && s.to_tick + step == tick
     {
         s.to_tick = tick;
         return;

@@ -57,6 +57,15 @@ pub struct Side {
     pub clock_offset: Option<ClockOffset>,
 }
 
+/// Frames of one period that the converter left out.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LeftOut {
+    /// The provider's period, such as `3` for the first half of extra time, or `none`.
+    pub period: String,
+    pub frames: u32,
+}
+
 /// One half.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

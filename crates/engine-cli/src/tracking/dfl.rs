@@ -107,6 +107,9 @@ pub fn read(files: &Files) -> anyhow::Result<TrackedMatch> {
         persons: info.persons,
         halves,
         events,
+        ticks_per_frame: 2,
+        resampled_from: None,
+        notes: super::Notes::default(),
     })
 }
 
