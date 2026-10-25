@@ -1076,6 +1076,11 @@ impl Margin {
 /// was measured at the design count on 3 generated leagues, so the floor sits again on more.
 pub const PROVISIONAL_REASON: &str = "engine spread at the design count, 3 leagues";
 
+/// The reason of the provisional widenings the tracked bands took on 2026-10-25: their real
+/// error is the jackknife error over 7 tracked matches, so a margin may narrow back when
+/// more tracked matches exist.
+pub const TRACKED_REASON: &str = "real error from 7 tracked matches";
+
 /// A part of a margin added so it holds the 97 percent floor. A provisional one holds the
 /// floor until the floor is set again on more leagues, when it may shrink or go; any other
 /// widening cites a noticeable error.
@@ -2099,18 +2104,30 @@ mod tests {
         }
     }
 
-    /// The floor answer of 2026-10-22: every margin the floor refused is widened by a
-    /// provisional part with the stated reason, and the noticeable error keeps its design
-    /// value.
+    /// The floor answers of 2026-10-22 and 2026-10-25: every margin the floor refused is
+    /// widened by a provisional part with the stated reason, and the noticeable error keeps
+    /// its design value. The 100 tracked bands the second floor refused cite their 7-match
+    /// real error (10 of them were among the 36 widened on 2026-10-22); a tracked band that
+    /// holds its floor keeps its earlier widening and reason.
     #[test]
     fn the_widened_margins_are_provisional_and_hold_their_parts() {
         let r = Registry::load(&shipped()).unwrap();
         let provisional = r.provisional();
-        assert_eq!(provisional.len(), 36);
+        assert_eq!(provisional.len(), 126);
+        let mut tracked = 0;
         for p in &provisional {
+            let band = r.band(&p.band).unwrap();
+            let is_tracked = band
+                .real
+                .as_ref()
+                .and_then(|real| real.target_key())
+                .is_some_and(|k| k.starts_with("trk.dfl."));
             // The one engine experiment among them has no real source to lower its floor.
             let reason = if p.band == "full_over_control" {
                 "engine spread at the design count; engine experiment, no real source"
+            } else if is_tracked && p.reason == TRACKED_REASON {
+                tracked += 1;
+                TRACKED_REASON
             } else {
                 PROVISIONAL_REASON
             };
@@ -2120,6 +2137,7 @@ mod tests {
             let parts = m.league_spread + m.noticeable_error + p.widening;
             assert!((m.value - parts).abs() < 1e-9, "{}", p.band);
         }
+        assert_eq!(tracked, 100);
         for name in RARE_REAL_ERROR {
             assert!(provisional.iter().any(|p| p.band == name), "{name}");
         }
