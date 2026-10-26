@@ -169,11 +169,19 @@ pub fn patched_content(from: &Path, to: &Path, setting: &str, value: &Value) -> 
         }
         Ok(())
     }
-    let _ = std::fs::remove_dir_all(to);
-    copy(from, to).with_context(|| format!("cannot copy the content to {}", to.display()))?;
     let (file, pointer) = setting
         .split_once('#')
         .with_context(|| format!("{setting}: name it as <file>#<pointer>"))?;
+    let inside = !file.is_empty()
+        && Path::new(file)
+            .components()
+            .all(|c| matches!(c, std::path::Component::Normal(_)));
+    anyhow::ensure!(
+        inside,
+        "{setting}: the file must be a path inside the content folder"
+    );
+    let _ = std::fs::remove_dir_all(to);
+    copy(from, to).with_context(|| format!("cannot copy the content to {}", to.display()))?;
     let path = to.join(file);
     let mut doc: Value = serde_json::from_slice(
         &std::fs::read(&path).with_context(|| format!("cannot read {}", path.display()))?,
@@ -358,5 +366,20 @@ mod tests {
         let changed = super::super::touched::diff_dirs(&shipped, &to).unwrap();
         assert_eq!(changed.len(), 1);
         assert_eq!(changed[0].key, "tuning.json#/engine/shots/save_high");
+    }
+
+    #[test]
+    fn a_setting_whose_file_leaves_the_content_folder_is_refused() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let from = tmp.path().join("from");
+        std::fs::create_dir_all(&from).unwrap();
+        let to = tmp.path().join("c");
+        for setting in ["../x.json#/a", "#/a", "/x.json#/a"] {
+            assert!(
+                patched_content(&from, &to, setting, &json!(1)).is_err(),
+                "{setting}"
+            );
+        }
+        assert!(!to.exists());
     }
 }

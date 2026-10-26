@@ -7,7 +7,7 @@
 //! - A sending-off gives no advantage: 120 seeds, cards otherwise off, the away keeper,
 //!   centre-back, or striker sent off at kick-off. The reduced side never outscores the full
 //!   side on average, and the full side's goals over its no-send-off mean stay inside the
-//!   `full_over_control` band (design 0.8, margin 0.48).
+//!   `full_over_control` band (its design value plus its margin, read from the band file).
 //! - Every shipped formation holds against 4-4-2 at 11 against 11: neither side averages more
 //!   than 4.0 goals per match over 120 seeds.
 

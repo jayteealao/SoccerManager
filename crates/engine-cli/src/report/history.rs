@@ -169,21 +169,23 @@ pub fn read(path: &Path) -> anyhow::Result<Vec<HistoryPoint>> {
 /// Adds `points` to the history at `path`, first removing the lines of their run, so a run
 /// judged again keeps one point per band. Returns the whole history after the write.
 pub fn record(path: &Path, points: &[HistoryPoint]) -> anyhow::Result<Vec<HistoryPoint>> {
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("cannot create {}", parent.display()))?;
+    }
+    // Two runs that share one history take turns, so neither loses the other's points.
+    let _lock = Lock::take(&path.with_extension("jsonl.lock"))?;
     let mut all = read(path)?;
     if let Some(run) = points.first().map(|p| p.run.clone()) {
         all.retain(|p| p.run != run);
     }
     all.extend(points.iter().cloned());
-    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("cannot create {}", parent.display()))?;
-    }
     let mut text = Vec::new();
     for p in &all {
         serde_json::to_writer(&mut text, p)?;
         text.push(b'\n');
     }
-    let partial = path.with_extension("jsonl.partial");
+    let partial = path.with_extension(format!("jsonl.{}.partial", std::process::id()));
     {
         let mut file = std::fs::File::create(&partial)
             .with_context(|| format!("cannot write {}", partial.display()))?;
@@ -193,6 +195,54 @@ pub fn record(path: &Path, points: &[HistoryPoint]) -> anyhow::Result<Vec<Histor
     std::fs::rename(&partial, path)
         .with_context(|| format!("cannot replace {}", path.display()))?;
     Ok(all)
+}
+
+/// A lock file held while one run rewrites the history; removed when dropped. A lock older
+/// than [`Lock::STALE`] was left by a run that stopped, and is taken over.
+struct Lock(std::path::PathBuf);
+
+impl Lock {
+    const STALE: std::time::Duration = std::time::Duration::from_secs(120);
+    const WAIT: std::time::Duration = std::time::Duration::from_secs(60);
+
+    fn take(path: &Path) -> anyhow::Result<Lock> {
+        let start = std::time::Instant::now();
+        loop {
+            match std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path)
+            {
+                Ok(_) => return Ok(Lock(path.to_path_buf())),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                    let stale = std::fs::metadata(path)
+                        .and_then(|m| m.modified())
+                        .ok()
+                        .and_then(|t| t.elapsed().ok())
+                        .is_some_and(|age| age > Self::STALE);
+                    if stale {
+                        let _ = std::fs::remove_file(path);
+                        continue;
+                    }
+                    anyhow::ensure!(
+                        start.elapsed() < Self::WAIT,
+                        "another run holds {}; remove it if no run is writing the history",
+                        path.display()
+                    );
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+                Err(e) => {
+                    return Err(e).with_context(|| format!("cannot create {}", path.display()));
+                }
+            }
+        }
+    }
+}
+
+impl Drop for Lock {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
 }
 
 /// The drifting bands of a history, in band order: each band, suite, pairing and definition
@@ -323,6 +373,25 @@ mod tests {
             .map(|p| p.value)
             .collect();
         assert_eq!(r1, vec![1.2, 2.2]);
+    }
+
+    #[test]
+    fn two_runs_writing_at_once_keep_every_point() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("history.jsonl");
+        std::thread::scope(|s| {
+            for run in ["r1", "r2", "r3", "r4"] {
+                let file = &file;
+                s.spawn(move || {
+                    for k in 0..5 {
+                        record(file, &[point(run, &format!("b{k}"), 1.0)]).unwrap();
+                    }
+                });
+            }
+        });
+        let all = read(&file).unwrap();
+        assert_eq!(all.len(), 4, "each run keeps its last write: {all:?}");
+        assert!(!file.with_extension("jsonl.lock").exists());
     }
 
     #[test]

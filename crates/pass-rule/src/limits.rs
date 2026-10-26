@@ -233,7 +233,9 @@ impl Limits {
                     target_key: b.target.target,
                     margin: b.margin.value,
                     rare: b.rare,
-                    share: b.measure.kind == "share",
+                    // A scoreline cell is a share of matches, as the calibrate report
+                    // reads it.
+                    share: matches!(b.measure.kind.as_str(), "share" | "scoreline"),
                     min_exposure: b.min_exposure.value,
                 };
                 (b.band, limit)
@@ -480,6 +482,30 @@ mod tests {
         assert!((j.value - 0.8).abs() < 1e-12);
         let far = units(&vec![0.0; 500]);
         assert_eq!(l.judge_sample("p", &far).word, Word::Fail);
+    }
+
+    #[test]
+    fn a_rare_scoreline_band_takes_the_share_bounds_as_the_report_does() {
+        let dir = folder(
+            &[
+                band("cell", r#"{"design": 0.01}"#, 0.02, "scoreline", true),
+                band("share", r#"{"design": 0.01}"#, 0.02, "share", true),
+                band("rate", r#"{"design": 0.01}"#, 0.02, "mean", true),
+            ],
+            None,
+        );
+        let l = limits(&dir, no_report());
+        assert!(l.limit("cell").unwrap().share);
+        assert!(!l.limit("rate").unwrap().share);
+        let mut sample = units(&vec![0.0; 290]);
+        sample.extend(units(&[1.0, 1.0, 1.0]));
+        // The exact bounds carry no standard error (NaN), so the ends are compared.
+        let ends = |band: &str| {
+            let iv = l.judge_sample(band, &sample).interval.unwrap();
+            (iv.lo, iv.hi)
+        };
+        assert_eq!(ends("cell"), ends("share"));
+        assert_ne!(ends("cell"), ends("rate"));
     }
 
     #[test]

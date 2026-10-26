@@ -249,6 +249,25 @@ impl Fixture {
     }
 }
 
+/// The fewest generated leagues a run is judged on without a warning.
+pub const WARN_UNDER_LEAGUES: u32 = 20;
+
+/// The leagues `matches` fixtures of one suite span: one per double round-robin begun.
+pub fn leagues_of(matches: u32) -> u32 {
+    matches.div_ceil(FIXTURES_PER_LEAGUE)
+}
+
+/// The warning of a run whose equal suite spans fewer than [`WARN_UNDER_LEAGUES`] leagues:
+/// it is judged all the same.
+pub fn league_warning(matches: u32) -> Option<String> {
+    let leagues = leagues_of(matches);
+    (matches > 0 && leagues < WARN_UNDER_LEAGUES).then(|| {
+        format!(
+            "warning: the equal suite's {matches} matches span {leagues} generated leagues,              under {WARN_UNDER_LEAGUES}; the run is judged, and its bootstrap resamples those              {leagues} leagues"
+        )
+    })
+}
+
 /// The first `matches` fixtures of the run.
 pub fn fixtures(matches: u32) -> Vec<Fixture> {
     let one = double_round_robin(CLUBS as usize);
@@ -435,6 +454,17 @@ impl<'a> Leagues<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_run_under_twenty_leagues_warns_and_one_at_twenty_does_not() {
+        assert_eq!(leagues_of(6342), 17);
+        assert_eq!(leagues_of(380), 1);
+        assert_eq!(leagues_of(381), 2);
+        let w = league_warning(6342).unwrap();
+        assert!(w.contains("span 17 generated leagues"), "{w}");
+        assert!(league_warning(20 * FIXTURES_PER_LEAGUE).is_none());
+        assert!(league_warning(0).is_none());
+    }
 
     #[test]
     fn a_double_round_robin_plays_every_ordered_pair_once() {

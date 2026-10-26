@@ -18,14 +18,9 @@ pub fn quantile_linear(v: &[f64], p: f64) -> f64 {
 }
 
 /// The `q` quantile of the sorted values by the bootstrap's rule: the `ceil((B + 1) q)`-th
-/// smallest of `B`. An empty sample reads 0.
-pub fn quantile_rank(sorted: &[f64], q: f64) -> f64 {
-    if sorted.is_empty() {
-        return 0.0;
-    }
-    let k = ((sorted.len() as f64 + 1.0) * q).ceil() as usize;
-    sorted[k.clamp(1, sorted.len()) - 1]
-}
+/// smallest of `B`. An empty sample reads 0. The pass rule owns it, so the bootstrap bands
+/// and the pass rule pick their bounds with one rule.
+pub use pass_rule::interval::quantile_rank;
 
 /// `x` rounded to `places` decimal places.
 pub fn round_to(x: f64, places: i32) -> f64 {

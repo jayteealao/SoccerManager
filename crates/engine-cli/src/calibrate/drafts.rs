@@ -76,17 +76,25 @@ pub fn rule_id(setting: &str, band: &str, direction: Direction) -> String {
     format!("sr-{}", &format!("{:x}", h.finalize())[..8])
 }
 
-/// Refuses a setting rule list with a repeated id, a setting not named `<file>#/<pointer>`, a
-/// band the band file does not hold, levels that are not three and rising, a choice that is
-/// not two values, or a blank note; the error names the rule.
+/// Refuses a setting rule list with a repeated id or one not as [`rule_id`] writes it, a
+/// setting not named `<file>#/<pointer>`, a band the band file does not hold, levels that are
+/// not three and rising, a choice that is not two values, or a blank note; the error names
+/// the rule.
 pub fn validate(rules: &[SettingRule], registry: &Registry) -> anyhow::Result<()> {
     for (i, r) in rules.iter().enumerate() {
         let at = |what: &str| format!("{FILE}: setting_rules[{i}] ({}): {what}", r.id);
         if rules[..i].iter().any(|o| o.id == r.id) {
             anyhow::bail!(at("the id is used twice"));
         }
-        if !r.id.starts_with("sr-") {
-            anyhow::bail!(at("an id starts with sr-"));
+        let hex = r.id.strip_prefix("sr-").unwrap_or("");
+        if hex.len() != 8
+            || !hex
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        {
+            anyhow::bail!(at(
+                "an id is sr- and eight hex digits, as calibrate writes it"
+            ));
         }
         if !r.setting.contains("#/") {
             anyhow::bail!(at("name the setting as <file>#/<pointer>"));
@@ -774,6 +782,9 @@ mod tests {
         assert!(bad(&|x| x.band = "nope".into()));
         assert!(bad(&|x| x.setting = "foul".into()));
         assert!(bad(&|x| x.note = " ".into()));
+        assert!(bad(&|x| x.id = "sr-/../x".into()));
+        assert!(bad(&|x| x.id = "sr-a:b".into()));
+        assert!(bad(&|x| x.id = "sr-0000000G".into()));
         assert!(validate(&[r.clone(), r], &registry()).is_err());
     }
 

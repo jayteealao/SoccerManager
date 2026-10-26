@@ -25,7 +25,8 @@ fn between<const N: usize>(
     b: Option<[f32; N]>,
     (ta, tb, t): (f64, f64, f64),
 ) -> Option<[f32; N]> {
-    if t == ta {
+    // An instant rounded a hair past the half's last frame has no span to draw across.
+    if t == ta || tb <= ta {
         return a;
     }
     let (a, b) = (a?, b?);
@@ -98,11 +99,18 @@ pub fn resample(m: &TrackedMatch, times: &[Vec<f64>], fps: f64) -> anyhow::Resul
             positions,
         });
     }
+    // Field by field, so the native halves are not copied only to be replaced.
     Ok(TrackedMatch {
+        source: m.source.clone(),
+        match_id: m.match_id.clone(),
+        pitch: m.pitch,
+        teams: m.teams.clone(),
+        persons: m.persons.clone(),
         halves,
+        events: m.events.clone(),
         ticks_per_frame: 1,
         resampled_from: Some(fps),
-        ..m.clone()
+        notes: m.notes.clone(),
     })
 }
 
@@ -112,6 +120,14 @@ mod tests {
 
     use super::super::pff;
     use super::*;
+
+    #[test]
+    fn an_instant_past_the_last_frame_takes_that_frame() {
+        let a = Some([1.0f32, 2.0]);
+        let last = 40.0;
+        let got = between(a, a, (last, last, last + 1e-12));
+        assert_eq!(got, a);
+    }
 
     fn native() -> pff::Native {
         let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tracking/pff");

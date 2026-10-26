@@ -234,12 +234,12 @@ Use a feature flag to decide between the current model and a candidate on the re
    ```
 
    The run plays every fixture twice: once with the flag off, into `arms/off/`, and once with it on, into `arms/on/`. Use `--suite equal` or `--suite strength` to play one suite only. Use `--flag other_flag=on` to hold another flag in one state for both arms.
-3. Read the table on standard error, or `calib.compare` and `calib.verdict` in `report.json`. Each row shows one band of one suite with the off value, the on value, and the difference. A star marks a value outside its band.
+3. Read the table on standard error, or `calib.compare` and `calib.verdict` in `report.json`. The on arm is judged as a change run judges its engine, with the off arm in the old engine's place. Each row shows one band of one suite: `value` is the on arm's figure and `base_value` the off arm's, `word` is the on arm's word against real football, and `old_word` its word against the off arm (`better`, `worse`, `equivalent` or `not sure`). The last line counts those words over the gating bands.
 4. Act on the verdict:
-   - `on-rejected`: the on arm had a match without its statistics record, a match that panicked, a change left unapplied, a rule violation, a `stronger_team_win_rate` outside its band (in the shipped file, a stronger club that won less than half its matches), or a single-thread match time more than 10 percent slower. Remove the candidate.
-   - `on-better`: the on arm passes more bands, or as many and sits closer to the band centres by more than 0.05. Keep the candidate as the only model.
-   - `off-better`: remove the candidate.
-   - `no-difference`: run once more on a second seed, for example `--seed 2027`. If the verdict is still `no-difference`, remove the candidate.
+   - `on-rejected`: the on arm broke a guardrail: a match without its statistics record, a match that panicked, a change left unapplied, a rule violation, a `stronger_team_win_rate` that fails, or a single-thread match time more than 10 percent slower than the off arm's. Remove the candidate.
+   - `pass`: the on arm passes against real football. Keep the candidate as the only model when its rows are `better` or `equivalent` against the off arm; when the off arm passes too and the candidate is no better, the choice is yours.
+   - `fail`: the on arm fails against real football. Remove the candidate.
+   - `not-sure`: the run cannot tell. Run once more on a second seed, for example `--seed 2027`. If the verdict is still `not-sure`, remove the candidate.
 
 A run of 1000 matches per suite is the decision run. Use a smaller `--matches` only while you try values.
 

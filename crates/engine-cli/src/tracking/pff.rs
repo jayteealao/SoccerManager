@@ -31,6 +31,9 @@ use serde::{Deserialize, Deserializer};
 use super::side::LeftOut;
 use super::{Event, EventKind, Frame, Group, Half, Height, Notes, Person, TrackedMatch};
 
+/// The longest line of a tracking file that is read as a frame.
+const MAX_LINE_BYTES: u64 = 16 << 20;
+
 /// The provider as targets and side files name it.
 pub const SOURCE: &str = "PFF";
 
@@ -593,12 +596,20 @@ pub fn read_native(data: &Path, id: &str) -> anyhow::Result<Native> {
     let mut text = String::new();
     loop {
         text.clear();
-        let n = reader
+        // One frame is a few kilobytes; a longer line is not a frame, and is not held whole.
+        let n = Read::by_ref(&mut reader)
+            .take(MAX_LINE_BYTES + 1)
             .read_line(&mut text)
             .with_context(|| format!("cannot read {} after {lines} lines", path.display()))?;
         if n == 0 {
             break;
         }
+        anyhow::ensure!(
+            n as u64 <= MAX_LINE_BYTES,
+            "{}: line {} is longer than {MAX_LINE_BYTES} bytes",
+            path.display(),
+            lines + 1
+        );
         if text.trim().is_empty() {
             continue;
         }

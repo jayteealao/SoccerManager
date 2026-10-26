@@ -335,6 +335,10 @@ pub struct TrackedShape {
     slide: [SlideSums; 2],
     /// The running of each player by person key.
     runners: std::collections::BTreeMap<u32, Runner>,
+    /// Each slot's current person, team and peak speed since he took the slot, folded into
+    /// `runners` when the slot changes hands and at the end: one map lookup per spell, not
+    /// per frame.
+    slot_peak: [Option<(u32, usize, f64)>; ROSTER],
     /// The half followed, its first tick and the last tick seen.
     half: Option<(usize, u32, u32)>,
     /// Frames since the half started, and dead frames so far.
@@ -352,6 +356,7 @@ impl TrackedShape {
             follow: vec![Follow::default(); ROSTER],
             slide: [[[[0.0; 5]; 2]; 2]; 2],
             runners: std::collections::BTreeMap::new(),
+            slot_peak: [None; ROSTER],
             half: None,
             half_frames: 0,
             dead_frames: 0,
@@ -375,6 +380,9 @@ impl TrackedShape {
                     }
                 }
             }
+        }
+        for i in 0..ROSTER {
+            self.fold_peak(i);
         }
         for r in self.runners.values() {
             self.values[r.team][si(RUN + 7)] += r.peak;
@@ -433,19 +441,35 @@ impl TrackedShape {
         Ok(())
     }
 
+    /// Folds slot `i`'s open peak into its person's runner.
+    fn fold_peak(&mut self, i: usize) {
+        if let Some((person, team, peak)) = self.slot_peak[i].take() {
+            let r = self
+                .runners
+                .entry(person)
+                .or_insert(Runner { team, peak: 0.0 });
+            r.peak = r.peak.max(peak);
+        }
+    }
+
     /// The ball-free figures of a frame: length, width and spread of each side's outfield.
     fn free(&mut self, f: &Frame) {
         for team in 0..2 {
-            let pts: Vec<[f64; 2]> = (team * PER_TEAM..(team + 1) * PER_TEAM)
-                .filter(|&i| f.on[i].is_some_and(|h| h.group != Group::Keeper))
-                .map(|i| [f64::from(f.players[i][0]), f64::from(f.players[i][1])])
-                .collect();
+            let mut held = [[0.0f64; 2]; PER_TEAM];
+            let mut count = 0;
+            for i in team * PER_TEAM..(team + 1) * PER_TEAM {
+                if f.on[i].is_some_and(|h| h.group != Group::Keeper) {
+                    held[count] = [f64::from(f.players[i][0]), f64::from(f.players[i][1])];
+                    count += 1;
+                }
+            }
+            let pts = &held[..count];
             if pts.len() < 2 {
                 continue;
             }
             let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
             let mut c = [0.0; 2];
-            for p in &pts {
+            for p in pts {
                 for d in 0..2 {
                     lo[d] = lo[d].min(p[d]);
                     hi[d] = hi[d].max(p[d]);
@@ -548,11 +572,13 @@ impl TrackedShape {
                 let z = ZONE_TOPS.iter().take_while(|&&t| speed >= t).count();
                 v[si(RUN + 2 + z)] += 1.0;
             }
-            let r = self
-                .runners
-                .entry(h.person)
-                .or_insert(Runner { team, peak: 0.0 });
-            r.peak = r.peak.max(speed);
+            match &mut self.slot_peak[i] {
+                Some((person, _, peak)) if *person == h.person => *peak = peak.max(speed),
+                _ => {
+                    self.fold_peak(i);
+                    self.slot_peak[i] = Some((h.person, team, 0.0f64.max(speed)));
+                }
+            }
         }
         let ax = f.attack_x[team];
         if h.group == Group::Keeper {

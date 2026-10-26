@@ -78,7 +78,7 @@ If the run stops before it plays, read the message. It names each difference fro
 target/release/engine-cli calibrate --suite red-card --seed 1 --matches 240 --baseline runs/base-red-card/report.json
 ```
 
-The experiment plays the default clubs with cards otherwise off: a control, and the away keeper, centre-back, or striker sent off at kick-off. Each seed plays twice, once in each home and away order of the two clubs, so each club is the reduced side in half the matches. `--matches 240` plays seeds 1 to 120 in both orders. `calib.red_card` in the report holds each arm's goals for the full and the reduced side, the control, and the verdict. The criterion passes when, in each arm, the reduced side does not outscore the full side and the full side scores at most 1.28 times the control's home goals (the top of the `full_over_control` band: design 0.8 plus its provisional margin 0.48).
+The experiment plays the default clubs with cards otherwise off: a control, and the away keeper, centre-back, or striker sent off at kick-off. Each seed plays twice, once in each home and away order of the two clubs, so each club is the reduced side in half the matches. `--matches 240` plays seeds 1 to 120 in both orders. `calib.red_card` in the report holds each arm's goals for the full and the reduced side, the control, and the verdict. The criterion passes when, in each arm, the reduced side does not outscore the full side and the full side scores at most the top of the `full_over_control` band times the control's home goals: the band's design value plus its margin, as the band file sets them (0.8 plus the provisional margin 0.4906 today, so 1.2906).
 
 ## Confirm the change on the full suites
 
@@ -114,10 +114,10 @@ target/release/engine-cli calibrate --suite equal --seed 42 --base main --out ru
 3. Read the headline after the table:
 
    ```text
-   kind change: fixed count equal 1000, strength 1000, formations 18 per pairing, red-card 250 per arm; not sure: 3 of 41 gating bands; accepted: 0; dropped pairs: 0
+   kind change: fixed count equal 6342, strength 115, formations 19 per pairing, red-card 248 per arm; not sure: 3 of 258 gating bands; accepted: 0; dropped pairs: 0
    ```
 
-   It names the counts played, how many gating bands stayed `not sure`, how many of them you accepted, and the pairs dropped because a match failed on either engine.
+   It names the counts played, how many gating bands stayed `not sure`, how many of them you accepted, and the pairs dropped because a match failed on either engine. Each generated league holds 380 fixtures, so a run whose equal suite spans fewer than 20 leagues prints a `warning:` line after the headline and is judged all the same; the change count of 6342 spans 17.
 
 4. Read each band's two words in the table. The word column is the band's word against real football (see "Read a band's word"): only it decides. The `old engine` column says what the change did to the band:
 
@@ -182,7 +182,7 @@ The table prints each band's interval and margin, and `report.json` holds them o
 The headline counts the provisional margins:
 
 ```text
-margins: 36 provisional, widened to hold the 97 percent floor on today's 3 generated leagues; the floor is set again on 30 leagues
+margins: 158 provisional, widened to hold the 97 percent floor on today's 3 generated leagues; the floor is set again on 30 leagues
 ```
 
 `calib.provisional_margins` in `report.json` names them. After it, each report-only band prints its needed margin and whether it would hold now; `calib.report_only_floor` holds the same rows.

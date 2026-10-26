@@ -316,6 +316,8 @@ pub fn to_ticks(m: &TrackedMatch) -> anyhow::Result<Converted> {
             _ => {}
         }
     }
+    // Sorted once, so each tick's lookup is a binary search.
+    restarts.sort_unstable();
     let holder_at = |i: usize, tick: u32| {
         timeline[i]
             .iter()
@@ -406,7 +408,7 @@ pub fn to_ticks(m: &TrackedMatch) -> anyhow::Result<Converted> {
             tick,
             ball,
             players,
-            restart: restarts.contains(&tick),
+            restart: restarts.binary_search(&tick).is_ok(),
         });
     }
 

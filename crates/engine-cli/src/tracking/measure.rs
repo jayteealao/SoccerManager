@@ -96,6 +96,12 @@ pub fn frames_of(records: &[TickRecord], side: &Side) -> anyhow::Result<Vec<Fram
         }
         events.entry(e.tick).or_default().push((r, team));
     }
+    // The converter writes the ball runs in tick order, one after another; a file that
+    // holds them otherwise is searched whole.
+    let ball_sorted = side
+        .ball
+        .windows(2)
+        .all(|w| w[0].to_tick < w[1].from_tick && w[0].from_tick <= w[0].to_tick);
     let mut out = Vec::new();
     for r in records {
         let Some(half) = side
@@ -121,10 +127,15 @@ pub fn frames_of(records: &[TickRecord], side: &Side) -> anyhow::Result<Vec<Fram
                 on[o.team * PER_TEAM + o.slot] = None;
             }
         }
-        let run = side
-            .ball
-            .iter()
-            .find(|b| (b.from_tick..=b.to_tick).contains(&t));
+        let run = if ball_sorted {
+            side.ball
+                .get(side.ball.partition_point(|b| b.to_tick < t))
+                .filter(|b| (b.from_tick..=b.to_tick).contains(&t))
+        } else {
+            side.ball
+                .iter()
+                .find(|b| (b.from_tick..=b.to_tick).contains(&t))
+        };
         out.push(Frame {
             tick: t,
             half,

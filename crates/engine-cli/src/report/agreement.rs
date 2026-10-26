@@ -55,7 +55,9 @@ pub fn influence_pairs(r: &PairedRow) -> Vec<(f64, f64)> {
         if s[1] <= 0.0 || s[2] <= 0.0 {
             return None;
         }
-        let term = |k: usize, i: usize| if s[k] > 0.0 { t[k][i] / s[k] } else { 0.0 };
+        // A difference band's numerator sum can be negative: only a zero sum has no term,
+        // as in the paired error.
+        let term = |k: usize, i: usize| if s[k] != 0.0 { t[k][i] / s[k] } else { 0.0 };
         Some(
             (0..t[0].len())
                 .map(|i| term(0, i) - term(1, i) + term(3, i) - term(2, i))
@@ -279,6 +281,20 @@ mod tests {
         assert_eq!(pairs.len(), 6);
         let r = pass_rule::agreement::pearson(&pairs).unwrap();
         assert!((r - 1.0).abs() < 1e-12, "{r}");
+    }
+
+    #[test]
+    fn a_band_whose_numerators_sum_below_zero_keeps_its_terms() {
+        let c = [-1.0, -3.0, 0.0, -2.0, -4.0, -1.0];
+        let o = [-2.0, -1.0, -1.0, -2.0, -2.0, 0.0];
+        let pairs = influence_pairs(&row("home_goal_difference", &c, &o));
+        assert_eq!(pairs.len(), 6);
+        assert!(pairs.iter().any(|p| (p.0 - pairs[0].0).abs() > 1e-12));
+        let r = pass_rule::agreement::pearson(&pairs).unwrap();
+        let shift = |v: &[f64]| v.iter().map(|x| x + 10.0).collect::<Vec<_>>();
+        let shifted = influence_pairs(&row("home_goal_difference", &shift(&c), &shift(&o)));
+        let r10 = pass_rule::agreement::pearson(&shifted).unwrap();
+        assert!((r - r10).abs() < 1e-9, "{r} against {r10}");
     }
 
     #[test]

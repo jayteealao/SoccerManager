@@ -722,6 +722,13 @@ pub fn run(content_dir: Option<&Path>, opts: &CalibrateOpts) -> anyhow::Result<i
     }
     if let (Some(h), false) = (&headline, quiet) {
         eprintln!("{h}");
+        let equal = ctx.suites.contains(&Suite::Equal);
+        if let Some(w) = equal
+            .then(|| fixtures::league_warning(kind_def.count_for(Suite::Equal)))
+            .flatten()
+        {
+            eprintln!("{w}");
+        }
     }
     // The formation field rating: report only, read by nothing that decides the verdict.
     // It describes the same arm as `calib.formations`, and needs every pairing.

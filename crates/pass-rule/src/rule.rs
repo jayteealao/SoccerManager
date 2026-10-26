@@ -42,8 +42,9 @@ pub fn judge(iv: &Interval, margin: f64) -> Word {
 
 /// The word of a band with a design target and a cap: the interval of engine minus design
 /// target against the margin, and the interval of engine minus real against the cap. Pass
-/// when both pass, fail when either fails, not sure otherwise. A band whose cap has no real
-/// interval here is not sure at best.
+/// when both pass, fail when either fails, not sure otherwise. `None` means the band has no
+/// cap; a caller whose band has a cap passes its real interval, and when that interval is
+/// missing the caller turns a pass into not sure itself.
 pub fn judge_design(to_target: &Interval, margin: f64, to_real: Option<(&Interval, f64)>) -> Word {
     let target = judge(to_target, margin);
     let real = to_real.map(|(iv, cap)| judge(iv, cap));
