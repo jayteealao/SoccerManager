@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, bail};
 use engine::modules::fast_events::FitRules;
 use engine::modules::fast_model::{
-    self, FIT_FILE, FIT_VERSION, FIT_VERSION_2, FITTED_SCORES, FastFit,
+    self, FIT_FILE, FIT_VERSION, FIT_VERSION_2, FIT_VERSION_3, FITTED_SCORES, FastFit,
 };
 use engine::{Content, ContentDir};
 use serde::{Deserialize, Serialize};
@@ -83,8 +83,9 @@ pub struct CheckRecord {
 }
 
 impl FitFile {
-    /// Reads a fit file of this build's layout, or of version 2, whose model had no
-    /// favourite's tilt: it reads with a tilt of 0, which plays as it did.
+    /// Reads a fit file of this build's layout, or of version 3, whose model had no weight on
+    /// scores of ten goals or more, or of version 2, which also had no favourite's tilt: each
+    /// reads with the missing terms at 0, which plays as it did.
     pub fn load(path: &Path) -> anyhow::Result<Self> {
         let text = std::fs::read_to_string(path)
             .with_context(|| format!("cannot read the fit file {}", path.display()))?;
@@ -93,12 +94,16 @@ impl FitFile {
         let version = value
             .get("schema_version")
             .and_then(serde_json::Value::as_u64);
-        if version == Some(u64::from(FIT_VERSION_2)) {
+        let older = [FIT_VERSION_2, FIT_VERSION_3].map(|v| Some(u64::from(v)));
+        if older.contains(&version) {
             if let Some(params) = value
                 .pointer_mut("/fit/params")
                 .and_then(serde_json::Value::as_object_mut)
             {
-                params.insert("tilt".into(), 0.0.into());
+                if version == older[0] {
+                    params.insert("tilt".into(), 0.0.into());
+                }
+                params.insert("top".into(), 0.0.into());
             }
             value["schema_version"] = FIT_VERSION.into();
         } else if version != Some(u64::from(FIT_VERSION)) {
@@ -320,8 +325,8 @@ fn print_report(file: &FitFile, figures: &[Figure]) {
     let p = &file.fit.params;
     println!("fast-model {} for {}", file.model, file.engine_id);
     println!(
-        "params: base {:.4} home {:.4} attack {:.4} curve {:.4} defence {:.4} dispersion {:.3} rho {:.4} draw {:.4} tilt {:.4}",
-        p.base, p.home, p.attack, p.curve, p.defence, p.dispersion, p.rho, p.draw, p.tilt
+        "params: base {:.4} home {:.4} attack {:.4} curve {:.4} defence {:.4} dispersion {:.3} rho {:.4} draw {:.4} tilt {:.4} top {:.4}",
+        p.base, p.home, p.attack, p.curve, p.defence, p.dispersion, p.rho, p.draw, p.tilt, p.top
     );
     println!(
         "{:<14} {:<30} {:>9} {:>9} {:>9} {:>9} {:>5}  verdict  band",

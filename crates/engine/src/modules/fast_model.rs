@@ -22,7 +22,9 @@
 //! home win's probability is multiplied by `(λ / μ)^tilt`, an away win's by `(μ / λ)^tilt`,
 //! where `λ` and `μ` are the two means, so the side with the higher mean wins a little more
 //! often and loses a little less often than the shared table alone gives, with the same
-//! draws; then the table is normalised. A goal's
+//! draws; every score of `TOP_TOTAL` goals or more in total is weighted by `1 + top`, so the
+//! model's share of such high-scoring matches follows the full engine's; then the table is
+//! normalised. A goal's
 //! minute is drawn from 90 shares fitted from the full engine's goal minutes, and its scorer
 //! from the side's six most advanced outfield players by finishing. The model plays
 //! regulation time only.
@@ -50,11 +52,17 @@ use crate::validate::StreamRules;
 pub const MAX_GOALS: usize = 16;
 /// The minutes of regulation time a goal can fall in.
 pub const MINUTES: usize = 90;
-/// The fit file's layout version. Version 3 adds the favourite's tilt; a version 2 file
-/// reads with a tilt of 0, which plays as version 2 did.
-pub const FIT_VERSION: u32 = 3;
+/// The fit file's layout version. Version 4 adds the weight on high-scoring matches, version 3
+/// the favourite's tilt; a version 3 file reads with a weight of 0 and a version 2 file also
+/// with a tilt of 0, each playing as it did.
+pub const FIT_VERSION: u32 = 4;
+/// The fit file layout before the weight on high-scoring matches.
+pub const FIT_VERSION_3: u32 = 3;
 /// The fit file layout before the favourite's tilt.
 pub const FIT_VERSION_2: u32 = 2;
+/// The fewest goals in total a score needs to take the weight `1 + top`: the threshold of the
+/// season figure `ten_plus_goals_share`, the share of matches with ten or more goals.
+pub const TOP_TOTAL: usize = 10;
 /// The fit file inside the content folder. `Content::load` never reads it, so it moves no
 /// content hash.
 pub const FIT_FILE: &str = "fast-model.json";
@@ -93,7 +101,7 @@ pub fn role_curve_value(stages: &StageValues, keeper: bool) -> f64 {
     sum / f64::from(count.max(1))
 }
 
-/// The nine fitted parameters.
+/// The ten fitted parameters.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FastParams {
@@ -118,6 +126,9 @@ pub struct FastParams {
     /// The favourite's tilt: a home win's probability is multiplied by `(λ / μ)^tilt` and an
     /// away win's by `(μ / λ)^tilt` before the table is normalised.
     pub tilt: f64,
+    /// Every score whose total is `TOP_TOTAL` or more has its probability multiplied by
+    /// `1 + top` before the table is normalised.
+    pub top: f64,
 }
 
 /// What the model plays from: its parameters, the share of goals in each minute, and the
@@ -147,13 +158,14 @@ impl FastFit {
             p.rho,
             p.draw,
             p.tilt,
+            p.top,
         ]
         .iter()
         .all(|v| v.is_finite());
-        if !finite || p.dispersion <= 0.0 || p.draw <= -1.0 {
+        if !finite || p.dispersion <= 0.0 || p.draw <= -1.0 || p.top <= -1.0 {
             return Err(EngineError::InvalidConfig(
                 "the fast-model parameters must be finite, with a positive dispersion and a \
-                 draw weight above -1"
+                 draw weight and a high-score weight above -1"
                     .into(),
             ));
         }
@@ -420,6 +432,9 @@ pub fn score_table(params: &FastParams, kick_off: &KickOff) -> [[f64; MAX_GOALS]
                 std::cmp::Ordering::Greater => *cell *= favourite,
                 std::cmp::Ordering::Less => *cell /= favourite,
             }
+            if h + a >= TOP_TOTAL {
+                *cell *= 1.0 + params.top;
+            }
             sum += *cell;
         }
     }
@@ -532,6 +547,7 @@ mod tests {
                 rho: -0.08,
                 draw: 0.3,
                 tilt: 0.0,
+                top: 0.0,
             },
             minute_shares: vec![1.0 / MINUTES as f64; MINUTES],
             events: EventFit::plain(FitRules::standard()),
@@ -621,6 +637,76 @@ mod tests {
         assert!(
             (with[2][1] / with[1][2] - plain[2][1] / plain[1][2] * expect * expect).abs() < 1e-9
         );
+    }
+
+    /// At a weight of 0 the table is the version 3 table: the shared table times the
+    /// Dixon-Coles factor, the draw weight and the tilt, normalised.
+    #[test]
+    fn a_top_weight_of_zero_gives_the_version_3_table() {
+        let mut p = fit().params;
+        p.tilt = 0.2;
+        let ko = KickOff::even([11.2, 9.6]);
+        let table = score_table(&p, &ko);
+        let [lambda, mu] = means(&p, &ko);
+        let mut expect = shared_pmf(lambda, mu, p.dispersion);
+        let favourite = libm::pow(lambda / mu, p.tilt);
+        let mut sum = 0.0;
+        for (h, row) in expect.iter_mut().enumerate() {
+            for (a, cell) in row.iter_mut().enumerate() {
+                *cell *= tau(h, a, lambda, mu, p.rho);
+                *cell *= match h.cmp(&a) {
+                    std::cmp::Ordering::Equal => 1.0 + p.draw,
+                    std::cmp::Ordering::Greater => favourite,
+                    std::cmp::Ordering::Less => 1.0 / favourite,
+                };
+                sum += *cell;
+            }
+        }
+        for (h, row) in expect.iter().enumerate() {
+            for (a, cell) in row.iter().enumerate() {
+                assert!((table[h][a] - cell / sum).abs() < 1e-15, "{h}-{a}");
+            }
+        }
+    }
+
+    /// The weight scales every score of ten or more goals in total by `1 + top` against the
+    /// rest, and the table still sums to 1.
+    #[test]
+    fn the_top_weight_scales_every_total_of_ten_or_more() {
+        let mut p = fit().params;
+        p.base = 0.9;
+        p.dispersion = 1.5;
+        let ko = KickOff::even([11.0, 11.0]);
+        let ratio = |p: &FastParams| {
+            let table = score_table(p, &ko);
+            let sum: f64 = table.iter().flatten().sum();
+            assert!((sum - 1.0).abs() < 1e-12, "{sum}");
+            let mut top = 0.0;
+            for (h, row) in table.iter().enumerate() {
+                for (a, cell) in row.iter().enumerate() {
+                    if h + a >= TOP_TOTAL {
+                        top += cell;
+                    }
+                }
+            }
+            assert!(top > 0.01, "{top}");
+            top / (1.0 - top)
+        };
+        let plain = ratio(&p);
+        p.top = -0.4;
+        let weighted = ratio(&p);
+        assert!((weighted / plain - 0.6).abs() < 1e-12, "{plain} {weighted}");
+    }
+
+    #[test]
+    fn a_top_weight_at_minus_one_is_refused() {
+        let mut bad = fit();
+        bad.params.top = -1.0;
+        assert!(bad.check().is_err());
+        bad.params.top = f64::NAN;
+        assert!(bad.check().is_err());
+        bad.params.top = -0.99;
+        assert!(bad.check().is_ok());
     }
 
     #[test]

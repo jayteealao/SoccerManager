@@ -1,4 +1,4 @@
-//! The fit of the fast model's eight parameters and its minute shares from the full-engine
+//! The fit of the fast model's ten parameters and its minute shares from the full-engine
 //! rows of the fit batch.
 //!
 //! The five mean parameters are set so that, for each side of each pairing, the model's
@@ -11,14 +11,17 @@
 //! compares. Fitted on the groups, the terms follow the pairings. When every row is its own
 //! group the equations are those of the Poisson likelihood. Coordinate ascent on the
 //! likelihood of the final scores under the whole normalised table then sets the
-//! dispersion, the low-score factor and the draw weight and refines the intercept and the
-//! home term, one golden-section search at a time. The favourite's tilt is set as the mean
+//! dispersion, the low-score factor, the draw weight and the weight on scores of ten goals
+//! or more, and refines the intercept and the home term, one golden-section search at a
+//! time. For a weight on a set of scores the likelihood equation reads "the model's mean
+//! share of that set over the rows equals the rows' own share", so the fitted model holds
+//! the batch's share of ten-goal matches. The favourite's tilt is set as the mean
 //! terms are, on the groups: so that, summed over each side of each pairing, the model's
 //! wins and losses add up to the full engine's along the group's mean log ratio of the two
 //! means. Fitted match by match, the likelihood reads the clubs' differences inside a
 //! pairing (which the levels see only in part) and pulls the tilt the wrong way; on the
 //! groups it follows the pairings the check compares. The tilt and the likelihood step
-//! alternate a few rounds. No statistics crate is in the workspace, and nine parameters do
+//! alternate a few rounds. No statistics crate is in the workspace, and ten parameters do
 //! not need one.
 
 use engine::modules::fast_events::{
@@ -42,6 +45,7 @@ pub fn fit(rows: &[Row], rules: FitRules) -> FastFit {
         rho: 0.0,
         draw: 0.0,
         tilt: 0.0,
+        top: 0.0,
     };
     let start = params;
     let mut params = joint(rows, params, SWEEPS);
@@ -217,8 +221,9 @@ fn tilt(rows: &[Row], params: &FastParams) -> f64 {
 
 /// Coordinate ascent on the likelihood of the final scores: each sweep searches the
 /// dispersion (on a log scale, 0.3 to 200), the low-score factor (-0.3 to 0.3), the draw
-/// weight (-0.5 to 1.5) and then the intercept and the home term within 0.3 of their values,
-/// one at a time. The strength terms and the tilt keep their values.
+/// weight (-0.5 to 1.5), the intercept and the home term within 0.3 of their values, and
+/// last the weight on scores of ten goals or more (-0.9 to 1.5), one at a time. The strength
+/// terms and the tilt keep their values.
 fn joint(rows: &[Row], mut params: FastParams, sweeps: usize) -> FastParams {
     type Field = fn(&mut FastParams) -> &mut f64;
     let means: [Field; 2] = [|p| &mut p.base, |p| &mut p.home];
@@ -249,6 +254,10 @@ fn joint(rows: &[Row], mut params: FastParams, sweeps: usize) -> FastParams {
             );
             *field(&mut params) = v;
         }
+        // Last in the sweep, so its equation (the model's share of ten-goal matches equals
+        // the rows') holds at the parameters the sweep returns.
+        let top: Field = |p| &mut p.top;
+        params.top = golden_max(|v| log_likelihood(rows, &with(&params, top, v)), -0.9, 1.5);
     }
     params
 }
@@ -627,6 +636,7 @@ mod tests {
                 rho: -0.1,
                 draw: 0.3,
                 tilt: 0.0,
+                top: 0.0,
             },
             minute_shares: (0..MINUTES)
                 .map(|m| (1.0 + m as f64 / 90.0) / 135.5)
@@ -718,6 +728,7 @@ mod tests {
                 rho: 0.0,
                 draw: 0.16,
                 tilt: 0.25,
+                top: 0.0,
             },
             minute_shares: vec![1.0 / MINUTES as f64; MINUTES],
             events: EventFit::plain(FitRules::standard()),
@@ -770,6 +781,7 @@ mod tests {
                 rho: 0.0,
                 draw: 0.0,
                 tilt: 0.0,
+                top: 0.0,
             },
             minute_shares: vec![1.0 / MINUTES as f64; MINUTES],
             events: EventFit::plain(FitRules::standard()),
@@ -839,6 +851,91 @@ mod tests {
             );
         }
         assert!(got.check().is_ok());
+    }
+
+    /// 6 000 rows drawn from a model with high means (about 2.5 goals a side) and a weight of
+    /// -0.4 on scores of ten goals or more, each row its own group: the fit holds the rows'
+    /// share of such matches and recovers the spread of goals.
+    #[test]
+    fn the_top_weight_fits_the_share_of_ten_goal_matches() {
+        let truth = FastFit {
+            params: FastParams {
+                base: 0.9,
+                home: 0.0,
+                attack: 0.2,
+                curve: 0.0,
+                defence: -0.1,
+                dispersion: 2.0,
+                rho: 0.0,
+                draw: 0.0,
+                tilt: 0.0,
+                top: -0.4,
+            },
+            minute_shares: vec![1.0 / MINUTES as f64; MINUTES],
+            events: EventFit::plain(FitRules::standard()),
+        };
+        let rows: Vec<Row> = (0..6_000u64)
+            .map(|i| {
+                let level = |n: u64| 9.0 + (n % 11) as f64 / 5.0;
+                let kick_off = KickOff {
+                    attack: [level(i), level(i / 11)],
+                    defence: [level(i / 121), level(i / 7)],
+                    ..KickOff::even([10.0; 2])
+                };
+                let m = FittedScoresV1.play(&truth, &kick_off, i).unwrap();
+                Row {
+                    pairing: i as usize,
+                    kick_off,
+                    goals: m.scores,
+                    goal_minutes: Vec::new(),
+                    tally: EventTally::default(),
+                }
+            })
+            .collect();
+        let got = fit(&rows, FitRules::standard()).params;
+        let observed = rows
+            .iter()
+            .filter(|r| (r.goals[0] + r.goals[1]) as usize >= fast_model::TOP_TOTAL)
+            .count() as f64
+            / rows.len() as f64;
+        let model: f64 = rows
+            .iter()
+            .map(|r| {
+                let mut top = 0.0;
+                for (h, line) in score_table(&got, &r.kick_off).iter().enumerate() {
+                    for (a, cell) in line.iter().enumerate() {
+                        if h + a >= fast_model::TOP_TOTAL {
+                            top += cell;
+                        }
+                    }
+                }
+                top
+            })
+            .sum::<f64>()
+            / rows.len() as f64;
+        assert!(observed > 0.02, "share of ten-goal rows {observed}");
+        assert!(
+            (model - observed).abs() < 0.004,
+            "model share {model}, rows' share {observed}"
+        );
+        // The weight and the dispersion both shape the tail, so the fit can trade one for the
+        // other; what it must recover is the spread of goals: the share of every total, on
+        // average over the rows, and a weight that thins the tail as the truth's does.
+        let totals = |p: &FastParams| {
+            let mut out = [0.0; 2 * MAX_GOALS - 1];
+            for r in &rows {
+                for (h, line) in score_table(p, &r.kick_off).iter().enumerate() {
+                    for (a, cell) in line.iter().enumerate() {
+                        out[h + a] += cell / rows.len() as f64;
+                    }
+                }
+            }
+            out
+        };
+        for (total, (a, b)) in totals(&truth.params).iter().zip(totals(&got)).enumerate() {
+            assert!((a - b).abs() < 0.01, "total {total}: truth {a}, fit {b}");
+        }
+        assert!(got.top < 0.0, "top {}", got.top);
     }
 
     #[test]

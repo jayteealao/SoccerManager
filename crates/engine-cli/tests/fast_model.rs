@@ -85,7 +85,7 @@ fn golden_ledger_index() -> usize {
 
 /// The fit confirms the engine, plays both batches, and reports 261 figures (49 of the
 /// score, 212 of the events); the fit it reports records the golden results' id and is
-/// format 2 with its events block.
+/// format 4 with its events block, its tilt and its weight on scores of ten goals or more.
 #[test]
 fn a_small_fit_runs_and_records_the_golden_results_id() {
     let (_, report) = small_fit();
@@ -103,8 +103,9 @@ fn a_small_fit_runs_and_records_the_golden_results_id() {
     assert_eq!(report["fit"]["model"], "fitted-scores@1");
     assert_eq!(report["fit"]["batch"]["matches_per_pairing"], 8);
     assert_eq!(report["fit"]["check"]["figures"], 261);
-    assert_eq!(report["fit"]["schema_version"], 3);
+    assert_eq!(report["fit"]["schema_version"], 4);
     assert!(report["fit"]["fit"]["params"]["tilt"].is_f64());
+    assert!(report["fit"]["fit"]["params"]["top"].is_f64());
     let shares = report["fit"]["fit"]["minute_shares"].as_array().unwrap();
     assert_eq!(shares.len(), 90);
     let events = &report["fit"]["fit"]["events"];
@@ -116,7 +117,7 @@ fn a_small_fit_runs_and_records_the_golden_results_id() {
 }
 
 /// A fit file of format 1 (the score only) is refused with a message that names the
-/// command that writes format 3; the format-3 fit is the control.
+/// command that writes format 4; the format-4 fit is the control.
 #[test]
 fn a_format_1_fit_is_refused_and_names_the_fit_command() {
     let (dir, _) = small_fit();
@@ -134,7 +135,7 @@ fn a_format_1_fit_is_refused_and_names_the_fit_command() {
     assert_eq!(done.status.code(), Some(1), "{stderr}");
     assert!(stderr.contains("schema_version 1"), "{stderr}");
     assert!(
-        stderr.contains("this build reads 3; run engine-cli fast-model fit"),
+        stderr.contains("this build reads 4; run engine-cli fast-model fit"),
         "{stderr}"
     );
     let control = run(
@@ -145,15 +146,41 @@ fn a_format_1_fit_is_refused_and_names_the_fit_command() {
 }
 
 /// A fit file of format 2 (no favourite's tilt) still reads: it reads with a tilt of 0 and
-/// passes the stale check as the format-3 file it came from does.
+/// passes the stale check as the format-4 file it came from does.
 #[test]
 fn a_format_2_fit_reads_with_no_tilt() {
     let (dir, _) = small_fit();
     let good = dir.join("from-report.json");
     let mut fit: Value = serde_json::from_str(&std::fs::read_to_string(&good).unwrap()).unwrap();
     fit["schema_version"] = Value::from(2);
-    fit["fit"]["params"].as_object_mut().unwrap().remove("tilt");
+    let params = fit["fit"]["params"].as_object_mut().unwrap();
+    params.remove("tilt");
+    params.remove("top");
     let old = dir.join("format-2.json");
+    std::fs::write(&old, serde_json::to_string_pretty(&fit).unwrap()).unwrap();
+    let done = run(
+        dir,
+        &["fast-model", "stale", "--fit", old.to_str().unwrap()],
+    );
+    assert_eq!(
+        done.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&done.stderr)
+    );
+}
+
+/// A fit file of format 3 (no weight on scores of ten goals or more) still reads: it reads
+/// with a weight of 0 and passes the stale check as the format-4 file it came from does.
+#[test]
+fn a_format_3_fit_reads_with_no_top_weight() {
+    let (dir, _) = small_fit();
+    let good = dir.join("from-report.json");
+    let mut fit: Value = serde_json::from_str(&std::fs::read_to_string(&good).unwrap()).unwrap();
+    fit["schema_version"] = Value::from(3);
+    fit["fit"]["params"].as_object_mut().unwrap().remove("top");
+    let tmp = tempfile::TempDir::new().unwrap();
+    let old = tmp.path().join("format-3.json");
     std::fs::write(&old, serde_json::to_string_pretty(&fit).unwrap()).unwrap();
     let done = run(
         dir,
@@ -354,7 +381,8 @@ fn the_shipped_fit_records_the_golden_results_id() {
         fit["check"]["pass"].as_bool().unwrap(),
         "the shipped fit passed its check"
     );
-    assert_eq!(fit["schema_version"], 3);
+    assert_eq!(fit["schema_version"], 4);
+    assert!(fit["fit"]["params"]["top"].is_f64());
     assert_eq!(fit["check"]["figures"], 261);
     assert_eq!(fit["check"]["z"], 3.7);
     assert_eq!(fit["check"]["event_z"], 4.07);

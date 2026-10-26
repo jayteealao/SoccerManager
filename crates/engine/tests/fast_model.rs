@@ -59,6 +59,7 @@ fn test_fit() -> FastFit {
             rho: -0.09,
             draw: 0.3,
             tilt: 0.0,
+            top: 0.0,
         },
         minute_shares: vec![1.0 / MINUTES as f64; MINUTES],
         events: EventFit::plain(FitRules::standard()),

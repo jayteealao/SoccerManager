@@ -27,7 +27,7 @@ Runtime output (`owner.id`, `matches/<match.id>/stats.json`, `matches/<match.id>
 | `teams/default-a.json`, `teams/default-b.json` | 1 | The two default clubs (`engine-cli generate --seed 1` and `--seed 2`) |
 | `commentary/en.json` | 1 | The English commentary lines, grouped by event kind and match situation |
 | `realism-bands.json` | 6 | The band registry: every realism band the calibration run judges, with its measure, its target and margin, how it is resampled, its engine spread, and its record (where its real value is measured, the evidence label, the confidence counts, the condition, and whether it gates), and the figures it reports beside an earlier build's value. An earlier version is refused. They are acceptance criteria, never tuning values |
-| `fast-model.json` | 3 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
+| `fast-model.json` | 4 | The fast model fitted from full-engine results, with the engine id of the results it came from. The content hash does not read it |
 | `sensitivity.json` | 2 | The sensitivity rules: one rule per attribute job and per body job, the thresholds they are judged by, the size of a run, the five-match rule, and the setting rules a change run writes and plays. Only the sensitivity run and the rules stage of a change run read it; the content hash does not |
 | `gate-proof.json` | 1 | The gate proof: the broken copies of the engine that `engine-cli calibrate proof` plays, and the pass and fail rates of the last proof with the gate it measured. No match reads it; neither the content hash nor the old engine's cache key includes it |
 | `world.json` | 1 | The world database: every country (by code) and tier the sources cover, each club with a facsimile name and an Elo strength with its source, and the continental, intercontinental and domestic competitions as structure. No match reads it; written by engine-cli world-database build, never by hand |
@@ -672,12 +672,12 @@ The fit of the fast model, written by `engine-cli fast-model fit` (see [the comm
 
 | Field | Holds |
 |---|---|
-| `schema_version` | 3. A file of format 2 has no `tilt`; it reads with a tilt of 0, which plays as it did. A file of format 1 holds the score fit only; the command refuses it and names `engine-cli fast-model fit` |
+| `schema_version` | 4. A file of format 3 has no `top`; it reads with a weight of 0. A file of format 2 has no `tilt` and no `top`; it reads with both at 0. Each plays as it did. A file of format 1 holds the score fit only; the command refuses it and names `engine-cli fast-model fit` |
 | `model` | The module the fit is for: `fitted-scores@1` |
 | `engine_id` | The engine id of the results the fit came from: `golden-<ledger index>-<build>-<digest>` |
 | `engine` | The id's parts: `id`, `ledger_index`, `build` and `digest` |
 | `fitted_by` | The `engine_version` and `build` of the program that fitted it |
-| `fit.params` | The nine parameters: `base`, `home`, `attack`, `curve`, `defence`, `dispersion` (the shape of the match factor both scores share), `rho`, `draw` and `tilt` (the favourite's tilt) |
+| `fit.params` | The ten parameters: `base`, `home`, `attack`, `curve`, `defence`, `dispersion` (the shape of the match factor both scores share), `rho`, `draw`, `tilt` (the favourite's tilt) and `top` (every score of ten goals or more in total is weighted by `1 + top`) |
 | `fit.minute_shares` | 90 shares, one per minute of regulation time, summing to 1 |
 | `fit.events.fouls`, `offsides`, `corners`, `throw_ins`, `goal_kicks`, `injuries` | One count each: the seven `coefficients` of the side's log mean over 1, the home flag, `o`, `t`, `o²`, `t²` and `o × t`, where `o` is the side's strength and `t` the other side's, each as (strength − 10) / 2, a strength being the level of the starting eleven read through the attribute contract (see [the command-line reference](cli.md#fast-model)); `dispersion` (the negative binomial's shape, or `null` for a Poisson count), and 92 `minute_shares` summing to 1, 45 per half and one for each half's added time |
 | `fit.events.advantage`, `penalty`, `yellow`, `red`, `second_yellow`, `injury_stoppage` | The four `coefficients` of each share's log over 1, the home flag, `o` and `t` of the side: the shares of fouls played on with advantage; of fouls not played on that give a penalty; of fouls booked; of fouls sent off straight; of yellow cards, while a player of the side is booked, that go to a booked player; and of injuries that stop play |
