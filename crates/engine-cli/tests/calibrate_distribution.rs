@@ -13,11 +13,10 @@
 
 mod common;
 
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Output;
 
-use common::{RecordSchemas, bin, copy_tree, edited_content, hold_floor, record, temp};
+use common::{RecordSchemas, bin, copy_tree, edited_content, hold_floor, record};
 use serde_json::{Value, json};
 
 /// The bands read from the band record, in every build.
@@ -34,40 +33,56 @@ const MEASURES: [&str; 3] = [
     "chain_seconds_distribution",
 ];
 
-fn gz(path: &Path, text: &str) {
-    let file = std::fs::File::create(path).unwrap();
-    let mut gz = flate2::write::GzEncoder::new(file, flate2::Compression::default());
-    gz.write_all(text.as_bytes()).unwrap();
-    gz.finish().unwrap();
-}
-
-/// The fixture folder, copied to `data`, with two compressed StatsBomb-shaped event files
-/// written now: synthetic shots and possessions, no figure from real matches.
+/// The fixture folder, copied to `data`.
 fn fixture(data: &Path) -> PathBuf {
     let dir = data.join("real-data");
     copy_tree(
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/real-data"),
         &dir,
     );
-    gz(
-        &dir.join("sb_events.csv.gz"),
-        "mid,type,x,y\n\
-         1,Shot,93,34\n1,Shot,88,40\n1,Pass,50,30\n\
-         2,Shot,99,30\n2,Shot,75,20\n\
-         3,Shot,90,50\n",
-    );
-    gz(
-        &dir.join("sb2_events.csv.gz"),
-        "mid,period,ts,type,team,poss,poss_team,dur\n\
-         1,1,00:00:00.000,Pass,A,1,A,1.0\n\
-         1,1,00:00:02.000,Pass,A,1,A,1.0\n\
-         1,1,00:00:04.000,Carry,B,2,B,3.0\n\
-         2,1,00:00:00.000,Pass,A,1,A,2.0\n\
-         2,1,00:00:03.000,Pass,B,1,A,1.0\n\
-         2,1,00:00:05.000,Pass,B,2,B,10.0\n\
-         3,1,00:00:00.000,Pass,A,1,A,1.0\n",
-    );
     dir
+}
+
+/// The StatsBomb distribution targets the three measures bands name, as fixtures: the
+/// committed reference file goes to `data/gate/` beside the content folder with each
+/// `sb.men.dist.*` target replaced by one over two invented competition-seasons of two
+/// matches each, its bins and width the band's, its shares pooled from the per-match
+/// histograms written to the side folder `data/real-targets/`. No figure comes from real
+/// matches.
+fn statsbomb_targets(data: &Path) {
+    let committed = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../gate/real-targets.json");
+    let mut file: Value =
+        serde_json::from_str(&std::fs::read_to_string(committed).unwrap()).unwrap();
+    let labels = ["fx_1", "fx_2"];
+    let mut rows = String::from("label,match,kind,bin,count\n");
+    for kind in ["shot_distance", "chain_passes", "chain_seconds"] {
+        let target = &mut file["targets"][format!("sb.men.dist.{kind}")];
+        let bins = target["bins"].as_u64().unwrap();
+        let mut pooled = vec![0.0; bins as usize];
+        for m in 1..=4u64 {
+            let label = labels[usize::from(m > 2)];
+            for (bin, count) in [((m * 3) % bins, m), ((m * 7 + 1) % bins, 1)] {
+                rows.push_str(&format!("{label},{m},{kind},{bin},{count}\n"));
+                pooled[bin as usize] += count as f64;
+            }
+        }
+        let total: f64 = pooled.iter().sum();
+        target["shares"] = json!(pooled.iter().map(|c| c / total).collect::<Vec<f64>>());
+        target["n"] = json!(4);
+        target["seasons"] = json!(labels);
+        target["leagues"] = json!(labels);
+        target["source_label"] = json!("fixture, two invented competition-seasons");
+    }
+    let gate = data.join("gate");
+    std::fs::create_dir_all(&gate).unwrap();
+    std::fs::write(
+        gate.join("real-targets.json"),
+        serde_json::to_string_pretty(&file).unwrap(),
+    )
+    .unwrap();
+    let side = data.join("real-targets");
+    std::fs::create_dir_all(&side).unwrap();
+    std::fs::write(side.join("statsbomb-match-histograms.csv"), rows).unwrap();
 }
 
 /// The shipped content, its five-league filters widened to the fixture's competitions A and
@@ -154,9 +169,11 @@ fn expected() -> Vec<&'static str> {
 
 #[test]
 fn each_whole_distribution_has_a_band_that_gates() {
-    let data = temp("engine-cli-distribution", "table");
+    let tmp = tempfile::TempDir::new().unwrap();
+    let data = tmp.path().to_path_buf();
     let real = fixture(&data);
     let content = content(&data);
+    statsbomb_targets(&data);
 
     let run = data.join("run");
     let out = calibrate(&data, &content, &run, &real);
@@ -218,8 +235,9 @@ fn each_whole_distribution_has_a_band_that_gates() {
         assert!(!RECORD.contains(&band) && !MEASURES.contains(&band), "{v}");
     }
 
-    // An absent folder: every distribution band is not sure with no value.
-    let absent = data.join("absent");
+    // An absent folder with no side folder beside it: every distribution band is not sure
+    // with no value.
+    let absent = data.join("elsewhere").join("absent");
     let run2 = data.join("run-absent");
     let out2 = calibrate(&data, &content, &run2, &absent);
     let text2 = stderr(&out2);
@@ -241,5 +259,4 @@ fn each_whole_distribution_has_a_band_that_gates() {
         let l = line(&text2, band).unwrap_or_else(|| panic!("no table line {band}: {text2}"));
         assert!(l.contains("no real data here"), "{l}");
     }
-    let _ = std::fs::remove_dir_all(&data);
 }
