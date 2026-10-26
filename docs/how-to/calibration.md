@@ -242,7 +242,16 @@ target/release/engine-cli tracking measure --data <data folder>
 target/release/engine-cli real-targets build
 ```
 
-The first writes `gate/tracking/dfl-matches.json`; the second rebuilds the reference file from it. Commit both together with any band change that reads the new targets. To measure the PFF matches again, run `target/release/engine-cli tracking measure --source pff --data <data folder> --jobs 6` (about two minutes on 6 threads), then the same `real-targets build`; it writes `gate/tracking/pff-matches.json`.
+The first writes `gate/tracking/dfl-matches.json`; the second rebuilds the reference file from it. Commit both together with any band change that reads the new targets. To measure the PFF matches again, run `target/release/engine-cli tracking measure --source pff --data <data folder> --jobs 6` (about two minutes on 6 threads), then the same `real-targets build`; it writes `gate/tracking/pff-matches.json`. Its printout ends with a restart block: each restart kind a match beside the DFL matches, and the kick-off check (the kick-offs a match reach the goals plus the two half openings). A match it names with fewer kick-offs after goals than goals is usually one with a goal in the last minute of a half, which no kick-off follows.
+
+The PFF speed twins read below DFL: fast running about half, sprints about three quarters. To see whether that comes from the conversion or from the data, run the pace check, which measures fast running and sprints on the native frames and on the report's frames after conversion:
+
+```bash
+target/release/engine-cli tracking pace --source pff --jobs 6
+target/release/engine-cli tracking pace --source dfl
+```
+
+The two verdict lines read yes when the converted figures sit within 5 percent of the native ones, so the gap to DFL is a property of the PFF data; the context of each speed twin says so, with the figures of the last check. The figures from rows seen on camera only show how much of the gap PFF's estimated rows carry.
 
 The slide up the pitch reads low while the off-ball stands are off, because players then hold their formation places. To see the band with them on, pair the run with the stands flag:
 

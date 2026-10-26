@@ -85,6 +85,7 @@ All notable changes to this game are listed here. The format follows [Keep a Cha
 
 ### Fixed
 
+- PFF World Cup restarts that fell between two report frames are counted, so the PFF restart counts match the event files (throw-ins 39.9 a match instead of 20.1, kick-offs after goals 2.6 instead of 1.2); a half-opening kick-off PFF times just after the half's first frame opens the half instead of counting as a stoppage, and a goal PFF marks as ruled out is no goal. `engine-cli tracking measure --source pff` prints each match's restarts and goals and a restart block beside DFL. `engine-cli tracking pace` compares PFF speeds on native and converted frames: they agree within 1 percent, so the PFF speed twins' gap to DFL comes with the PFF data, and their context says so.
 - A loose ball no longer stops in open play with two players standing beside it. Two players going for the same loose ball no longer push each other off it, so one of them reaches it: over 200 matches of the default teams, 8 matches with such a stall (the ball still for 100 s or more in all) now have none. The match check gains the rule `ball_rest`: a ball still in open play for longer than 19.92 s (the median of 696 dead-ball spells measured on real Bundesliga matches) is a violation. Matches play differently for the same seed.
 - A match resumed from a snapshot taken while play was stopped no longer reads the waiting ball as a stalled one.
 - The match checker reads the ball from the match's first record, so the opening kick-off no longer looks like a ball left on the centre spot.
