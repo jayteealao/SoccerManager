@@ -6155,7 +6155,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cb_pace_walk_share",
@@ -6296,7 +6296,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cb_pace_jog_share",
@@ -6437,7 +6437,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cb_pace_run_share",
@@ -6578,7 +6578,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cb_pace_hs_share",
@@ -6719,7 +6719,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cb_pace_sprint_share",
@@ -6860,7 +6860,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cb_speed_near",
@@ -7001,7 +7001,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cb_speed_far",
@@ -7142,7 +7142,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cb_sprints_fwd_per_min",
@@ -7288,7 +7288,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cb_sprints_back_per_min",
@@ -7429,7 +7429,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cb_sprints_lat_per_min",
@@ -7575,7 +7575,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "fb_depth_in",
@@ -8577,7 +8577,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "fb_pace_walk_share",
@@ -8718,7 +8718,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "fb_pace_jog_share",
@@ -8859,7 +8859,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "fb_pace_run_share",
@@ -9000,7 +9000,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "fb_pace_hs_share",
@@ -9141,7 +9141,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "fb_pace_sprint_share",
@@ -9282,7 +9282,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "fb_speed_near",
@@ -9423,7 +9423,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "fb_speed_far",
@@ -9564,7 +9564,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "fb_sprints_fwd_per_min",
@@ -9705,7 +9705,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "fb_sprints_back_per_min",
@@ -9846,7 +9846,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "fb_sprints_lat_per_min",
@@ -9992,7 +9992,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cm_depth_in",
@@ -10984,7 +10984,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cm_pace_walk_share",
@@ -11125,7 +11125,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cm_pace_jog_share",
@@ -11266,7 +11266,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cm_pace_run_share",
@@ -11407,7 +11407,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cm_pace_hs_share",
@@ -11553,7 +11553,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cm_pace_sprint_share",
@@ -11699,7 +11699,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cm_speed_near",
@@ -11845,7 +11845,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cm_speed_far",
@@ -11986,7 +11986,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cm_sprints_fwd_per_min",
@@ -12132,7 +12132,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cm_sprints_back_per_min",
@@ -12273,7 +12273,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "cm_sprints_lat_per_min",
@@ -12419,7 +12419,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "w_depth_in",
@@ -13411,7 +13411,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "w_pace_walk_share",
@@ -13552,7 +13552,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "w_pace_jog_share",
@@ -13698,7 +13698,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "w_pace_run_share",
@@ -13839,7 +13839,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "w_pace_hs_share",
@@ -13980,7 +13980,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "w_pace_sprint_share",
@@ -14121,7 +14121,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "w_speed_near",
@@ -14262,7 +14262,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "w_speed_far",
@@ -14403,7 +14403,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "w_sprints_fwd_per_min",
@@ -14544,7 +14544,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "w_sprints_back_per_min",
@@ -14685,7 +14685,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "w_sprints_lat_per_min",
@@ -14826,7 +14826,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "st_depth_in",
@@ -15843,7 +15843,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "st_pace_walk_share",
@@ -15984,7 +15984,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "st_pace_jog_share",
@@ -16130,7 +16130,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "st_pace_run_share",
@@ -16271,7 +16271,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "st_pace_hs_share",
@@ -16412,7 +16412,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "st_pace_sprint_share",
@@ -16553,7 +16553,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "st_speed_near",
@@ -16694,7 +16694,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "st_speed_far",
@@ -16835,7 +16835,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "st_sprints_fwd_per_min",
@@ -16976,7 +16976,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "st_sprints_back_per_min",
@@ -17117,7 +17117,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "st_sprints_lat_per_min",
@@ -17263,7 +17263,7 @@
       },
       "condition": "dry",
       "gates": true,
-      "context": "tournament, national teams; measured at 25 frames a second by the shared report"
+      "context": "tournament, national teams; measured at 25 frames a second by the shared report; fast running and sprints read below DFL (3.55 and 1.63 against 7.35 and 2.15 m a player-minute): a property of the PFF data, not of the conversion (native and converted frames agree within 0.6 percent; 62.6 percent of player rows estimated by PFF, rows seen on camera only 5.77 and 1.91; checked 2026-10-26)"
     },
     {
       "band": "slide_up_in",
