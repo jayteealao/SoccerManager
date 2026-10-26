@@ -6,7 +6,9 @@
 //! the half's start tick. Its players are the slot holders of the side file, less the
 //! off-pitch spells; the ball status and possession come from the ball runs, the ball is
 //! absent on the ticks the side file lists, and the restarts are the placed restart events
-//! of the tick. A kick-off a source places on a half's start tick opens the half and is no
+//! after the half's previous frame up to the frame's tick, so a restart a source places
+//! between two frames counts on the next one, and one after the half's last frame on that
+//! frame (the engine feed's own rule). A kick-off a source places on a half's start tick opens the half and is no
 //! stoppage; an engine side file lists only the stoppages it counted.
 //!
 //! `engine-cli tracking measure` measures every match of one provider in the data folder
@@ -102,7 +104,16 @@ pub fn frames_of(records: &[TickRecord], side: &Side) -> anyhow::Result<Vec<Fram
         .ball
         .windows(2)
         .all(|w| w[0].to_tick < w[1].from_tick && w[0].from_tick <= w[0].to_tick);
-    let mut out = Vec::new();
+    // The placed restarts of ticks `from..=to`, taken out of `events`.
+    let take = |events: &mut BTreeMap<u32, Vec<(Restart, usize)>>, from: u32, to: u32| {
+        let ticks: Vec<u32> = events.range(from..=to).map(|(t, _)| *t).collect();
+        ticks
+            .into_iter()
+            .flat_map(|t| events.remove(&t).unwrap_or_default())
+            .collect::<Vec<_>>()
+    };
+    let mut last_of_half: Vec<Option<usize>> = vec![None; side.halves.len()];
+    let mut out: Vec<Frame> = Vec::new();
     for r in records {
         let Some(half) = side
             .halves
@@ -136,6 +147,7 @@ pub fn frames_of(records: &[TickRecord], side: &Side) -> anyhow::Result<Vec<Fram
                 .iter()
                 .find(|b| (b.from_tick..=b.to_tick).contains(&t))
         };
+        last_of_half[half] = Some(out.len());
         out.push(Frame {
             tick: t,
             half,
@@ -144,9 +156,15 @@ pub fn frames_of(records: &[TickRecord], side: &Side) -> anyhow::Result<Vec<Fram
             on,
             live: run.and_then(|b| b.live),
             possession: run.and_then(|b| b.possession),
-            restarts: events.remove(&t).unwrap_or_default(),
+            restarts: take(&mut events, h.start_tick, t),
             attack_x: [h.team0_attack, -h.team0_attack],
         });
+    }
+    for (h, last) in side.halves.iter().zip(last_of_half) {
+        if let Some(i) = last {
+            let rest = take(&mut events, h.start_tick, h.end_tick);
+            out[i].restarts.extend(rest);
+        }
     }
     Ok(out)
 }
@@ -368,6 +386,32 @@ pub struct PffCounts {
     pub left_out: Vec<super::side::LeftOut>,
     /// Whether the match was turned so team 0 attacks towards positive x first.
     pub rotated: bool,
+    /// The restarts the report counted, home and away together, in the order of
+    /// [`RESTART_KINDS`].
+    pub restarts: [f64; 6],
+    /// The kick-offs on a half's start tick, which open the half.
+    pub half_openings: u32,
+    /// The goals of periods 1 and 2 that count.
+    pub goals: u32,
+}
+
+/// The six restart kinds of the report, as its figure names end, in the summary's order.
+pub const RESTART_KINDS: [&str; 6] = [
+    "throw_in",
+    "free_kick",
+    "goal_kick",
+    "corner",
+    "kick_off",
+    "penalty",
+];
+
+/// The restarts of `figures`, home and away together, in the order of [`RESTART_KINDS`].
+pub fn restarts_of(figures: &BTreeMap<String, [f64; 2]>) -> [f64; 6] {
+    RESTART_KINDS.map(|k| {
+        figures
+            .get(&format!("team.stops_{k}"))
+            .map_or(0.0, |v| v[0] + v[1])
+    })
 }
 
 /// A measured set of PFF matches: the tracking file, each match's counts in match order,
@@ -394,6 +438,18 @@ fn measure_one_pff(data: &Path, id: &str) -> anyhow::Result<(MatchFigures, PffCo
         estimated_share: r.m.notes.estimated_share.unwrap_or(0.0),
         left_out: r.m.notes.left_out.clone(),
         rotated: c.side.rotated,
+        restarts: restarts_of(&figures.figures),
+        half_openings: u32::try_from(
+            c.side
+                .events
+                .iter()
+                .filter(|e| {
+                    e.kind == "kick_off" && c.side.halves.iter().any(|h| h.start_tick == e.tick)
+                })
+                .count(),
+        )
+        .unwrap_or(u32::MAX),
+        goals: r.goals,
     };
     Ok((figures, counts))
 }
@@ -598,6 +654,43 @@ mod tests {
         let f = figures_of(&c.records, &c.side, &dfl_pass_choice(&r.m)).unwrap();
         assert_eq!(f.frames as usize, want);
         assert_eq!(f.figures.len(), field_names().len());
+    }
+
+    /// A restart on a tick between two report frames counts once, on the next frame of its
+    /// half, or on the half's last frame when no frame follows it; a restart on a frame
+    /// tick counts on that frame; a half-opening kick-off on the start tick counts not at
+    /// all.
+    #[test]
+    fn a_restart_between_two_frames_counts_on_the_next_frame() {
+        use super::super::side::Placed;
+        let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tracking/pff");
+        let r = super::super::pff::read(&data, "9001").unwrap();
+        let mut c = convert::to_ticks(&r.m).unwrap();
+        // The first half ends on an odd step from its start.
+        let h = &mut c.side.halves[0];
+        if (h.end_tick - h.start_tick).is_multiple_of(2) {
+            h.end_tick -= 1;
+        }
+        let (s, e) = (h.start_tick, h.end_tick);
+        let ev = |tick: u32, kind: &str| Placed {
+            tick,
+            kind: kind.into(),
+            team: Some(0),
+            placed: "event-time".into(),
+        };
+        c.side.events = vec![
+            ev(s, "kick_off"),
+            ev(s + 11, "throw_in"),
+            ev(s + 20, "corner"),
+            ev(e, "free_kick"),
+        ];
+        let frames = frames_of(&c.records, &c.side).unwrap();
+        let at = |t: u32| frames.iter().find(|f| f.tick == t).unwrap();
+        assert!(at(s).restarts.is_empty());
+        assert_eq!(at(s + 12).restarts, [(Restart::ThrowIn, 0)]);
+        assert_eq!(at(s + 20).restarts, [(Restart::Corner, 0)]);
+        assert_eq!(at(e - 1).restarts, [(Restart::FreeKick, 0)]);
+        assert_eq!(frames.iter().map(|f| f.restarts.len()).sum::<usize>(), 3);
     }
 
     /// A side file of another tick step is refused.

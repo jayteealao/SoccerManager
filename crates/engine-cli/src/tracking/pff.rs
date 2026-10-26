@@ -56,6 +56,8 @@ pub struct Native {
     pub ball_absent: u32,
     /// Frame lines left out because they repeat an earlier frame of their half.
     pub repeated: u32,
+    /// The goals of periods 1 and 2 that count, a penalty's included.
+    pub goals: u32,
 }
 
 /// The folder that holds the PFF files.
@@ -202,6 +204,10 @@ struct PossessionEvents {
     shot_outcome_type: Option<String>,
     #[serde(default)]
     receiver_player_id: Option<Id>,
+    /// PFF marks a play that did not count, such as a goal ruled out for offside, as a
+    /// non-event.
+    #[serde(default)]
+    non_event: Option<bool>,
 }
 
 #[derive(Deserialize, Default)]
@@ -249,6 +255,8 @@ pub(crate) struct Read1 {
     pub events: Vec<Event>,
     pub flow: Flow,
     pub team: Option<usize>,
+    /// The event is a goal that counts: a shot PFF calls a goal and not a non-event.
+    pub goal: bool,
 }
 
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> anyhow::Result<T> {
@@ -306,6 +314,9 @@ fn read_events(
         let pe = r.possession_events.unwrap_or_default();
         let fouls = r.fouls.unwrap_or_default();
         let on_team = team(&g.team_id);
+        let goal = pe.possession_event_type.as_deref() == Some("SH")
+            && pe.shot_outcome_type.as_deref() == Some("G")
+            && pe.non_event != Some(true);
         let player = g.player_id.as_ref().map(|p| p.0.clone());
         let event = |kind: EventKind, team: Option<usize>, person: Option<String>| Event {
             kind,
@@ -343,9 +354,7 @@ fn read_events(
                             height: height(pe.high_point_type.as_deref()),
                         },
                         Some("CR") => EventKind::Cross,
-                        Some("SH") => EventKind::Shot {
-                            goal: pe.shot_outcome_type.as_deref() == Some("G"),
-                        },
+                        Some("SH") => EventKind::Shot { goal },
                         other => EventKind::Other(format!(
                             "on_ball_{}",
                             other.unwrap_or("none").to_lowercase()
@@ -417,6 +426,7 @@ fn read_events(
             events,
             flow,
             team: on_ball,
+            goal,
         });
     }
     out.sort_by(|a, b| a.ms.total_cmp(&b.ms));
@@ -435,6 +445,8 @@ pub struct Resampled {
     pub ball_absent: u32,
     /// Frame lines left out because they repeat an earlier frame.
     pub repeated: u32,
+    /// The goals of periods 1 and 2 that count.
+    pub goals: u32,
 }
 
 /// Reads match `id` of `data` and resamples it to 50 frames a second.
@@ -447,6 +459,7 @@ pub fn read(data: &Path, id: &str) -> anyhow::Result<Resampled> {
         native_frames: n.m.halves.iter().map(|h| h.frames.len()).sum(),
         ball_absent: n.ball_absent,
         repeated: n.repeated,
+        goals: n.goals,
     })
 }
 
@@ -686,6 +699,7 @@ pub fn read_native(data: &Path, id: &str) -> anyhow::Result<Native> {
         &team_of_person,
     )?;
     mark_ball(&mut halves, &times, &read);
+    let goals = u32::try_from(read.iter().filter(|r| r.goal).count()).unwrap_or(u32::MAX);
     let events: Vec<Event> = read.iter().flat_map(|r| r.events.clone()).collect();
     let m = TrackedMatch {
         source: SOURCE.into(),
@@ -714,6 +728,7 @@ pub fn read_native(data: &Path, id: &str) -> anyhow::Result<Native> {
         lines,
         ball_absent,
         repeated,
+        goals,
     })
 }
 
@@ -960,5 +975,59 @@ mod tests {
         assert_eq!(possession(&m, 1, 40), Some(0));
         assert_eq!(possession(&m, 1, 79), Some(0));
         assert_eq!(possession(&m, 1, 80), Some(1));
+    }
+
+    /// A shot PFF calls a goal counts as a goal; one it marks as a non-event (ruled out)
+    /// is a shot and no goal.
+    #[test]
+    fn a_goal_ruled_out_is_no_goal() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let (from, to) = (folder(&data()), folder(tmp.path()));
+        for dir in ["Metadata", "Rosters", "Event Data", "Tracking Data"] {
+            std::fs::create_dir_all(to.join(dir)).unwrap();
+            for f in std::fs::read_dir(from.join(dir)).unwrap() {
+                let f = f.unwrap();
+                std::fs::copy(f.path(), to.join(dir).join(f.file_name())).unwrap();
+            }
+        }
+        let events = to.join("Event Data/9001.json");
+        let mut v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&events).unwrap()).unwrap();
+        let passes: Vec<usize> = v
+            .as_array()
+            .unwrap()
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| {
+                e["gameEvents"]["setpieceType"] == "O"
+                    && e["possessionEvents"]["possessionEventType"] == "PA"
+            })
+            .map(|(i, _)| i)
+            .collect();
+        for (n, &i) in passes.iter().take(2).enumerate() {
+            let pe = &mut v[i]["possessionEvents"];
+            pe["possessionEventType"] = "SH".into();
+            pe["shotOutcomeType"] = "G".into();
+            pe["nonEvent"] = (n == 1).into();
+        }
+        std::fs::write(&events, v.to_string()).unwrap();
+        let n = read_native(tmp.path(), "9001").unwrap();
+        assert_eq!(n.goals, 1);
+        let goals = |m: &TrackedMatch| {
+            m.events
+                .iter()
+                .filter(|e| e.kind == EventKind::Shot { goal: true })
+                .count()
+        };
+        let shots = |m: &TrackedMatch| {
+            m.events
+                .iter()
+                .filter(|e| matches!(e.kind, EventKind::Shot { .. }))
+                .count()
+        };
+        let plain = fixture();
+        assert_eq!((goals(&n.m), goals(&plain.m)), (1, 0));
+        assert_eq!(shots(&n.m), shots(&plain.m) + 2);
+        assert_eq!(fixture().goals, 0);
     }
 }

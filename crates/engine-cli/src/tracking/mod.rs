@@ -273,8 +273,91 @@ fn data_folder(content_root: &Path, flag: Option<&Path>) -> anyhow::Result<PathB
     }
 }
 
-/// Prints one line per measured PFF match, each refused match, and the totals.
-fn print_pff(run: &measure::PffRun) {
+/// The restart words of the summary, in the order of [`measure::RESTART_KINDS`].
+const RESTART_WORDS: [&str; 6] = [
+    "throw-ins",
+    "free kicks",
+    "goal kicks",
+    "corners",
+    "kick-offs",
+    "penalties",
+];
+
+/// The restart block of the PFF summary: each restart kind a match beside the DFL
+/// matches' mean (or "no DFL file"), the kick-off check (the half openings and the
+/// kick-offs after goals, at least the goals plus the two half openings a match), and each
+/// match with fewer kick-offs after goals than goals.
+fn restart_block(
+    counts: &[measure::PffCounts],
+    dfl: Option<&measure::TrackingFile>,
+) -> Vec<String> {
+    let n = counts.len().max(1) as f64;
+    let dfl = dfl.filter(|f| !f.matches.is_empty());
+    let dfl_means: Option<[f64; 6]> = dfl.map(|f| {
+        let mut sum = [0.0; 6];
+        for m in &f.matches {
+            for (s, v) in sum.iter_mut().zip(measure::restarts_of(&m.figures)) {
+                *s += v;
+            }
+        }
+        sum.map(|s| s / f.matches.len() as f64)
+    });
+    let mut out = vec![match dfl {
+        Some(f) => format!(
+            "restarts a match, PFF ({} matches) beside DFL ({} matches):",
+            counts.len(),
+            f.matches.len()
+        ),
+        None => format!("restarts a match, PFF ({} matches):", counts.len()),
+    }];
+    for (k, word) in RESTART_WORDS.iter().enumerate() {
+        let pff = counts.iter().map(|c| c.restarts[k]).sum::<f64>() / n;
+        out.push(match dfl_means {
+            Some(d) => format!("  {word}: PFF {pff:.2}, DFL {:.2}", d[k]),
+            None => format!("  {word}: PFF {pff:.2}, DFL: no DFL file"),
+        });
+    }
+    let after_goals = counts.iter().map(|c| c.restarts[4]).sum::<f64>() / n;
+    let openings = counts
+        .iter()
+        .map(|c| f64::from(c.half_openings))
+        .sum::<f64>()
+        / n;
+    let goals = counts.iter().map(|c| f64::from(c.goals)).sum::<f64>() / n;
+    let kick_offs = after_goals + openings;
+    out.push(format!(
+        "kick-offs a match: {kick_offs:.2} ({openings:.2} half openings + {after_goals:.2} \
+         after goals); goals a match {goals:.2}; at least goals plus two half openings: {}",
+        if kick_offs + 1e-9 >= goals + 2.0 {
+            "yes"
+        } else {
+            "no"
+        }
+    ));
+    let short: Vec<String> = counts
+        .iter()
+        .filter(|c| c.restarts[4] < f64::from(c.goals))
+        .map(|c| {
+            format!(
+                "{} ({} kick-offs after {} goals)",
+                c.match_id, c.restarts[4], c.goals
+            )
+        })
+        .collect();
+    out.push(format!(
+        "matches with fewer kick-offs after goals than goals: {}",
+        if short.is_empty() {
+            "none".to_string()
+        } else {
+            short.join(", ")
+        }
+    ));
+    out
+}
+
+/// Prints one line per measured PFF match, each refused match, the totals and the restart
+/// block beside `dfl`, the DFL tracking file when there is one.
+fn print_pff(run: &measure::PffRun, dfl: Option<&measure::TrackingFile>) {
     let mut live = Vec::new();
     for (m, c) in run.file.matches.iter().zip(&run.counts) {
         let halves: Vec<String> = m.live_minutes.iter().map(|v| format!("{v:.1}")).collect();
@@ -287,7 +370,8 @@ fn print_pff(run: &measure::PffRun) {
         println!(
             "{}: {} frames, ball in play {} minutes by half, {} frame lines ({} repeated), \
              {:.1}% of player rows estimated, {} of {} frames without a ball, left out {}, \
-             direction checked{}",
+             restarts T/F/G/C/K/P {}, {} half-opening kick-offs, {} goals, direction \
+             checked{}",
             m.match_id,
             m.frames,
             halves.join(" + "),
@@ -301,6 +385,9 @@ fn print_pff(run: &measure::PffRun) {
             } else {
                 left.join(", ")
             },
+            c.restarts.map(|v| v.to_string()).join("/"),
+            c.half_openings,
+            c.goals,
             if c.rotated {
                 ", turned by 180 degrees"
             } else {
@@ -325,6 +412,9 @@ fn print_pff(run: &measure::PffRun) {
         100.0 * sum(&|c| c.estimated_share) / n.max(1) as f64,
         100.0 * sum(&|c| f64::from(c.ball_absent)) / native.max(1.0)
     );
+    for line in restart_block(&run.counts, dfl) {
+        println!("{line}");
+    }
 }
 
 /// Runs `engine-cli tracking`.
@@ -428,7 +518,13 @@ pub fn run(content_dir: Option<&Path>, opts: &TrackingOpts) -> anyhow::Result<i3
                 Err(e) => eprintln!("{id}: refused: {e}"),
             };
             let run = measure::measure_pff(&folder, jobs.unwrap_or(1) as usize, &progress)?;
-            print_pff(&run);
+            let dfl_file = measure::default_out(dir.root());
+            let dfl = if dfl_file.is_file() {
+                Some(measure::TrackingFile::read(&dfl_file)?)
+            } else {
+                None
+            };
+            print_pff(&run, dfl.as_ref());
             println!("wall time {:.0} s", start.elapsed().as_secs_f64());
             let path = out
                 .clone()
@@ -474,6 +570,87 @@ pub fn run(content_dir: Option<&Path>, opts: &TrackingOpts) -> anyhow::Result<i3
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn counts(id: &str, restarts: [f64; 6], goals: u32) -> measure::PffCounts {
+        measure::PffCounts {
+            match_id: id.into(),
+            lines: 0,
+            native_frames: 0,
+            ball_absent: 0,
+            repeated: 0,
+            estimated_share: 0.0,
+            left_out: Vec::new(),
+            rotated: false,
+            restarts,
+            half_openings: 2,
+            goals,
+        }
+    }
+
+    fn dfl_match(id: &str, restarts: [f64; 6]) -> measure::MatchFigures {
+        measure::MatchFigures {
+            match_id: id.into(),
+            frames: 0,
+            live_minutes: Vec::new(),
+            clock_offset: None,
+            checks: measure::Checks {
+                records: 0,
+                rotated: false,
+                off_pitch_spells: 0,
+                ball_missing: 0,
+                events_placed: 0,
+                events_unplaced: 0,
+            },
+            figures: measure::RESTART_KINDS
+                .iter()
+                .zip(restarts)
+                .map(|(k, v)| (format!("team.stops_{k}"), [v, 0.0]))
+                .collect(),
+            halves: Vec::new(),
+        }
+    }
+
+    /// The restart block sets each kind a match beside the DFL mean, checks the kick-offs
+    /// against the goals plus the two half openings, and names each match with fewer
+    /// kick-offs after goals than goals; without a DFL file it says so.
+    #[test]
+    fn the_restart_block_sets_pff_beside_dfl_and_checks_the_kick_offs() {
+        let pff = [
+            counts("1", [40.0, 20.0, 16.0, 8.0, 3.0, 1.0], 3),
+            counts("2", [44.0, 26.0, 18.0, 10.0, 1.0, 0.0], 2),
+        ];
+        let dfl = measure::TrackingFile {
+            schema: measure::TRACKING_SCHEMA,
+            source: "DFL".into(),
+            credit: String::new(),
+            frame_rate: 25,
+            matches: vec![
+                dfl_match("A", [44.0, 24.0, 17.0, 8.0, 3.0, 1.0]),
+                dfl_match("B", [46.0, 26.0, 19.0, 10.0, 5.0, 0.0]),
+            ],
+        };
+        let block = restart_block(&pff, Some(&dfl));
+        assert_eq!(block.len(), 9, "{block:#?}");
+        assert!(block[0].contains("PFF (2 matches) beside DFL (2 matches)"));
+        assert_eq!(block[1], "  throw-ins: PFF 42.00, DFL 45.00");
+        assert_eq!(block[5], "  kick-offs: PFF 2.00, DFL 4.00");
+        assert_eq!(block[6], "  penalties: PFF 0.50, DFL 0.50");
+        // 2 half openings + 2 after goals against 2.5 goals + 2: no.
+        assert_eq!(
+            block[7],
+            "kick-offs a match: 4.00 (2.00 half openings + 2.00 after goals); goals a match \
+             2.50; at least goals plus two half openings: no"
+        );
+        assert_eq!(
+            block[8],
+            "matches with fewer kick-offs after goals than goals: 2 (1 kick-offs after 2 goals)"
+        );
+        let fine = [counts("1", [40.0, 20.0, 16.0, 8.0, 3.0, 1.0], 3)];
+        let block = restart_block(&fine, None);
+        assert!(block[1].ends_with("DFL: no DFL file"), "{block:#?}");
+        assert!(block[7].ends_with(": yes"), "{block:#?}");
+        assert!(block[8].ends_with(": none"), "{block:#?}");
+    }
 
     /// Events before the first half-opening kick-off belong to the first half.
     #[test]

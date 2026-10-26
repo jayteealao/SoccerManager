@@ -274,7 +274,14 @@ pub fn to_ticks(m: &TrackedMatch) -> anyhow::Result<Converted> {
             unplaced += 1;
             continue;
         };
-        let tick = at.tick;
+        let mut tick = at.tick;
+        // A half opens with its kick-off: one a source times a frame or two after the
+        // half's first ball frame goes on the half's start tick.
+        if e.kind == (EventKind::KickOff { half_start: true })
+            && let Some(h) = ticks.iter().min_by_key(|h| h.base.abs_diff(tick))
+        {
+            tick = h.base;
+        }
         placed.push(Placed {
             tick,
             kind: e.kind.word().into(),
@@ -568,5 +575,28 @@ mod tests {
             (sub.tick, sub.team, sub.placed.as_str()),
             (156, Some(0), "event-time")
         );
+    }
+
+    /// A half-opening kick-off timed just after the half's first ball frame goes on the
+    /// half's start tick, so the report reads it as the half's opening, not a stoppage.
+    #[test]
+    fn a_late_half_opening_kick_off_goes_on_the_start_tick() {
+        let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tracking/pff");
+        let mut m = super::super::pff::read(&data, "9001").unwrap().m;
+        let first = m
+            .events
+            .iter_mut()
+            .find(|e| e.kind == (EventKind::KickOff { half_start: true }))
+            .unwrap();
+        *first.time_ms.as_mut().unwrap() += 60;
+        let side = to_ticks(&m).unwrap().side;
+        let starts: Vec<u32> = side.halves.iter().map(|h| h.start_tick).collect();
+        let openings: Vec<u32> = side
+            .events
+            .iter()
+            .filter(|e| e.kind == "kick_off" && starts.contains(&e.tick))
+            .map(|e| e.tick)
+            .collect();
+        assert_eq!(openings, starts);
     }
 }

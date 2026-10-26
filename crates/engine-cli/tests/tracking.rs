@@ -692,6 +692,65 @@ fn a_pff_side_file_holds_ball_status_possession_and_the_resampling() {
     assert_eq!(at("kick_off"), vec![0, 146]);
 }
 
+/// Every restart of the converted PFF fixture counts once in the report, the half
+/// openings left out, one of them on an odd tick between two report frames.
+#[test]
+fn every_pff_restart_counts_once_also_between_two_report_frames() {
+    let (_dir, _records, side) = converted_pff();
+    let starts: Vec<u64> = side["halves"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|h| h["start_tick"].as_u64().unwrap())
+        .collect();
+    let words = [
+        "throw_in",
+        "free_kick",
+        "goal_kick",
+        "corner",
+        "kick_off",
+        "penalty",
+    ];
+    let restarts: Vec<u64> = side["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| words.contains(&e["kind"].as_str().unwrap()) && !e["team"].is_null())
+        .map(|e| e["tick"].as_u64().unwrap())
+        .filter(|t| !starts.contains(t))
+        .collect();
+    let odd = |t: u64| {
+        let start = starts.iter().filter(|s| **s <= t).max().unwrap();
+        (t - start) % 2 == 1
+    };
+    assert!(restarts.iter().any(|t| odd(*t)), "{restarts:?}");
+    let dir = TempDir::new().unwrap();
+    let file = dir.path().join("pff.json");
+    let out = bin()
+        .args(["tracking", "measure", "--source", "pff", "--data"])
+        .arg(fixtures().join("pff"))
+        .arg("--out")
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert!(file.exists(), "{}", text(&out));
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    let m = v["matches"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["match_id"] == PFF)
+        .unwrap();
+    let counted: f64 = words
+        .iter()
+        .map(|w| {
+            let pair = &m["figures"][format!("team.stops_{w}")];
+            pair[0].as_f64().unwrap() + pair[1].as_f64().unwrap()
+        })
+        .sum();
+    assert_eq!(counted, restarts.len() as f64, "{restarts:?}");
+}
+
 /// A DFL match converts byte for byte as before the resampling was added.
 #[test]
 fn a_dfl_match_converts_byte_for_byte_as_before() {
