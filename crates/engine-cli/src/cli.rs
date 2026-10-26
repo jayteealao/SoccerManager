@@ -309,6 +309,35 @@ pub enum TrackingAction {
         )]
         out: Option<PathBuf>,
     },
+    /// Compare fast running and sprints on native and converted frames.
+    #[command(
+        long_about = "Measure each tracked match's fast running (5.5 to 7 m/s) and sprints\n\
+                      (7 m/s and over) of the outfield players on its native frames and on\n\
+                      the report's frames after conversion, by one rule. Prints the metres\n\
+                      and the metres a player-minute of both, their difference, the native\n\
+                      figures from rows seen on camera only, the totals, and whether the\n\
+                      converted figures sit within 5 percent of the native ones."
+    )]
+    Pace {
+        /// The provider of the matches.
+        #[arg(long, value_enum, default_value = "pff")]
+        source: TrackSource,
+        /// The raw data folder.
+        #[arg(
+            long,
+            value_name = "DIR",
+            long_help = "The raw data folder holding idsse/ with the DFL files or\n\
+                         pff-wc2022/ with the PFF files; default the main checkout's\n\
+                         .scratch/data."
+        )]
+        data: Option<PathBuf>,
+        /// A match to check, such as the PFF 3812; repeat for more; default all.
+        #[arg(long = "match", value_name = "ID")]
+        matches: Vec<String>,
+        /// Matches read at the same time; default 1.
+        #[arg(long, value_name = "N")]
+        jobs: Option<u32>,
+    },
 }
 
 /// The provider of a tracked match.

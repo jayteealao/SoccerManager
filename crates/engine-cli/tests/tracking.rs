@@ -773,7 +773,7 @@ fn a_dfl_match_converts_byte_for_byte_as_before() {
 /// The help of the tracking commands names both providers within 80 columns.
 #[test]
 fn the_tracking_help_names_both_providers_within_eighty_columns() {
-    for action in ["convert", "measure"] {
+    for action in ["convert", "measure", "pace"] {
         let out = bin().args(["tracking", action, "--help"]).output().unwrap();
         assert!(out.status.success(), "{}", text(&out));
         let help = String::from_utf8_lossy(&out.stdout);
@@ -783,4 +783,34 @@ fn the_tracking_help_names_both_providers_within_eighty_columns() {
             assert!(line.len() <= 80, "{action}: {} columns: {line}", line.len());
         }
     }
+}
+
+/// The pace check reads the PFF fixture on its native frames and the report's frames,
+/// prints the match, the totals and both verdicts, and refuses a match it cannot find.
+#[test]
+fn the_pace_check_prints_both_frame_sets_and_the_verdicts() {
+    let out = bin()
+        .args([
+            "tracking", "pace", "--source", "pff", "--match", PFF, "--data",
+        ])
+        .arg(fixtures().join("pff"))
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", text(&out));
+    let t = text(&out);
+    assert!(t.contains(&format!("{PFF}: fast running native")), "{t}");
+    assert!(t.contains("totals of 1 matches"), "{t}");
+    assert!(
+        t.contains("fast running converted within 5 percent of native: ")
+            && t.contains("sprint converted within 5 percent of native: "),
+        "{t}"
+    );
+    let out = bin()
+        .args([
+            "tracking", "pace", "--source", "pff", "--match", "1", "--data",
+        ])
+        .arg(fixtures().join("pff"))
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1), "{}", text(&out));
 }

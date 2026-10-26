@@ -163,8 +163,8 @@ const DT: f64 = 1.0 / FRAMES_PER_SECOND;
 /// The upper bounds of the pace levels below sprint, in m/s.
 const PACE_TOPS: [f64; 5] = [0.2, 2.0, 4.0, 5.5, 7.0];
 /// The upper bounds of the running zones below sprint, in m/s.
-const ZONE_TOPS: [f64; 4] = [2.0, 4.0, 5.5, 7.0];
-const SPRINT_MPS: f64 = 7.0;
+pub(crate) const ZONE_TOPS: [f64; 4] = [2.0, 4.0, 5.5, 7.0];
+pub(crate) const SPRINT_MPS: f64 = 7.0;
 /// A sprint lasts at least this many frames: 1 s.
 const SPRINT_FRAMES: u32 = 25;
 const SPRINT_RUN_M: f64 = 3.0;
@@ -172,7 +172,7 @@ const FLANK_M: f64 = 5.0;
 /// The speed window: 0.32 s.
 const SMOOTH_FRAMES: usize = 8;
 /// A step longer than this from one frame to the next breaks a player's track, in metres.
-const BREAK_M: f64 = 1.0;
+pub(crate) const BREAK_M: f64 = 1.0;
 /// Far-player windows start every this many frames: 0.2 s.
 const FAR_EVERY: u64 = 5;
 /// The far-player windows in starts: 1 s and 10 s.

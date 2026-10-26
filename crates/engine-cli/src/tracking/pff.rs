@@ -58,6 +58,9 @@ pub struct Native {
     pub repeated: u32,
     /// The goals of periods 1 and 2 that count, a penalty's included.
     pub goals: u32,
+    /// Per half, per person (in [`TrackedMatch::persons`] order), per frame: whether the
+    /// row was estimated off camera; false where the person has no row.
+    pub estimated: Vec<Vec<Vec<bool>>>,
 }
 
 /// The folder that holds the PFF files.
@@ -603,6 +606,7 @@ pub fn read_native(data: &Path, id: &str) -> anyhow::Result<Native> {
         })
         .collect();
     let mut times: Vec<Vec<f64>> = vec![Vec::new(), Vec::new()];
+    let mut est: Vec<Vec<Vec<bool>>> = vec![vec![Vec::new(); persons.len()]; 2];
     let mut left: BTreeMap<String, u32> = BTreeMap::new();
     let (mut lines, mut rows, mut estimated, mut ball_absent) = (0u64, 0u64, 0u64, 0u32);
     let mut repeated = 0u32;
@@ -661,6 +665,9 @@ pub fn read_native(data: &Path, id: &str) -> anyhow::Result<Native> {
         for p in &mut half.positions {
             p.push(None);
         }
+        for e in &mut est[h] {
+            e.push(false);
+        }
         let sides = [&line.home_players_smoothed, &line.away_players_smoothed];
         for (team, side) in sides.into_iter().enumerate() {
             for r in side.iter().flatten() {
@@ -677,6 +684,9 @@ pub fn read_native(data: &Path, id: &str) -> anyhow::Result<Native> {
                 rows += 1;
                 if r.visibility.as_deref() == Some("ESTIMATED") {
                     estimated += 1;
+                    if let Some(e) = est[h][p].last_mut() {
+                        *e = true;
+                    }
                 }
                 if let Some(at) = half.positions[p].last_mut() {
                     *at = Some([x as f32, y as f32]);
@@ -729,6 +739,7 @@ pub fn read_native(data: &Path, id: &str) -> anyhow::Result<Native> {
         ball_absent,
         repeated,
         goals,
+        estimated: est,
     })
 }
 

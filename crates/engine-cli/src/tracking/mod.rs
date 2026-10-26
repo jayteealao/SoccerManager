@@ -12,6 +12,7 @@ pub mod convert;
 pub mod dfl;
 pub mod live_rule;
 pub mod measure;
+pub mod pace;
 pub mod pff;
 pub mod place;
 pub mod resample;
@@ -532,6 +533,65 @@ pub fn run(content_dir: Option<&Path>, opts: &TrackingOpts) -> anyhow::Result<i3
             run.file.write(&path)?;
             println!("wrote {}", path.display());
             Ok(if run.refused.is_empty() { 0 } else { 1 })
+        }
+        TrackingAction::Pace {
+            source,
+            data,
+            matches,
+            jobs,
+        } => {
+            let folder = data_folder(dir.root(), data.as_deref())?;
+            let start = std::time::Instant::now();
+            let jobs = jobs.unwrap_or(1) as usize;
+            let (ids, results) = match source {
+                TrackSource::Pff => {
+                    let mut ids = pff::matches(&folder)?;
+                    if !matches.is_empty() {
+                        ids.retain(|id| matches.contains(id));
+                    }
+                    let r = pace::each(&ids, jobs, |id| pace::pff_match(&folder, id));
+                    (ids, r)
+                }
+                TrackSource::Dfl => {
+                    let mut files = dfl::matches(&folder)?;
+                    if !matches.is_empty() {
+                        files.retain(|f| matches.contains(&f.match_id));
+                    }
+                    let ids = files.iter().map(|f| f.match_id.clone()).collect();
+                    (ids, pace::each(&files, jobs, pace::dfl_match))
+                }
+            };
+            let missing: Vec<&String> = matches.iter().filter(|m| !ids.contains(m)).collect();
+            anyhow::ensure!(
+                missing.is_empty() && !ids.is_empty(),
+                "no match to check: {} in {}",
+                if missing.is_empty() {
+                    "none".to_string()
+                } else {
+                    missing
+                        .iter()
+                        .map(|m| m.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                },
+                folder.display()
+            );
+            let mut done = Vec::new();
+            let mut refused = 0;
+            for (id, r) in ids.iter().zip(results) {
+                match r {
+                    Ok(p) => done.push(p),
+                    Err(e) => {
+                        println!("{id}: refused: {e:#}");
+                        refused += 1;
+                    }
+                }
+            }
+            for line in pace::lines(&done) {
+                println!("{line}");
+            }
+            println!("wall time {:.0} s", start.elapsed().as_secs_f64());
+            Ok(if refused == 0 { 0 } else { 1 })
         }
         TrackingAction::Measure {
             source: TrackSource::Dfl,
