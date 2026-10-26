@@ -602,7 +602,7 @@
           6.0
         ],
         "team.stops_kick_off": [
-          3.0,
+          2.0,
           1.0
         ],
         "team.stops_penalty": [
@@ -1345,8 +1345,8 @@
           11.0
         ],
         "team.stops_kick_off": [
-          1.0,
-          4.0
+          0.0,
+          3.0
         ],
         "team.stops_penalty": [
           0.0,
@@ -2088,7 +2088,7 @@
           6.0
         ],
         "team.stops_kick_off": [
-          1.0,
+          0.0,
           4.0
         ],
         "team.stops_penalty": [

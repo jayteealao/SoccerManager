@@ -2318,12 +2318,14 @@ mod tests {
     /// real error of the tracked bands, are replaced), and so do the 5 bands whose real error
     /// comes from the raw rows read at run time (goals, goalless share, yellow cards, fouls and
     /// offsides); the 30 refused twins cite their 64-match real error; a band that holds its
-    /// floor keeps its earlier widening and reason.
+    /// floor keeps its earlier widening and reason. The corrected PFF restart counts of
+    /// 2026-10-26 raise the real error of the throw-in and kick-off twins, so the throw-in twin
+    /// is the 31st twin to cite it and the kick-off twin's widening grows.
     #[test]
     fn the_widened_margins_are_provisional_and_hold_their_parts() {
         let r = Registry::load(&shipped()).unwrap();
         let provisional = r.provisional();
-        assert_eq!(provisional.len(), 158);
+        assert_eq!(provisional.len(), 159);
         let mut by_reason: BTreeMap<&str, usize> = BTreeMap::new();
         for p in &provisional {
             let twin = p.band.ends_with("_pff");
@@ -2340,7 +2342,7 @@ mod tests {
             assert!((m.value - parts).abs() < 1e-9, "{}", p.band);
         }
         assert_eq!(by_reason[GATING_COUNT_REASON], 108);
-        assert_eq!(by_reason[PFF_REASON], 30);
+        assert_eq!(by_reason[PFF_REASON], 31);
         assert_eq!(by_reason[PROVISIONAL_REASON], 20);
         for name in RARE_REAL_ERROR {
             assert!(provisional.iter().any(|p| p.band == name), "{name}");

@@ -590,19 +590,19 @@
           5620279.411610749
         ],
         "team.stops_corner": [
-          2.0,
-          4.0
+          6.0,
+          7.0
         ],
         "team.stops_free_kick": [
-          7.0,
-          9.0
+          14.0,
+          15.0
         ],
         "team.stops_goal_kick": [
-          4.0,
-          9.0
+          6.0,
+          11.0
         ],
         "team.stops_kick_off": [
-          1.0,
+          2.0,
           0.0
         ],
         "team.stops_penalty": [
@@ -610,8 +610,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          8.0,
-          13.0
+          17.0,
+          28.0
         ],
         "w.depth_in_n": [
           74392.0,
@@ -1333,28 +1333,28 @@
           7108427.0558102885
         ],
         "team.stops_corner": [
-          2.0,
+          8.0,
           0.0
         ],
         "team.stops_free_kick": [
-          4.0,
-          6.0
+          16.0,
+          10.0
         ],
         "team.stops_goal_kick": [
-          1.0,
-          3.0
+          5.0,
+          5.0
         ],
         "team.stops_kick_off": [
           2.0,
-          4.0
+          6.0
         ],
         "team.stops_penalty": [
           0.0,
-          0.0
+          1.0
         ],
         "team.stops_throw_in": [
-          6.0,
-          9.0
+          18.0,
+          18.0
         ],
         "w.depth_in_n": [
           121510.0,
@@ -2076,19 +2076,19 @@
           4202447.472988677
         ],
         "team.stops_corner": [
-          0.0,
-          1.0
-        ],
-        "team.stops_free_kick": [
-          11.0,
-          10.0
-        ],
-        "team.stops_goal_kick": [
           1.0,
           3.0
         ],
+        "team.stops_free_kick": [
+          19.0,
+          17.0
+        ],
+        "team.stops_goal_kick": [
+          4.0,
+          7.0
+        ],
         "team.stops_kick_off": [
-          1.0,
+          2.0,
           0.0
         ],
         "team.stops_penalty": [
@@ -2096,8 +2096,8 @@
           1.0
         ],
         "team.stops_throw_in": [
-          9.0,
-          8.0
+          20.0,
+          17.0
         ],
         "w.depth_in_n": [
           0.0,
@@ -2819,28 +2819,28 @@
           6159338.665850019
         ],
         "team.stops_corner": [
-          1.0,
-          2.0
-        ],
-        "team.stops_free_kick": [
-          6.0,
+          5.0,
           4.0
         ],
+        "team.stops_free_kick": [
+          11.0,
+          16.0
+        ],
         "team.stops_goal_kick": [
-          1.0,
-          5.0
+          5.0,
+          9.0
         ],
         "team.stops_kick_off": [
           1.0,
-          0.0
+          1.0
         ],
         "team.stops_penalty": [
           0.0,
           1.0
         ],
         "team.stops_throw_in": [
-          13.0,
-          16.0
+          22.0,
+          25.0
         ],
         "w.depth_in_n": [
           98684.0,
@@ -3562,28 +3562,28 @@
           5056408.555843958
         ],
         "team.stops_corner": [
-          5.0,
-          0.0
+          9.0,
+          2.0
         ],
         "team.stops_free_kick": [
-          11.0,
-          5.0
+          23.0,
+          17.0
         ],
         "team.stops_goal_kick": [
-          2.0,
-          5.0
+          3.0,
+          9.0
         ],
         "team.stops_kick_off": [
-          1.0,
+          2.0,
           1.0
         ],
         "team.stops_penalty": [
-          0.0,
+          1.0,
           0.0
         ],
         "team.stops_throw_in": [
-          12.0,
-          5.0
+          24.0,
+          13.0
         ],
         "w.depth_in_n": [
           81618.0,
@@ -4305,16 +4305,16 @@
           5511966.797532796
         ],
         "team.stops_corner": [
-          6.0,
-          5.0
+          11.0,
+          9.0
         ],
         "team.stops_free_kick": [
-          2.0,
-          6.0
+          11.0,
+          10.0
         ],
         "team.stops_goal_kick": [
-          3.0,
-          6.0
+          6.0,
+          7.0
         ],
         "team.stops_kick_off": [
           0.0,
@@ -4325,8 +4325,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          18.0,
-          11.0
+          24.0,
+          24.0
         ],
         "w.depth_in_n": [
           28731.0,
@@ -5048,16 +5048,16 @@
           6085134.152810652
         ],
         "team.stops_corner": [
-          3.0,
-          4.0
-        ],
-        "team.stops_free_kick": [
-          8.0,
+          6.0,
           5.0
         ],
+        "team.stops_free_kick": [
+          15.0,
+          16.0
+        ],
         "team.stops_goal_kick": [
-          3.0,
-          7.0
+          7.0,
+          9.0
         ],
         "team.stops_kick_off": [
           0.0,
@@ -5068,8 +5068,8 @@
           1.0
         ],
         "team.stops_throw_in": [
-          15.0,
-          14.0
+          21.0,
+          23.0
         ],
         "w.depth_in_n": [
           95658.0,
@@ -5791,19 +5791,19 @@
           6152747.9983899435
         ],
         "team.stops_corner": [
-          5.0,
+          8.0,
           1.0
         ],
         "team.stops_free_kick": [
-          3.0,
-          1.0
+          11.0,
+          5.0
         ],
         "team.stops_goal_kick": [
-          3.0,
-          6.0
+          8.0,
+          10.0
         ],
         "team.stops_kick_off": [
-          2.0,
+          1.0,
           4.0
         ],
         "team.stops_penalty": [
@@ -5811,8 +5811,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          9.0,
-          12.0
+          17.0,
+          21.0
         ],
         "w.depth_in_n": [
           117417.0,
@@ -6535,15 +6535,15 @@
         ],
         "team.stops_corner": [
           0.0,
-          1.0
+          5.0
         ],
         "team.stops_free_kick": [
-          6.0,
-          6.0
+          11.0,
+          16.0
         ],
         "team.stops_goal_kick": [
-          2.0,
-          2.0
+          6.0,
+          5.0
         ],
         "team.stops_kick_off": [
           0.0,
@@ -6554,8 +6554,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          10.0,
-          15.0
+          22.0,
+          27.0
         ],
         "w.depth_in_n": [
           63276.0,
@@ -7277,28 +7277,28 @@
           6557224.13033645
         ],
         "team.stops_corner": [
-          2.0,
-          5.0
+          6.0,
+          6.0
         ],
         "team.stops_free_kick": [
-          9.0,
-          5.0
+          17.0,
+          10.0
         ],
         "team.stops_goal_kick": [
-          4.0,
-          3.0
+          8.0,
+          10.0
         ],
         "team.stops_kick_off": [
-          1.0,
-          0.0
+          2.0,
+          1.0
         ],
         "team.stops_penalty": [
           1.0,
           0.0
         ],
         "team.stops_throw_in": [
-          15.0,
-          6.0
+          34.0,
+          12.0
         ],
         "w.depth_in_n": [
           105758.0,
@@ -8020,28 +8020,28 @@
           7345880.139297683
         ],
         "team.stops_corner": [
-          2.0,
+          5.0,
           0.0
         ],
         "team.stops_free_kick": [
-          13.0,
-          7.0
+          18.0,
+          11.0
         ],
         "team.stops_goal_kick": [
           0.0,
-          5.0
+          10.0
         ],
         "team.stops_kick_off": [
           0.0,
-          2.0
+          7.0
         ],
         "team.stops_penalty": [
           1.0,
           0.0
         ],
         "team.stops_throw_in": [
-          11.0,
-          9.0
+          24.0,
+          13.0
         ],
         "w.depth_in_n": [
           143451.0,
@@ -8763,28 +8763,28 @@
           5175185.6295196805
         ],
         "team.stops_corner": [
-          1.0,
-          2.0
+          4.0,
+          4.0
         ],
         "team.stops_free_kick": [
-          6.0,
-          7.0
+          15.0,
+          10.0
         ],
         "team.stops_goal_kick": [
-          8.0,
-          5.0
+          18.0,
+          7.0
         ],
         "team.stops_kick_off": [
           0.0,
-          0.0
+          1.0
         ],
         "team.stops_penalty": [
           0.0,
           1.0
         ],
         "team.stops_throw_in": [
-          9.0,
-          16.0
+          16.0,
+          30.0
         ],
         "w.depth_in_n": [
           87854.0,
@@ -9506,28 +9506,28 @@
           5466004.721357521
         ],
         "team.stops_corner": [
-          6.0,
-          3.0
+          11.0,
+          5.0
         ],
         "team.stops_free_kick": [
-          5.0,
-          6.0
+          10.0,
+          14.0
         ],
         "team.stops_goal_kick": [
-          1.0,
-          3.0
+          6.0,
+          9.0
         ],
         "team.stops_kick_off": [
-          1.0,
-          0.0
+          0.0,
+          1.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          12.0,
-          5.0
+          17.0,
+          12.0
         ],
         "w.depth_in_n": [
           71046.0,
@@ -10249,16 +10249,16 @@
           4612575.259647792
         ],
         "team.stops_corner": [
-          1.0,
-          1.0
-        ],
-        "team.stops_free_kick": [
-          5.0,
+          4.0,
           3.0
         ],
+        "team.stops_free_kick": [
+          10.0,
+          8.0
+        ],
         "team.stops_goal_kick": [
-          5.0,
-          2.0
+          8.0,
+          9.0
         ],
         "team.stops_kick_off": [
           0.0,
@@ -10269,8 +10269,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          12.0,
-          14.0
+          22.0,
+          28.0
         ],
         "w.depth_in_n": [
           86802.0,
@@ -10992,28 +10992,28 @@
           5319324.361426385
         ],
         "team.stops_corner": [
-          2.0,
-          1.0
+          3.0,
+          3.0
         ],
         "team.stops_free_kick": [
-          7.0,
-          7.0
+          19.0,
+          15.0
         ],
         "team.stops_goal_kick": [
-          3.0,
-          5.0
+          6.0,
+          12.0
         ],
         "team.stops_kick_off": [
-          0.0,
-          1.0
+          2.0,
+          3.0
         ],
         "team.stops_penalty": [
           1.0,
           0.0
         ],
         "team.stops_throw_in": [
-          4.0,
-          7.0
+          9.0,
+          11.0
         ],
         "w.depth_in_n": [
           104316.0,
@@ -11735,28 +11735,28 @@
           6280525.676437521
         ],
         "team.stops_corner": [
-          3.0,
-          3.0
-        ],
-        "team.stops_free_kick": [
-          9.0,
+          6.0,
           4.0
         ],
+        "team.stops_free_kick": [
+          12.0,
+          7.0
+        ],
         "team.stops_goal_kick": [
-          3.0,
-          6.0
+          6.0,
+          11.0
         ],
         "team.stops_kick_off": [
           0.0,
-          1.0
+          2.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          12.0,
-          10.0
+          24.0,
+          15.0
         ],
         "w.depth_in_n": [
           108574.0,
@@ -12479,15 +12479,15 @@
         ],
         "team.stops_corner": [
           2.0,
-          2.0
+          7.0
         ],
         "team.stops_free_kick": [
-          7.0,
-          6.0
+          13.0,
+          11.0
         ],
         "team.stops_goal_kick": [
-          4.0,
-          1.0
+          8.0,
+          8.0
         ],
         "team.stops_kick_off": [
           2.0,
@@ -12498,8 +12498,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          9.0,
-          11.0
+          29.0,
+          20.0
         ],
         "w.depth_in_n": [
           16587.0,
@@ -13221,28 +13221,28 @@
           3916371.183876644
         ],
         "team.stops_corner": [
-          3.0,
-          4.0
+          6.0,
+          7.0
         ],
         "team.stops_free_kick": [
-          2.0,
-          4.0
+          15.0,
+          9.0
         ],
         "team.stops_goal_kick": [
-          4.0,
-          6.0
+          12.0,
+          10.0
         ],
         "team.stops_kick_off": [
           3.0,
-          0.0
+          1.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          12.0,
-          12.0
+          20.0,
+          22.0
         ],
         "w.depth_in_n": [
           0.0,
@@ -13965,18 +13965,18 @@
         ],
         "team.stops_corner": [
           2.0,
-          2.0
+          5.0
         ],
         "team.stops_free_kick": [
-          6.0,
-          6.0
+          17.0,
+          16.0
         ],
         "team.stops_goal_kick": [
-          2.0,
-          3.0
+          7.0,
+          5.0
         ],
         "team.stops_kick_off": [
-          0.0,
+          1.0,
           1.0
         ],
         "team.stops_penalty": [
@@ -13984,8 +13984,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          10.0,
-          15.0
+          21.0,
+          30.0
         ],
         "w.depth_in_n": [
           0.0,
@@ -14707,16 +14707,16 @@
           6103202.494609081
         ],
         "team.stops_corner": [
-          2.0,
-          3.0
+          3.0,
+          7.0
         ],
         "team.stops_free_kick": [
-          7.0,
-          4.0
+          15.0,
+          10.0
         ],
         "team.stops_goal_kick": [
-          1.0,
-          1.0
+          7.0,
+          3.0
         ],
         "team.stops_kick_off": [
           0.0,
@@ -14727,8 +14727,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          7.0,
-          8.0
+          18.0,
+          16.0
         ],
         "w.depth_in_n": [
           97926.0,
@@ -15450,19 +15450,19 @@
           5731417.08722325
         ],
         "team.stops_corner": [
-          3.0,
+          5.0,
           2.0
         ],
         "team.stops_free_kick": [
-          12.0,
-          8.0
+          16.0,
+          18.0
         ],
         "team.stops_goal_kick": [
-          3.0,
-          4.0
+          5.0,
+          8.0
         ],
         "team.stops_kick_off": [
-          0.0,
+          1.0,
           0.0
         ],
         "team.stops_penalty": [
@@ -15470,8 +15470,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          16.0,
-          12.0
+          39.0,
+          21.0
         ],
         "w.depth_in_n": [
           98337.0,
@@ -16193,28 +16193,28 @@
           3766347.886211699
         ],
         "team.stops_corner": [
-          1.0,
-          2.0
+          4.0,
+          5.0
         ],
         "team.stops_free_kick": [
-          9.0,
-          7.0
+          15.0,
+          17.0
         ],
         "team.stops_goal_kick": [
-          11.0,
-          5.0
+          18.0,
+          7.0
         ],
         "team.stops_kick_off": [
           0.0,
-          1.0
+          2.0
         ],
         "team.stops_penalty": [
           0.0,
           1.0
         ],
         "team.stops_throw_in": [
-          14.0,
-          10.0
+          21.0,
+          20.0
         ],
         "w.depth_in_n": [
           56444.0,
@@ -16936,28 +16936,28 @@
           5285386.374871231
         ],
         "team.stops_corner": [
-          1.0,
+          6.0,
           4.0
         ],
         "team.stops_free_kick": [
-          5.0,
+          10.0,
           5.0
         ],
         "team.stops_goal_kick": [
-          5.0,
-          2.0
+          11.0,
+          6.0
         ],
         "team.stops_kick_off": [
-          0.0,
-          1.0
+          1.0,
+          2.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          10.0,
-          14.0
+          22.0,
+          22.0
         ],
         "w.depth_in_n": [
           99793.0,
@@ -17679,28 +17679,28 @@
           4726645.600828497
         ],
         "team.stops_corner": [
-          2.0,
-          1.0
+          4.0,
+          2.0
         ],
         "team.stops_free_kick": [
-          13.0,
-          9.0
+          23.0,
+          18.0
         ],
         "team.stops_goal_kick": [
-          4.0,
-          4.0
+          6.0,
+          7.0
         ],
         "team.stops_kick_off": [
           0.0,
-          0.0
+          2.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          10.0,
-          8.0
+          21.0,
+          19.0
         ],
         "w.depth_in_n": [
           69808.0,
@@ -18422,16 +18422,16 @@
           4658056.652411312
         ],
         "team.stops_corner": [
-          3.0,
+          5.0,
           0.0
         ],
         "team.stops_free_kick": [
-          7.0,
-          8.0
+          11.0,
+          22.0
         ],
         "team.stops_goal_kick": [
-          0.0,
-          3.0
+          4.0,
+          11.0
         ],
         "team.stops_kick_off": [
           1.0,
@@ -18442,8 +18442,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          8.0,
-          9.0
+          19.0,
+          15.0
         ],
         "w.depth_in_n": [
           141976.0,
@@ -19165,19 +19165,19 @@
           4412573.011470396
         ],
         "team.stops_corner": [
-          3.0,
+          9.0,
           1.0
         ],
         "team.stops_free_kick": [
-          9.0,
-          8.0
+          17.0,
+          14.0
         ],
         "team.stops_goal_kick": [
-          4.0,
-          7.0
+          10.0,
+          12.0
         ],
         "team.stops_kick_off": [
-          0.0,
+          2.0,
           0.0
         ],
         "team.stops_penalty": [
@@ -19185,8 +19185,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          9.0,
-          3.0
+          18.0,
+          8.0
         ],
         "w.depth_in_n": [
           101366.0,
@@ -19908,28 +19908,28 @@
           5998816.592510998
         ],
         "team.stops_corner": [
-          3.0,
-          1.0
+          5.0,
+          2.0
         ],
         "team.stops_free_kick": [
-          4.0,
-          4.0
+          8.0,
+          14.0
         ],
         "team.stops_goal_kick": [
-          2.0,
-          1.0
+          3.0,
+          3.0
         ],
         "team.stops_kick_off": [
-          0.0,
-          2.0
+          1.0,
+          4.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          9.0,
-          12.0
+          32.0,
+          26.0
         ],
         "w.depth_in_n": [
           73617.0,
@@ -20651,28 +20651,28 @@
           6466028.549326761
         ],
         "team.stops_corner": [
-          4.0,
-          2.0
+          6.0,
+          5.0
         ],
         "team.stops_free_kick": [
-          8.0,
-          3.0
+          16.0,
+          15.0
         ],
         "team.stops_goal_kick": [
-          4.0,
-          4.0
+          9.0,
+          5.0
         ],
         "team.stops_kick_off": [
           1.0,
-          0.0
+          1.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          13.0,
-          8.0
+          23.0,
+          15.0
         ],
         "w.depth_in_n": [
           96051.0,
@@ -21394,28 +21394,28 @@
           4411278.14649305
         ],
         "team.stops_corner": [
-          1.0,
-          2.0
+          4.0,
+          4.0
         ],
         "team.stops_free_kick": [
-          7.0,
-          5.0
+          16.0,
+          8.0
         ],
         "team.stops_goal_kick": [
-          4.0,
-          1.0
+          9.0,
+          4.0
         ],
         "team.stops_kick_off": [
-          0.0,
-          0.0
+          3.0,
+          3.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          11.0,
-          7.0
+          24.0,
+          20.0
         ],
         "w.depth_in_n": [
           65738.0,
@@ -22137,28 +22137,28 @@
           5649439.809510373
         ],
         "team.stops_corner": [
-          8.0,
-          2.0
+          12.0,
+          5.0
         ],
         "team.stops_free_kick": [
-          5.0,
-          6.0
+          10.0,
+          15.0
         ],
         "team.stops_goal_kick": [
-          0.0,
-          2.0
+          3.0,
+          10.0
         ],
         "team.stops_kick_off": [
-          0.0,
-          1.0
+          3.0,
+          2.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          13.0,
-          9.0
+          23.0,
+          13.0
         ],
         "w.depth_in_n": [
           99616.0,
@@ -22880,28 +22880,28 @@
           5708145.642946735
         ],
         "team.stops_corner": [
-          5.0,
-          1.0
+          8.0,
+          3.0
         ],
         "team.stops_free_kick": [
-          8.0,
-          6.0
+          17.0,
+          13.0
         ],
         "team.stops_goal_kick": [
-          1.0,
-          6.0
+          2.0,
+          10.0
         ],
         "team.stops_kick_off": [
           0.0,
-          0.0
+          1.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          12.0,
-          5.0
+          24.0,
+          18.0
         ],
         "w.depth_in_n": [
           118004.0,
@@ -23623,28 +23623,28 @@
           6043857.925403867
         ],
         "team.stops_corner": [
-          3.0,
-          1.0
+          6.0,
+          2.0
         ],
         "team.stops_free_kick": [
-          8.0,
-          4.0
+          16.0,
+          13.0
         ],
         "team.stops_goal_kick": [
-          6.0,
-          5.0
+          8.0,
+          11.0
         ],
         "team.stops_kick_off": [
           0.0,
-          1.0
+          2.0
         ],
         "team.stops_penalty": [
-          0.0,
+          1.0,
           0.0
         ],
         "team.stops_throw_in": [
-          12.0,
-          10.0
+          19.0,
+          18.0
         ],
         "w.depth_in_n": [
           100813.0,
@@ -24366,19 +24366,19 @@
           5035988.533705122
         ],
         "team.stops_corner": [
-          0.0,
-          3.0
+          3.0,
+          6.0
         ],
         "team.stops_free_kick": [
-          5.0,
-          13.0
+          14.0,
+          22.0
         ],
         "team.stops_goal_kick": [
-          6.0,
-          0.0
+          9.0,
+          5.0
         ],
         "team.stops_kick_off": [
-          0.0,
+          2.0,
           1.0
         ],
         "team.stops_penalty": [
@@ -24386,8 +24386,8 @@
           1.0
         ],
         "team.stops_throw_in": [
-          9.0,
-          6.0
+          23.0,
+          18.0
         ],
         "w.depth_in_n": [
           78056.0,
@@ -25109,28 +25109,28 @@
           3847129.9274537484
         ],
         "team.stops_corner": [
-          1.0,
-          0.0
+          3.0,
+          2.0
         ],
         "team.stops_free_kick": [
-          5.0,
-          12.0
+          8.0,
+          23.0
         ],
         "team.stops_goal_kick": [
-          2.0,
-          6.0
+          6.0,
+          9.0
         ],
         "team.stops_kick_off": [
           0.0,
-          0.0
+          2.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          6.0,
-          8.0
+          14.0,
+          12.0
         ],
         "w.depth_in_n": [
           0.0,
@@ -25852,19 +25852,19 @@
           3793358.6452023666
         ],
         "team.stops_corner": [
-          0.0,
-          0.0
+          1.0,
+          6.0
         ],
         "team.stops_free_kick": [
-          8.0,
-          9.0
+          11.0,
+          17.0
         ],
         "team.stops_goal_kick": [
-          1.0,
-          0.0
+          7.0,
+          4.0
         ],
         "team.stops_kick_off": [
-          2.0,
+          3.0,
           0.0
         ],
         "team.stops_penalty": [
@@ -25872,8 +25872,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          3.0,
-          12.0
+          17.0,
+          16.0
         ],
         "w.depth_in_n": [
           38055.0,
@@ -26596,18 +26596,18 @@
         ],
         "team.stops_corner": [
           1.0,
-          1.0
+          5.0
         ],
         "team.stops_free_kick": [
-          6.0,
-          9.0
+          11.0,
+          16.0
         ],
         "team.stops_goal_kick": [
-          8.0,
-          6.0
+          9.0,
+          8.0
         ],
         "team.stops_kick_off": [
-          0.0,
+          1.0,
           0.0
         ],
         "team.stops_penalty": [
@@ -26615,8 +26615,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          8.0,
-          12.0
+          20.0,
+          22.0
         ],
         "w.depth_in_n": [
           71314.0,
@@ -27338,28 +27338,28 @@
           5576120.0485339
         ],
         "team.stops_corner": [
-          1.0,
-          2.0
+          2.0,
+          6.0
         ],
         "team.stops_free_kick": [
-          6.0,
-          3.0
+          12.0,
+          12.0
         ],
         "team.stops_goal_kick": [
-          7.0,
-          2.0
+          11.0,
+          4.0
         ],
         "team.stops_kick_off": [
           0.0,
-          0.0
+          1.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          9.0,
-          9.0
+          32.0,
+          27.0
         ],
         "w.depth_in_n": [
           41246.0,
@@ -28081,16 +28081,16 @@
           5201861.928304419
         ],
         "team.stops_corner": [
-          2.0,
-          6.0
+          7.0,
+          8.0
         ],
         "team.stops_free_kick": [
-          6.0,
-          13.0
+          8.0,
+          18.0
         ],
         "team.stops_goal_kick": [
-          4.0,
-          5.0
+          8.0,
+          9.0
         ],
         "team.stops_kick_off": [
           0.0,
@@ -28101,8 +28101,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          13.0,
-          16.0
+          31.0,
+          26.0
         ],
         "w.depth_in_n": [
           52403.0,
@@ -28824,28 +28824,28 @@
           3224291.289309671
         ],
         "team.stops_corner": [
-          0.0,
-          6.0
+          1.0,
+          9.0
         ],
         "team.stops_free_kick": [
-          4.0,
-          4.0
+          12.0,
+          5.0
         ],
         "team.stops_goal_kick": [
-          4.0,
-          1.0
+          10.0,
+          2.0
         ],
         "team.stops_kick_off": [
-          1.0,
+          2.0,
           0.0
         ],
         "team.stops_penalty": [
           0.0,
-          0.0
+          1.0
         ],
         "team.stops_throw_in": [
-          11.0,
-          9.0
+          16.0,
+          18.0
         ],
         "w.depth_in_n": [
           68808.0,
@@ -29568,18 +29568,18 @@
         ],
         "team.stops_corner": [
           1.0,
-          5.0
-        ],
-        "team.stops_free_kick": [
-          11.0,
-          14.0
-        ],
-        "team.stops_goal_kick": [
-          6.0,
           8.0
         ],
+        "team.stops_free_kick": [
+          23.0,
+          22.0
+        ],
+        "team.stops_goal_kick": [
+          13.0,
+          11.0
+        ],
         "team.stops_kick_off": [
-          1.0,
+          2.0,
           1.0
         ],
         "team.stops_penalty": [
@@ -29587,8 +29587,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          15.0,
-          12.0
+          26.0,
+          23.0
         ],
         "w.depth_in_n": [
           64578.0,
@@ -30310,19 +30310,19 @@
           5871785.701615237
         ],
         "team.stops_corner": [
-          1.0,
-          1.0
+          2.0,
+          4.0
         ],
         "team.stops_free_kick": [
-          3.0,
-          4.0
+          9.0,
+          11.0
         ],
         "team.stops_goal_kick": [
-          1.0,
-          4.0
+          7.0,
+          8.0
         ],
         "team.stops_kick_off": [
-          1.0,
+          0.0,
           0.0
         ],
         "team.stops_penalty": [
@@ -30330,8 +30330,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          13.0,
-          8.0
+          27.0,
+          15.0
         ],
         "w.depth_in_n": [
           82970.0,
@@ -31053,16 +31053,16 @@
           4760649.7834858345
         ],
         "team.stops_corner": [
-          3.0,
-          1.0
+          6.0,
+          2.0
         ],
         "team.stops_free_kick": [
-          8.0,
-          14.0
+          18.0,
+          18.0
         ],
         "team.stops_goal_kick": [
-          1.0,
-          4.0
+          4.0,
+          6.0
         ],
         "team.stops_kick_off": [
           2.0,
@@ -31073,8 +31073,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          11.0,
-          14.0
+          24.0,
+          20.0
         ],
         "w.depth_in_n": [
           89262.0,
@@ -31797,27 +31797,27 @@
         ],
         "team.stops_corner": [
           0.0,
-          0.0
+          2.0
         ],
         "team.stops_free_kick": [
-          4.0,
-          7.0
+          8.0,
+          11.0
         ],
         "team.stops_goal_kick": [
-          4.0,
-          3.0
+          5.0,
+          5.0
         ],
         "team.stops_kick_off": [
-          0.0,
-          1.0
+          1.0,
+          2.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          5.0,
-          9.0
+          11.0,
+          22.0
         ],
         "w.depth_in_n": [
           48448.0,
@@ -32539,19 +32539,19 @@
           4091487.4327732823
         ],
         "team.stops_corner": [
-          0.0,
-          7.0
+          1.0,
+          14.0
         ],
         "team.stops_free_kick": [
-          5.0,
-          5.0
+          12.0,
+          7.0
         ],
         "team.stops_goal_kick": [
-          6.0,
-          1.0
+          14.0,
+          2.0
         ],
         "team.stops_kick_off": [
-          2.0,
+          4.0,
           2.0
         ],
         "team.stops_penalty": [
@@ -32559,8 +32559,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          7.0,
-          9.0
+          15.0,
+          18.0
         ],
         "w.depth_in_n": [
           56503.0,
@@ -33282,16 +33282,16 @@
           5793720.433013537
         ],
         "team.stops_corner": [
-          3.0,
-          1.0
+          5.0,
+          2.0
         ],
         "team.stops_free_kick": [
-          5.0,
-          11.0
+          12.0,
+          19.0
         ],
         "team.stops_goal_kick": [
-          2.0,
-          3.0
+          9.0,
+          6.0
         ],
         "team.stops_kick_off": [
           2.0,
@@ -33302,8 +33302,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          13.0,
-          11.0
+          32.0,
+          23.0
         ],
         "w.depth_in_n": [
           92915.0,
@@ -34025,28 +34025,28 @@
           4665667.873527943
         ],
         "team.stops_corner": [
-          2.0,
-          3.0
+          5.0,
+          4.0
         ],
         "team.stops_free_kick": [
-          9.0,
-          6.0
+          15.0,
+          10.0
         ],
         "team.stops_goal_kick": [
-          3.0,
-          3.0
+          9.0,
+          7.0
         ],
         "team.stops_kick_off": [
           1.0,
-          0.0
+          2.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          10.0,
-          11.0
+          15.0,
+          17.0
         ],
         "w.depth_in_n": [
           58206.0,
@@ -34768,28 +34768,28 @@
           5331575.382375331
         ],
         "team.stops_corner": [
-          1.0,
+          2.0,
           0.0
         ],
         "team.stops_free_kick": [
-          11.0,
-          9.0
+          14.0,
+          18.0
         ],
         "team.stops_goal_kick": [
-          4.0,
-          2.0
+          7.0,
+          8.0
         ],
         "team.stops_kick_off": [
-          1.0,
-          1.0
+          3.0,
+          2.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          10.0,
-          15.0
+          23.0,
+          22.0
         ],
         "w.depth_in_n": [
           8026.0,
@@ -35512,15 +35512,15 @@
         ],
         "team.stops_corner": [
           3.0,
-          6.0
+          11.0
         ],
         "team.stops_free_kick": [
-          4.0,
-          5.0
+          15.0,
+          14.0
         ],
         "team.stops_goal_kick": [
-          5.0,
-          4.0
+          16.0,
+          6.0
         ],
         "team.stops_kick_off": [
           0.0,
@@ -35531,8 +35531,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          4.0,
-          7.0
+          11.0,
+          15.0
         ],
         "w.depth_in_n": [
           60454.0,
@@ -36254,28 +36254,28 @@
           4122278.2326085586
         ],
         "team.stops_corner": [
-          0.0,
-          3.0
+          4.0,
+          5.0
         ],
         "team.stops_free_kick": [
-          3.0,
-          8.0
+          8.0,
+          10.0
         ],
         "team.stops_goal_kick": [
-          5.0,
-          4.0
+          7.0,
+          6.0
         ],
         "team.stops_kick_off": [
-          0.0,
-          0.0
+          1.0,
+          2.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          9.0,
-          9.0
+          15.0,
+          21.0
         ],
         "w.depth_in_n": [
           20185.0,
@@ -36997,28 +36997,28 @@
           6944560.953776211
         ],
         "team.stops_corner": [
-          0.0,
-          2.0
+          1.0,
+          3.0
         ],
         "team.stops_free_kick": [
-          11.0,
-          5.0
+          16.0,
+          11.0
         ],
         "team.stops_goal_kick": [
-          2.0,
-          5.0
+          4.0,
+          10.0
         ],
         "team.stops_kick_off": [
-          0.0,
-          0.0
+          1.0,
+          2.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          8.0,
-          16.0
+          24.0,
+          22.0
         ],
         "w.depth_in_n": [
           77986.0,
@@ -37740,28 +37740,28 @@
           5652061.189113958
         ],
         "team.stops_corner": [
-          4.0,
-          0.0
+          7.0,
+          1.0
         ],
         "team.stops_free_kick": [
-          5.0,
-          6.0
+          9.0,
+          11.0
         ],
         "team.stops_goal_kick": [
-          3.0,
-          4.0
+          11.0,
+          5.0
         ],
         "team.stops_kick_off": [
           0.0,
-          2.0
+          3.0
         ],
         "team.stops_penalty": [
           0.0,
-          1.0
+          2.0
         ],
         "team.stops_throw_in": [
-          11.0,
-          9.0
+          19.0,
+          13.0
         ],
         "w.depth_in_n": [
           100897.0,
@@ -38483,28 +38483,28 @@
           6230562.154017697
         ],
         "team.stops_corner": [
-          2.0,
-          1.0
+          3.0,
+          3.0
         ],
         "team.stops_free_kick": [
-          5.0,
-          9.0
+          12.0,
+          16.0
         ],
         "team.stops_goal_kick": [
-          6.0,
-          5.0
+          11.0,
+          8.0
         ],
         "team.stops_kick_off": [
           0.0,
-          0.0
+          2.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          8.0,
-          9.0
+          18.0,
+          15.0
         ],
         "w.depth_in_n": [
           100466.0,
@@ -39226,28 +39226,28 @@
           4526228.334965998
         ],
         "team.stops_corner": [
-          3.0,
-          1.0
+          5.0,
+          4.0
         ],
         "team.stops_free_kick": [
-          6.0,
-          8.0
+          13.0,
+          14.0
         ],
         "team.stops_goal_kick": [
-          3.0,
-          5.0
+          7.0,
+          8.0
         ],
         "team.stops_kick_off": [
-          0.0,
-          0.0
+          1.0,
+          1.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          9.0,
-          7.0
+          21.0,
+          16.0
         ],
         "w.depth_in_n": [
           79409.0,
@@ -39969,28 +39969,28 @@
           5698197.856797274
         ],
         "team.stops_corner": [
-          4.0,
-          2.0
-        ],
-        "team.stops_free_kick": [
-          8.0,
+          6.0,
           4.0
         ],
+        "team.stops_free_kick": [
+          16.0,
+          8.0
+        ],
         "team.stops_goal_kick": [
-          5.0,
-          2.0
+          6.0,
+          8.0
         ],
         "team.stops_kick_off": [
-          0.0,
-          2.0
+          1.0,
+          4.0
         ],
         "team.stops_penalty": [
           1.0,
           0.0
         ],
         "team.stops_throw_in": [
-          5.0,
-          7.0
+          14.0,
+          13.0
         ],
         "w.depth_in_n": [
           98163.0,
@@ -40713,15 +40713,15 @@
         ],
         "team.stops_corner": [
           0.0,
-          2.0
+          4.0
         ],
         "team.stops_free_kick": [
-          14.0,
-          10.0
+          18.0,
+          15.0
         ],
         "team.stops_goal_kick": [
-          3.0,
-          2.0
+          7.0,
+          7.0
         ],
         "team.stops_kick_off": [
           0.0,
@@ -40732,8 +40732,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          8.0,
-          10.0
+          18.0,
+          22.0
         ],
         "w.depth_in_n": [
           48144.0,
@@ -41455,28 +41455,28 @@
           4490487.265978179
         ],
         "team.stops_corner": [
-          4.0,
-          2.0
+          6.0,
+          6.0
         ],
         "team.stops_free_kick": [
-          7.0,
-          8.0
+          13.0,
+          15.0
         ],
         "team.stops_goal_kick": [
-          5.0,
-          3.0
+          7.0,
+          5.0
         ],
         "team.stops_kick_off": [
-          0.0,
-          5.0
+          1.0,
+          6.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          4.0,
-          20.0
+          18.0,
+          26.0
         ],
         "w.depth_in_n": [
           73202.0,
@@ -42198,16 +42198,16 @@
           6009407.444199044
         ],
         "team.stops_corner": [
-          1.0,
-          3.0
+          2.0,
+          5.0
         ],
         "team.stops_free_kick": [
-          8.0,
-          15.0
+          15.0,
+          20.0
         ],
         "team.stops_goal_kick": [
-          5.0,
-          1.0
+          7.0,
+          4.0
         ],
         "team.stops_kick_off": [
           0.0,
@@ -42218,8 +42218,8 @@
           0.0
         ],
         "team.stops_throw_in": [
-          5.0,
-          9.0
+          9.0,
+          18.0
         ],
         "w.depth_in_n": [
           80334.0,
@@ -42941,28 +42941,28 @@
           5234538.707190919
         ],
         "team.stops_corner": [
-          1.0,
-          0.0
+          2.0,
+          1.0
         ],
         "team.stops_free_kick": [
-          5.0,
-          6.0
+          17.0,
+          17.0
         ],
         "team.stops_goal_kick": [
-          3.0,
-          4.0
+          4.0,
+          7.0
         ],
         "team.stops_kick_off": [
-          0.0,
-          1.0
+          2.0,
+          2.0
         ],
         "team.stops_penalty": [
           0.0,
-          0.0
+          1.0
         ],
         "team.stops_throw_in": [
-          12.0,
-          8.0
+          28.0,
+          13.0
         ],
         "w.depth_in_n": [
           0.0,
@@ -43684,28 +43684,28 @@
           2926924.5430792924
         ],
         "team.stops_corner": [
-          2.0,
-          6.0
+          3.0,
+          10.0
         ],
         "team.stops_free_kick": [
-          8.0,
-          7.0
+          12.0,
+          17.0
         ],
         "team.stops_goal_kick": [
-          8.0,
-          6.0
+          15.0,
+          9.0
         ],
         "team.stops_kick_off": [
           0.0,
-          0.0
+          1.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          4.0,
-          14.0
+          11.0,
+          27.0
         ],
         "w.depth_in_n": [
           45715.0,
@@ -44427,28 +44427,28 @@
           5349093.916113338
         ],
         "team.stops_corner": [
-          4.0,
+          5.0,
           2.0
         ],
         "team.stops_free_kick": [
-          8.0,
-          4.0
+          14.0,
+          10.0
         ],
         "team.stops_goal_kick": [
-          3.0,
-          4.0
+          9.0,
+          6.0
         ],
         "team.stops_kick_off": [
-          0.0,
+          2.0,
           1.0
         ],
         "team.stops_penalty": [
-          0.0,
+          2.0,
           0.0
         ],
         "team.stops_throw_in": [
-          7.0,
-          4.0
+          17.0,
+          14.0
         ],
         "w.depth_in_n": [
           95340.0,
@@ -45170,28 +45170,28 @@
           4147477.5293390104
         ],
         "team.stops_corner": [
-          1.0,
-          3.0
+          2.0,
+          4.0
         ],
         "team.stops_free_kick": [
-          2.0,
-          7.0
+          6.0,
+          15.0
         ],
         "team.stops_goal_kick": [
-          4.0,
-          3.0
+          9.0,
+          4.0
         ],
         "team.stops_kick_off": [
           0.0,
-          2.0
+          3.0
         ],
         "team.stops_penalty": [
-          0.0,
+          1.0,
           0.0
         ],
         "team.stops_throw_in": [
-          8.0,
-          14.0
+          19.0,
+          22.0
         ],
         "w.depth_in_n": [
           56953.0,
@@ -45913,28 +45913,28 @@
           3942862.905142179
         ],
         "team.stops_corner": [
-          1.0,
-          2.0
-        ],
-        "team.stops_free_kick": [
-          6.0,
-          8.0
-        ],
-        "team.stops_goal_kick": [
           2.0,
           3.0
         ],
+        "team.stops_free_kick": [
+          13.0,
+          15.0
+        ],
+        "team.stops_goal_kick": [
+          8.0,
+          10.0
+        ],
         "team.stops_kick_off": [
           0.0,
-          1.0
+          2.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          7.0,
-          12.0
+          14.0,
+          18.0
         ],
         "w.depth_in_n": [
           75322.0,
@@ -46656,28 +46656,28 @@
           4312425.769951816
         ],
         "team.stops_corner": [
-          4.0,
+          6.0,
           3.0
         ],
         "team.stops_free_kick": [
-          4.0,
-          6.0
+          13.0,
+          15.0
         ],
         "team.stops_goal_kick": [
-          5.0,
-          5.0
+          12.0,
+          11.0
         ],
         "team.stops_kick_off": [
           1.0,
-          1.0
+          2.0
         ],
         "team.stops_penalty": [
           0.0,
           0.0
         ],
         "team.stops_throw_in": [
-          6.0,
-          12.0
+          14.0,
+          19.0
         ],
         "w.depth_in_n": [
           72964.0,
@@ -47399,28 +47399,28 @@
           5185578.576003501
         ],
         "team.stops_corner": [
+          4.0,
+          3.0
+        ],
+        "team.stops_free_kick": [
+          17.0,
+          23.0
+        ],
+        "team.stops_goal_kick": [
+          4.0,
+          5.0
+        ],
+        "team.stops_kick_off": [
           2.0,
           2.0
         ],
-        "team.stops_free_kick": [
-          10.0,
-          14.0
-        ],
-        "team.stops_goal_kick": [
-          3.0,
-          1.0
-        ],
-        "team.stops_kick_off": [
+        "team.stops_penalty": [
           1.0,
           1.0
         ],
-        "team.stops_penalty": [
-          0.0,
-          0.0
-        ],
         "team.stops_throw_in": [
-          13.0,
-          13.0
+          21.0,
+          21.0
         ],
         "w.depth_in_n": [
           67445.0,

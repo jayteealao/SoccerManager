@@ -18637,12 +18637,17 @@
         "real": {}
       },
       "margin": {
-        "value": 6.03,
+        "value": 6.876,
         "league_spread": 0.0,
         "noticeable_error": 6.03,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
         "spread_reason": "one population: the band's real pool gives no between-league spread",
-        "design_choice": true
+        "design_choice": true,
+        "widening": {
+          "value": 0.846,
+          "reason": "real error from 64 PFF matches",
+          "provisional": true
+        }
       },
       "definition_version": 1,
       "population": "the equal suite's matches between equal generated clubs of generated leagues",
@@ -19172,14 +19177,14 @@
         "real": {}
       },
       "margin": {
-        "value": 1.053,
+        "value": 1.378,
         "league_spread": 0.0,
         "noticeable_error": 0.99,
         "reason": "design value: the smallest change a player would notice, the band's earlier smallest shift",
         "spread_reason": "one population: the band's real pool gives no between-league spread",
         "design_choice": true,
         "widening": {
-          "value": 0.063,
+          "value": 0.388,
           "reason": "real error from 64 PFF matches",
           "provisional": true
         }
