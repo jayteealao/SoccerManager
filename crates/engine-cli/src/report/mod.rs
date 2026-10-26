@@ -2451,8 +2451,8 @@ mod tests {
         b.plan(Suite::RedCard, 8);
         // Control 2-1 and 0-1: home mean 1. Keeper arm 2-0 and 1-0; centre-back 1-1 and
         // 1-0; striker 1-0 and 3-2. The limit is the top of the band's pass region, design
-        // 0.8 plus its margin 0.48: the keeper's full side (1.5) and the striker's (2.0) sit
-        // above 1.28 x 1.
+        // 0.8 plus its margin 0.4906: the keeper's full side (1.5) and the striker's (2.0)
+        // sit above 1.2906 x 1.
         let arms = [
             [[2, 1], [0, 1]],
             [[2, 0], [1, 0]],
@@ -2467,14 +2467,17 @@ mod tests {
         let f = b.red_card_figures().unwrap();
         assert_eq!(f.matches, 2);
         assert_eq!(f.control, [1.0, 1.0]);
-        assert!((f.limit - 1.28).abs() < 1e-9, "{}", f.limit);
+        assert!((f.limit - 1.2906).abs() < 1e-9, "{}", f.limit);
         let arm = |name: &str| f.arms.iter().find(|a| a.arm == name).unwrap();
         assert_eq!((arm("keeper").full, arm("keeper").reduced), (1.5, 0.0));
         assert!(arm("centre-back").pass);
-        assert!(!arm("keeper").pass, "the full side scored 1.5 against 1.28");
+        assert!(
+            !arm("keeper").pass,
+            "the full side scored 1.5 against 1.2906"
+        );
         assert!(
             !arm("striker").pass,
-            "the full side scored 2.0 against 1.28"
+            "the full side scored 2.0 against 1.2906"
         );
         assert!(!f.pass);
         let checks = b.checks(&BTreeMap::new());

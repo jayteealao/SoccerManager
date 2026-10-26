@@ -481,8 +481,9 @@ fn the_shape_bands_gate_and_the_figures_report_with_their_real_values() {
     let r = report(&out, &run);
     let measured = cfg!(feature = "measures");
 
+    // The 101 team-shape bands and their 101 PFF twins, which read the same figures.
     let bands = shape_bands();
-    assert_eq!(bands.len(), 101);
+    assert_eq!(bands.len(), 202);
     let gating: Vec<&str> = rows(&r, "calib.bands")
         .iter()
         .map(|b| b["band"].as_str().unwrap())

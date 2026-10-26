@@ -179,9 +179,9 @@ fn line<'a>(text: &'a str, band: &str) -> &'a str {
         .unwrap_or_else(|| panic!("no table line for {band}: {text}"))
 }
 
-/// The shipped file's bands: the 157 that gate and the 5 that only report (the 4 rare bands
-/// and the scan check).
-const BANDS: u64 = 162;
+/// The shipped file's bands: the 258 that gate (the 101 PFF twins of the team-shape bands
+/// among them) and the 5 that only report (the 4 rare bands and the scan check).
+const BANDS: u64 = 263;
 
 /// The shipped bands with no real counterpart: the engine experiments and design values.
 const SHIPPED_NO_COUNTERPART: u64 = 8;

@@ -2127,8 +2127,20 @@ mod tests {
     fn the_shipped_registry_is_version_6_and_every_band_gates_but_the_named_groups() {
         let r = Registry::load(&shipped()).unwrap();
         assert_eq!(r.schema_version, REGISTRY_VERSION);
-        assert_eq!(r.bands.len(), 154 + ADDED.len());
-        assert_eq!(r.bands.iter().filter(|b| is_shape(b)).count(), SHAPE_BANDS);
+        // Each team-shape band has a PFF twin of its name with "_pff" added.
+        assert_eq!(r.bands.len(), 154 + ADDED.len() + SHAPE_BANDS);
+        let (twins, shape): (Vec<&BandDef>, Vec<&BandDef>) = r
+            .bands
+            .iter()
+            .filter(|b| is_shape(b))
+            .partition(|b| b.band.ends_with("_pff"));
+        assert_eq!(shape.len(), SHAPE_BANDS);
+        assert_eq!(twins.len(), SHAPE_BANDS);
+        for t in &twins {
+            let of = t.band.strip_suffix("_pff").unwrap();
+            assert!(r.band(of).is_some_and(is_shape), "{}", t.band);
+            assert!(t.gates, "{}", t.band);
+        }
         assert!(r.bands.iter().all(|b| b.rule.is_some()));
         for name in ADDED {
             assert!(r.band(name).is_some(), "{name}");
@@ -2182,14 +2194,15 @@ mod tests {
 
     /// The built-in measures carry their old pass region: a design target at its centre and
     /// a noticeable error of its half-width. `full_over_control` keeps the centre of its old
-    /// region 0 to 1.6, and its margin is the floor's needed value, 0.48, marked provisional.
+    /// region 0 to 1.6. The two engine experiments' margins hold the floor's needed value at
+    /// 258 gating bands (0.2555 and 0.4906), each marked provisional.
     #[test]
     fn the_built_in_bands_keep_their_old_pass_region() {
         let r = Registry::load(&shipped()).unwrap();
         for (name, lo, hi) in [
-            ("stronger_team_win_rate", 0.5, 1.0),
+            ("stronger_team_win_rate", 0.4945, 1.0055),
             ("reduced_minus_full", -10.0, 0.0),
-            ("full_over_control", 0.32, 1.28),
+            ("full_over_control", 0.3094, 1.2906),
         ] {
             let b = r.band(name).unwrap();
             assert!(
@@ -2249,6 +2262,21 @@ mod tests {
                     assert_eq!(rule.resampling.real, RealUnit::TrackedMatch, "{}", b.band);
                     assert_eq!(real.sample, 7, "{}", b.band);
                 }
+                RealSource::Target(t) if t.target.starts_with(PFF_KEY_PREFIX) => {
+                    // A PFF twin reads the World Cup matches' target of its DFL band's name
+                    // and carries the tournament label.
+                    let of = b.band.strip_suffix("_pff").unwrap();
+                    assert_eq!(t.target, format!("{PFF_KEY_PREFIX}{of}"));
+                    assert_eq!(rule.resampling.real, RealUnit::TrackedMatch, "{}", b.band);
+                    assert_eq!(real.sample, 64, "{}", b.band);
+                    assert!(
+                        rule.context
+                            .as_deref()
+                            .is_some_and(|c| c.starts_with(PFF_LABEL)),
+                        "{}",
+                        b.band
+                    );
+                }
                 RealSource::Target(t) => {
                     // The football-data distributions, the StatsBomb men's senior pool and
                     // the scan-rate study figure.
@@ -2275,45 +2303,45 @@ mod tests {
         }
     }
 
-    /// The reason of the provisional widenings the tracked bands took on 2026-10-25: their
-    /// real error is the jackknife error over 7 tracked matches, so a margin may narrow back
-    /// when more tracked matches exist.
-    const TRACKED_REASON: &str = "real error from 7 tracked matches";
+    /// The reason of the provisional widenings the floor of 2026-10-26 set on the existing
+    /// bands it refused: the 101 PFF twins raised the gating count from 157 to 258.
+    const GATING_COUNT_REASON: &str = "gating count with the PFF twins";
 
-    /// The floor answers of 2026-10-22 and 2026-10-25: every margin the floor refused is
-    /// widened by a provisional part with the stated reason, and the noticeable error keeps
-    /// its design value. The 100 tracked bands the second floor refused cite their 7-match
-    /// real error (10 of them were among the 36 widened on 2026-10-22); a tracked band that
-    /// holds its floor keeps its earlier widening and reason.
+    /// The reason of the provisional widenings of the PFF twins the floor refused: their real
+    /// error is the jackknife error over the 64 World Cup matches.
+    const PFF_REASON: &str = "real error from 64 PFF matches";
+
+    /// The floor answers of 2026-10-22, 2026-10-25 and 2026-10-26: every margin the floor
+    /// refused is widened by a provisional part with the stated reason, and the noticeable
+    /// error keeps its design value. On 2026-10-26 the 103 existing bands the floor refused at
+    /// 258 gating bands cite the gating count (their earlier reasons, among them the 7-match
+    /// real error of the tracked bands, are replaced), and so do the 5 bands whose real error
+    /// comes from the raw rows read at run time (goals, goalless share, yellow cards, fouls and
+    /// offsides); the 30 refused twins cite their 64-match real error; a band that holds its
+    /// floor keeps its earlier widening and reason.
     #[test]
     fn the_widened_margins_are_provisional_and_hold_their_parts() {
         let r = Registry::load(&shipped()).unwrap();
         let provisional = r.provisional();
-        assert_eq!(provisional.len(), 126);
-        let mut tracked = 0;
+        assert_eq!(provisional.len(), 158);
+        let mut by_reason: BTreeMap<&str, usize> = BTreeMap::new();
         for p in &provisional {
-            let band = r.band(&p.band).unwrap();
-            let is_tracked = band
-                .real
-                .as_ref()
-                .and_then(|real| real.target_key())
-                .is_some_and(|k| k.starts_with("trk.dfl."));
-            // The one engine experiment among them has no real source to lower its floor.
-            let reason = if p.band == "full_over_control" {
-                "engine spread at the design count; engine experiment, no real source"
-            } else if is_tracked && p.reason == TRACKED_REASON {
-                tracked += 1;
-                TRACKED_REASON
-            } else {
-                PROVISIONAL_REASON
+            let twin = p.band.ends_with("_pff");
+            let reason = match p.reason.as_str() {
+                PFF_REASON if twin => PFF_REASON,
+                GATING_COUNT_REASON if !twin => GATING_COUNT_REASON,
+                _ => PROVISIONAL_REASON,
             };
             assert_eq!(p.reason, reason, "{}", p.band);
+            *by_reason.entry(reason).or_default() += 1;
             let m = &r.band(&p.band).unwrap().rule.as_ref().unwrap().margin;
             assert!(p.widening > 0.0, "{}", p.band);
             let parts = m.league_spread + m.noticeable_error + p.widening;
             assert!((m.value - parts).abs() < 1e-9, "{}", p.band);
         }
-        assert_eq!(tracked, 100);
+        assert_eq!(by_reason[GATING_COUNT_REASON], 108);
+        assert_eq!(by_reason[PFF_REASON], 30);
+        assert_eq!(by_reason[PROVISIONAL_REASON], 20);
         for name in RARE_REAL_ERROR {
             assert!(provisional.iter().any(|p| p.band == name), "{name}");
         }

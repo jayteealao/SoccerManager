@@ -2296,10 +2296,11 @@ A,0,0
         assert_eq!(strong.report_only, None);
         assert_eq!(
             (info.missing, info.no_counterpart),
-            // The 101 team-shape bands read a file this folder lacks, and the shots and cards
-            // distributions and the scan check a reference file it lacks; the three experiment
-            // bands and the five bands only the slow tests judge have no real counterpart.
-            (15 + 35 + 101 + 2 + 1, 3 + 5)
+            // The 101 team-shape bands and their 101 PFF twins read a file this folder lacks,
+            // and the shots and cards distributions and the scan check a reference file it
+            // lacks; the three experiment bands and the five bands only the slow tests judge
+            // have no real counterpart.
+            (15 + 35 + 101 + 101 + 2 + 1, 3 + 5)
         );
 
         let mut joint = Joint {
