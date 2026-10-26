@@ -746,34 +746,39 @@ Exit codes: 0 when the files are written; 1 when a snapshot is missing or malfor
 
 ## tracking
 
-Convert real tracked matches into the engine's tick format and measure them. The raw files are read in place, by default from `.scratch/data` in the main checkout (found as `real-targets` finds it); the DFL files sit in its `idsse/` folder.
+Convert real tracked matches into the engine's tick format and measure them. The raw files are read in place, by default from `.scratch/data` in the main checkout (found as `real-targets` finds it); the DFL files sit in its `idsse/` folder and the PFF FIFA World Cup 2022 files in its `pff-wc2022/` folder (`Metadata/`, `Rosters/`, `Event Data/` and `Tracking Data/<id>.jsonl.bz2`, read as a stream).
 
 ```text
-engine-cli tracking convert --match <ID> --out <DIR> [--data <DIR>]
+engine-cli tracking convert --match <ID> --out <DIR> [--source dfl|pff] [--data <DIR>]
 ```
 
 `convert` reads one DFL match (its match information, raw event and raw position files) and writes `<ID>.ticks` and `<ID>.side.json` in the output folder. The tick file is the engine's own format, unchanged: engine tick 2k holds frame k of a half counted from the half's first frame with a ball position, half 1 starting at tick 0 and each later half at the previous half's last tick plus 2; the odd ticks have no record. Team 0 is the home team; each team's starters hold slots 0 to 10 in their starting order with the keeper in slot 0, and a substitute takes the replaced player's slot from the substitution's tick. A player who is not on the pitch in a frame (not tracked, sent off, or no player for the slot) stands on his slot's parking spot on the stadium's pitch. Positions stay in metres as recorded; the whole match is turned by 180 degrees when needed so team 0 attacks towards positive x in the first half, and a match whose play direction does not change at half time is refused. A restart event sets the restart bit of its tick. The side file (schema 1) holds the source and its credit, the pitch, the frame rate and tick step, the halves with their first frame, start and end tick and team 0's attack direction, each slot's holders, each off-pitch spell with its reason, the ball status and possession as runs of ticks, and the placed events.
 
+With `--source pff`, `convert` reads one PFF match (metadata, roster, events and the smoothed tracking frames). It keeps periods 1 and 2 and counts the frames of extra time, shoot-outs and period 0 it leaves out; a frame line that repeats an earlier frame is skipped and counted. The 29.97 frames a second are resampled to 50 a second: instant 0 of each half is its first frame with a ball, each later instant 20 ms on, up to the half's last frame; a player's position at an instant is the straight line between the two frames around it when both hold him and are at most 100 ms apart, else he is not on the pitch for that tick. Every engine tick of a half then holds a frame. The ball status comes from the events (dead from a stop, such as the ball going out, a foul or the end of a half, to the next restart) and possession from the possession events. The group of each player comes from the roster's position. The play-direction check by the keepers is cross-checked with the metadata's `homeTeamStartLeft`, and a disagreement is refused naming the match. The side file keeps `frame_rate` 25 and `tick_step` 2, as an engine side file does, so the shared report reads every second tick, and adds `odd_ticks` `resampled`, `resampled_from` (29.97), `ball_status_from` (`events`), `estimated_share` (the share of player rows PFF estimated) and `left_out`.
+
 | Flag | Value | Default | Meaning |
 |---|---|---|---|
+| `--source` | `dfl` or `pff` | `dfl` | The provider of the match. |
 | `--data` | folder | the main checkout's `.scratch/data` | The raw data folder. |
-| `--match` | id | required | The DFL match id, such as `DFL-MAT-J03WMX`. |
+| `--match` | id | required | The match id, such as the DFL `DFL-MAT-J03WMX` or the PFF `3812`. |
 | `--out` | folder | required | Where the tick file and the side file go. |
 
 Exit codes: 0 when both files are written; 1 when a file is missing or malformed, the pitch is outside the Laws, no keeper is tracked in a half, or the play direction does not change at half time.
 
 ```text
-engine-cli tracking measure [--data <DIR>] [--out <FILE>]
+engine-cli tracking measure [--source dfl|pff] [--data <DIR>] [--jobs <N>] [--out <FILE>]
 ```
 
-`measure` converts every DFL match of the data folder and measures it with the shared shape report, the code that measures each engine match of a `measures` build, at 25 frames a second. It prints one line per match (frames, ball-in-play minutes of each half, the clock offset fitted on the passes) and writes one tracking file (schema 1) with each match's figures, home and away, its frames, ball-in-play minutes per half, clock offset and the converter's checks (records, turned or not, off-pitch spells, ticks without a ball, placed and unplaced events).
+`measure` converts every match of one provider in the data folder (DFL by default) and measures it with the shared shape report, the code that measures each engine match of a `measures` build, at 25 frames a second. It prints one line per match (frames, ball-in-play minutes of each half, the clock offset fitted on the passes) and writes one tracking file (schema 1) with each match's figures, home and away, its frames, ball-in-play minutes per half, clock offset and the converter's checks (records, turned or not, off-pitch spells, ticks without a ball, placed and unplaced events). With `--source pff` it measures the 64 World Cup matches in memory, `--jobs` at a time, writes no tick file, and also prints for each match the frame lines read and repeated, the share of estimated player rows, the frames without a ball, the periods left out and the direction check, then a totals line and the wall time.
 
 | Flag | Value | Default | Meaning |
 |---|---|---|---|
+| `--source` | `dfl` or `pff` | `dfl` | The provider of the matches. |
 | `--data` | folder | the main checkout's `.scratch/data` | The raw data folder. |
-| `--out` | file | `gate/tracking/dfl-matches.json` of the checkout | The tracking file to write. |
+| `--jobs` | 1 or more | 1 | Matches converted at the same time (PFF). |
+| `--out` | file | `gate/tracking/dfl-matches.json`, or `gate/tracking/pff-matches.json` for PFF, of the checkout | The tracking file to write. |
 
-Exit codes: 0 when the file is written; 1 when the folder holds no DFL match or a match cannot be converted.
+Exit codes: 0 when the file is written; 1 when the folder holds no match of the provider or a match cannot be converted.
 
 ```text
 engine-cli tracking live-check [--data <DIR>] [--out <FILE>]

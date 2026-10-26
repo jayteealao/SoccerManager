@@ -9,9 +9,11 @@
 //! of the tick. A kick-off a source places on a half's start tick opens the half and is no
 //! stoppage; an engine side file lists only the stoppages it counted.
 //!
-//! `engine-cli tracking measure` measures every DFL match of the data folder this way and
-//! writes their figures, frames, ball-in-play minutes per half, clock offsets and converter
-//! checks into one file, `gate/tracking/dfl-matches.json`.
+//! `engine-cli tracking measure` measures every match of one provider in the data folder
+//! this way and writes their figures, frames, ball-in-play minutes per half, clock offsets
+//! and converter checks into one file: `gate/tracking/dfl-matches.json` for the DFL
+//! matches, `gate/tracking/pff-matches.json` for the PFF World Cup matches, which are
+//! resampled to 50 frames a second first and measured in memory, several at a time.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
