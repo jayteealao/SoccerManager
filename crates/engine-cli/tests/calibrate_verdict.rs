@@ -15,6 +15,8 @@ use common::{
 use serde_json::{Value, json};
 
 const FLAG: &str = "card_storm";
+/// The flag of the shift test: three times the aim noise on a pass, so fewer passes arrive.
+const SHIFT_FLAG: &str = "wide_aim";
 
 fn exe() -> &'static str {
     env!("CARGO_BIN_EXE_engine-cli")
@@ -85,7 +87,8 @@ fn row<'a>(report: &'a Value, band: &str) -> &'a Value {
         .unwrap_or_else(|| panic!("no verdict for {band}: {report}"))
 }
 
-/// The shipped content with a flag that makes every foul a booked foul.
+/// The shipped content with a flag that makes every foul a booked foul, and one that doubles
+/// the aim noise of a pass three times over.
 fn flagged(data: &Path) -> PathBuf {
     edited_content(data, "tuning.json", |tuning| {
         tuning["flags"] = json!({
@@ -95,6 +98,13 @@ fn flagged(data: &Path) -> PathBuf {
                 "removal_condition": "a test flag; never shipped",
                 "state": "off",
                 "overrides": { "engine.foul_base": 1.0, "engine.yellow_base": 1.0 }
+            },
+            SHIFT_FLAG: {
+                "owner": "engine team",
+                "hypothesis": "three times the aim noise on a pass lowers the pass accuracy",
+                "removal_condition": "a test flag; never shipped",
+                "state": "off",
+                "overrides": { "engine.aim_noise": 0.18 }
             }
         });
     })
@@ -239,43 +249,46 @@ fn a_short_change_run_never_passes_and_reports_its_stages_and_rules() {
 
 /// A flag that moves one measure by more than its band's smallest shift is reported
 /// as a move of that band against the old engine, and the run does not pass. The flag is first shown to move the
-/// measure in two plain runs, and the same change run without the flag shows no move. The runs
-/// start from seed 18, the lowest whose 12 short matches and 60-match change run show the move
-/// (seed 14 until clearances, shots and misreads were scored by their cost; seed 8 until
+/// measure in two plain runs, and the same change run without the flag shows no move. The flag
+/// sets three times the aim noise of a pass, and pass accuracy falls by more than its band's
+/// smallest shift (3.25 points) from a design target of 80 percent. The runs start from seed 1, the lowest whose 12 short matches and
+/// 60-match change run show the move. Until the current engine the flag was `card_storm` on
+/// yellow cards from seed 18 (seed 14 until clearances, shots and misreads were scored by their cost; seed 8 until
 /// the computer manager grouped its substitutions and a player going for a loose ball stopped being pushed off it; seed 14 until a kick stayed on its way from its kicker along the line he sent it; seed 1 until a passer read the press his receiver would meet;
 /// seed 9 until the player record's mood and personality came in, when its 12 matches moved
-/// 0.29 cards).
+/// 0.29 cards): the flag books every foul, but the engine now commits about two fouls a team
+/// in 90 minutes, so 5-minute matches hold almost none and the cards no longer move.
 #[test]
 fn a_flag_that_shifts_a_measure_moves_its_band_against_the_old_engine() {
-    let data = temp("engine-cli-verdict", "shift");
+    let tmp = tempfile::TempDir::new().unwrap();
+    let data = tmp.path().to_path_buf();
     let content = flagged(&data);
-    edit_band(&content, "yellow_cards_per_team", |b| {
-        set_range(b, 1.2, 2.6)
-    });
+    let band = "pass_accuracy_pct";
+    let shift = 3.25;
+    edit_band(&content, band, |b| set_range(b, 80.0 - shift, 80.0 + shift));
+    let on_flag = format!("{SHIFT_FLAG}=on");
     let plain = |name: &str, args: &[&str]| {
         let run = data.join(name);
         let out = calibrate_on(
-            "18",
+            "1",
             &data,
             &content,
             &run,
             &[&["--matches", "12"], args].concat(),
         );
-        row(&report(&out, &run), "yellow_cards_per_team")["value"]
-            .as_f64()
-            .unwrap()
+        row(&report(&out, &run), band)["value"].as_f64().unwrap()
     };
-    let (off, on) = (plain("off", &[]), plain("on", &["--flag", "card_storm=on"]));
+    let (off, on) = (plain("off", &[]), plain("on", &["--flag", &on_flag]));
     assert!(
-        on > off + 0.35,
-        "the flag moves yellow cards: {off} -> {on}"
+        on < off - shift,
+        "the flag moves pass accuracy: {off} -> {on}"
     );
 
     set_counts(&content, 60);
     let change = |name: &str, args: &[&str]| {
         let run = data.join(name);
         let out = calibrate_on(
-            "18",
+            "1",
             &data,
             &content,
             &run,
@@ -283,34 +296,33 @@ fn a_flag_that_shifts_a_measure_moves_its_band_against_the_old_engine() {
         );
         (report(&out, &run), out.status.code())
     };
-    let (flagged, code) = change("change", &["--flag", "card_storm=on"]);
-    let yellow = row(&flagged, "yellow_cards_per_team");
+    let (flagged, code) = change("change", &["--flag", &on_flag]);
+    let accuracy = row(&flagged, band);
     let critical = flagged["calib.joint"]["critical"].as_f64().unwrap();
     let (diff, se) = (
-        yellow["diff"].as_f64().unwrap(),
-        yellow["se"].as_f64().unwrap(),
+        accuracy["diff"].as_f64().unwrap(),
+        accuracy["se"].as_f64().unwrap(),
     );
     assert!(
-        diff > 0.35,
-        "the change is above the smallest shift: {yellow}"
+        diff < -shift,
+        "the change is beyond the smallest shift: {accuracy}"
     );
     assert!(
-        diff > critical * se,
-        "the move is beyond the threshold: {yellow}"
+        -diff > critical * se,
+        "the move is beyond the threshold: {accuracy}"
     );
-    assert_eq!(yellow["moved"], "up", "{yellow}");
+    assert_eq!(accuracy["moved"], "down", "{accuracy}");
     assert!(
-        yellow["old_word"] == "better" || yellow["old_word"] == "worse",
-        "a move is better or worse: {yellow}"
+        accuracy["old_word"] == "better" || accuracy["old_word"] == "worse",
+        "a move is better or worse: {accuracy}"
     );
     assert_ne!(flagged["calib.joint"]["word"], "pass");
     assert_eq!(code, Some(2));
 
     let (same, _) = change("same", &[]);
-    let yellow = row(&same, "yellow_cards_per_team");
-    assert_eq!(yellow["diff"], 0.0);
-    assert!(yellow.get("moved").is_none(), "{yellow}");
-    let _ = std::fs::remove_dir_all(&data);
+    let accuracy = row(&same, band);
+    assert_eq!(accuracy["diff"], 0.0);
+    assert!(accuracy.get("moved").is_none(), "{accuracy}");
 }
 
 /// After a finished run, a changed range in the registry is judged again from the
