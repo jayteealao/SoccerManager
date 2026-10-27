@@ -7,7 +7,7 @@
 
 mod common;
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use stream::{Client, Incoming};
 
@@ -18,19 +18,45 @@ fn a_slow_client_pauses_the_producer_and_loses_no_tick() {
     let mut client = Client::connect_local(served.port).unwrap();
     let gauge = served.gauge();
 
+    // The client is slow by the producer's own buffer, not by a fixed sleep: the
+    // instrumented coverage build produces more slowly than a 1 ms pause lets the buffer
+    // fill, so a fixed pause can leave the producer short of the bound. Before reading,
+    // the client waits until a frame is counted in at a full buffer, and measures how long
+    // the producer took to fill the whole pipeline from empty. Until a pause is counted it
+    // stops again after each burst for twice that time, which refills a drained burst at
+    // this build's speed. The deadline only turns a producer that never reaches the bound
+    // into a failure instead of a hang.
+    let first_hold = Instant::now();
+    let give_up = first_hold + Duration::from_secs(120);
+    let no_pause = |ticks: u32| {
+        format!(
+            "no pause within 120 s: {ticks} ticks read, high water {} against a bound of \
+             {bound}, {} pauses",
+            gauge.high_water(),
+            gauge.pauses()
+        )
+    };
+    while gauge.high_water() <= bound {
+        assert!(Instant::now() < give_up, "{}", no_pause(0));
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let hold = (2 * first_hold.elapsed()).max(Duration::from_millis(1));
+
     let mut ticks = 0u32;
-    let mut read_since_pause = 0u32;
+    let mut read_since_hold = 0u32;
     loop {
         match client.read().unwrap() {
             Incoming::Tick(_, quantised) => {
                 ticks += 1;
                 assert_eq!(quantised.tick, ticks, "a tick was dropped or reordered");
-                read_since_pause += 1;
-                // Read in small bursts, then stop. Five minutes of play is far more than
-                // the socket buffers hold, so the producer must reach the bound and wait.
-                if read_since_pause == 64 {
-                    read_since_pause = 0;
-                    std::thread::sleep(Duration::from_millis(1));
+                if gauge.pauses() > 0 {
+                    continue;
+                }
+                read_since_hold += 1;
+                if read_since_hold == 64 {
+                    read_since_hold = 0;
+                    assert!(Instant::now() < give_up, "{}", no_pause(ticks));
+                    std::thread::sleep(hold);
                 }
             }
             Incoming::Message(_) => continue,
