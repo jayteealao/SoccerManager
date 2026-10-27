@@ -345,7 +345,7 @@ pub enum TrackingAction {
 pub enum TrackSource {
     /// DFL Bundesliga tracking, 25 frames a second.
     Dfl,
-    /// PFF FIFA World Cup 2022 broadcast tracking, 29.97 frames a second.
+    /// PFF FIFA World Cup 2022 broadcast tracking, 29.97 frames/s.
     Pff,
 }
 
