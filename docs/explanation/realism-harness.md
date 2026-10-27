@@ -62,7 +62,7 @@ A band moves into the gate only when the person promotes it, by editing the band
 
 Each band names where its real value is measured: a data set, a file and a key under the real-data folder, with the sample size and the date. The run reads the value from that folder at each judgement, and the band file never holds it. The measured results come from licensed data: the data files and their row-level figures stay on the machine that holds the data. Only summary figures, such as the real values quoted in `content/README.md` and the ranges set from them, are in git. A pointer keeps every band's source in git without the data. It also keeps the real values current: a re-measured file changes the distances the next run reports, with no edit of the band file.
 
-When the folder or a file is not there, for example in a fresh checkout or a CI runner, the run goes on and says so. Every real column reads `no real data here`, and the headline counts the bands without a real value. A real value never changes a word, so a missing one cannot hide a failure. It only removes the distance from real football beside the verdict.
+When the folder or a file is not there, for example in a fresh checkout or a CI runner, the run goes on and says so. Every real column reads `no real data here`, and the headline counts the bands without a real value. A band with no real value here is never a pass: it reads `not sure`, so a missing value cannot hide a failure.
 
 ## How the gate is proven
 
@@ -127,6 +127,8 @@ Every figure below comes from the 8-thread reference machine: an AMD Ryzen 7 980
 | Realistic evaluation | 57,000 | idle | projected | about 39 to 46 minutes |
 | Change run, warm cache | 12,278 of the changed engine | idle | projected | about 8.4 to 9.9 minutes |
 | Change run, warm cache, `measures` build, against the old engine of 0.2.0-dev | 12,278 of the changed engine | idle apart from desktop programs (12 to 20 percent) | measured, twice | 799 and 805 s (about 13.3 minutes): play 4,171 s and checks 1,954 s of thread time, judge 24 s |
+| Change run of the equal suite at the fixed count, warm cache | 6,342 pairs | idle | projected from the measured rate | about 50 minutes (about 96 minutes with no cached old engine) |
+| Change run of all four suites at the fixed count, warm cache | the change kind's counts | idle | projected from the measured rate | about 67 minutes (about 128 minutes with no cached old engine) |
 
 The loaded projection of the realistic evaluation uses the measured rate of about 13 matches per second. The idle projections use about a third of a second of thread time per match over 8 threads. The lower idle figure assumes perfect scaling over the threads, and the higher figure assumes 85 percent scaling.
 

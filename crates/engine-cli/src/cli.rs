@@ -217,11 +217,11 @@ pub enum TrackingAction {
     /// Check the event-data live-time rule against the tracked ball status.
     #[command(
         name = "live-check",
-        long_about = "Apply the event-data live-time rule (in each half, the time from a
-                      stop to the next restart is dead) to each DFL match's events and
-                      compare it with the tracked ball status. The check passes only when
-                      every match is within 2.0 minutes; otherwise event-data rates from
-                      Wyscout stay per match. Prints one line per match and writes the
+        long_about = "Apply the event-data live-time rule (in each half, the time from a\n\
+                      stop to the next restart is dead) to each DFL match's events and\n\
+                      compare it with the tracked ball status. The check passes only when\n\
+                      every match is within 2.0 minutes; otherwise event-data rates from\n\
+                      Wyscout stay per match. Prints one line per match and writes the\n\
                       check file."
     )]
     LiveCheck {
@@ -229,7 +229,7 @@ pub enum TrackingAction {
         #[arg(
             long,
             value_name = "DIR",
-            long_help = "The raw data folder holding idsse/ with the DFL files; default
+            long_help = "The raw data folder holding idsse/ with the DFL files; default\n\
                          the main checkout's .scratch/data."
         )]
         data: Option<PathBuf>,
@@ -237,18 +237,18 @@ pub enum TrackingAction {
         #[arg(
             long,
             value_name = "FILE",
-            long_help = "The check file to write; default gate/tracking/live-time-check.json
+            long_help = "The check file to write; default gate/tracking/live-time-check.json\n\
                          of the checkout."
         )]
         out: Option<PathBuf>,
     },
     /// Contrast amateur and elite team shape and pass choice.
     #[command(
-        long_about = "Contrast the team shape (length, width, spread) and pass choice of
-                      the SoccerTrack v2 amateur matches with the DFL elite matches of the
-                      tracking file, per half. SoccerTrack data sets no target: the
-                      contrast holds no other figure and never writes under gate/. Pass
-                      choice of the amateur matches needs SoccerTrack's ball-action
+        long_about = "Contrast the team shape (length, width, spread) and pass choice of\n\
+                      the SoccerTrack v2 amateur matches with the DFL elite matches of the\n\
+                      tracking file, per half. SoccerTrack data sets no target: the\n\
+                      contrast holds no other figure and never writes under gate/. Pass\n\
+                      choice of the amateur matches needs SoccerTrack's ball-action\n\
                       files; without them the contrast says so."
     )]
     Contrast {
@@ -259,7 +259,7 @@ pub enum TrackingAction {
         #[arg(
             long,
             value_name = "FILE",
-            long_help = "The tracking file of the elite matches; default
+            long_help = "The tracking file of the elite matches; default\n\
                          gate/tracking/dfl-matches.json of the checkout."
         )]
         tracking: Option<PathBuf>,
@@ -267,8 +267,8 @@ pub enum TrackingAction {
         #[arg(
             long,
             value_name = "FILE",
-            long_help = "The contrast file to write; default
-                         .scratch/tracking-contrast/contrast.json of the main checkout. A
+            long_help = "The contrast file to write; default\n\
+                         .scratch/tracking-contrast/contrast.json of the main checkout. A\n\
                          path under gate/ is refused."
         )]
         out: Option<PathBuf>,
@@ -345,7 +345,7 @@ pub enum TrackingAction {
 pub enum TrackSource {
     /// DFL Bundesliga tracking, 25 frames a second.
     Dfl,
-    /// PFF FC World Cup 2022 broadcast tracking, 29.97 frames a second.
+    /// PFF FIFA World Cup 2022 broadcast tracking, 29.97 frames a second.
     Pff,
 }
 

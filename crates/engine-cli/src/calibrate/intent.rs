@@ -144,7 +144,10 @@ impl Intent {
         }
         let known = |field: String, band: &str| -> anyhow::Result<()> {
             if registry.band(band).is_none() {
-                anyhow::bail!("intent: {field}: {band} is not a band of the band file");
+                anyhow::bail!(
+                    "intent: {field}: {band} is not a band of the band file{}",
+                    closest_hint(registry, band)
+                );
             }
             Ok(())
         };
@@ -402,6 +405,38 @@ pub fn write_into(run_dir: &Path, intent: &Intent) -> anyhow::Result<String> {
     Ok(format!("{:x}", Sha256::digest(text.as_bytes())))
 }
 
+/// "; did you mean NAME?" for the band name closest to `band` by edit distance, when one
+/// is within three edits; empty otherwise.
+fn closest_hint(registry: &Registry, band: &str) -> String {
+    registry
+        .names()
+        .into_iter()
+        .map(|name| (edit_distance(band, name), name))
+        .filter(|(d, _)| *d <= 3)
+        .min()
+        .map_or_else(String::new, |(_, name)| format!("; did you mean {name}?"))
+}
+
+/// The Levenshtein distance between `a` and `b`, by characters.
+fn edit_distance(a: &str, b: &str) -> usize {
+    let b: Vec<char> = b.chars().collect();
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.chars().enumerate() {
+        let mut diag = row[0];
+        row[0] = i + 1;
+        for (j, &cb) in b.iter().enumerate() {
+            let above = row[j + 1];
+            row[j + 1] = if ca == cb {
+                diag
+            } else {
+                1 + diag.min(above).min(row[j])
+            };
+            diag = above;
+        }
+    }
+    row[b.len()]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -455,6 +490,17 @@ mod tests {
             ),
             "{shown}"
         );
+    }
+
+    #[test]
+    fn a_mistyped_band_names_the_closest_band() {
+        let reg = registry();
+        assert_eq!(edit_distance("kitten", "sitting"), 3);
+        assert_eq!(
+            closest_hint(&reg, "goals_per_mach"),
+            "; did you mean goals_per_match?"
+        );
+        assert_eq!(closest_hint(&reg, "nothing_like_any_band_name"), "");
     }
 
     #[test]

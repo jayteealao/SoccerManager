@@ -150,7 +150,8 @@ fn edit_band(content: &Path, name: &str, edit: impl FnOnce(&mut Value)) {
 /// in.
 #[test]
 fn a_short_change_run_never_passes_and_reports_its_stages_and_rules() {
-    let data = temp("engine-cli-verdict", "short");
+    let tmp = tempfile::TempDir::new().unwrap();
+    let data = tmp.path().to_path_buf();
     let content = edited_content(&data, "tuning.json", |_| {});
     set_counts(&content, 4);
     let run = data.join("run");
@@ -244,7 +245,6 @@ fn a_short_change_run_never_passes_and_reports_its_stages_and_rules() {
         ),
         "{text}"
     );
-    let _ = std::fs::remove_dir_all(&data);
 }
 
 /// A flag that moves one measure by more than its band's smallest shift is reported

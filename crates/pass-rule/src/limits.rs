@@ -19,6 +19,9 @@ use crate::interval::{Interval, RareKind, Real, Unit, interval, rare_interval, r
 use crate::rule::{Word, gate_exposure, judge, judge_design};
 use crate::special::norm_quantile;
 
+/// The layout version of `realism-bands.json` the slow tests and the calibrate report read.
+pub const BAND_FILE_VERSION: u32 = 6;
+
 /// The variable that names a calibrate report whose real values the slow tests may read.
 pub const REAL_REPORT: &str = "SM_REAL_REPORT";
 
@@ -209,9 +212,9 @@ impl Limits {
             .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
         let file: BandFile = serde_json::from_str(&text)
             .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-        if file.schema_version != 6 {
+        if file.schema_version != BAND_FILE_VERSION {
             return Err(format!(
-                "{} is schema_version {}; the slow tests read 6",
+                "{} is schema_version {}; the slow tests read {BAND_FILE_VERSION}",
                 path.display(),
                 file.schema_version
             ));

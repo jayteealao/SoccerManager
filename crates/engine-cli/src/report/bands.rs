@@ -37,7 +37,7 @@ use super::Suite;
 /// The file name inside the content folder.
 pub const BANDS_FILE: &str = "realism-bands.json";
 /// The layout version this build writes and reads.
-pub const REGISTRY_VERSION: u32 = 6;
+pub const REGISTRY_VERSION: u32 = pass_rule::limits::BAND_FILE_VERSION;
 
 const KIND: &str = "realism bands";
 
@@ -1898,7 +1898,8 @@ impl Registry {
             if !fits {
                 out.push((
                     at("resampling.real"),
-                    "is target or tracked-match when the real source names a reference-file                      target, and neither target otherwise"
+                    "is target or tracked-match when the real source names a reference-file \
+                     target, and neither target otherwise"
                         .into(),
                 ));
             }

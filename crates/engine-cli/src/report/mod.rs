@@ -888,6 +888,7 @@ impl RunBuilder {
         let flags = terms.covered_flags();
         let mut units: BTreeMap<u64, Unit> = BTreeMap::new();
         let mut events = 0.0;
+        let mut trials = 0.0;
         for (i, &covered) in flags.iter().enumerate() {
             if !covered {
                 continue;
@@ -907,6 +908,7 @@ impl RunBuilder {
             u.scale_num += d[i];
             u.scale_den += c[i];
             events += a[i];
+            trials += b[i];
         }
         let matches = terms.covered() as f64;
         let exposure = match rule.min_exposure.unit {
@@ -951,18 +953,13 @@ impl RunBuilder {
         let mut draw = || rng.next_f64();
         let interval = |to: &Real, draw: &mut dyn FnMut() -> f64| -> Result<Interval, String> {
             if rule.rare {
-                let kind = match def.measure {
-                    bands::Measure::Share { .. } | bands::Measure::Scoreline { .. } => {
-                        RareKind::Share
-                    }
-                    _ => RareKind::Rate,
-                };
+                let (kind, out_of) = rare_count(&def.measure, matches, trials);
                 let (value, se) = to.estimate();
                 let bounds = pass_rule::interval::real_bounds(value, se, alpha);
                 Ok(pass_rule::interval::rare_interval(
                     kind,
                     events.round().max(0.0) as u64,
-                    matches,
+                    out_of,
                     bounds,
                     alpha,
                 ))
@@ -1271,6 +1268,20 @@ pub fn se_ratio(ys: &[f64], xs: &[f64]) -> f64 {
 /// the record would write as `null`).
 fn ratio(num: f64, den: f64) -> f64 {
     if den > 0.0 { num / den } else { 0.0 }
+}
+
+/// What a rare band counts its events out of. A share of matches counts them over the
+/// matches; a ratio's numerator is a subset of its denominator (penalty goals of all
+/// goals), so it counts them over the summed denominator `trials`; any other rare band is
+/// a rate per match.
+fn rare_count(measure: &bands::Measure, matches: f64, trials: f64) -> (RareKind, f64) {
+    match measure {
+        bands::Measure::Share { .. } | bands::Measure::Scoreline { .. } => {
+            (RareKind::Share, matches)
+        }
+        bands::Measure::Ratio { .. } => (RareKind::Share, trials),
+        _ => (RareKind::Rate, matches),
+    }
 }
 
 fn mean(xs: &[f64]) -> f64 {
@@ -2046,6 +2057,35 @@ impl Record for CalibrationReport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_rare_ratio_counts_its_events_out_of_its_denominator() {
+        // 3 penalty goals in 100 goals over 37 matches: a share of goals, not a rate per
+        // match.
+        let ratio = bands::Measure::Ratio {
+            num: vec!["goals_phase.penalty.home".into()],
+            den: vec!["goals.home".into()],
+        };
+        let (kind, out_of) = rare_count(&ratio, 37.0, 100.0);
+        assert!(matches!(kind, RareKind::Share));
+        assert_eq!(out_of, 100.0);
+        let iv = pass_rule::interval::rare_interval(kind, 3, out_of, (0.03, 0.03, 0.03), 0.05);
+        assert!((iv.point - 0.0).abs() < 1e-12, "{iv:?}");
+        assert!(iv.lo < 0.0 && iv.hi > 0.0, "{iv:?}");
+        let scoreline = bands::Measure::Scoreline {
+            scores: vec![[5, 1]],
+        };
+        let (kind, out_of) = rare_count(&scoreline, 37.0, 100.0);
+        assert!(matches!(kind, RareKind::Share));
+        assert_eq!(out_of, 37.0);
+        let mean = bands::Measure::Mean {
+            per: bands::Per::Match,
+            of: vec!["laws.red.home".into()],
+        };
+        let (kind, out_of) = rare_count(&mean, 37.0, 100.0);
+        assert!(matches!(kind, RareKind::Rate));
+        assert_eq!(out_of, 37.0);
+    }
 
     #[test]
     fn dropped_pairs_are_counted_by_the_engine_that_failed_them() {

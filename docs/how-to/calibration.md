@@ -110,7 +110,7 @@ target/release/engine-cli calibrate --suite equal --seed 42 --base main --out ru
 ```
 
 1. Pick the kind. A change run is `--kind change` by default, with a seed from 0 to 999999. A milestone run takes `--kind milestone` and a seed from 1000000 to 1999999; a release run `--kind release` and a seed from 2000000 to 2999999. A seed of another kind's set is refused before anything plays. The change kind judges no rare band: each rare band reads `not judged in a change run`, neither pass nor fail, and the change count is sized on the other bands. The milestone and release kinds judge every rare band at its own margin and their full count.
-2. Let the run play its count. The count comes from the `kinds` table of `content/realism-bands.json`; `--matches` is refused in a change run. The old engine is built once, with this build's features, and its results are cached, so the next change run against the same revision plays only the new engine's matches.
+2. Let the run play its count. The count comes from the `kinds` table of `content/realism-bands.json`; `--matches` is refused in a change run. The old engine is built once, with this build's features, and its results are cached, so the next change run against the same revision plays only the new engine's matches. A change run of the equal suite at 6342 pairs has not been timed yet: from the rate of the measured 12,278-match runs on the development PC (8 threads), expect about 50 minutes with the old engine's matches cached and about 96 minutes without, and about 67 and 128 minutes for all four suites.
 3. Read the headline after the table:
 
    ```text
@@ -157,13 +157,13 @@ A change run asks what the change should do before any match plays, so that ever
 Every run reads each band's real value from the measured real data and prints it beside the verdict. The line before the table says which folder it read and how many bands have no real value:
 
 ```text
-real data: C:\Users\you\SoccerManager\.scratch\out (default); 0 of 154 bands without a real value; 3 with no real counterpart
+real data: C:\Users\you\SoccerManager\.scratch\out (default); 0 of 263 bands without a real value; 3 with no real counterpart
 ```
 
 - `real` is the value measured on real matches; `distance` is the run's value minus it.
 - `no real data here` means the folder, the file or the key is not there. `calib.real.bands` in `report.json` names the file and the reason.
 - `no real counterpart` marks the three bands of the strength and red-card suites: they measure engine experiments that no real match repeats, so they have no real value by design and are never counted as missing.
-- `(report only: ...)` at the end of a line marks a band that does not change the verdict: its band file says `gates: false`, its real sample is under its own floor, or its real value comes from too few competitions and seasons.
+- `(report only: ...)` at the end of a line marks a band that does not change the verdict: its group is named under `report_only` in the band file (today `five_one_share`, the goals from free kicks, penalties and throw-ins, and `scan_rate`).
 
 The last line after the table is the realism claim. Only bands labelled `validation` in the band file count toward it; every shipped band is `calibration`, so today the claim says `none`.
 
@@ -400,7 +400,6 @@ A band gates once you trust its range: its real value is measured, its range sta
 
 Some promoted bands still do not gate as you might expect:
 
-- A band whose real sample is under its own floor (`real.floor`) stays in the reported table, with `report only: real sample too small to gate (sample <s> under floor <f>)`.
 - A band of the measures is judged by its range alone while the old engine of a change run has no measures (`range only: base has no measures`).
 - A promotion changes the gate, so [run the gate proof](#run-the-gate-proof) again.
 

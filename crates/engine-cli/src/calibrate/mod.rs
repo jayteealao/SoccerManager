@@ -1467,9 +1467,12 @@ fn floor_refused(bands: &Registry, real_se: &dyn Fn(&BandDef) -> Option<f64>) ->
         .iter()
         .map(|f| format!("  {}: {}", f.band, f.reason()))
         .collect();
+    let percent = bands
+        .pass_rule
+        .map_or(97.0, |p| (p.sound_pass * 1000.0).round() / 10.0);
     Some(format!(
-        "{} band(s) of {} hold a margin under the 97 percent floor with the real errors \
-         read here; no match played. Widen each margin with a reason that cites a \
+        "{} band(s) of {} hold a margin under the {percent} percent floor with the real \
+         errors read here; no match played. Widen each margin with a reason that cites a \
          noticeable error, or add real data:\n{}",
         refused.len(),
         crate::report::bands::BANDS_FILE,
