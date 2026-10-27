@@ -162,7 +162,13 @@ fn steer(p: &Player, push: DVec2, t: &Tuning) -> DVec2 {
     let max_decel = p.max_decel();
     // Arriving brakes over the distance his braking needs.
     let way = arrive(p.pos, p.target, max_speed, max_decel, t.arrive_radius);
-    let desired = way + push + sidestep(way, push);
+    // With no push the step aside is zero, because its dot with a zero push is not positive.
+    let side = if push == DVec2::ZERO {
+        DVec2::ZERO
+    } else {
+        sidestep(way, push)
+    };
+    let desired = way + push + side;
     let raw = desired - p.vel;
     // A change against his run is braking, which his agility sets; any other change is
     // acceleration. With both equal this is the one clamp it always was.

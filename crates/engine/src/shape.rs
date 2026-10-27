@@ -198,9 +198,15 @@ fn options(
     // the ball, so every across measure of an option is taken from it.
     let centre = ball.y * view.tuning().compactness_y;
     let carrier = f.carrier.filter(|&c| players[c].team == f.team);
-    let back_line = f.side.back_line();
+    let back_line = f.side.back_line_slots();
     let in_back_line = |i: usize| back_line.contains(&(i - f.first));
-    let movers: Vec<usize> = f.outfield().filter(|&i| Some(i) != f.carrier).collect();
+    let mut mover_buf = [0usize; PLAYERS_PER_TEAM];
+    let mut mover_count = 0;
+    for i in f.outfield().filter(|&i| Some(i) != f.carrier) {
+        mover_buf[mover_count] = i;
+        mover_count += 1;
+    }
+    let movers = &mover_buf[..mover_count];
 
     // One dropper per team: in possession, the eligible player nearest the carrier; out of
     // possession, the first eligible player when the back line has a gap.
@@ -209,7 +215,7 @@ fn options(
         if let Some(c) = carrier {
             let carrier_depth = f.depth(players[c].pos);
             let mut best = f64::INFINITY;
-            for &i in &movers {
+            for &i in movers {
                 if !has(menu_of(f.side, i - f.first, true), StandOption::Drop) {
                     continue;
                 }
@@ -249,7 +255,7 @@ fn options(
     } else {
         None
     };
-    for &i in &movers {
+    for &i in movers {
         let slot = i - f.first;
         let menu = menu_of(f.side, slot, in_possession);
         if menu[0].is_none() {
@@ -365,14 +371,19 @@ fn options(
 /// they stand, at the line's depth, when it is wider than the tuning allows by the gap share.
 fn back_line_gap(f: &Frame<'_>) -> Option<DVec2> {
     let (_, sy) = f.view.pitch().scale();
-    let mut line: Vec<DVec2> = f
+    let mut line_buf = [DVec2::ZERO; PLAYERS_PER_TEAM];
+    let mut line_len = 0;
+    for i in f
         .side
-        .back_line()
-        .into_iter()
-        .map(|slot| f.first + slot)
+        .back_line_slots()
+        .iter()
+        .map(|&slot| f.first + slot)
         .filter(|&i| i != f.keeper && f.view.player(i).active())
-        .map(|i| f.view.player(i).pos)
-        .collect();
+    {
+        line_buf[line_len] = f.view.player(i).pos;
+        line_len += 1;
+    }
+    let line = &mut line_buf[..line_len];
     line.sort_by(|a, b| a.y.total_cmp(&b.y));
     let allowed = f.side.plan.back_line_gap * sy * BACK_LINE_GAP_SHARE;
     line.windows(2)
@@ -398,12 +409,20 @@ fn guard(
     // Goal-side of the ball, or of the halfway line while the ball is in the team's own half:
     // in build-up the whole team stands behind the halfway line and nobody is held back.
     let line = f.depth(ball).max(0.0);
-    let outfield: Vec<usize> = f.outfield().collect();
-    let candidates: Vec<usize> = outfield
-        .iter()
-        .copied()
-        .filter(|&i| Some(i) != f.carrier)
-        .collect();
+    let mut outfield_buf = [0usize; PLAYERS_PER_TEAM];
+    let mut outfield_len = 0;
+    for i in f.outfield() {
+        outfield_buf[outfield_len] = i;
+        outfield_len += 1;
+    }
+    let outfield = &outfield_buf[..outfield_len];
+    let mut candidate_buf = [0usize; PLAYERS_PER_TEAM];
+    let mut candidate_len = 0;
+    for &i in outfield.iter().filter(|&&i| Some(i) != f.carrier) {
+        candidate_buf[candidate_len] = i;
+        candidate_len += 1;
+    }
+    let candidates = &candidate_buf[..candidate_len];
     let need = plan.rest_defence.min(outfield.len().saturating_sub(1));
     let goal_side = |targets: &[DVec2; ROSTER], i: usize| f.depth(targets[i]) < line;
     let duty = |i: usize| plan.slots[i - f.first].depth;
@@ -427,11 +446,13 @@ fn guard(
         .filter(|&&i| goal_side(targets, i))
         .count();
     if count < need {
-        let mut forward: Vec<usize> = candidates
-            .iter()
-            .copied()
-            .filter(|&i| !goal_side(targets, i))
-            .collect();
+        let mut forward_buf = [0usize; PLAYERS_PER_TEAM];
+        let mut forward_len = 0;
+        for &i in candidates.iter().filter(|&&i| !goal_side(targets, i)) {
+            forward_buf[forward_len] = i;
+            forward_len += 1;
+        }
+        let forward = &mut forward_buf[..forward_len];
         forward.sort_by(|&a, &b| {
             duty(a)
                 .total_cmp(&duty(b))
@@ -446,7 +467,7 @@ fn guard(
 
     // Above it: a support or defend duty goes forward only with a team-mate goal-side in his
     // lane; an attacking duty goes.
-    for &i in &candidates {
+    for &i in candidates {
         if goal_side(targets, i) || duty(i) > 0.0 {
             continue;
         }
@@ -461,8 +482,8 @@ fn guard(
 
     // Cover: a team-mate stays for a full-back who went forward, if he is familiar enough
     // with his place.
-    let back_line = f.side.back_line();
-    for &b in &outfield {
+    let back_line = f.side.back_line_slots();
+    for &b in outfield {
         let slot = b - f.first;
         if !matches!(plan.slots[slot].position, Some(Position::LB | Position::RB)) {
             continue;

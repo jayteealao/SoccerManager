@@ -716,28 +716,83 @@ pub fn keeper_off_xg(
 
 /// The distance, in metres, of a shot straight in front of the goal whose [`shot_xg`] of model
 /// `t` (no keeper term) is `p`: from 0.1 m up to the pitch's length, found by halving.
+///
+/// The first halvings read a per-thread table of the central chance at each midpoint of the
+/// search, kept while the model and the pitch stay the same. The table holds the values of the
+/// same function at the same midpoints on the same path, so the result is bit for bit the same.
 pub fn central_distance(p: f64, t: &XgTuning, pitch: &Pitch) -> f64 {
     let central = |d: f64| {
         let angle = 2.0 * math::atan2(GOAL_WIDTH / 2.0, d);
         1.0 / (1.0 + math::exp(-(t.intercept + t.distance_coef * d + t.angle_coef * angle)))
     };
-    let (mut lo, mut hi) = (0.1, pitch.length());
-    if p >= central(lo) {
-        return lo;
-    }
-    if p <= central(hi) {
-        return hi;
-    }
-    // The central chance falls as the distance grows.
-    for _ in 0..32 {
-        let mid = 0.5 * (lo + hi);
-        if central(mid) > p {
-            lo = mid;
-        } else {
-            hi = mid;
+    let length = pitch.length();
+    let key = [
+        t.intercept.to_bits(),
+        t.distance_coef.to_bits(),
+        t.angle_coef.to_bits(),
+        length.to_bits(),
+    ];
+    CENTRAL_MEMO.with(|cell| {
+        let mut slot = cell.borrow_mut();
+        if slot.as_ref().is_none_or(|m| m.key != key) {
+            *slot = Some(CentralMemo {
+                key,
+                ends: [central(0.1), central(length)],
+                nodes: vec![f64::NAN; CENTRAL_MEMO_NODES],
+            });
         }
-    }
-    0.5 * (lo + hi)
+        let memo = slot.as_mut().expect("the memo was just filled");
+        let (mut lo, mut hi) = (0.1, length);
+        if p >= memo.ends[0] {
+            return lo;
+        }
+        if p <= memo.ends[1] {
+            return hi;
+        }
+        // The central chance falls as the distance grows. A node's index is the path taken to
+        // reach it, so the same index always stands for the same midpoint.
+        let mut idx = 1usize;
+        for _ in 0..32 {
+            let mid = 0.5 * (lo + hi);
+            let v = if idx < memo.nodes.len() {
+                let cached = memo.nodes[idx];
+                if cached.is_nan() {
+                    let fresh = central(mid);
+                    memo.nodes[idx] = fresh;
+                    fresh
+                } else {
+                    cached
+                }
+            } else {
+                central(mid)
+            };
+            if v > p {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+            if idx < memo.nodes.len() {
+                idx = 2 * idx + (v > p) as usize;
+            }
+        }
+        0.5 * (lo + hi)
+    })
+}
+
+/// Number of table slots (index 0 unused): the top sixteen levels of the halving tree.
+const CENTRAL_MEMO_NODES: usize = 1 << 16;
+
+/// The central chances [`central_distance`] has met at the midpoints of its search, for one
+/// shot model and pitch length (`key`), with the two end values of the search.
+struct CentralMemo {
+    key: [u64; 4],
+    ends: [f64; 2],
+    nodes: Vec<f64>,
+}
+
+thread_local! {
+    static CENTRAL_MEMO: std::cell::RefCell<Option<CentralMemo>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 /// How far the keeper of the side defending the goal a team attacking `attack_x` aims at

@@ -44,17 +44,18 @@ impl Simulation {
             .map(|&(_, side, xg)| if side == team { xg } else { -xg })
             .sum();
         let keeper = self.keeper(team);
-        let outfield: Vec<f64> = self
-            .players
-            .iter()
-            .enumerate()
-            .filter(|(i, p)| p.team == team && p.active() && *i != keeper)
-            .map(|(_, p)| p.energy)
-            .collect();
-        let energy = if outfield.is_empty() {
+        let mut tired = [0.0f64; PLAYERS_PER_TEAM];
+        let mut counted = 0;
+        for (i, p) in self.players.iter().enumerate() {
+            if p.team == team && p.active() && i != keeper {
+                tired[counted] = p.energy;
+                counted += 1;
+            }
+        }
+        let energy = if counted == 0 {
             1.0
         } else {
-            outfield.iter().sum::<f64>() / outfield.len() as f64
+            tired[..counted].iter().sum::<f64>() / counted as f64
         };
         Situation {
             goal_difference: goals[team] as i32 - goals[other] as i32,

@@ -105,10 +105,16 @@ pub fn injury_chance(base: Skills<'_>, rate: f64) -> f64 {
 /// the effective values is the fatigue modifier, [`FatigueCurveV1`].
 pub struct FatigueV1;
 
-impl FatigueModule for FatigueV1 {
-    fn drain(&self, view: &MatchView<'_>, i: usize) -> f64 {
+impl FatigueV1 {
+    /// The match minute of the current tick.
+    fn minute(view: &MatchView<'_>) -> f64 {
+        f64::from(view.tick()) / f64::from(crate::rules::clock::TICKS_PER_MINUTE)
+    }
+
+    /// The energy player `i` loses this tick, at match minute `minute`.
+    #[inline(always)]
+    fn drain_at(view: &MatchView<'_>, i: usize, minute: f64) -> f64 {
         let t = view.tuning();
-        let minute = f64::from(view.tick()) / f64::from(crate::rules::clock::TICKS_PER_MINUTE);
         let body = &t.contract.body;
         // Before the late minute the fade is 1 for every age, so his age is not read.
         let fade = if minute > f64::from(body.age.late_from_minute) {
@@ -124,6 +130,28 @@ impl FatigueModule for FatigueV1 {
             t.dt,
             fade,
         )
+    }
+}
+
+impl FatigueModule for FatigueV1 {
+    fn drain(&self, view: &MatchView<'_>, i: usize) -> f64 {
+        Self::drain_at(view, i, Self::minute(view))
+    }
+
+    fn drains(&self, view: &MatchView<'_>, out: &mut [f64; crate::modules::ROSTER]) {
+        let minute = Self::minute(view);
+        for (i, p) in view
+            .players()
+            .iter()
+            .enumerate()
+            .take(crate::modules::ROSTER)
+        {
+            out[i] = if p.active() {
+                Self::drain_at(view, i, minute)
+            } else {
+                0.0
+            };
+        }
     }
 
     fn injury_chance(&self, view: &MatchView<'_>, i: usize, source: InjurySource) -> f64 {

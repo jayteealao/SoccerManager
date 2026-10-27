@@ -2411,24 +2411,25 @@ fn recovery_jobs(view: &MatchView<'_>, jobs: &mut [Job; ROSTER], def: usize, kee
     if missing == 0 {
         return;
     }
-    let mut candidates: Vec<(f64, f64, usize)> = outfield()
-        .filter(|&i| {
-            ahead(i) >= 0.0 && !matches!(jobs[i], Job::Press | Job::LooseBall | Job::Chase)
-        })
-        .map(|i| {
-            (
-                ahead(i) / players[i].derived.knobs.recovery_run,
-                ahead(i),
-                i,
-            )
-        })
-        .collect();
+    let mut candidates = [(0.0, 0.0, 0usize); PLAYERS_PER_TEAM];
+    let mut n = 0;
+    for i in outfield().filter(|&i| {
+        ahead(i) >= 0.0 && !matches!(jobs[i], Job::Press | Job::LooseBall | Job::Chase)
+    }) {
+        candidates[n] = (
+            ahead(i) / players[i].derived.knobs.recovery_run,
+            ahead(i),
+            i,
+        );
+        n += 1;
+    }
+    let candidates = &mut candidates[..n];
     candidates.sort_by(|a, b| {
         a.0.total_cmp(&b.0)
             .then(a.1.total_cmp(&b.1))
             .then(a.2.cmp(&b.2))
     });
-    for (_, _, i) in candidates {
+    for &(_, _, i) in candidates.iter() {
         if missing == 0 {
             break;
         }
@@ -2608,7 +2609,7 @@ fn cover(
     };
     let at = players[j].pos;
     let mut best: Option<(f64, usize)> = None;
-    for slot in side.back_line() {
+    for &slot in side.back_line_slots().iter() {
         let i = first + slot;
         let p = &players[i];
         if !p.active() || i == keeper || pressers.iter().any(|&(_, k)| k == i) {
@@ -2686,7 +2687,7 @@ fn step_with_line(
     let side = &view.teams()[def];
     let first = def * PLAYERS_PER_TEAM;
     let keeper = view.keeper(def);
-    for slot in side.back_line() {
+    for &slot in side.back_line_slots().iter() {
         let i = first + slot;
         let p = view.player(i);
         let late = 1.0 - p.derived.knobs.cover;
@@ -2712,7 +2713,7 @@ fn trap_step(
     let side = &view.teams()[def];
     let first = def * PLAYERS_PER_TEAM;
     let keeper = view.keeper(def);
-    for slot in side.back_line() {
+    for &slot in side.back_line_slots().iter() {
         let i = first + slot;
         if !view.player(i).active() || i == keeper || skip(i) {
             continue;

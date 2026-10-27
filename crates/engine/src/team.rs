@@ -104,6 +104,22 @@ impl SquadPlayer {
     }
 }
 
+/// A short list of slots held on the stack: at most one per player of a side, in the order
+/// they were pushed.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SlotList {
+    slots: [usize; PLAYERS_PER_TEAM],
+    len: usize,
+}
+
+impl std::ops::Deref for SlotList {
+    type Target = [usize];
+
+    fn deref(&self) -> &[usize] {
+        &self.slots[..self.len]
+    }
+}
+
 /// A team: club identity, an attack direction, the squad, the lineup and bench, the
 /// tactics, and the formation in force.
 #[derive(Debug, Clone)]
@@ -155,6 +171,10 @@ pub struct Team {
     /// to it. Private, so the ground is written only with the match's own copy
     /// (`MatchConfig::set_pitch`), and one match never holds two grounds.
     pitch: Pitch,
+    /// Bit `s` is set for each outfield slot of the back line of `base_formation`, as
+    /// [`Team::back_line_slots`] reads it. [`Team::relayout`] keeps it, and it runs after
+    /// every write of `base_formation`.
+    back_mask: u16,
 }
 
 impl Team {
@@ -197,6 +217,7 @@ impl Team {
             take_up: None,
             active: [true; PLAYERS_PER_TEAM],
             pitch: Pitch::DEFAULT,
+            back_mask: 0,
         };
         team.relayout();
         team
@@ -398,6 +419,18 @@ impl Team {
     /// acting keeper takes the keeper's place.
     pub(crate) fn relayout(&mut self) {
         self.formation = self.base_formation;
+        self.back_mask = {
+            let deepest = (1..PLAYERS_PER_TEAM)
+                .map(|s| self.base_formation[s].0)
+                .fold(f64::INFINITY, f64::min);
+            let mut mask = 0u16;
+            for s in 1..PLAYERS_PER_TEAM {
+                if self.base_formation[s].0 <= deepest + BACK_LINE_BAND {
+                    mask |= 1 << s;
+                }
+            }
+            mask
+        };
         let keeper = self.keeper_slot();
         let active = self.active;
         let out = |s: usize| !active[s] || (s == keeper && s != 0);
@@ -466,20 +499,27 @@ impl Team {
     /// the deepest outfield slot, in slot order. It is read from the formation as the tactics
     /// file gives it, so it does not change as players leave.
     pub fn back_line(&self) -> Vec<usize> {
-        let deepest = (1..PLAYERS_PER_TEAM)
-            .map(|s| self.base_formation[s].0)
-            .fold(f64::INFINITY, f64::min);
-        (1..PLAYERS_PER_TEAM)
-            .filter(|&s| self.base_formation[s].0 <= deepest + BACK_LINE_BAND)
-            .collect()
+        self.back_line_slots().to_vec()
+    }
+
+    /// The back line ([`Team::back_line`]) without a heap allocation, for the per-tick passes.
+    pub(crate) fn back_line_slots(&self) -> SlotList {
+        let mut list = SlotList {
+            slots: [0; PLAYERS_PER_TEAM],
+            len: 0,
+        };
+        for s in 1..PLAYERS_PER_TEAM {
+            if self.back_mask & (1 << s) != 0 {
+                list.slots[list.len] = s;
+                list.len += 1;
+            }
+        }
+        list
     }
 
     /// `true` when `slot` is in the back line ([`Team::back_line`]).
     pub fn in_back_line(&self, slot: usize) -> bool {
-        let deepest = (1..PLAYERS_PER_TEAM)
-            .map(|s| self.base_formation[s].0)
-            .fold(f64::INFINITY, f64::min);
-        slot != 0 && self.base_formation[slot].0 <= deepest + BACK_LINE_BAND
+        slot != 0 && self.back_mask & (1 << slot) != 0
     }
 
     /// The team's lone forward: the single active slot, other than the one keeping goal, in
